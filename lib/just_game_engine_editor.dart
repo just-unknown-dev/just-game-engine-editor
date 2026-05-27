@@ -1,0 +1,18 @@
+library;
+
+export 'src/ui/dialogs/add_component_picker.dart';
+export 'src/core/registry/component_registry.dart';
+export 'src/ui/dialogs/create_scene_overlay.dart';
+export 'src/core/serialization/ecs_level_mapper.dart';
+export 'src/ui/overlay/editor_overlay.dart';
+export 'src/core/plugin/editor_plugin.dart';
+export 'src/core/state/editor_scene_state.dart';
+export 'src/core/serialization/editor_serialization_service.dart';
+export 'src/ui/panels/entity_inspector_panel.dart';
+export 'src/integration/game_editor_adapter.dart';
+export 'src/ui/overlay/gizmo_painter.dart';
+export 'src/core/serialization/scene_file_generator.dart';
+export 'src/core/serialization/scene_name_validator.dart';
+export 'src/ui/panels/scene_picker_panel.dart';
+export 'src/ui/panels/scene_tree_panel.dart';
+export 'src/ui/widgets/scrubbable_number_field.dart';

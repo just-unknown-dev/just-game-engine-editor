@@ -1,0 +1,30 @@
+name: just_game_engine_editor_example
+description: Example app for just_game_engine_editor runtime overlay scaffolding.
+publish_to: none
+
+version: 0.0.1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  just_game_engine:
+    path: ../../just_game_engine
+  just_game_engine_editor:
+    path: ../
+
+dependency_overrides:
+  just_game_engine:
+    path: ../../just_game_engine
+  just_debugger:
+    path: ../../just_debugger
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
