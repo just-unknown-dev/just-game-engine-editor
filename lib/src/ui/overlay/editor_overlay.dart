@@ -152,56 +152,45 @@ class _GameCanvasArea extends StatelessWidget {
 
 // ── Right panel ───────────────────────────────────────────────────────────────
 
-enum _StatusMetricId { fps, update, entities, systems, memory, health, logs }
+enum _StatusMetricId { fps, entities, memory, logs }
 
 extension on _StatusMetricId {
   _StatusDetailSection get section => switch (this) {
     _StatusMetricId.fps => _StatusDetailSection.performance,
-    _StatusMetricId.update => _StatusDetailSection.performance,
     _StatusMetricId.entities => _StatusDetailSection.ecs,
-    _StatusMetricId.systems => _StatusDetailSection.ecs,
     _StatusMetricId.memory => _StatusDetailSection.memory,
-    _StatusMetricId.health => _StatusDetailSection.health,
     _StatusMetricId.logs => _StatusDetailSection.logs,
   };
 
   String get label => switch (this) {
     _StatusMetricId.fps => 'FPS',
-    _StatusMetricId.update => 'Update',
     _StatusMetricId.entities => 'Entities',
-    _StatusMetricId.systems => 'Systems',
-    _StatusMetricId.memory => 'Memory',
-    _StatusMetricId.health => 'Health',
+    _StatusMetricId.memory => 'Runtime',
     _StatusMetricId.logs => 'Logs',
   };
 
   IconData get icon => switch (this) {
     _StatusMetricId.fps => Icons.speed_rounded,
-    _StatusMetricId.update => Icons.timer_outlined,
     _StatusMetricId.entities => Icons.blur_linear_rounded,
-    _StatusMetricId.systems => Icons.settings_input_component_rounded,
     _StatusMetricId.memory => Icons.memory_rounded,
-    _StatusMetricId.health => Icons.favorite_rounded,
     _StatusMetricId.logs => Icons.article_outlined,
   };
 }
 
-enum _StatusDetailSection { performance, ecs, memory, health, logs }
+enum _StatusDetailSection { performance, ecs, memory, logs }
 
 extension on _StatusDetailSection {
   String get title => switch (this) {
     _StatusDetailSection.performance => 'Performance Details',
     _StatusDetailSection.ecs => 'ECS Details',
-    _StatusDetailSection.memory => 'Memory Details',
-    _StatusDetailSection.health => 'Health Details',
+    _StatusDetailSection.memory => 'Runtime Details',
     _StatusDetailSection.logs => 'Log Details',
   };
 
   IconData get icon => switch (this) {
     _StatusDetailSection.performance => Icons.bolt_rounded,
     _StatusDetailSection.ecs => Icons.hub_rounded,
-    _StatusDetailSection.memory => Icons.memory_rounded,
-    _StatusDetailSection.health => Icons.favorite_rounded,
+    _StatusDetailSection.memory => Icons.monitor_heart_rounded,
     _StatusDetailSection.logs => Icons.subject_rounded,
   };
 }
@@ -218,7 +207,7 @@ class _CompactStatusDock extends StatefulWidget {
   final double maxDetailHeight;
 
   static const double _panelHeight = 56;
-  static const double _detailWidth = 360;
+  static const double _detailWidth = 350;
 
   @override
   State<_CompactStatusDock> createState() => _CompactStatusDockState();
@@ -297,169 +286,138 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
         final errorCount = logs
             .where((entry) => entry.level == DebuggerLogLevel.error)
             .length;
+        final detailMaxHeight =
+            widget.maxDetailHeight - _CompactStatusDock._panelHeight - 40;
+        final detailHeight = detailMaxHeight.clamp(180.0, 320.0).toDouble();
+        final dockHeight =
+            _CompactStatusDock._panelHeight +
+            (_selectedMetric == null ? 0.0 : detailHeight + 12.0);
 
-        return Material(
-          color: Colors.transparent,
-          child: Stack(
-            key: _stackKey,
-            clipBehavior: Clip.none,
-            children: <Widget>[
-              Container(
-                height: _CompactStatusDock._panelHeight,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF111111),
-                  borderRadius: BorderRadius.circular(0),
-                  border: Border(
-                    top: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                    left: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.04),
-                    ),
-                    right: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.04),
-                    ),
-                    bottom: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.04),
-                    ),
-                  ),
-                  boxShadow: const <BoxShadow>[
-                    BoxShadow(
-                      color: Color(0x55000000),
-                      blurRadius: 14,
-                      offset: Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 3,
-                  ),
-                  child: Column(
-                    children: <Widget>[
-                      Expanded(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: <Widget>[
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.fps,
-                                anchorKey: _anchorKeyFor(_StatusMetricId.fps),
-                                value: '${performance.currentFps}',
-                                accent: EditorTheme.primary,
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.fps,
-                                onTap: _selectMetric,
-                              ),
-                              _StatusSeparator(),
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.update,
-                                anchorKey: _anchorKeyFor(
-                                  _StatusMetricId.update,
-                                ),
-                                value:
-                                    '${performance.lastUpdateMs.toStringAsFixed(1)} ms',
-                                accent: EditorTheme.primaryBright,
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.update,
-                                onTap: _selectMetric,
-                              ),
-                              _StatusSeparator(),
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.entities,
-                                anchorKey: _anchorKeyFor(
-                                  _StatusMetricId.entities,
-                                ),
-                                value: '${snapshot.entityCount}',
-                                accent: const Color(0xFF7DE6B1),
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.entities,
-                                onTap: _selectMetric,
-                              ),
-                              _StatusSeparator(),
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.systems,
-                                anchorKey: _anchorKeyFor(
-                                  _StatusMetricId.systems,
-                                ),
-                                value: '${snapshot.systemCount}',
-                                accent: const Color(0xFF7CD7FF),
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.systems,
-                                onTap: _selectMetric,
-                              ),
-                              _StatusSeparator(),
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.memory,
-                                anchorKey: _anchorKeyFor(
-                                  _StatusMetricId.memory,
-                                ),
-                                value: _formatBytes(memory.rssBytes),
-                                accent: const Color(0xFFFFC86B),
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.memory,
-                                onTap: _selectMetric,
-                              ),
-                              _StatusSeparator(),
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.health,
-                                anchorKey: _anchorKeyFor(
-                                  _StatusMetricId.health,
-                                ),
-                                value: health.hasWarnings
-                                    ? '${health.messages.length} alerts'
-                                    : 'Healthy',
-                                accent: health.hasWarnings
-                                    ? EditorTheme.warning
-                                    : const Color(0xFF6DE0A7),
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.health,
-                                onTap: _selectMetric,
-                              ),
-                              _StatusSeparator(),
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.logs,
-                                anchorKey: _anchorKeyFor(_StatusMetricId.logs),
-                                value: '${logs.length} total',
-                                trailing: errorCount > 0
-                                    ? '$errorCount err'
-                                    : '$warningCount warn',
-                                accent: const Color(0xFFD9A7FF),
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.logs,
-                                onTap: _selectMetric,
-                              ),
-                            ],
-                          ),
+        return SizedBox(
+          height: dockHeight,
+          child: Material(
+            color: Colors.transparent,
+            child: Stack(
+              key: _stackKey,
+              clipBehavior: Clip.none,
+              children: <Widget>[
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    height: _CompactStatusDock._panelHeight,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111111),
+                      borderRadius: BorderRadius.circular(0),
+                      border: Border(
+                        top: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.08),
+                        ),
+                        left: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.04),
+                        ),
+                        right: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.04),
+                        ),
+                        bottom: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.04),
                         ),
                       ),
-                    ],
+                      boxShadow: const <BoxShadow>[
+                        BoxShadow(
+                          color: Color(0x55000000),
+                          blurRadius: 14,
+                          offset: Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 3,
+                      ),
+                      child: Column(
+                        children: <Widget>[
+                          Expanded(
+                            child: Row(
+                              children: <Widget>[
+                                _StatusMetricButton(
+                                  metric: _StatusMetricId.fps,
+                                  anchorKey: _anchorKeyFor(_StatusMetricId.fps),
+                                  value:
+                                      '${performance.currentFps} fps • ${performance.lastUpdateMs.toStringAsFixed(1)} ms',
+                                  accent: EditorTheme.primary,
+                                  isSelected:
+                                      _selectedMetric == _StatusMetricId.fps,
+                                  onTap: _selectMetric,
+                                ),
+                                _StatusSeparator(),
+                                _StatusMetricButton(
+                                  metric: _StatusMetricId.entities,
+                                  anchorKey: _anchorKeyFor(
+                                    _StatusMetricId.entities,
+                                  ),
+                                  value: '${snapshot.entityCount}',
+                                  accent: const Color(0xFF7DE6B1),
+                                  isSelected:
+                                      _selectedMetric ==
+                                      _StatusMetricId.entities,
+                                  onTap: _selectMetric,
+                                ),
+                                _StatusSeparator(),
+                                _StatusMetricButton(
+                                  metric: _StatusMetricId.memory,
+                                  anchorKey: _anchorKeyFor(
+                                    _StatusMetricId.memory,
+                                  ),
+                                  value: _formatBytes(memory.rssBytes),
+                                  accent: health.hasWarnings
+                                      ? EditorTheme.warning
+                                      : const Color(0xFFFFC86B),
+                                  isSelected:
+                                      _selectedMetric == _StatusMetricId.memory,
+                                  onTap: _selectMetric,
+                                ),
+                                _StatusSeparator(),
+                                _StatusMetricButton(
+                                  metric: _StatusMetricId.logs,
+                                  anchorKey: _anchorKeyFor(
+                                    _StatusMetricId.logs,
+                                  ),
+                                  value: errorCount > 0
+                                      ? '${logs.length} total • $errorCount err'
+                                      : '${logs.length} total • $warningCount warn',
+                                  accent: const Color(0xFFD9A7FF),
+                                  isSelected:
+                                      _selectedMetric == _StatusMetricId.logs,
+                                  onTap: _selectMetric,
+                                ),
+                                Spacer(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              if (_selectedMetric != null)
-                Positioned(
-                  left: _detailLeftFor(_selectedMetric!, _detailWidth()),
-                  bottom: _CompactStatusDock._panelHeight + 12,
-                  child: IgnorePointer(
-                    ignoring: false,
+                if (_selectedMetric != null)
+                  Positioned(
+                    left: _detailLeftFor(_selectedMetric!, _detailWidth()),
+                    bottom: _CompactStatusDock._panelHeight + 12,
                     child: SizedBox(
                       width: _detailWidth(),
                       child: _StatusDetailCard(
                         controller: controller,
                         section: _selectedMetric!.section,
                         onClose: _clearSelection,
-                        maxHeight:
-                            widget.maxDetailHeight -
-                            _CompactStatusDock._panelHeight -
-                            40,
+                        maxHeight: detailMaxHeight,
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -475,13 +433,11 @@ class _StatusMetricButton extends StatelessWidget {
     required this.accent,
     required this.isSelected,
     required this.onTap,
-    this.trailing,
   });
 
   final _StatusMetricId metric;
   final GlobalKey anchorKey;
   final String value;
-  final String? trailing;
   final Color accent;
   final bool isSelected;
   final ValueChanged<_StatusMetricId> onTap;
@@ -514,17 +470,6 @@ class _StatusMetricButton extends StatelessWidget {
                           color: EditorTheme.textMuted,
                         ),
                       ),
-                      if (trailing != null) ...<Widget>[
-                        const SizedBox(width: 5),
-                        Text(
-                          trailing!,
-                          style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w500,
-                            color: EditorTheme.textMuted,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                   const SizedBox(width: 6),
@@ -572,7 +517,7 @@ class _StatusDetailCard extends StatelessWidget {
             constraints: BoxConstraints(maxHeight: maxHeight.clamp(180, 320)),
             decoration: BoxDecoration(
               color: const Color(0xF41B1B1B),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
               boxShadow: const <BoxShadow>[
                 BoxShadow(
@@ -617,13 +562,7 @@ class _StatusDetailCard extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 1),
-                            Text(
-                              _detailSubtitle(section, controller),
-                              style: const TextStyle(
-                                fontSize: 9,
-                                color: EditorTheme.textMuted,
-                              ),
-                            ),
+                            Text.rich(_detailSubtitle(section, controller)),
                           ],
                         ),
                       ),
@@ -637,11 +576,7 @@ class _StatusDetailCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      child: _buildDetailContent(controller),
-                    ),
-                  ),
+                  _buildDetailContent(controller),
                 ],
               ),
             ),
@@ -651,24 +586,91 @@ class _StatusDetailCard extends StatelessWidget {
     );
   }
 
-  String _detailSubtitle(
+  TextSpan _detailSubtitle(
     _StatusDetailSection section,
     JustDebuggerController controller,
   ) {
     final logs = controller.logs;
+    final runtimeHealth = controller.health.hasWarnings
+        ? '${controller.health.messages.length} alerts'
+        : 'Healthy';
+    final ecsWarning = controller.snapshot.systemCount == 0
+        ? 'No systems'
+        : controller.snapshot.activeEntityCount <
+              controller.snapshot.entityCount
+        ? 'Inactive entities'
+        : 'Healthy';
+    final ecsColor =
+        controller.snapshot.systemCount == 0 ||
+            controller.snapshot.activeEntityCount <
+                controller.snapshot.entityCount
+        ? EditorTheme.warning
+        : const Color(0xFF6DE0A7);
+    final performanceStatus = controller.performance.isOverBudget
+        ? 'Over budget'
+        : 'Within frame budget';
+    final statusColor = controller.performance.isOverBudget
+        ? EditorTheme.warning
+        : const Color(0xFF6DE0A7);
+    final healthColor = controller.health.hasWarnings
+        ? EditorTheme.warning
+        : const Color(0xFF6DE0A7);
     return switch (section) {
-      _StatusDetailSection.performance =>
-        'Frame ${controller.performance.frameNumber} • ${controller.performance.currentFps} FPS',
-      _StatusDetailSection.ecs =>
-        '${controller.snapshot.entityCount} entities • ${controller.snapshot.systemCount} systems',
-      _StatusDetailSection.memory =>
-        '${_formatBytes(controller.memory.rssBytes)} RSS • ${controller.memory.counters.length} counters',
-      _StatusDetailSection.health =>
-        controller.health.hasWarnings
-            ? '${controller.health.messages.length} runtime warnings need attention'
-            : 'No active runtime warnings',
-      _StatusDetailSection.logs =>
-        '${logs.length} captured events • latest ${logs.isEmpty ? '--' : logs.last.timeLabel}',
+      _StatusDetailSection.performance => TextSpan(
+        style: const TextStyle(fontSize: 9, color: EditorTheme.textMuted),
+        children: <InlineSpan>[
+          TextSpan(text: 'Frame ${controller.performance.frameNumber} • '),
+          TextSpan(
+            text: '${controller.performance.currentFps} FPS',
+            style: const TextStyle(color: EditorTheme.textPrimary),
+          ),
+          const TextSpan(text: ' • '),
+          TextSpan(
+            text: performanceStatus,
+            style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+      _StatusDetailSection.ecs => TextSpan(
+        style: const TextStyle(fontSize: 9, color: EditorTheme.textMuted),
+        children: <InlineSpan>[
+          TextSpan(text: '${controller.snapshot.entityCount} entities'),
+          const TextSpan(text: ' • '),
+          TextSpan(
+            text: '${controller.snapshot.systemCount} systems',
+            style: const TextStyle(color: EditorTheme.textPrimary),
+          ),
+          const TextSpan(text: ' • '),
+          TextSpan(
+            text: ecsWarning,
+            style: TextStyle(color: ecsColor, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+      _StatusDetailSection.memory => TextSpan(
+        style: const TextStyle(fontSize: 9, color: EditorTheme.textMuted),
+        children: <InlineSpan>[
+          TextSpan(
+            text: '${_formatBytes(controller.memory.rssBytes)} RSS',
+            style: const TextStyle(color: EditorTheme.textPrimary),
+          ),
+          const TextSpan(text: ' • '),
+          TextSpan(
+            text: runtimeHealth,
+            style: TextStyle(color: healthColor, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+      _StatusDetailSection.logs => TextSpan(
+        style: const TextStyle(fontSize: 9, color: EditorTheme.textMuted),
+        children: <InlineSpan>[
+          TextSpan(text: '${logs.length} captured events • latest '),
+          TextSpan(
+            text: logs.isEmpty ? '--' : logs.last.timeLabel,
+            style: const TextStyle(color: EditorTheme.textPrimary),
+          ),
+        ],
+      ),
     };
   }
 
@@ -678,10 +680,7 @@ class _StatusDetailCard extends StatelessWidget {
         controller: controller,
       ),
       _StatusDetailSection.ecs => _EcsDetailContent(controller: controller),
-      _StatusDetailSection.memory => _MemoryDetailContent(
-        controller: controller,
-      ),
-      _StatusDetailSection.health => _HealthDetailContent(
+      _StatusDetailSection.memory => _RuntimeDetailContent(
         controller: controller,
       ),
       _StatusDetailSection.logs => _LogsDetailContent(controller: controller),
@@ -704,48 +703,44 @@ class _StatusSeparator extends StatelessWidget {
 }
 
 class _DetailStatTile extends StatelessWidget {
-  const _DetailStatTile({required this.label, required this.value, this.hint});
+  const _DetailStatTile({required this.label, required this.value});
 
   final String label;
   final String value;
-  final String? hint;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 132,
-      padding: const EdgeInsets.all(12),
+      width: 160,
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: EditorTheme.surfaceBg,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: EditorTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 11, color: EditorTheme.textMuted),
-          ),
-          if (hint != null) ...<Widget>[
-            const SizedBox(height: 4),
-            Text(
-              hint!,
-              style: const TextStyle(
-                fontSize: 10,
-                color: EditorTheme.primaryMutedLight,
+          Row(
+            spacing: 8,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: EditorTheme.textMuted,
+                ),
               ),
-            ),
-          ],
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: EditorTheme.textPrimary,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -765,23 +760,25 @@ class _DetailSectionCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: EditorTheme.surfaceDark,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: EditorTheme.textPrimary,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: EditorTheme.textPrimary,
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          child,
-        ],
+            const SizedBox(height: 10),
+            child,
+          ],
+        ),
       ),
     );
   }
@@ -802,8 +799,8 @@ class _PerformanceDetailContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 5,
+          runSpacing: 5,
           children: <Widget>[
             _DetailStatTile(label: 'FPS', value: '${performance.currentFps}'),
             _DetailStatTile(
@@ -813,9 +810,6 @@ class _PerformanceDetailContent extends StatelessWidget {
             _DetailStatTile(
               label: 'Budget Left',
               value: '${performance.budgetRemainingMs.toStringAsFixed(1)} ms',
-              hint: performance.isOverBudget
-                  ? 'Over budget'
-                  : 'Within frame budget',
             ),
             _DetailStatTile(
               label: 'Frame',
@@ -823,7 +817,7 @@ class _PerformanceDetailContent extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         _DetailSectionCard(
           title: 'Hottest Systems',
           child: Column(
@@ -838,6 +832,7 @@ class _PerformanceDetailContent extends StatelessWidget {
                           child: Text(
                             entry.key,
                             style: const TextStyle(
+                              fontSize: 10,
                               color: EditorTheme.textSecondary,
                             ),
                           ),
@@ -845,6 +840,7 @@ class _PerformanceDetailContent extends StatelessWidget {
                         Text(
                           '${entry.value.toStringAsFixed(2)} ms',
                           style: const TextStyle(
+                            fontSize: 10,
                             color: EditorTheme.textPrimary,
                             fontWeight: FontWeight.w600,
                           ),
@@ -876,8 +872,8 @@ class _EcsDetailContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 5,
+          runSpacing: 5,
           children: <Widget>[
             _DetailStatTile(
               label: 'Entities',
@@ -894,7 +890,7 @@ class _EcsDetailContent extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         _DetailSectionCard(
           title: 'Top Components',
           child: Column(
@@ -909,6 +905,7 @@ class _EcsDetailContent extends StatelessWidget {
                           child: Text(
                             entry.key,
                             style: const TextStyle(
+                              fontSize: 10,
                               color: EditorTheme.textSecondary,
                             ),
                           ),
@@ -916,6 +913,7 @@ class _EcsDetailContent extends StatelessWidget {
                         Text(
                           '${entry.value}',
                           style: const TextStyle(
+                            fontSize: 10,
                             color: EditorTheme.textPrimary,
                             fontWeight: FontWeight.w600,
                           ),
@@ -932,21 +930,22 @@ class _EcsDetailContent extends StatelessWidget {
   }
 }
 
-class _MemoryDetailContent extends StatelessWidget {
-  const _MemoryDetailContent({required this.controller});
+class _RuntimeDetailContent extends StatelessWidget {
+  const _RuntimeDetailContent({required this.controller});
 
   final JustDebuggerController controller;
 
   @override
   Widget build(BuildContext context) {
     final memory = controller.memory;
+    final health = controller.health;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 5,
+          runSpacing: 5,
           children: <Widget>[
             _DetailStatTile(
               label: 'App RSS',
@@ -958,12 +957,12 @@ class _MemoryDetailContent extends StatelessWidget {
               value: '${memory.componentCount}',
             ),
             _DetailStatTile(
-              label: 'Cache Fallback',
-              value: memory.usingCacheFallback ? 'On' : 'Off',
+              label: 'Warnings',
+              value: '${health.messages.length}',
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         _DetailSectionCard(
           title: 'Memory Counters',
           child: Wrap(
@@ -978,55 +977,21 @@ class _MemoryDetailContent extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       '${entry.key}: ${entry.value}',
-                      style: const TextStyle(color: EditorTheme.textSecondary),
+                      style: const TextStyle(
+                        color: EditorTheme.textSecondary,
+                        fontSize: 10,
+                      ),
                     ),
                   );
                 })
                 .toList(growable: false),
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _HealthDetailContent extends StatelessWidget {
-  const _HealthDetailContent({required this.controller});
-
-  final JustDebuggerController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final health = controller.health;
-    final performance = controller.performance;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: <Widget>[
-            _DetailStatTile(
-              label: 'Status',
-              value: health.hasWarnings ? 'Attention' : 'Healthy',
-            ),
-            _DetailStatTile(
-              label: 'Warnings',
-              value: '${health.messages.length}',
-            ),
-            _DetailStatTile(label: 'FPS', value: '${performance.currentFps}'),
-            _DetailStatTile(
-              label: 'Budget State',
-              value: performance.isOverBudget ? 'Exceeded' : 'OK',
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         _DetailSectionCard(
           title: 'Current Signals',
           child: Column(
@@ -1052,6 +1017,7 @@ class _HealthDetailContent extends StatelessWidget {
                                 child: Text(
                                   message,
                                   style: const TextStyle(
+                                    fontSize: 10,
                                     color: EditorTheme.textSecondary,
                                   ),
                                 ),
@@ -1064,7 +1030,10 @@ class _HealthDetailContent extends StatelessWidget {
                 : const <Widget>[
                     Text(
                       'No active warnings. Runtime metrics look stable.',
-                      style: TextStyle(color: EditorTheme.textSecondary),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: EditorTheme.textSecondary,
+                      ),
                     ),
                   ],
           ),
@@ -1096,8 +1065,8 @@ class _LogsDetailContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 5,
+          runSpacing: 5,
           children: <Widget>[
             _DetailStatTile(
               label: 'Total Logs',
@@ -1108,56 +1077,63 @@ class _LogsDetailContent extends StatelessWidget {
             _DetailStatTile(label: 'Errors', value: '$errorCount'),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         _DetailSectionCard(
           title: 'Recent Entries',
-          child: Column(
-            children: logs.isEmpty
-                ? const <Widget>[
-                    Text(
-                      'No log entries captured yet.',
-                      style: TextStyle(color: EditorTheme.textSecondary),
-                    ),
-                  ]
-                : logs
-                      .map((entry) {
-                        final color = switch (entry.level) {
-                          DebuggerLogLevel.info => const Color(0xFF7CD7FF),
-                          DebuggerLogLevel.warning => EditorTheme.warning,
-                          DebuggerLogLevel.error => EditorTheme.errorLight,
-                        };
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  '${entry.category.toUpperCase()} • ${entry.timeLabel}',
-                                  style: TextStyle(
-                                    color: color,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+          child: SingleChildScrollView(
+            child: Column(
+              children: logs.isEmpty
+                  ? const <Widget>[
+                      Text(
+                        'No log entries captured yet.',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: EditorTheme.textSecondary,
+                        ),
+                      ),
+                    ]
+                  : logs
+                        .map((entry) {
+                          final color = switch (entry.level) {
+                            DebuggerLogLevel.info => const Color(0xFF7CD7FF),
+                            DebuggerLogLevel.warning => EditorTheme.warning,
+                            DebuggerLogLevel.error => EditorTheme.errorLight,
+                          };
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  spacing: 4,
+                                  children: <Widget>[
+                                    Text(
+                                      '${entry.category.toUpperCase()} • ${entry.timeLabel}',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: color,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    Text(
+                                      entry.message,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: EditorTheme.textSecondary,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  entry.message,
-                                  style: const TextStyle(
-                                    color: EditorTheme.textSecondary,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                        );
-                      })
-                      .toList(growable: false),
+                          );
+                        })
+                        .toList(growable: false),
+            ),
           ),
         ),
       ],
