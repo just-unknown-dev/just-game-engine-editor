@@ -3,12 +3,17 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:just_debugger/just_debugger.dart';
+import 'package:just_storage/just_storage.dart';
 
 import '../panels/entity_inspector_panel.dart';
 import '../panels/scene_picker_panel.dart';
 import '../panels/scene_tree_panel.dart';
 import '../theme/editor_theme.dart';
 import '../../core/plugin/editor_plugin.dart';
+
+part 'overlay_settings_store.part.dart';
+part 'overlay_dock_metrics.part.dart';
+part 'overlay_settings_dialog.part.dart';
 
 // ── Public overlay host ───────────────────────────────────────────────────────
 
@@ -43,20 +48,29 @@ class JustGameEditorOverlay extends StatelessWidget {
               return AbsorbPointer(absorbing: false, child: gameChild);
             }
 
-            return Stack(
-              children: <Widget>[
-                Positioned.fill(
-                  child: _EditorSplitLayout(
-                    plugin: plugin,
-                    gameChild: gameChild,
-                  ),
-                ),
-                const Positioned(
-                  top: 16,
-                  left: 16,
-                  child: IgnorePointer(child: _EditorStatusBadge()),
-                ),
-              ],
+            return ValueListenableBuilder<_OverlayUiSettings>(
+              valueListenable: _overlayUiSettingsSignal,
+              builder: (context, settings, _) {
+                return Stack(
+                  children: <Widget>[
+                    Positioned.fill(
+                      child: _EditorSplitLayout(
+                        plugin: plugin,
+                        gameChild: gameChild,
+                        settings: settings,
+                      ),
+                    ),
+                    if (settings.showStatusBadge)
+                      Positioned(
+                        top: 16,
+                        left: 16,
+                        child: IgnorePointer(
+                          child: _EditorStatusBadge(settings: settings),
+                        ),
+                      ),
+                  ],
+                );
+              },
             );
           },
         ),
@@ -65,11 +79,65 @@ class JustGameEditorOverlay extends StatelessWidget {
   }
 }
 
+enum _WarningSeverityMode { lenient, balanced, strict }
+
+extension on _WarningSeverityMode {
+  String get label => switch (this) {
+    _WarningSeverityMode.lenient => 'Lenient',
+    _WarningSeverityMode.balanced => 'Balanced',
+    _WarningSeverityMode.strict => 'Strict',
+  };
+}
+
+enum _AccessibilityMode { off, readable, highContrast }
+
+extension on _AccessibilityMode {
+  String get label => switch (this) {
+    _AccessibilityMode.off => 'Off',
+    _AccessibilityMode.readable => 'Readable',
+    _AccessibilityMode.highContrast => 'High Contrast',
+  };
+
+  double get textMultiplier => switch (this) {
+    _AccessibilityMode.off => 1.0,
+    _AccessibilityMode.readable => 1.15,
+    _AccessibilityMode.highContrast => 1.25,
+  };
+
+  double get separatorThickness => switch (this) {
+    _AccessibilityMode.off => 1,
+    _AccessibilityMode.readable => 1.5,
+    _AccessibilityMode.highContrast => 2,
+  };
+
+  double get separatorAlpha => switch (this) {
+    _AccessibilityMode.off => 0.08,
+    _AccessibilityMode.readable => 0.12,
+    _AccessibilityMode.highContrast => 0.2,
+  };
+}
+
+enum _OverlayProfilePreset { compact, defaultProfile, readable, streaming }
+
+extension on _OverlayProfilePreset {
+  String get label => switch (this) {
+    _OverlayProfilePreset.compact => 'Compact',
+    _OverlayProfilePreset.defaultProfile => 'Default',
+    _OverlayProfilePreset.readable => 'Readable',
+    _OverlayProfilePreset.streaming => 'Streaming',
+  };
+}
+
 class _EditorSplitLayout extends StatelessWidget {
-  const _EditorSplitLayout({required this.plugin, required this.gameChild});
+  const _EditorSplitLayout({
+    required this.plugin,
+    required this.gameChild,
+    required this.settings,
+  });
 
   final JustGameEditorPlugin plugin;
   final Widget gameChild;
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -78,23 +146,21 @@ class _EditorSplitLayout extends StatelessWidget {
         Expanded(
           child: _EditorWorkspaceArea(plugin: plugin, gameChild: gameChild),
         ),
-        SizedBox(width: 360, child: _EditorRightPanel(plugin: plugin)),
+        SizedBox(
+          width: 360,
+          child: _EditorRightPanel(plugin: plugin, settings: settings),
+        ),
       ],
     );
   }
 }
 
-class _EditorWorkspaceArea extends StatefulWidget {
+class _EditorWorkspaceArea extends StatelessWidget {
   const _EditorWorkspaceArea({required this.plugin, required this.gameChild});
 
   final JustGameEditorPlugin plugin;
   final Widget gameChild;
 
-  @override
-  State<_EditorWorkspaceArea> createState() => _EditorWorkspaceAreaState();
-}
-
-class _EditorWorkspaceAreaState extends State<_EditorWorkspaceArea> {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -103,18 +169,15 @@ class _EditorWorkspaceAreaState extends State<_EditorWorkspaceArea> {
           clipBehavior: Clip.hardEdge,
           children: <Widget>[
             Positioned.fill(
-              child: _GameCanvasArea(
-                plugin: widget.plugin,
-                gameChild: widget.gameChild,
-              ),
+              child: _GameCanvasArea(plugin: plugin, gameChild: gameChild),
             ),
-            if (widget.plugin.isStatusPanelVisible)
+            if (plugin.isStatusPanelVisible)
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: 0,
                 child: _CompactStatusDock(
-                  plugin: widget.plugin,
+                  plugin: plugin,
                   maxDetailWidth: constraints.maxWidth,
                   maxDetailHeight: constraints.maxHeight,
                 ),
@@ -179,6 +242,117 @@ extension on _StatusMetricId {
 
 enum _StatusDetailSection { performance, ecs, memory, logs }
 
+enum _SettingsThemePreset { sunrise, mint, cobalt, amber, mono }
+
+extension on _SettingsThemePreset {
+  String get label => switch (this) {
+    _SettingsThemePreset.sunrise => 'Sunrise',
+    _SettingsThemePreset.mint => 'Mint',
+    _SettingsThemePreset.cobalt => 'Cobalt',
+    _SettingsThemePreset.amber => 'Amber',
+    _SettingsThemePreset.mono => 'Mono',
+  };
+
+  Color get color => switch (this) {
+    _SettingsThemePreset.sunrise => const Color(0xFFFF6F61),
+    _SettingsThemePreset.mint => const Color(0xFF5FD7A3),
+    _SettingsThemePreset.cobalt => const Color(0xFF5A8DFF),
+    _SettingsThemePreset.amber => const Color(0xFFFFC86B),
+    _SettingsThemePreset.mono => const Color(0xFFB7BDC8),
+  };
+}
+
+class _OverlayUiSettings {
+  const _OverlayUiSettings({
+    required this.textScale,
+    required this.cornerRadius,
+    required this.themePreset,
+    required this.compactness,
+    required this.showStatusBadge,
+    required this.animationSpeed,
+    required this.ecsWarnOnInactive,
+    required this.ecsWarnOnNoSystems,
+    required this.warningSeverity,
+    required this.metricRefreshMs,
+    required this.logLineClamp,
+    required this.logsAutoScroll,
+    required this.accessibilityMode,
+  });
+
+  const _OverlayUiSettings.defaults()
+    : textScale = 1.0,
+      cornerRadius = 4,
+      themePreset = _SettingsThemePreset.sunrise,
+      compactness = 1.0,
+      showStatusBadge = true,
+      animationSpeed = 1.0,
+      ecsWarnOnInactive = true,
+      ecsWarnOnNoSystems = true,
+      warningSeverity = _WarningSeverityMode.balanced,
+      metricRefreshMs = 120,
+      logLineClamp = 8,
+      logsAutoScroll = true,
+      accessibilityMode = _AccessibilityMode.off;
+
+  final double textScale;
+  final double cornerRadius;
+  final _SettingsThemePreset themePreset;
+  final double compactness;
+  final bool showStatusBadge;
+  final double animationSpeed;
+  final bool ecsWarnOnInactive;
+  final bool ecsWarnOnNoSystems;
+  final _WarningSeverityMode warningSeverity;
+  final double metricRefreshMs;
+  final int logLineClamp;
+  final bool logsAutoScroll;
+  final _AccessibilityMode accessibilityMode;
+
+  Color get themeColor => themePreset.color;
+  double get effectiveTextScale => textScale * accessibilityMode.textMultiplier;
+
+  _OverlayUiSettings copyWith({
+    double? textScale,
+    double? cornerRadius,
+    _SettingsThemePreset? themePreset,
+    double? compactness,
+    bool? showStatusBadge,
+    double? animationSpeed,
+    bool? ecsWarnOnInactive,
+    bool? ecsWarnOnNoSystems,
+    _WarningSeverityMode? warningSeverity,
+    double? metricRefreshMs,
+    int? logLineClamp,
+    bool? logsAutoScroll,
+    _AccessibilityMode? accessibilityMode,
+  }) {
+    return _OverlayUiSettings(
+      textScale: textScale ?? this.textScale,
+      cornerRadius: cornerRadius ?? this.cornerRadius,
+      themePreset: themePreset ?? this.themePreset,
+      compactness: compactness ?? this.compactness,
+      showStatusBadge: showStatusBadge ?? this.showStatusBadge,
+      animationSpeed: animationSpeed ?? this.animationSpeed,
+      ecsWarnOnInactive: ecsWarnOnInactive ?? this.ecsWarnOnInactive,
+      ecsWarnOnNoSystems: ecsWarnOnNoSystems ?? this.ecsWarnOnNoSystems,
+      warningSeverity: warningSeverity ?? this.warningSeverity,
+      metricRefreshMs: metricRefreshMs ?? this.metricRefreshMs,
+      logLineClamp: logLineClamp ?? this.logLineClamp,
+      logsAutoScroll: logsAutoScroll ?? this.logsAutoScroll,
+      accessibilityMode: accessibilityMode ?? this.accessibilityMode,
+    );
+  }
+}
+
+final ValueNotifier<_OverlayUiSettings> _overlayUiSettingsSignal =
+    ValueNotifier<_OverlayUiSettings>(const _OverlayUiSettings.defaults());
+bool _overlayUiSettingsLoaded = false;
+Future<void>? _overlayUiSettingsLoadFuture;
+
+final _OverlaySettingsStore _overlaySettingsStore = _OverlaySettingsStore(
+  JustStorage.standard(),
+);
+
 extension on _StatusDetailSection {
   String get title => switch (this) {
     _StatusDetailSection.performance => 'Performance Details',
@@ -216,8 +390,12 @@ class _CompactStatusDock extends StatefulWidget {
 class _CompactStatusDockState extends State<_CompactStatusDock> {
   _StatusMetricId? _selectedMetric;
   final GlobalKey _stackKey = GlobalKey();
+  final GlobalKey _settingsAnchorKey = GlobalKey();
   final Map<_StatusMetricId, GlobalKey> _anchorKeys =
       <_StatusMetricId, GlobalKey>{};
+  int _lastMetricSampleMs = 0;
+  _DockMetricsSnapshot? _displayMetrics;
+  bool _isSettingsOpen = false;
 
   GlobalKey _anchorKeyFor(_StatusMetricId metric) {
     return _anchorKeys.putIfAbsent(metric, GlobalKey.new);
@@ -225,6 +403,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
 
   void _selectMetric(_StatusMetricId metric) {
     setState(() {
+      _isSettingsOpen = false;
       _selectedMetric = _selectedMetric == metric ? null : metric;
     });
   }
@@ -232,7 +411,60 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
   void _clearSelection() {
     setState(() {
       _selectedMetric = null;
+      _isSettingsOpen = false;
     });
+  }
+
+  void _updateSettings(_OverlayUiSettings settings) {
+    _overlayUiSettingsSignal.value = settings;
+    _persistSettings(settings);
+  }
+
+  void _toggleSettings() {
+    setState(() {
+      _selectedMetric = null;
+      _isSettingsOpen = !_isSettingsOpen;
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPersistedSettings();
+  }
+
+  Future<void> _loadPersistedSettings() async {
+    if (_overlayUiSettingsLoaded) {
+      return;
+    }
+    if (_overlayUiSettingsLoadFuture != null) {
+      await _overlayUiSettingsLoadFuture;
+      return;
+    }
+
+    _overlayUiSettingsLoadFuture = _loadPersistedSettingsOnce();
+    await _overlayUiSettingsLoadFuture;
+  }
+
+  Future<void> _loadPersistedSettingsOnce() async {
+    try {
+      final settings = await _overlaySettingsStore.loadSettings();
+      _overlayUiSettingsSignal.value = settings;
+    } catch (error, stackTrace) {
+      debugPrint('Failed to load overlay settings: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    } finally {
+      _overlayUiSettingsLoaded = true;
+    }
+  }
+
+  Future<void> _persistSettings(_OverlayUiSettings settings) async {
+    try {
+      await _overlaySettingsStore.saveSettings(settings);
+    } catch (error, stackTrace) {
+      debugPrint('Failed to save overlay settings: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   double _detailWidth() {
@@ -243,9 +475,9 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
     return math.min(_CompactStatusDock._detailWidth, availableWidth);
   }
 
-  double _detailLeftFor(_StatusMetricId metric, double detailWidth) {
+  double _detailLeftForKey(GlobalKey anchorKey, double detailWidth) {
     final stackContext = _stackKey.currentContext;
-    final anchorContext = _anchorKeyFor(metric).currentContext;
+    final anchorContext = anchorKey.currentContext;
     if (stackContext == null || anchorContext == null) {
       return 12;
     }
@@ -268,17 +500,39 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
     return (anchorCenter.dx - detailWidth / 2).clamp(minLeft, maxLeft);
   }
 
+  double _detailLeftFor(_StatusMetricId metric, double detailWidth) {
+    return _detailLeftForKey(_anchorKeyFor(metric), detailWidth);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: widget.plugin.debuggerController,
       builder: (context, _) {
         final controller = widget.plugin.debuggerController;
-        final snapshot = controller.snapshot;
-        final performance = controller.performance;
-        final memory = controller.memory;
-        final logs = controller.logs;
-        final health = controller.health;
+        final liveMetrics = _DockMetricsSnapshot.fromController(controller);
+
+        final refreshMs = _overlayUiSettingsSignal.value.metricRefreshMs
+            .clamp(33, 2000)
+            .round();
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        final shouldSample =
+            _lastMetricSampleMs == 0 ||
+            nowMs - _lastMetricSampleMs >= refreshMs;
+
+        if (shouldSample) {
+          _lastMetricSampleMs = nowMs;
+          _displayMetrics = liveMetrics;
+        }
+
+        final sampledMetrics = shouldSample
+            ? liveMetrics
+            : (_displayMetrics ?? liveMetrics);
+        final snapshot = sampledMetrics.snapshot;
+        final performance = sampledMetrics.performance;
+        final memory = sampledMetrics.memory;
+        final logs = sampledMetrics.logs;
+        final health = sampledMetrics.health;
 
         final warningCount = logs
             .where((entry) => entry.level == DebuggerLogLevel.warning)
@@ -289,136 +543,191 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
         final detailMaxHeight =
             widget.maxDetailHeight - _CompactStatusDock._panelHeight - 40;
         final detailHeight = detailMaxHeight.clamp(180.0, 320.0).toDouble();
+        final settingsPanelHeight = detailMaxHeight
+            .clamp(260.0, 460.0)
+            .toDouble();
+        final floatingPanelHeight = _isSettingsOpen
+            ? settingsPanelHeight
+            : (_selectedMetric != null ? detailHeight : 0.0);
         final dockHeight =
             _CompactStatusDock._panelHeight +
-            (_selectedMetric == null ? 0.0 : detailHeight + 12.0);
+            (floatingPanelHeight > 0 ? floatingPanelHeight + 12.0 : 0.0);
 
-        return SizedBox(
-          height: dockHeight,
-          child: Material(
-            color: Colors.transparent,
-            child: Stack(
-              key: _stackKey,
-              clipBehavior: Clip.none,
-              children: <Widget>[
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    height: _CompactStatusDock._panelHeight,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF111111),
-                      borderRadius: BorderRadius.circular(0),
-                      border: Border(
-                        top: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.08),
-                        ),
-                        left: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.04),
-                        ),
-                        right: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.04),
-                        ),
-                        bottom: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.04),
-                        ),
-                      ),
-                      boxShadow: const <BoxShadow>[
-                        BoxShadow(
-                          color: Color(0x55000000),
-                          blurRadius: 14,
-                          offset: Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 3,
-                      ),
-                      child: Column(
-                        children: <Widget>[
-                          Expanded(
-                            child: Row(
-                              children: <Widget>[
-                                _StatusMetricButton(
-                                  metric: _StatusMetricId.fps,
-                                  anchorKey: _anchorKeyFor(_StatusMetricId.fps),
-                                  value:
-                                      '${performance.currentFps} fps • ${performance.lastUpdateMs.toStringAsFixed(1)} ms',
-                                  accent: EditorTheme.primary,
-                                  isSelected:
-                                      _selectedMetric == _StatusMetricId.fps,
-                                  onTap: _selectMetric,
-                                ),
-                                _StatusSeparator(),
-                                _StatusMetricButton(
-                                  metric: _StatusMetricId.entities,
-                                  anchorKey: _anchorKeyFor(
-                                    _StatusMetricId.entities,
-                                  ),
-                                  value: '${snapshot.entityCount}',
-                                  accent: const Color(0xFF7DE6B1),
-                                  isSelected:
-                                      _selectedMetric ==
-                                      _StatusMetricId.entities,
-                                  onTap: _selectMetric,
-                                ),
-                                _StatusSeparator(),
-                                _StatusMetricButton(
-                                  metric: _StatusMetricId.memory,
-                                  anchorKey: _anchorKeyFor(
-                                    _StatusMetricId.memory,
-                                  ),
-                                  value: _formatBytes(memory.rssBytes),
-                                  accent: health.hasWarnings
-                                      ? EditorTheme.warning
-                                      : const Color(0xFFFFC86B),
-                                  isSelected:
-                                      _selectedMetric == _StatusMetricId.memory,
-                                  onTap: _selectMetric,
-                                ),
-                                _StatusSeparator(),
-                                _StatusMetricButton(
-                                  metric: _StatusMetricId.logs,
-                                  anchorKey: _anchorKeyFor(
-                                    _StatusMetricId.logs,
-                                  ),
-                                  value: errorCount > 0
-                                      ? '${logs.length} total • $errorCount err'
-                                      : '${logs.length} total • $warningCount warn',
-                                  accent: const Color(0xFFD9A7FF),
-                                  isSelected:
-                                      _selectedMetric == _StatusMetricId.logs,
-                                  onTap: _selectMetric,
-                                ),
-                                Spacer(),
-                              ],
+        return ValueListenableBuilder<_OverlayUiSettings>(
+          valueListenable: _overlayUiSettingsSignal,
+          builder: (context, settings, _) {
+            final panelPadding = 12.0 * settings.compactness;
+            final panelVertical = 3.0 * settings.compactness;
+            final animationMs = (220 / settings.animationSpeed).clamp(80, 420);
+            return AnimatedContainer(
+              duration: Duration(milliseconds: animationMs.round()),
+              curve: Curves.easeOutCubic,
+              height: dockHeight,
+              child: Material(
+                color: Colors.transparent,
+                child: Stack(
+                  key: _stackKey,
+                  clipBehavior: Clip.none,
+                  children: <Widget>[
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        height: _CompactStatusDock._panelHeight,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF111111),
+                          borderRadius: BorderRadius.circular(0),
+                          border: Border(
+                            top: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.08),
+                            ),
+                            left: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.04),
+                            ),
+                            right: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.04),
+                            ),
+                            bottom: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.04),
                             ),
                           ),
-                        ],
+                          boxShadow: const <BoxShadow>[
+                            BoxShadow(
+                              color: Color(0x55000000),
+                              blurRadius: 14,
+                              offset: Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: panelPadding,
+                            vertical: panelVertical,
+                          ),
+                          child: Column(
+                            children: <Widget>[
+                              Expanded(
+                                child: Row(
+                                  children: <Widget>[
+                                    _StatusMetricButton(
+                                      metric: _StatusMetricId.fps,
+                                      anchorKey: _anchorKeyFor(
+                                        _StatusMetricId.fps,
+                                      ),
+                                      value:
+                                          '${performance.currentFps} fps • ${performance.lastUpdateMs.toStringAsFixed(1)} ms',
+                                      accent: settings.themeColor,
+                                      isSelected:
+                                          _selectedMetric ==
+                                          _StatusMetricId.fps,
+                                      onTap: _selectMetric,
+                                      settings: settings,
+                                    ),
+                                    _StatusSeparator(settings: settings),
+                                    _StatusMetricButton(
+                                      metric: _StatusMetricId.entities,
+                                      anchorKey: _anchorKeyFor(
+                                        _StatusMetricId.entities,
+                                      ),
+                                      value: '${snapshot.entityCount}',
+                                      accent: const Color(0xFF7DE6B1),
+                                      isSelected:
+                                          _selectedMetric ==
+                                          _StatusMetricId.entities,
+                                      onTap: _selectMetric,
+                                      settings: settings,
+                                    ),
+                                    _StatusSeparator(settings: settings),
+                                    _StatusMetricButton(
+                                      metric: _StatusMetricId.memory,
+                                      anchorKey: _anchorKeyFor(
+                                        _StatusMetricId.memory,
+                                      ),
+                                      value: _formatBytes(memory.rssBytes),
+                                      accent: health.hasWarnings
+                                          ? EditorTheme.warning
+                                          : const Color(0xFFFFC86B),
+                                      isSelected:
+                                          _selectedMetric ==
+                                          _StatusMetricId.memory,
+                                      onTap: _selectMetric,
+                                      settings: settings,
+                                    ),
+                                    _StatusSeparator(settings: settings),
+                                    _StatusMetricButton(
+                                      metric: _StatusMetricId.logs,
+                                      anchorKey: _anchorKeyFor(
+                                        _StatusMetricId.logs,
+                                      ),
+                                      value: errorCount > 0
+                                          ? '${logs.length} total • $errorCount err'
+                                          : '${logs.length} total • $warningCount warn',
+                                      accent: const Color(0xFFD9A7FF),
+                                      isSelected:
+                                          _selectedMetric ==
+                                          _StatusMetricId.logs,
+                                      onTap: _selectMetric,
+                                      settings: settings,
+                                    ),
+                                    const Spacer(),
+                                    _EditorSettingsButton(
+                                      anchorKey: _settingsAnchorKey,
+                                      settings: settings,
+                                      isSelected: _isSettingsOpen,
+                                      onPressed: _toggleSettings,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    if (_selectedMetric != null)
+                      Positioned(
+                        left: _detailLeftFor(_selectedMetric!, _detailWidth()),
+                        bottom: _CompactStatusDock._panelHeight + 12,
+                        child: SizedBox(
+                          width: _detailWidth(),
+                          child: _StatusDetailCard(
+                            controller: controller,
+                            section: _selectedMetric!.section,
+                            onClose: _clearSelection,
+                            maxHeight: detailMaxHeight,
+                            settings: settings,
+                          ),
+                        ),
+                      ),
+                    if (_isSettingsOpen)
+                      Positioned(
+                        left: _detailLeftForKey(
+                          _settingsAnchorKey,
+                          math.min(
+                            420,
+                            math.max(280, widget.maxDetailWidth - 24),
+                          ),
+                        ),
+                        bottom: _CompactStatusDock._panelHeight + 12,
+                        child: SizedBox(
+                          width: math.min(
+                            420,
+                            math.max(280, widget.maxDetailWidth - 24),
+                          ),
+                          child: _EditorSettingsPanel(
+                            initial: _overlayUiSettingsSignal.value,
+                            onChanged: _updateSettings,
+                            onClose: _toggleSettings,
+                            maxHeight: settingsPanelHeight,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                if (_selectedMetric != null)
-                  Positioned(
-                    left: _detailLeftFor(_selectedMetric!, _detailWidth()),
-                    bottom: _CompactStatusDock._panelHeight + 12,
-                    child: SizedBox(
-                      width: _detailWidth(),
-                      child: _StatusDetailCard(
-                        controller: controller,
-                        section: _selectedMetric!.section,
-                        onClose: _clearSelection,
-                        maxHeight: detailMaxHeight,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -433,6 +742,7 @@ class _StatusMetricButton extends StatelessWidget {
     required this.accent,
     required this.isSelected,
     required this.onTap,
+    required this.settings,
   });
 
   final _StatusMetricId metric;
@@ -441,6 +751,7 @@ class _StatusMetricButton extends StatelessWidget {
   final Color accent;
   final bool isSelected;
   final ValueChanged<_StatusMetricId> onTap;
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -451,10 +762,13 @@ class _StatusMetricButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () => onTap(metric),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(settings.cornerRadius),
           child: Ink(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              padding: EdgeInsets.symmetric(
+                horizontal: 7 * settings.compactness,
+                vertical: 2 * settings.compactness,
+              ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
@@ -464,21 +778,21 @@ class _StatusMetricButton extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(
                         metric.label,
-                        style: const TextStyle(
-                          fontSize: 9,
+                        style: TextStyle(
+                          fontSize: 9 * settings.effectiveTextScale,
                           fontWeight: FontWeight.w500,
                           color: EditorTheme.textMuted,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(width: 6),
+                  SizedBox(width: 6 * settings.compactness),
                   Text(
                     value,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 10,
+                    style: TextStyle(
+                      fontSize: 10 * settings.effectiveTextScale,
                       fontWeight: FontWeight.w500,
                       color: EditorTheme.textPrimary,
                     ),
@@ -499,12 +813,14 @@ class _StatusDetailCard extends StatelessWidget {
     required this.section,
     required this.onClose,
     required this.maxHeight,
+    required this.settings,
   });
 
   final JustDebuggerController controller;
   final _StatusDetailSection section;
   final VoidCallback onClose;
   final double maxHeight;
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -517,7 +833,7 @@ class _StatusDetailCard extends StatelessWidget {
             constraints: BoxConstraints(maxHeight: maxHeight.clamp(180, 320)),
             decoration: BoxDecoration(
               color: const Color(0xF41B1B1B),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(settings.cornerRadius),
               border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
               boxShadow: const <BoxShadow>[
                 BoxShadow(
@@ -555,8 +871,8 @@ class _StatusDetailCard extends StatelessWidget {
                           children: <Widget>[
                             Text(
                               section.title,
-                              style: const TextStyle(
-                                fontSize: 12,
+                              style: TextStyle(
+                                fontSize: 12 * settings.effectiveTextScale,
                                 fontWeight: FontWeight.w500,
                                 color: EditorTheme.textPrimary,
                               ),
@@ -591,19 +907,36 @@ class _StatusDetailCard extends StatelessWidget {
     JustDebuggerController controller,
   ) {
     final logs = controller.logs;
-    final runtimeHealth = controller.health.hasWarnings
-        ? '${controller.health.messages.length} alerts'
+    final runtimeWarningThreshold = switch (settings.warningSeverity) {
+      _WarningSeverityMode.lenient => 3,
+      _WarningSeverityMode.balanced => 1,
+      _WarningSeverityMode.strict => 1,
+    };
+    final runtimeWarningCount = controller.health.messages.length;
+    final runtimeWarn = runtimeWarningCount >= runtimeWarningThreshold;
+    final runtimeHealth = runtimeWarn
+        ? '$runtimeWarningCount alerts'
         : 'Healthy';
-    final ecsWarning = controller.snapshot.systemCount == 0
+    final hasNoSystems = controller.snapshot.systemCount == 0;
+    final inactiveCount =
+        controller.snapshot.entityCount - controller.snapshot.activeEntityCount;
+    final inactiveRatio = controller.snapshot.entityCount <= 0
+        ? 0.0
+        : inactiveCount / controller.snapshot.entityCount;
+    final inactiveThreshold = switch (settings.warningSeverity) {
+      _WarningSeverityMode.lenient => 0.5,
+      _WarningSeverityMode.balanced => 0.2,
+      _WarningSeverityMode.strict => 0.05,
+    };
+    final hasInactive = inactiveRatio >= inactiveThreshold;
+    final ecsWarning = hasNoSystems && settings.ecsWarnOnNoSystems
         ? 'No systems'
-        : controller.snapshot.activeEntityCount <
-              controller.snapshot.entityCount
+        : hasInactive && settings.ecsWarnOnInactive
         ? 'Inactive entities'
         : 'Healthy';
     final ecsColor =
-        controller.snapshot.systemCount == 0 ||
-            controller.snapshot.activeEntityCount <
-                controller.snapshot.entityCount
+        (hasNoSystems && settings.ecsWarnOnNoSystems) ||
+            (hasInactive && settings.ecsWarnOnInactive)
         ? EditorTheme.warning
         : const Color(0xFF6DE0A7);
     final performanceStatus = controller.performance.isOverBudget
@@ -612,7 +945,7 @@ class _StatusDetailCard extends StatelessWidget {
     final statusColor = controller.performance.isOverBudget
         ? EditorTheme.warning
         : const Color(0xFF6DE0A7);
-    final healthColor = controller.health.hasWarnings
+    final healthColor = runtimeWarn
         ? EditorTheme.warning
         : const Color(0xFF6DE0A7);
     return switch (section) {
@@ -678,35 +1011,101 @@ class _StatusDetailCard extends StatelessWidget {
     return switch (section) {
       _StatusDetailSection.performance => _PerformanceDetailContent(
         controller: controller,
+        settings: settings,
       ),
-      _StatusDetailSection.ecs => _EcsDetailContent(controller: controller),
+      _StatusDetailSection.ecs => _EcsDetailContent(
+        controller: controller,
+        settings: settings,
+      ),
       _StatusDetailSection.memory => _RuntimeDetailContent(
         controller: controller,
+        settings: settings,
       ),
-      _StatusDetailSection.logs => _LogsDetailContent(controller: controller),
+      _StatusDetailSection.logs => _LogsDetailContent(
+        controller: controller,
+        settings: settings,
+      ),
     };
   }
 }
 
+class _EditorSettingsButton extends StatelessWidget {
+  const _EditorSettingsButton({
+    required this.anchorKey,
+    required this.settings,
+    required this.isSelected,
+    required this.onPressed,
+  });
+
+  final GlobalKey anchorKey;
+  final _OverlayUiSettings settings;
+  final bool isSelected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      key: anchorKey,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Tooltip(
+        message: 'Editor settings',
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(settings.cornerRadius),
+          child: Container(
+            decoration: isSelected
+                ? BoxDecoration(
+                    color: settings.themeColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(settings.cornerRadius),
+                    border: Border.all(
+                      color: settings.themeColor.withValues(alpha: 0.28),
+                    ),
+                  )
+                : null,
+            padding: EdgeInsets.symmetric(
+              horizontal: 8 * settings.compactness,
+              vertical: 6 * settings.compactness,
+            ),
+            child: Icon(
+              Icons.tune_rounded,
+              size: 15 * settings.effectiveTextScale,
+              color: settings.themeColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _StatusSeparator extends StatelessWidget {
-  const _StatusSeparator();
+  const _StatusSeparator({required this.settings});
+
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 1,
+      width: settings.accessibilityMode.separatorThickness,
       height: 12,
       margin: const EdgeInsets.symmetric(horizontal: 2),
-      color: Colors.white.withValues(alpha: 0.08),
+      color: Colors.white.withValues(
+        alpha: settings.accessibilityMode.separatorAlpha,
+      ),
     );
   }
 }
 
 class _DetailStatTile extends StatelessWidget {
-  const _DetailStatTile({required this.label, required this.value});
+  const _DetailStatTile({
+    required this.label,
+    required this.value,
+    required this.settings,
+  });
 
   final String label;
   final String value;
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -715,7 +1114,7 @@ class _DetailStatTile extends StatelessWidget {
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: EditorTheme.surfaceBg,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(settings.cornerRadius),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
@@ -726,15 +1125,15 @@ class _DetailStatTile extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: const TextStyle(
-                  fontSize: 11,
+                style: TextStyle(
+                  fontSize: 11 * settings.effectiveTextScale,
                   color: EditorTheme.textMuted,
                 ),
               ),
               Text(
                 value,
-                style: const TextStyle(
-                  fontSize: 12,
+                style: TextStyle(
+                  fontSize: 12 * settings.effectiveTextScale,
                   fontWeight: FontWeight.w700,
                   color: EditorTheme.textPrimary,
                 ),
@@ -747,11 +1146,53 @@ class _DetailStatTile extends StatelessWidget {
   }
 }
 
-class _DetailSectionCard extends StatelessWidget {
-  const _DetailSectionCard({required this.title, required this.child});
+class _DetailSectionCard extends StatefulWidget {
+  const _DetailSectionCard({
+    required this.sectionId,
+    required this.title,
+    required this.child,
+    required this.settings,
+  });
 
+  final String sectionId;
   final String title;
   final Widget child;
+  final _OverlayUiSettings settings;
+
+  @override
+  State<_DetailSectionCard> createState() => _DetailSectionCardState();
+}
+
+class _DetailSectionCardState extends State<_DetailSectionCard> {
+  bool _collapsed = false;
+
+  String get _prefKey => 'editor.overlay.sectionCollapsed.${widget.sectionId}';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCollapsed();
+  }
+
+  Future<void> _loadCollapsed() async {
+    final collapsed = await _overlaySettingsStore.readBoolByKey(
+      _prefKey,
+      fallback: false,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _collapsed = collapsed;
+    });
+  }
+
+  Future<void> _toggleCollapsed() async {
+    setState(() {
+      _collapsed = !_collapsed;
+    });
+    await _overlaySettingsStore.writeBoolByKey(_prefKey, _collapsed);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -760,34 +1201,55 @@ class _DetailSectionCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: EditorTheme.surfaceDark,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(widget.settings.cornerRadius),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: EditorTheme.textPrimary,
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          InkWell(
+            onTap: _toggleCollapsed,
+            borderRadius: BorderRadius.circular(widget.settings.cornerRadius),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    style: TextStyle(
+                      fontSize: 10 * widget.settings.effectiveTextScale,
+                      fontWeight: FontWeight.w700,
+                      color: EditorTheme.textPrimary,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _collapsed
+                      ? Icons.expand_more_rounded
+                      : Icons.expand_less_rounded,
+                  color: EditorTheme.textMuted,
+                  size: 16,
+                ),
+              ],
             ),
+          ),
+          if (!_collapsed) ...<Widget>[
             const SizedBox(height: 10),
-            child,
+            widget.child,
           ],
-        ),
+        ],
       ),
     );
   }
 }
 
 class _PerformanceDetailContent extends StatelessWidget {
-  const _PerformanceDetailContent({required this.controller});
+  const _PerformanceDetailContent({
+    required this.controller,
+    required this.settings,
+  });
 
   final JustDebuggerController controller;
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -802,24 +1264,33 @@ class _PerformanceDetailContent extends StatelessWidget {
           spacing: 5,
           runSpacing: 5,
           children: <Widget>[
-            _DetailStatTile(label: 'FPS', value: '${performance.currentFps}'),
+            _DetailStatTile(
+              label: 'FPS',
+              value: '${performance.currentFps}',
+              settings: settings,
+            ),
             _DetailStatTile(
               label: 'Update Time',
               value: '${performance.lastUpdateMs.toStringAsFixed(1)} ms',
+              settings: settings,
             ),
             _DetailStatTile(
               label: 'Budget Left',
               value: '${performance.budgetRemainingMs.toStringAsFixed(1)} ms',
+              settings: settings,
             ),
             _DetailStatTile(
               label: 'Frame',
               value: '${performance.frameNumber}',
+              settings: settings,
             ),
           ],
         ),
         const SizedBox(height: 8),
         _DetailSectionCard(
+          sectionId: 'performance_hottest_systems',
           title: 'Hottest Systems',
+          settings: settings,
           child: Column(
             children: timings
                 .take(5)
@@ -858,9 +1329,10 @@ class _PerformanceDetailContent extends StatelessWidget {
 }
 
 class _EcsDetailContent extends StatelessWidget {
-  const _EcsDetailContent({required this.controller});
+  const _EcsDetailContent({required this.controller, required this.settings});
 
   final JustDebuggerController controller;
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -878,21 +1350,30 @@ class _EcsDetailContent extends StatelessWidget {
             _DetailStatTile(
               label: 'Entities',
               value: '${snapshot.entityCount}',
+              settings: settings,
             ),
             _DetailStatTile(
               label: 'Active Entities',
               value: '${snapshot.activeEntityCount}',
+              settings: settings,
             ),
-            _DetailStatTile(label: 'Systems', value: '${snapshot.systemCount}'),
+            _DetailStatTile(
+              label: 'Systems',
+              value: '${snapshot.systemCount}',
+              settings: settings,
+            ),
             _DetailStatTile(
               label: 'Archetypes',
               value: '${snapshot.archetypeCount}',
+              settings: settings,
             ),
           ],
         ),
         const SizedBox(height: 8),
         _DetailSectionCard(
+          sectionId: 'ecs_top_components',
           title: 'Top Components',
+          settings: settings,
           child: Column(
             children: components
                 .take(6)
@@ -931,9 +1412,13 @@ class _EcsDetailContent extends StatelessWidget {
 }
 
 class _RuntimeDetailContent extends StatelessWidget {
-  const _RuntimeDetailContent({required this.controller});
+  const _RuntimeDetailContent({
+    required this.controller,
+    required this.settings,
+  });
 
   final JustDebuggerController controller;
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -950,21 +1435,30 @@ class _RuntimeDetailContent extends StatelessWidget {
             _DetailStatTile(
               label: 'App RSS',
               value: _formatBytes(memory.rssBytes),
+              settings: settings,
             ),
-            _DetailStatTile(label: 'Entities', value: '${memory.entityCount}'),
+            _DetailStatTile(
+              label: 'Entities',
+              value: '${memory.entityCount}',
+              settings: settings,
+            ),
             _DetailStatTile(
               label: 'Components',
               value: '${memory.componentCount}',
+              settings: settings,
             ),
             _DetailStatTile(
               label: 'Warnings',
               value: '${health.messages.length}',
+              settings: settings,
             ),
           ],
         ),
         const SizedBox(height: 8),
         _DetailSectionCard(
+          sectionId: 'runtime_memory_counters',
           title: 'Memory Counters',
+          settings: settings,
           child: Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -993,7 +1487,9 @@ class _RuntimeDetailContent extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         _DetailSectionCard(
+          sectionId: 'runtime_current_signals',
           title: 'Current Signals',
+          settings: settings,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: health.hasWarnings
@@ -1044,13 +1540,18 @@ class _RuntimeDetailContent extends StatelessWidget {
 }
 
 class _LogsDetailContent extends StatelessWidget {
-  const _LogsDetailContent({required this.controller});
+  const _LogsDetailContent({required this.controller, required this.settings});
 
   final JustDebuggerController controller;
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
-    final logs = controller.logs.reversed.take(5).toList(growable: false);
+    final logs = settings.logsAutoScroll
+        ? controller.logs.reversed
+              .take(settings.logLineClamp)
+              .toList(growable: false)
+        : controller.logs.take(settings.logLineClamp).toList(growable: false);
     final infoCount = controller.logs
         .where((entry) => entry.level == DebuggerLogLevel.info)
         .length;
@@ -1071,15 +1572,30 @@ class _LogsDetailContent extends StatelessWidget {
             _DetailStatTile(
               label: 'Total Logs',
               value: '${controller.logs.length}',
+              settings: settings,
             ),
-            _DetailStatTile(label: 'Info', value: '$infoCount'),
-            _DetailStatTile(label: 'Warnings', value: '$warningCount'),
-            _DetailStatTile(label: 'Errors', value: '$errorCount'),
+            _DetailStatTile(
+              label: 'Info',
+              value: '$infoCount',
+              settings: settings,
+            ),
+            _DetailStatTile(
+              label: 'Warnings',
+              value: '$warningCount',
+              settings: settings,
+            ),
+            _DetailStatTile(
+              label: 'Errors',
+              value: '$errorCount',
+              settings: settings,
+            ),
           ],
         ),
         const SizedBox(height: 8),
         _DetailSectionCard(
+          sectionId: 'logs_recent_entries',
           title: 'Recent Entries',
+          settings: settings,
           child: SingleChildScrollView(
             child: Column(
               children: logs.isEmpty
@@ -1162,9 +1678,10 @@ String _formatBytes(int bytes) {
 // ── Right panel ───────────────────────────────────────────────────────────────
 
 class _EditorRightPanel extends StatelessWidget {
-  const _EditorRightPanel({required this.plugin});
+  const _EditorRightPanel({required this.plugin, required this.settings});
 
   final JustGameEditorPlugin plugin;
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -1183,7 +1700,7 @@ class _EditorRightPanel extends StatelessWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  _HeaderBar(plugin: plugin),
+                  _HeaderBar(plugin: plugin, settings: settings),
                   const Divider(height: 1, color: EditorTheme.border),
                   if (!plugin.sceneState.hasScene)
                     Expanded(
@@ -1219,7 +1736,7 @@ class _EditorRightPanel extends StatelessWidget {
                       ),
                     ),
                     // Save button footer
-                    _SaveFooter(plugin: plugin),
+                    _SaveFooter(plugin: plugin, settings: settings),
                   ],
                 ],
               );
@@ -1234,9 +1751,10 @@ class _EditorRightPanel extends StatelessWidget {
 // ── Header bar ────────────────────────────────────────────────────────────────
 
 class _HeaderBar extends StatelessWidget {
-  const _HeaderBar({required this.plugin});
+  const _HeaderBar({required this.plugin, required this.settings});
 
   final JustGameEditorPlugin plugin;
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -1253,7 +1771,7 @@ class _HeaderBar extends StatelessWidget {
                 onPressed: plugin.sceneState.closeScene,
                 icon: const Icon(Icons.arrow_back_ios_new_rounded),
                 iconSize: 14,
-                color: EditorTheme.primary,
+                color: settings.themeColor,
                 splashRadius: 16,
                 padding: const EdgeInsets.all(4),
                 constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
@@ -1272,10 +1790,10 @@ class _HeaderBar extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Text(
+                Text(
                   'Just Runtime Editor',
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 13 * settings.effectiveTextScale,
                     fontWeight: FontWeight.w700,
                     color: EditorTheme.textPrimary,
                   ),
@@ -1283,15 +1801,15 @@ class _HeaderBar extends StatelessWidget {
                 if (sceneName != null)
                   Text(
                     sceneName,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: EditorTheme.primaryMuted,
+                    style: TextStyle(
+                      fontSize: 10 * settings.effectiveTextScale,
+                      color: settings.themeColor.withValues(alpha: 0.8),
                     ),
                   ),
               ],
             ),
           ),
-          const _Badge(label: 'JIT'),
+          _Badge(label: 'JIT', accent: settings.themeColor, settings: settings),
         ],
       ),
     );
@@ -1301,9 +1819,10 @@ class _HeaderBar extends StatelessWidget {
 // ── Save footer ───────────────────────────────────────────────────────────────
 
 class _SaveFooter extends StatelessWidget {
-  const _SaveFooter({required this.plugin});
+  const _SaveFooter({required this.plugin, required this.settings});
 
   final JustGameEditorPlugin plugin;
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -1318,9 +1837,13 @@ class _SaveFooter extends StatelessWidget {
         child: Row(
           children: <Widget>[
             if (isDirty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(right: 8),
-                child: _Badge(label: 'UNSAVED', accent: EditorTheme.warning),
+                child: _Badge(
+                  label: 'UNSAVED',
+                  accent: EditorTheme.warning,
+                  settings: settings,
+                ),
               ),
             const Spacer(),
             SizedBox(
@@ -1330,17 +1853,20 @@ class _SaveFooter extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: EditorTheme.buttonBg,
                   disabledBackgroundColor: EditorTheme.surfaceBg,
-                  foregroundColor: EditorTheme.primary,
+                  foregroundColor: settings.themeColor,
                   disabledForegroundColor: EditorTheme.border,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(settings.cornerRadius),
                   ),
                 ),
                 icon: const Icon(Icons.save_rounded, size: 14),
-                label: const Text(
+                label: Text(
                   'Save',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontSize: 12 * settings.effectiveTextScale,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
@@ -1354,31 +1880,36 @@ class _SaveFooter extends StatelessWidget {
 // ── Status badge (top-left corner) ────────────────────────────────────────────
 
 class _EditorStatusBadge extends StatelessWidget {
-  const _EditorStatusBadge();
+  const _EditorStatusBadge({required this.settings});
+
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: EditorTheme.statusBadgeBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: EditorTheme.primary, width: 1),
+        borderRadius: BorderRadius.circular(settings.cornerRadius + 6),
+        border: Border.all(color: settings.themeColor, width: 1),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: 10 * settings.compactness,
+          vertical: 8 * settings.compactness,
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const Icon(
+            Icon(
               Icons.visibility_rounded,
-              size: 14,
+              size: 14 * settings.effectiveTextScale,
               color: EditorTheme.textBright,
             ),
             const SizedBox(width: 6),
-            const Text(
+            Text(
               'EDITOR: OPEN',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 11 * settings.effectiveTextScale,
                 fontWeight: FontWeight.w700,
                 color: EditorTheme.textBright,
                 letterSpacing: 0.4,
@@ -1394,10 +1925,15 @@ class _EditorStatusBadge extends StatelessWidget {
 // ── Shared badge chip ─────────────────────────────────────────────────────────
 
 class _Badge extends StatelessWidget {
-  const _Badge({required this.label, this.accent = EditorTheme.buttonBg});
+  const _Badge({
+    required this.label,
+    this.accent = EditorTheme.buttonBg,
+    this.settings = const _OverlayUiSettings.defaults(),
+  });
 
   final String label;
   final Color accent;
+  final _OverlayUiSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -1407,12 +1943,15 @@ class _Badge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: EdgeInsets.symmetric(
+          horizontal: 8 * settings.compactness,
+          vertical: 3 * settings.compactness,
+        ),
         child: Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             color: EditorTheme.textBadge,
-            fontSize: 11,
+            fontSize: 11 * settings.effectiveTextScale,
             fontWeight: FontWeight.w700,
           ),
         ),

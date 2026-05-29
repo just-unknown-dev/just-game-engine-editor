@@ -15,6 +15,7 @@ dependencies:
   just_debugger: ^0.0.1
   flutter_colorpicker: ^1.1.0
   just_database: ^1.4.2
+  just_storage: ^1.2.1
 
 dev_dependencies:
   flutter_test:
