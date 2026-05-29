@@ -29,7 +29,8 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
          overlayVisible: false,
          attachImmediately: false,
        ),
-       sceneState = EditorSceneState(),
+       sceneState = EditorSceneState()
+         ..setGridSnapping(enabled: true, gridSize: 32),
        _gizmoPainter = GizmoPainter(),
        _hitTester = GizmoHitTester();
 
@@ -48,6 +49,9 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   bool _isVisible = false;
   bool _isStatusPanelVisible = false;
   bool _isDebuggerAttached = false;
+  bool _showGrid = true;
+  bool _gridSnappingEnabled = true;
+  double _gridSize = 32.0;
 
   // ── Pointer / drag state ──────────────────────────────────────────────────
 
@@ -150,13 +154,37 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   @override
   void onRender(Canvas canvas) {
     if (!_isInitialized || !_isVisible) return;
-
-    final selected = sceneState.selectedEntity;
-    if (selected == null || !selected.isActive) return;
     if (_canvasSize == Size.zero) return;
 
     final camera = engine.cameraSystem.mainCamera;
+
+    if (_showGrid) {
+      _gizmoPainter.paintInfiniteGrid(
+        canvas,
+        camera,
+        _canvasSize,
+        gridSize: _gridSize,
+      );
+    }
+
+    final selected = sceneState.selectedEntity;
+    if (selected == null || !selected.isActive) return;
     _gizmoPainter.paintGizmos(canvas, selected, camera, _canvasSize);
+  }
+
+  void applyOverlaySettings({
+    required bool showGrid,
+    required bool gridSnappingEnabled,
+    required double gridSize,
+  }) {
+    final nextGridSize = gridSize <= 0 ? 32.0 : gridSize;
+    _showGrid = showGrid;
+    _gridSnappingEnabled = gridSnappingEnabled;
+    _gridSize = nextGridSize;
+    sceneState.setGridSnapping(
+      enabled: _gridSnappingEnabled,
+      gridSize: _gridSize,
+    );
   }
 
   // ── Pointer events (called from _GameCanvasArea Listener) ────────────────
@@ -297,9 +325,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
             0.01,
             50.0,
           );
-          transform.scale.x = newSx;
-          sceneState.markDirty();
-          sceneState.refresh();
+          sceneState.setScaleX(entity, newSx);
         }
         _dragStartScreen = event.localPosition;
 
@@ -314,9 +340,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
             0.01,
             50.0,
           );
-          transform.scale.y = newSy;
-          sceneState.markDirty();
-          sceneState.refresh();
+          sceneState.setScaleY(entity, newSy);
         }
         _dragStartScreen = event.localPosition;
 

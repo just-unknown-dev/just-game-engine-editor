@@ -51,6 +51,11 @@ class JustGameEditorOverlay extends StatelessWidget {
             return ValueListenableBuilder<_OverlayUiSettings>(
               valueListenable: _overlayUiSettingsSignal,
               builder: (context, settings, _) {
+                plugin.applyOverlaySettings(
+                  showGrid: settings.showGrid,
+                  gridSnappingEnabled: settings.gridSnappingEnabled,
+                  gridSize: settings.gridSize,
+                );
                 return Stack(
                   children: <Widget>[
                     Positioned.fill(
@@ -277,6 +282,9 @@ class _OverlayUiSettings {
     required this.logLineClamp,
     required this.logsAutoScroll,
     required this.accessibilityMode,
+    required this.showGrid,
+    required this.gridSnappingEnabled,
+    required this.gridSize,
   });
 
   const _OverlayUiSettings.defaults()
@@ -292,7 +300,10 @@ class _OverlayUiSettings {
       metricRefreshMs = 120,
       logLineClamp = 8,
       logsAutoScroll = true,
-      accessibilityMode = _AccessibilityMode.off;
+      accessibilityMode = _AccessibilityMode.off,
+      showGrid = true,
+      gridSnappingEnabled = true,
+      gridSize = 32;
 
   final double textScale;
   final double cornerRadius;
@@ -307,6 +318,9 @@ class _OverlayUiSettings {
   final int logLineClamp;
   final bool logsAutoScroll;
   final _AccessibilityMode accessibilityMode;
+  final bool showGrid;
+  final bool gridSnappingEnabled;
+  final double gridSize;
 
   Color get themeColor => themePreset.color;
   double get effectiveTextScale => textScale * accessibilityMode.textMultiplier;
@@ -325,6 +339,9 @@ class _OverlayUiSettings {
     int? logLineClamp,
     bool? logsAutoScroll,
     _AccessibilityMode? accessibilityMode,
+    bool? showGrid,
+    bool? gridSnappingEnabled,
+    double? gridSize,
   }) {
     return _OverlayUiSettings(
       textScale: textScale ?? this.textScale,
@@ -340,6 +357,9 @@ class _OverlayUiSettings {
       logLineClamp: logLineClamp ?? this.logLineClamp,
       logsAutoScroll: logsAutoScroll ?? this.logsAutoScroll,
       accessibilityMode: accessibilityMode ?? this.accessibilityMode,
+      showGrid: showGrid ?? this.showGrid,
+      gridSnappingEnabled: gridSnappingEnabled ?? this.gridSnappingEnabled,
+      gridSize: gridSize ?? this.gridSize,
     );
   }
 }

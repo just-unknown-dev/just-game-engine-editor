@@ -339,6 +339,16 @@ class _EditorSettingsSummary extends StatelessWidget {
             label: 'Accessibility',
             value: settings.accessibilityMode.label,
           ),
+          _SettingsInfoChip(
+            label: 'Grid',
+            value: settings.showGrid
+                ? '${settings.gridSize.toStringAsFixed(0)}u'
+                : 'Hidden',
+          ),
+          _SettingsInfoChip(
+            label: 'Snap',
+            value: settings.gridSnappingEnabled ? 'Enabled' : 'Disabled',
+          ),
           _SettingsInfoChip(label: 'View', value: activeTab.label),
         ],
       ),
@@ -562,6 +572,39 @@ class _EditorSettingsRuntimeTab extends StatelessWidget {
                 value: settings.ecsWarnOnInactive,
                 onChanged: (value) =>
                     onChanged(settings.copyWith(ecsWarnOnInactive: value)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        _DetailSectionCard(
+          sectionId: 'editor_settings_runtime_grid',
+          title: 'Grid & Snapping',
+          settings: settings,
+          child: Column(
+            children: <Widget>[
+              _SettingsSwitchRow(
+                title: 'Show infinite grid on canvas',
+                value: settings.showGrid,
+                onChanged: (value) =>
+                    onChanged(settings.copyWith(showGrid: value)),
+              ),
+              _SettingsSwitchRow(
+                title: 'Snap movement and scale to grid',
+                value: settings.gridSnappingEnabled,
+                onChanged: (value) =>
+                    onChanged(settings.copyWith(gridSnappingEnabled: value)),
+              ),
+              _SettingsSliderRow(
+                label: 'Grid Size',
+                value: settings.gridSize,
+                min: 4,
+                max: 256,
+                digits: 0,
+                suffix: 'u',
+                onChanged: (value) => onChanged(
+                  settings.copyWith(gridSize: value.roundToDouble()),
+                ),
               ),
             ],
           ),

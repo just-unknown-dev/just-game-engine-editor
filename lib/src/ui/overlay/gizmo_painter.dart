@@ -49,6 +49,7 @@ class GizmoPainter {
   // Axis-scale square: sits on the arrow shaft before the arrowhead
   static const double _axisSquareOffset = 30.0;
   static const double _axisSquareHalf = 5.0;
+  static const double _minGridScreenSpacing = 14.0;
 
   // Colours
   static const Color _colX = Color(0xFFE54B4B);
@@ -60,6 +61,65 @@ class GizmoPainter {
   static const Color _colMove = Color(0xFF40E0D0);
 
   final Paint _paint = Paint()..isAntiAlias = true;
+
+  void paintInfiniteGrid(
+    Canvas canvas,
+    Camera camera,
+    Size canvasSize, {
+    required double gridSize,
+  }) {
+    if (gridSize <= 0 || canvasSize == Size.zero) return;
+
+    camera.viewportSize = canvasSize;
+    final topLeftWorld = camera.screenToWorld(Offset.zero);
+    final bottomRightWorld = camera.screenToWorld(
+      Offset(canvasSize.width, canvasSize.height),
+    );
+
+    final minX = math.min(topLeftWorld.dx, bottomRightWorld.dx);
+    final maxX = math.max(topLeftWorld.dx, bottomRightWorld.dx);
+    final minY = math.min(topLeftWorld.dy, bottomRightWorld.dy);
+    final maxY = math.max(topLeftWorld.dy, bottomRightWorld.dy);
+
+    final baseSpacing = gridSize * camera.zoom.abs();
+    if (!baseSpacing.isFinite || baseSpacing <= 0) return;
+
+    final multiplier = math.max(
+      1,
+      (_minGridScreenSpacing / baseSpacing).ceil(),
+    );
+    final step = gridSize * multiplier;
+    final majorEvery = 5;
+
+    final minorColor = const Color(0xFFFFFFFF).withValues(alpha: 0.07);
+    final majorColor = const Color(0xFFFFFFFF).withValues(alpha: 0.14);
+
+    final firstX = (minX / step).floor() * step;
+    var indexX = 0;
+    for (double x = firstX; x <= maxX + step; x += step) {
+      final sx = camera.worldToScreen(Offset(x, 0)).dx;
+      final isMajor = indexX % majorEvery == 0;
+      _paint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = isMajor ? 1.2 : 0.8
+        ..color = isMajor ? majorColor : minorColor;
+      canvas.drawLine(Offset(sx, 0), Offset(sx, canvasSize.height), _paint);
+      indexX++;
+    }
+
+    final firstY = (minY / step).floor() * step;
+    var indexY = 0;
+    for (double y = firstY; y <= maxY + step; y += step) {
+      final sy = camera.worldToScreen(Offset(0, y)).dy;
+      final isMajor = indexY % majorEvery == 0;
+      _paint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = isMajor ? 1.2 : 0.8
+        ..color = isMajor ? majorColor : minorColor;
+      canvas.drawLine(Offset(0, sy), Offset(canvasSize.width, sy), _paint);
+      indexY++;
+    }
+  }
 
   /// Paints gizmos for [entity] using [camera] to convert positions.
   ///

@@ -21,6 +21,10 @@ class _OverlaySettingsStore {
   static const String prefLogsAutoScroll = 'editor.overlay.logsAutoScroll';
   static const String prefAccessibilityMode =
       'editor.overlay.accessibilityMode';
+  static const String prefShowGrid = 'editor.overlay.showGrid';
+  static const String prefGridSnappingEnabled =
+      'editor.overlay.gridSnappingEnabled';
+  static const String prefGridSize = 'editor.overlay.gridSize';
 
   Future<_OverlayUiSettings> loadSettings() async {
     final values = await (await _storageFuture).readAll();
@@ -71,6 +75,13 @@ class _OverlaySettingsStore {
             0,
             _AccessibilityMode.values.length - 1,
           )],
+      showGrid: _readBool(values, prefShowGrid, fallback: true),
+      gridSnappingEnabled: _readBool(
+        values,
+        prefGridSnappingEnabled,
+        fallback: true,
+      ),
+      gridSize: _readDouble(values, prefGridSize, fallback: 32),
     );
   }
 
@@ -102,6 +113,12 @@ class _OverlaySettingsStore {
         prefAccessibilityMode,
         settings.accessibilityMode.index.toString(),
       ),
+      storage.write(prefShowGrid, settings.showGrid.toString()),
+      storage.write(
+        prefGridSnappingEnabled,
+        settings.gridSnappingEnabled.toString(),
+      ),
+      storage.write(prefGridSize, settings.gridSize.toString()),
     ]);
   }
 

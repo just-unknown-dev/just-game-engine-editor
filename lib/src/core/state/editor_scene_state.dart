@@ -13,6 +13,8 @@ class EditorSceneState extends ChangeNotifier {
   bool _isDirty = false;
   final Map<EntityId, SceneNode> _entityNodeMap = {};
   final Set<EntityId> _multiSelectedIds = {};
+  bool _gridSnappingEnabled = true;
+  double _gridSize = 32.0;
 
   // ── Getters ──────────────────────────────────────────────────────────────
 
@@ -29,6 +31,8 @@ class EditorSceneState extends ChangeNotifier {
 
   /// `true` when two or more entities are selected simultaneously.
   bool get hasMultiSelection => _multiSelectedIds.length > 1;
+  bool get gridSnappingEnabled => _gridSnappingEnabled;
+  double get gridSize => _gridSize;
 
   bool isInMultiSelection(EntityId id) => _multiSelectedIds.contains(id);
 
@@ -150,6 +154,21 @@ class EditorSceneState extends ChangeNotifier {
   /// dirty flag alone wouldn't trigger a rebuild for.
   void refresh() => notifyListeners();
 
+  void setGridSnapping({
+    required bool enabled,
+    required double gridSize,
+    bool notify = false,
+  }) {
+    final normalizedSize = gridSize <= 0 ? 32.0 : gridSize;
+    final changed =
+        _gridSnappingEnabled != enabled || _gridSize != normalizedSize;
+    _gridSnappingEnabled = enabled;
+    _gridSize = normalizedSize;
+    if (changed && notify) {
+      notifyListeners();
+    }
+  }
+
   // ── Transform mutations (keep ECS + SceneNode in sync) ───────────────────
 
   /// Translate [entity] by [delta] in world space.
@@ -157,7 +176,11 @@ class EditorSceneState extends ChangeNotifier {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
     transform.translateXY(delta.dx, delta.dy);
-    _entityNodeMap[entity.id]?.localPosition += delta;
+    if (_gridSnappingEnabled) {
+      final snapped = _snapPosition(transform.position.toOffset());
+      transform.setPositionXY(snapped.dx, snapped.dy);
+    }
+    _entityNodeMap[entity.id]?.localPosition = transform.position.toOffset();
     markDirty();
     notifyListeners();
   }
@@ -179,8 +202,14 @@ class EditorSceneState extends ChangeNotifier {
     if (transform == null) return;
     transform.scale.x *= factor;
     transform.scale.y *= factor;
+    if (_gridSnappingEnabled) {
+      transform.scale.x = _snapScale(transform.scale.x);
+      transform.scale.y = _snapScale(transform.scale.y);
+    }
     final node = _entityNodeMap[entity.id];
-    if (node != null) node.localScale *= factor;
+    if (node != null) {
+      node.localScale = (transform.scale.x + transform.scale.y) / 2;
+    }
     markDirty();
     notifyListeners();
   }
@@ -189,9 +218,12 @@ class EditorSceneState extends ChangeNotifier {
   void setPosition(Entity entity, Offset position) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
-    transform.setPositionXY(position.dx, position.dy);
+    final nextPosition = _gridSnappingEnabled
+        ? _snapPosition(position)
+        : position;
+    transform.setPositionXY(nextPosition.dx, nextPosition.dy);
     final node = _entityNodeMap[entity.id];
-    if (node != null) node.localPosition = position;
+    if (node != null) node.localPosition = nextPosition;
     markDirty();
     notifyListeners();
   }
@@ -211,10 +243,12 @@ class EditorSceneState extends ChangeNotifier {
   void setScale(Entity entity, Offset scale) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
-    transform.scale.x = scale.dx;
-    transform.scale.y = scale.dy;
+    final sx = _gridSnappingEnabled ? _snapScale(scale.dx) : scale.dx;
+    final sy = _gridSnappingEnabled ? _snapScale(scale.dy) : scale.dy;
+    transform.scale.x = sx;
+    transform.scale.y = sy;
     final node = _entityNodeMap[entity.id];
-    if (node != null) node.localScale = (scale.dx + scale.dy) / 2;
+    if (node != null) node.localScale = (sx + sy) / 2;
     markDirty();
     notifyListeners();
   }
@@ -223,9 +257,10 @@ class EditorSceneState extends ChangeNotifier {
   void setScaleX(Entity entity, double x) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
-    transform.scale.x = x;
+    final sx = _gridSnappingEnabled ? _snapScale(x) : x;
+    transform.scale.x = sx;
     final node = _entityNodeMap[entity.id];
-    if (node != null) node.localScale = (x + transform.scale.y) / 2;
+    if (node != null) node.localScale = (sx + transform.scale.y) / 2;
     markDirty();
     notifyListeners();
   }
@@ -234,11 +269,23 @@ class EditorSceneState extends ChangeNotifier {
   void setScaleY(Entity entity, double y) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
-    transform.scale.y = y;
+    final sy = _gridSnappingEnabled ? _snapScale(y) : y;
+    transform.scale.y = sy;
     final node = _entityNodeMap[entity.id];
-    if (node != null) node.localScale = (transform.scale.x + y) / 2;
+    if (node != null) node.localScale = (transform.scale.x + sy) / 2;
     markDirty();
     notifyListeners();
+  }
+
+  Offset _snapPosition(Offset value) {
+    final gx = (value.dx / _gridSize).roundToDouble() * _gridSize;
+    final gy = (value.dy / _gridSize).roundToDouble() * _gridSize;
+    return Offset(gx, gy);
+  }
+
+  double _snapScale(double value) {
+    final step = 1 / _gridSize;
+    return (value / step).roundToDouble() * step;
   }
 
   /// Rename [entity] and keep the linked [SceneNode] in sync.
