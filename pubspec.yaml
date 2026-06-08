@@ -13,7 +13,7 @@ dependencies:
     sdk: flutter
   just_game_engine: ^1.6.0
   just_debugger: ^0.0.1
-  flutter_colorpicker: ^1.1.0
+  just_colours: ^0.1.0
   just_database: ^1.4.2
   just_storage: ^1.2.1
 

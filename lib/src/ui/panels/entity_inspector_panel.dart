@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:just_game_engine/just_game_engine.dart';
+import 'package:just_colours/just_colours.dart';
 import '../dialogs/add_component_picker.dart';
 import '../theme/editor_theme.dart';
 import '../widgets/scrubbable_number_field.dart';
@@ -2477,6 +2477,26 @@ class _ColorWheelDialogState extends State<_ColorWheelDialog> {
     widget.onChanged(c);
   }
 
+  void _setHue(double hue) {
+    final hsv = HSVColor.fromColor(_current);
+    _applyColor(hsv.withHue(hue).toColor());
+  }
+
+  void _setSaturation(double saturation) {
+    final hsv = HSVColor.fromColor(_current);
+    _applyColor(hsv.withSaturation(saturation.clamp(0, 1)).toColor());
+  }
+
+  void _setValue(double value) {
+    final hsv = HSVColor.fromColor(_current);
+    _applyColor(hsv.withValue(value.clamp(0, 1)).toColor());
+  }
+
+  void _setAlpha(double alpha) {
+    final hsv = HSVColor.fromColor(_current);
+    _applyColor(hsv.withAlpha(alpha.clamp(0, 1)).toColor());
+  }
+
   void _onHexChanged(String value) {
     final cleaned = value.replaceAll(RegExp(r'[^0-9a-fA-F]'), '');
     int? argb;
@@ -2532,11 +2552,28 @@ class _ColorWheelDialogState extends State<_ColorWheelDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-              HueRingPicker(
-                pickerColor: _current,
-                onColorChanged: _applyColor,
-                enableAlpha: true,
-                displayThumbColor: true,
+              Center(
+                child: ColourWheel(
+                  hue: HSVColor.fromColor(_current).hue,
+                  onChanged: _setHue,
+                  size: 180,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _ChannelSlider(
+                label: 'Saturation',
+                value: HSVColor.fromColor(_current).saturation,
+                onChanged: _setSaturation,
+              ),
+              _ChannelSlider(
+                label: 'Value',
+                value: HSVColor.fromColor(_current).value,
+                onChanged: _setValue,
+              ),
+              _ChannelSlider(
+                label: 'Alpha',
+                value: HSVColor.fromColor(_current).alpha,
+                onChanged: _setAlpha,
               ),
               const SizedBox(height: 12),
               // ── Editable hex field ───────────────────────────────────────
@@ -2680,6 +2717,45 @@ class _ColorWheelDialogState extends State<_ColorWheelDialog> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ChannelSlider extends StatelessWidget {
+  const _ChannelSlider({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 72,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: EditorTheme.textMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Slider(
+            value: value.clamp(0, 1),
+            min: 0,
+            max: 1,
+            onChanged: onChanged,
+          ),
+        ),
+      ],
     );
   }
 }
