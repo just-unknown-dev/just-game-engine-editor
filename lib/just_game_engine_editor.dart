@@ -1,6 +1,7 @@
 library;
 
 export 'src/ui/dialogs/add_component_picker.dart';
+export 'src/core/components/simple_movement_component.dart';
 export 'src/core/registry/component_registry.dart';
 export 'src/ui/dialogs/create_scene_overlay.dart';
 export 'src/core/serialization/ecs_level_mapper.dart';
@@ -16,3 +17,4 @@ export 'src/core/serialization/scene_name_validator.dart';
 export 'src/ui/panels/scene_picker_panel.dart';
 export 'src/ui/panels/scene_tree_panel.dart';
 export 'src/ui/widgets/scrubbable_number_field.dart';
+export 'src/core/systems/simple_movement_system.dart';

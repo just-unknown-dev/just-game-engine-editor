@@ -1,11 +1,29 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_colours/just_colours.dart';
 import '../dialogs/add_component_picker.dart';
 import '../theme/editor_theme.dart';
 import '../widgets/scrubbable_number_field.dart';
+import '../../core/components/simple_movement_component.dart';
 import '../../core/services/color_history_service.dart';
 import '../../core/state/editor_scene_state.dart';
+
+Future<ColourStorageRepository?>? _colourStorageRepoFuture;
+
+Future<ColourStorageRepository?> _getColourStorageRepository() {
+  _colourStorageRepoFuture ??= _createColourStorageRepositorySafe();
+  return _colourStorageRepoFuture!;
+}
+
+Future<ColourStorageRepository?> _createColourStorageRepositorySafe() async {
+  try {
+    return await ColourStorageRepository.create();
+  } catch (_) {
+    return null;
+  }
+}
 
 // ── Public widget ─────────────────────────────────────────────────────────────
 
@@ -151,6 +169,17 @@ class _EntityInspector extends StatelessWidget {
           vel: velocity,
           sceneState: sceneState,
           onDelete: () => _removeComponent<VelocityComponent>(),
+        ),
+      );
+    }
+
+    final simpleMovement = entity.getComponent<SimpleMovementComponent>();
+    if (simpleMovement != null) {
+      sections.add(
+        _SimpleMovementSection(
+          comp: simpleMovement,
+          sceneState: sceneState,
+          onDelete: () => _removeComponent<SimpleMovementComponent>(),
         ),
       );
     }
@@ -631,6 +660,135 @@ class _VelocitySectionState extends State<_VelocitySection> {
           widget.sceneState.markDirty();
         },
         scrub: const NumberScrubConfig(step: 1, fractionDigits: 1, min: 0),
+      ),
+    ],
+  );
+}
+
+// ── Simple movement ─────────────────────────────────────────────────────────
+
+class _SimpleMovementSection extends StatefulWidget {
+  const _SimpleMovementSection({
+    required this.comp,
+    required this.sceneState,
+    required this.onDelete,
+  });
+
+  final SimpleMovementComponent comp;
+  final EditorSceneState sceneState;
+  final VoidCallback onDelete;
+
+  @override
+  State<_SimpleMovementSection> createState() => _SimpleMovementSectionState();
+}
+
+class _SimpleMovementSectionState extends State<_SimpleMovementSection> {
+  late TextEditingController _speedCtrl;
+  late TextEditingController _deadZoneCtrl;
+  final _speedF = FocusNode();
+  final _deadZoneF = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _speedCtrl = TextEditingController(
+      text: widget.comp.speed.toStringAsFixed(1),
+    );
+    _deadZoneCtrl = TextEditingController(
+      text: widget.comp.deadZone.toStringAsFixed(2),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_SimpleMovementSection old) {
+    super.didUpdateWidget(old);
+    if (!_speedF.hasFocus) {
+      _speedCtrl.text = widget.comp.speed.toStringAsFixed(1);
+    }
+    if (!_deadZoneF.hasFocus) {
+      _deadZoneCtrl.text = widget.comp.deadZone.toStringAsFixed(2);
+    }
+  }
+
+  @override
+  void dispose() {
+    _speedCtrl.dispose();
+    _deadZoneCtrl.dispose();
+    _speedF.dispose();
+    _deadZoneF.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    final speed = double.tryParse(_speedCtrl.text);
+    final deadZone = double.tryParse(_deadZoneCtrl.text);
+    if (speed != null) {
+      widget.comp.speed = speed.clamp(0.0, 10000.0);
+    }
+    if (deadZone != null) {
+      widget.comp.deadZone = deadZone.clamp(0.0, 1.0);
+    }
+    widget.sceneState.markDirty();
+  }
+
+  @override
+  Widget build(BuildContext context) => _Section(
+    title: 'Simple Movement',
+    onDelete: widget.onDelete,
+    children: [
+      _FieldRow(
+        'Speed',
+        _speedCtrl,
+        _speedF,
+        _commit,
+        scrub: const NumberScrubConfig(step: 5, fractionDigits: 1, min: 0),
+      ),
+      const SizedBox(height: 6),
+      _FieldRow(
+        'Dead Zone',
+        _deadZoneCtrl,
+        _deadZoneF,
+        _commit,
+        scrub: const NumberScrubConfig(step: 0.01, fractionDigits: 2),
+      ),
+      const SizedBox(height: 6),
+      _BoolRow('Use Keyboard', widget.comp.useKeyboard, (v) {
+        widget.comp.useKeyboard = v;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 6),
+      _BoolRow('Use Joystick', widget.comp.useJoystick, (v) {
+        widget.comp.useJoystick = v;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 6),
+      _BoolRow('Normalize Diagonal', widget.comp.normalizeDiagonal, (v) {
+        widget.comp.normalizeDiagonal = v;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 6),
+      Row(
+        children: [
+          const SizedBox(
+            width: 86,
+            child: Text(
+              'Direction',
+              style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              '${widget.comp.lastDirection.dx.toStringAsFixed(2)}, ${widget.comp.lastDirection.dy.toStringAsFixed(2)}',
+              style: const TextStyle(
+                color: EditorTheme.textPrimary,
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ],
       ),
     ],
   );
@@ -2746,10 +2904,16 @@ class _ShapePaintRow extends StatelessWidget {
   }
 
   Future<void> _pickStyle(BuildContext context) async {
-    await showDialog<void>(
-      context: context,
-      builder: (_) => _ShapePaintDialog(initial: style, onChanged: onChanged),
+    final repository = await _getColourStorageRepository();
+    if (!context.mounted) return;
+
+    final selection = await ColourGradientDialog.show(
+      context,
+      initialSelection: _shapePaintToColourSelection(style),
+      repository: repository,
     );
+    if (!context.mounted || selection == null) return;
+    onChanged(_colourSelectionToShapePaint(selection, base: style));
   }
 }
 
@@ -3578,6 +3742,109 @@ String _tileModeLabel(TileMode mode) {
     case TileMode.decal:
       return 'Decal';
   }
+}
+
+ColourSelection _shapePaintToColourSelection(ShapePaintStyle style) {
+  final gradient = style.gradient;
+  if (gradient == null) {
+    return ColourSelection(color: style.color, useGradient: false);
+  }
+
+  GradientType type;
+  switch (gradient.kind) {
+    case ShapeGradientKind.linear:
+      type = GradientType.linear;
+      break;
+    case ShapeGradientKind.radial:
+      type = GradientType.radial;
+      break;
+    case ShapeGradientKind.sweep:
+      type = GradientType.sweep;
+      break;
+  }
+
+  final end = _asAlignment(gradient.end, Alignment.centerRight);
+  final angle = math.atan2(end.y, end.x) * 180.0 / math.pi;
+
+  return ColourSelection(
+    color: style.color,
+    useGradient: true,
+    gradient: GradientConfig(
+      type: type,
+      colors: gradient.colors,
+      stops: gradient.stops,
+      angle: angle,
+      center: _asAlignment(gradient.center, Alignment.center),
+      radius: gradient.radius,
+      tileMode: gradient.tileMode,
+    ),
+  );
+}
+
+ShapePaintStyle _colourSelectionToShapePaint(
+  ColourSelection selection, {
+  required ShapePaintStyle base,
+}) {
+  if (!selection.useGradient) {
+    return ShapePaintStyle(color: selection.color, blendMode: base.blendMode);
+  }
+
+  final cfg = selection.gradient;
+  final colors = cfg.colors.isNotEmpty
+      ? cfg.colors
+      : <Color>[selection.color, Colors.white];
+  final stops = cfg.stops;
+
+  ShapeGradient gradient;
+  switch (cfg.type) {
+    case GradientType.linear:
+      final radians = cfg.angle * math.pi / 180.0;
+      gradient = ShapeGradient.linear(
+        colors: colors,
+        stops: stops,
+        begin: Alignment(
+          math.cos(radians + math.pi),
+          math.sin(radians + math.pi),
+        ),
+        end: Alignment(math.cos(radians), math.sin(radians)),
+        tileMode: cfg.tileMode,
+      );
+      break;
+    case GradientType.radial:
+      gradient = ShapeGradient.radial(
+        colors: colors,
+        stops: stops,
+        center: cfg.center,
+        radius: cfg.radius,
+        tileMode: cfg.tileMode,
+      );
+      break;
+    case GradientType.sweep:
+      final previous = base.gradient;
+      final startAngle =
+          previous != null && previous.kind == ShapeGradientKind.sweep
+          ? previous.startAngle
+          : 0.0;
+      final endAngle =
+          previous != null && previous.kind == ShapeGradientKind.sweep
+          ? previous.endAngle
+          : 6.283185307179586;
+      gradient = ShapeGradient.sweep(
+        colors: colors,
+        stops: stops,
+        center: cfg.center,
+        startAngle: startAngle,
+        endAngle: endAngle,
+        tileMode: cfg.tileMode,
+      );
+      break;
+  }
+
+  return ShapePaintStyle(
+    color: selection.color,
+    gradient: gradient,
+    blendMode: base.blendMode,
+  );
 }
 
 // ── Color wheel dialog ────────────────────────────────────────────────────────

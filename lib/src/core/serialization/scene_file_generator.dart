@@ -5,6 +5,8 @@ import 'package:flutter/material.dart' show Colors;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
+import '../components/simple_movement_component.dart';
+
 /// Writes and reads scene files inside the project's `lib/game/scenes/`
 /// directory using [dart:io].
 ///
@@ -547,6 +549,14 @@ class ${cls}Level {
         );
       case 'InputComponent':
         return InputComponent();
+      case 'SimpleMovementComponent':
+        return SimpleMovementComponent(
+          speed: _n(j['speed'] ?? 220.0),
+          useKeyboard: j['useKeyboard'] as bool? ?? true,
+          useJoystick: j['useJoystick'] as bool? ?? true,
+          normalizeDiagonal: j['normalizeDiagonal'] as bool? ?? true,
+          deadZone: _n(j['deadZone'] ?? 0.05),
+        );
       case 'ChildrenComponent':
         return ChildrenComponent();
       // childIds re-linked by openScene hierarchy pass; don't restore raw IDs here
@@ -649,6 +659,16 @@ class ${cls}Level {
       };
     }
     if (c is InputComponent) return {'type': 'InputComponent'};
+    if (c is SimpleMovementComponent) {
+      return {
+        'type': 'SimpleMovementComponent',
+        'speed': c.speed,
+        'useKeyboard': c.useKeyboard,
+        'useJoystick': c.useJoystick,
+        'normalizeDiagonal': c.normalizeDiagonal,
+        'deadZone': c.deadZone,
+      };
+    }
     if (c is ChildrenComponent) {
       return {'type': 'ChildrenComponent', 'childIds': c.childIds};
     }

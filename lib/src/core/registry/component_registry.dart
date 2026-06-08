@@ -1,6 +1,8 @@
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
+import '../components/simple_movement_component.dart';
+
 /// A single entry in the component picker catalogue.
 class ComponentEntry {
   const ComponentEntry({
@@ -131,6 +133,13 @@ const List<ComponentEntry> kComponentRegistry = [
     description: 'Virtual joystick input state.',
     factory: _makeJoystick,
   ),
+  ComponentEntry(
+    name: 'SimpleMovementComponent',
+    group: 'Input',
+    description:
+        'Moves Transform from keyboard/joystick direction with a speed scalar.',
+    factory: _makeSimpleMovement,
+  ),
 
   // ── Camera ───────────────────────────────────────────────────────────────
   ComponentEntry(
@@ -252,6 +261,7 @@ Component _makeTag() => TagComponent('entity');
 Component _makeLifetime() => LifetimeComponent(3.0);
 Component _makeInput() => InputComponent();
 Component _makeJoystick() => JoystickInputComponent();
+Component _makeSimpleMovement() => SimpleMovementComponent(speed: 220);
 Component _makeCameraFollow() => CameraFollowComponent();
 
 Component _makeAudioSource() => AudioSourceComponent(clipPath: '');
