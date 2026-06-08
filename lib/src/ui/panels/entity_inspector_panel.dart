@@ -185,15 +185,17 @@ class _EntityInspector extends StatelessWidget {
       );
     } else if (renderable is LineComponent) {
       sections.add(
-        _MarkerSection(
-          title: 'Line',
+        _LineSection(
+          comp: renderable,
+          sceneState: sceneState,
           onDelete: () => _removeComponent<RenderableComponent>(),
         ),
       );
     } else if (renderable is PolygonComponent) {
       sections.add(
-        _MarkerSection(
-          title: 'Polygon',
+        _PolygonSection(
+          comp: renderable,
+          sceneState: sceneState,
           onDelete: () => _removeComponent<RenderableComponent>(),
         ),
       );
@@ -728,17 +730,14 @@ class _RectangleSectionState extends State<_RectangleSection> {
         scrub2: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0),
       ),
       const SizedBox(height: 6),
-      _ColorRow('Tint', widget.comp.fillStyle.color, (c) {
-        widget.comp.fillStyle = ShapePaintStyle(
-          color: c,
-          gradient: widget.comp.fillStyle.gradient,
-          blendMode: widget.comp.fillStyle.blendMode,
-        );
-        widget.comp.strokeStyle = ShapePaintStyle(
-          color: c,
-          gradient: widget.comp.strokeStyle.gradient,
-          blendMode: widget.comp.strokeStyle.blendMode,
-        );
+      _ShapePaintRow('Fill', widget.comp.fillStyle, (style) {
+        widget.comp.fillStyle = style;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 6),
+      _ShapePaintRow('Stroke', widget.comp.strokeStyle, (style) {
+        widget.comp.strokeStyle = style;
         widget.sceneState.markDirty();
         setState(() {});
       }),
@@ -825,17 +824,14 @@ class _CircleSectionState extends State<_CircleSection> {
         scrub2: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0),
       ),
       const SizedBox(height: 6),
-      _ColorRow('Tint', widget.comp.fillStyle.color, (c) {
-        widget.comp.fillStyle = ShapePaintStyle(
-          color: c,
-          gradient: widget.comp.fillStyle.gradient,
-          blendMode: widget.comp.fillStyle.blendMode,
-        );
-        widget.comp.strokeStyle = ShapePaintStyle(
-          color: c,
-          gradient: widget.comp.strokeStyle.gradient,
-          blendMode: widget.comp.strokeStyle.blendMode,
-        );
+      _ShapePaintRow('Fill', widget.comp.fillStyle, (style) {
+        widget.comp.fillStyle = style;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 6),
+      _ShapePaintRow('Stroke', widget.comp.strokeStyle, (style) {
+        widget.comp.strokeStyle = style;
         widget.sceneState.markDirty();
         setState(() {});
       }),
@@ -916,17 +912,14 @@ class _CapsuleSectionState extends State<_CapsuleSection> {
         scrub2: const NumberScrubConfig(step: 1, fractionDigits: 1, min: 0),
       ),
       const SizedBox(height: 6),
-      _ColorRow('Tint', widget.comp.fillStyle.color, (c) {
-        widget.comp.fillStyle = ShapePaintStyle(
-          color: c,
-          gradient: widget.comp.fillStyle.gradient,
-          blendMode: widget.comp.fillStyle.blendMode,
-        );
-        widget.comp.strokeStyle = ShapePaintStyle(
-          color: c,
-          gradient: widget.comp.strokeStyle.gradient,
-          blendMode: widget.comp.strokeStyle.blendMode,
-        );
+      _ShapePaintRow('Fill', widget.comp.fillStyle, (style) {
+        widget.comp.fillStyle = style;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 6),
+      _ShapePaintRow('Stroke', widget.comp.strokeStyle, (style) {
+        widget.comp.strokeStyle = style;
         widget.sceneState.markDirty();
         setState(() {});
       }),
@@ -1304,6 +1297,237 @@ class _MarkerSection extends StatelessWidget {
         'No editable properties',
         style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
       ),
+    ],
+  );
+}
+
+class _LineSection extends StatefulWidget {
+  const _LineSection({
+    required this.comp,
+    required this.sceneState,
+    required this.onDelete,
+  });
+
+  final LineComponent comp;
+  final EditorSceneState sceneState;
+  final VoidCallback onDelete;
+
+  @override
+  State<_LineSection> createState() => _LineSectionState();
+}
+
+class _LineSectionState extends State<_LineSection> {
+  late TextEditingController _sxCtrl, _syCtrl, _exCtrl, _eyCtrl, _swCtrl;
+  final _sxF = FocusNode();
+  final _syF = FocusNode();
+  final _exF = FocusNode();
+  final _eyF = FocusNode();
+  final _swF = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _sxCtrl = TextEditingController(
+      text: widget.comp.start.dx.toStringAsFixed(1),
+    );
+    _syCtrl = TextEditingController(
+      text: widget.comp.start.dy.toStringAsFixed(1),
+    );
+    _exCtrl = TextEditingController(
+      text: widget.comp.end.dx.toStringAsFixed(1),
+    );
+    _eyCtrl = TextEditingController(
+      text: widget.comp.end.dy.toStringAsFixed(1),
+    );
+    _swCtrl = TextEditingController(
+      text: widget.comp.strokeWidth.toStringAsFixed(1),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_LineSection old) {
+    super.didUpdateWidget(old);
+    if (!_sxF.hasFocus) _sxCtrl.text = widget.comp.start.dx.toStringAsFixed(1);
+    if (!_syF.hasFocus) _syCtrl.text = widget.comp.start.dy.toStringAsFixed(1);
+    if (!_exF.hasFocus) _exCtrl.text = widget.comp.end.dx.toStringAsFixed(1);
+    if (!_eyF.hasFocus) _eyCtrl.text = widget.comp.end.dy.toStringAsFixed(1);
+    if (!_swF.hasFocus) {
+      _swCtrl.text = widget.comp.strokeWidth.toStringAsFixed(1);
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final controller in [_sxCtrl, _syCtrl, _exCtrl, _eyCtrl, _swCtrl]) {
+      controller.dispose();
+    }
+    for (final focus in [_sxF, _syF, _exF, _eyF, _swF]) {
+      focus.dispose();
+    }
+    super.dispose();
+  }
+
+  void _commitPoints() {
+    final sx = double.tryParse(_sxCtrl.text);
+    final sy = double.tryParse(_syCtrl.text);
+    final ex = double.tryParse(_exCtrl.text);
+    final ey = double.tryParse(_eyCtrl.text);
+    if (sx != null && sy != null) widget.comp.start = Offset(sx, sy);
+    if (ex != null && ey != null) widget.comp.end = Offset(ex, ey);
+    final strokeWidth = double.tryParse(_swCtrl.text);
+    if (strokeWidth != null) widget.comp.strokeWidth = strokeWidth;
+    widget.sceneState.markDirty();
+  }
+
+  @override
+  Widget build(BuildContext context) => _Section(
+    title: 'Line',
+    onDelete: widget.onDelete,
+    children: [
+      _Row2(
+        'Start X',
+        _sxCtrl,
+        _sxF,
+        'Start Y',
+        _syCtrl,
+        _syF,
+        _commitPoints,
+        scrub1: const NumberScrubConfig(step: 1, fractionDigits: 1),
+        scrub2: const NumberScrubConfig(step: 1, fractionDigits: 1),
+      ),
+      const SizedBox(height: 6),
+      _Row2(
+        'End X',
+        _exCtrl,
+        _exF,
+        'End Y',
+        _eyCtrl,
+        _eyF,
+        _commitPoints,
+        scrub1: const NumberScrubConfig(step: 1, fractionDigits: 1),
+        scrub2: const NumberScrubConfig(step: 1, fractionDigits: 1),
+      ),
+      const SizedBox(height: 6),
+      _FieldRow(
+        'Stroke',
+        _swCtrl,
+        _swF,
+        _commitPoints,
+        scrub: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0),
+      ),
+      const SizedBox(height: 6),
+      _ShapePaintRow('Paint', widget.comp.strokeStyle, (style) {
+        widget.comp.strokeStyle = style;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 4),
+      _BoolRow('Round', widget.comp.roundCaps, (value) {
+        widget.comp.roundCaps = value;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+    ],
+  );
+}
+
+class _PolygonSection extends StatefulWidget {
+  const _PolygonSection({
+    required this.comp,
+    required this.sceneState,
+    required this.onDelete,
+  });
+
+  final PolygonComponent comp;
+  final EditorSceneState sceneState;
+  final VoidCallback onDelete;
+
+  @override
+  State<_PolygonSection> createState() => _PolygonSectionState();
+}
+
+class _PolygonSectionState extends State<_PolygonSection> {
+  late TextEditingController _swCtrl;
+  final _swF = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _swCtrl = TextEditingController(
+      text: widget.comp.strokeWidth.toStringAsFixed(1),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_PolygonSection old) {
+    super.didUpdateWidget(old);
+    if (!_swF.hasFocus) {
+      _swCtrl.text = widget.comp.strokeWidth.toStringAsFixed(1);
+    }
+  }
+
+  @override
+  void dispose() {
+    _swCtrl.dispose();
+    _swF.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    final strokeWidth = double.tryParse(_swCtrl.text);
+    if (strokeWidth != null) widget.comp.strokeWidth = strokeWidth;
+    widget.sceneState.markDirty();
+  }
+
+  @override
+  Widget build(BuildContext context) => _Section(
+    title: 'Polygon',
+    onDelete: widget.onDelete,
+    children: [
+      Row(
+        children: [
+          const SizedBox(
+            width: 52,
+            child: Text(
+              'Verts',
+              style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            ),
+          ),
+          Text(
+            '${widget.comp.vertices.length}',
+            style: const TextStyle(
+              color: EditorTheme.textSecondary,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 6),
+      _FieldRow(
+        'Stroke',
+        _swCtrl,
+        _swF,
+        _commit,
+        scrub: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0),
+      ),
+      const SizedBox(height: 6),
+      _ShapePaintRow('Fill', widget.comp.fillStyle, (style) {
+        widget.comp.fillStyle = style;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 6),
+      _ShapePaintRow('Stroke', widget.comp.strokeStyle, (style) {
+        widget.comp.strokeStyle = style;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 4),
+      _BoolRow('Filled', widget.comp.filled, (value) {
+        widget.comp.filled = value;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
     ],
   );
 }
@@ -2475,6 +2699,884 @@ class _ColorRow extends StatelessWidget {
       context: context,
       builder: (_) => _ColorWheelDialog(initial: color, onChanged: onChanged),
     );
+  }
+}
+
+class _ShapePaintRow extends StatelessWidget {
+  const _ShapePaintRow(this.label, this.style, this.onChanged);
+
+  final String label;
+  final ShapePaintStyle style;
+  final void Function(ShapePaintStyle) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 52,
+          child: Text(
+            label,
+            style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+          ),
+        ),
+        GestureDetector(
+          onTap: () => _pickStyle(context),
+          child: Container(
+            width: 32,
+            height: 20,
+            decoration: BoxDecoration(
+              color: style.gradient == null ? style.color : null,
+              gradient: _toFlutterGradient(style.gradient),
+              borderRadius: BorderRadius.circular(3),
+              border: Border.all(color: EditorTheme.border),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            _shapePaintSummary(style),
+            style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickStyle(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _ShapePaintDialog(initial: style, onChanged: onChanged),
+    );
+  }
+}
+
+class _ShapePaintDialog extends StatefulWidget {
+  const _ShapePaintDialog({required this.initial, required this.onChanged});
+
+  final ShapePaintStyle initial;
+  final void Function(ShapePaintStyle) onChanged;
+
+  @override
+  State<_ShapePaintDialog> createState() => _ShapePaintDialogState();
+}
+
+class _ShapePaintDialogState extends State<_ShapePaintDialog> {
+  late ShapePaintStyle _style;
+
+  @override
+  void initState() {
+    super.initState();
+    _style = widget.initial;
+  }
+
+  void _updateStyle(ShapePaintStyle style) {
+    setState(() => _style = style);
+    widget.onChanged(style);
+  }
+
+  void _updateGradient(ShapeGradient gradient) {
+    _updateStyle(_copyShapePaintStyle(_style, gradient: gradient));
+  }
+
+  void _toggleGradient(bool enabled) {
+    _updateStyle(
+      _copyShapePaintStyle(
+        _style,
+        gradient: enabled
+            ? _style.gradient ?? _defaultShapeGradient(_style.color)
+            : null,
+      ),
+    );
+  }
+
+  void _setGradientKind(ShapeGradientKind kind) {
+    final gradient = _style.gradient;
+    if (gradient == null) return;
+    _updateGradient(_copyShapeGradient(gradient, kind: kind));
+  }
+
+  void _setTileMode(TileMode tileMode) {
+    final gradient = _style.gradient;
+    if (gradient == null) return;
+    _updateGradient(_copyShapeGradient(gradient, tileMode: tileMode));
+  }
+
+  void _setGradientColor(int index, Color color) {
+    final gradient = _style.gradient;
+    if (gradient == null) return;
+    final colors = List<Color>.from(gradient.colors);
+    colors[index] = color;
+    final stops = gradient.stops?.toList();
+    _updateGradient(_copyShapeGradient(gradient, colors: colors, stops: stops));
+  }
+
+  void _setGradientStop(int index, double stop) {
+    final gradient = _style.gradient;
+    if (gradient == null) return;
+    final stops = _normalizedStops(gradient);
+    stops[index] = stop.clamp(0.0, 1.0);
+    _updateGradient(_copyShapeGradient(gradient, stops: stops));
+  }
+
+  void _setBeginX(double value) {
+    final gradient = _style.gradient;
+    if (gradient == null) return;
+    final begin = _asAlignment(gradient.begin, Alignment.centerLeft);
+    _updateGradient(
+      _copyShapeGradient(gradient, begin: Alignment(value, begin.y)),
+    );
+  }
+
+  void _setBeginY(double value) {
+    final gradient = _style.gradient;
+    if (gradient == null) return;
+    final begin = _asAlignment(gradient.begin, Alignment.centerLeft);
+    _updateGradient(
+      _copyShapeGradient(gradient, begin: Alignment(begin.x, value)),
+    );
+  }
+
+  void _setEndX(double value) {
+    final gradient = _style.gradient;
+    if (gradient == null) return;
+    final end = _asAlignment(gradient.end, Alignment.centerRight);
+    _updateGradient(_copyShapeGradient(gradient, end: Alignment(value, end.y)));
+  }
+
+  void _setEndY(double value) {
+    final gradient = _style.gradient;
+    if (gradient == null) return;
+    final end = _asAlignment(gradient.end, Alignment.centerRight);
+    _updateGradient(_copyShapeGradient(gradient, end: Alignment(end.x, value)));
+  }
+
+  void _setCenterX(double value) {
+    final gradient = _style.gradient;
+    if (gradient == null) return;
+    final center = _asAlignment(gradient.center, Alignment.center);
+    _updateGradient(
+      _copyShapeGradient(gradient, center: Alignment(value, center.y)),
+    );
+  }
+
+  void _setCenterY(double value) {
+    final gradient = _style.gradient;
+    if (gradient == null) return;
+    final center = _asAlignment(gradient.center, Alignment.center);
+    _updateGradient(
+      _copyShapeGradient(gradient, center: Alignment(center.x, value)),
+    );
+  }
+
+  void _setRadius(double value) {
+    final gradient = _style.gradient;
+    if (gradient == null) return;
+    _updateGradient(_copyShapeGradient(gradient, radius: value));
+  }
+
+  void _setStartAngle(double value) {
+    final gradient = _style.gradient;
+    if (gradient == null) return;
+    _updateGradient(_copyShapeGradient(gradient, startAngle: value));
+  }
+
+  void _setEndAngle(double value) {
+    final gradient = _style.gradient;
+    if (gradient == null) return;
+    _updateGradient(_copyShapeGradient(gradient, endAngle: value));
+  }
+
+  void _addGradientStop() {
+    final gradient = _style.gradient;
+    if (gradient == null || gradient.colors.length >= 4) return;
+    final colors = List<Color>.from(gradient.colors)..add(gradient.colors.last);
+    _updateGradient(_copyShapeGradient(gradient, colors: colors, stops: null));
+  }
+
+  void _removeGradientStop(int index) {
+    final gradient = _style.gradient;
+    if (gradient == null || gradient.colors.length <= 2) return;
+    final colors = List<Color>.from(gradient.colors)..removeAt(index);
+    _updateGradient(_copyShapeGradient(gradient, colors: colors, stops: null));
+  }
+
+  void _cancel() {
+    widget.onChanged(widget.initial);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final gradient = _style.gradient;
+    return Dialog(
+      backgroundColor: EditorTheme.dialogBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(color: EditorTheme.border),
+      ),
+      child: SizedBox(
+        width: 420,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 640),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Shape Paint',
+                  style: TextStyle(
+                    color: EditorTheme.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _ColorRow('Tint', _style.color, (color) {
+                          _updateStyle(
+                            _copyShapePaintStyle(_style, color: color),
+                          );
+                        }),
+                        const SizedBox(height: 8),
+                        _BoolRow('Gradient', gradient != null, _toggleGradient),
+                        const SizedBox(height: 8),
+                        _ShapePaintPreview(style: _style),
+                        if (gradient != null) ...[
+                          const SizedBox(height: 10),
+                          _DropdownRow<ShapeGradientKind>(
+                            label: 'Type',
+                            value: gradient.kind,
+                            values: ShapeGradientKind.values,
+                            labelBuilder: _shapeGradientKindLabel,
+                            onChanged: _setGradientKind,
+                          ),
+                          const SizedBox(height: 6),
+                          _DropdownRow<TileMode>(
+                            label: 'Tile',
+                            value: gradient.tileMode,
+                            values: TileMode.values,
+                            labelBuilder: _tileModeLabel,
+                            onChanged: _setTileMode,
+                          ),
+                          const SizedBox(height: 10),
+                          for (int i = 0; i < gradient.colors.length; i++) ...[
+                            _GradientColorRow(
+                              label: 'Stop ${i + 1}',
+                              color: gradient.colors[i],
+                              stop: _normalizedStops(gradient)[i],
+                              canRemove: gradient.colors.length > 2,
+                              onChanged: (color) => _setGradientColor(i, color),
+                              onStopChanged: (stop) =>
+                                  _setGradientStop(i, stop),
+                              onRemove: () => _removeGradientStop(i),
+                            ),
+                            if (i < gradient.colors.length - 1)
+                              const SizedBox(height: 6),
+                          ],
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: gradient.colors.length >= 4
+                                  ? null
+                                  : _addGradientStop,
+                              icon: const Icon(Icons.add_rounded, size: 14),
+                              label: const Text('Add stop'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: EditorTheme.primary,
+                                minimumSize: Size.zero,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          if (gradient.kind == ShapeGradientKind.linear) ...[
+                            _AlignmentEditor(
+                              label: 'Begin',
+                              alignment: _asAlignment(
+                                gradient.begin,
+                                Alignment.centerLeft,
+                              ),
+                              onXChanged: _setBeginX,
+                              onYChanged: _setBeginY,
+                            ),
+                            const SizedBox(height: 6),
+                            _AlignmentEditor(
+                              label: 'End',
+                              alignment: _asAlignment(
+                                gradient.end,
+                                Alignment.centerRight,
+                              ),
+                              onXChanged: _setEndX,
+                              onYChanged: _setEndY,
+                            ),
+                          ],
+                          if (gradient.kind != ShapeGradientKind.linear) ...[
+                            _AlignmentEditor(
+                              label: 'Center',
+                              alignment: _asAlignment(
+                                gradient.center,
+                                Alignment.center,
+                              ),
+                              onXChanged: _setCenterX,
+                              onYChanged: _setCenterY,
+                            ),
+                          ],
+                          if (gradient.kind == ShapeGradientKind.radial) ...[
+                            const SizedBox(height: 6),
+                            _DoubleValueField(
+                              label: 'Radius',
+                              value: gradient.radius,
+                              fractionDigits: 2,
+                              step: 0.05,
+                              min: 0,
+                              onChanged: _setRadius,
+                            ),
+                          ],
+                          if (gradient.kind == ShapeGradientKind.sweep) ...[
+                            const SizedBox(height: 6),
+                            _DoubleValueField(
+                              label: 'Start',
+                              value: gradient.startAngle,
+                              fractionDigits: 3,
+                              step: 0.1,
+                              onChanged: _setStartAngle,
+                            ),
+                            const SizedBox(height: 6),
+                            _DoubleValueField(
+                              label: 'End',
+                              value: gradient.endAngle,
+                              fractionDigits: 3,
+                              step: 0.1,
+                              onChanged: _setEndAngle,
+                            ),
+                          ],
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _cancel,
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: EditorTheme.primary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: EditorTheme.buttonBg,
+                        foregroundColor: EditorTheme.primary,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      child: const Text(
+                        'OK',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GradientColorRow extends StatelessWidget {
+  const _GradientColorRow({
+    required this.label,
+    required this.color,
+    required this.stop,
+    required this.onChanged,
+    required this.onStopChanged,
+    required this.canRemove,
+    required this.onRemove,
+  });
+
+  final String label;
+  final Color color;
+  final double stop;
+  final void Function(Color) onChanged;
+  final ValueChanged<double> onStopChanged;
+  final bool canRemove;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ColorRow(label, color, onChanged),
+              const SizedBox(height: 6),
+              _DoubleValueField(
+                label: 'Pos',
+                value: stop,
+                fractionDigits: 2,
+                step: 0.05,
+                min: 0,
+                max: 1,
+                onChanged: onStopChanged,
+              ),
+            ],
+          ),
+        ),
+        if (canRemove) ...[
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: onRemove,
+            child: const Icon(
+              Icons.remove_circle_outline_rounded,
+              size: 16,
+              color: EditorTheme.textMuted,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ShapePaintPreview extends StatelessWidget {
+  const _ShapePaintPreview({required this.style});
+
+  final ShapePaintStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final gradient = _toFlutterGradient(style.gradient);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Preview',
+          style: TextStyle(
+            color: EditorTheme.primaryMuted,
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          height: 28,
+          decoration: BoxDecoration(
+            color: gradient == null ? style.color : Colors.transparent,
+            gradient: gradient,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: EditorTheme.border),
+          ),
+          child: gradient == null
+              ? null
+              : ColorFiltered(
+                  colorFilter: ColorFilter.mode(style.color, style.blendMode),
+                  child: Container(color: Colors.white),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DropdownRow<T> extends StatelessWidget {
+  const _DropdownRow({
+    required this.label,
+    required this.value,
+    required this.values,
+    required this.labelBuilder,
+    required this.onChanged,
+  });
+
+  final String label;
+  final T value;
+  final List<T> values;
+  final String Function(T) labelBuilder;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 52,
+          child: Text(
+            label,
+            style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+          ),
+        ),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: EditorTheme.surfaceDarker,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: EditorTheme.border),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<T>(
+                value: value,
+                isExpanded: true,
+                dropdownColor: EditorTheme.dialogBg,
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+                items: values
+                    .map(
+                      (item) => DropdownMenuItem<T>(
+                        value: item,
+                        child: Text(labelBuilder(item)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (next) {
+                  if (next != null) onChanged(next);
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AlignmentEditor extends StatelessWidget {
+  const _AlignmentEditor({
+    required this.label,
+    required this.alignment,
+    required this.onXChanged,
+    required this.onYChanged,
+  });
+
+  final String label;
+  final Alignment alignment;
+  final ValueChanged<double> onXChanged;
+  final ValueChanged<double> onYChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: EditorTheme.primaryMuted,
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Expanded(
+              child: _DoubleValueField(
+                label: 'X',
+                value: alignment.x,
+                fractionDigits: 2,
+                step: 0.1,
+                min: -1,
+                max: 1,
+                onChanged: onXChanged,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _DoubleValueField(
+                label: 'Y',
+                value: alignment.y,
+                fractionDigits: 2,
+                step: 0.1,
+                min: -1,
+                max: 1,
+                onChanged: onYChanged,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DoubleValueField extends StatefulWidget {
+  const _DoubleValueField({
+    required this.label,
+    required this.value,
+    required this.fractionDigits,
+    required this.step,
+    required this.onChanged,
+    this.min,
+    this.max,
+  });
+
+  final String label;
+  final double value;
+  final int fractionDigits;
+  final double step;
+  final ValueChanged<double> onChanged;
+  final double? min;
+  final double? max;
+
+  @override
+  State<_DoubleValueField> createState() => _DoubleValueFieldState();
+}
+
+class _DoubleValueFieldState extends State<_DoubleValueField> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _format(widget.value));
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void didUpdateWidget(_DoubleValueField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_focusNode.hasFocus) {
+      _controller.text = _format(widget.value);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    final parsed = double.tryParse(_controller.text);
+    if (parsed == null) {
+      _controller.text = _format(widget.value);
+      return;
+    }
+    var next = parsed;
+    if (widget.min != null && next < widget.min!) next = widget.min!;
+    if (widget.max != null && next > widget.max!) next = widget.max!;
+    widget.onChanged(next);
+  }
+
+  String _format(double value) => value.toStringAsFixed(widget.fractionDigits);
+
+  @override
+  Widget build(BuildContext context) {
+    return _FieldRow(
+      widget.label,
+      _controller,
+      _focusNode,
+      _commit,
+      scrub: NumberScrubConfig(
+        step: widget.step,
+        fractionDigits: widget.fractionDigits,
+        min: widget.min,
+        max: widget.max,
+      ),
+    );
+  }
+}
+
+ShapePaintStyle _copyShapePaintStyle(
+  ShapePaintStyle style, {
+  Color? color,
+  ShapeGradient? gradient,
+  BlendMode? blendMode,
+}) {
+  return ShapePaintStyle(
+    color: color ?? style.color,
+    gradient: gradient,
+    blendMode: blendMode ?? style.blendMode,
+  );
+}
+
+ShapeGradient _defaultShapeGradient(Color seedColor) {
+  return ShapeGradient.linear(colors: [seedColor, Colors.white]);
+}
+
+ShapeGradient _copyShapeGradient(
+  ShapeGradient gradient, {
+  ShapeGradientKind? kind,
+  List<Color>? colors,
+  List<double>? stops,
+  AlignmentGeometry? begin,
+  AlignmentGeometry? end,
+  AlignmentGeometry? center,
+  double? radius,
+  double? startAngle,
+  double? endAngle,
+  TileMode? tileMode,
+}) {
+  final nextKind = kind ?? gradient.kind;
+  final nextColors = List<Color>.from(colors ?? gradient.colors);
+  final nextStops =
+      stops ??
+      (nextColors.length == gradient.colors.length ? gradient.stops : null);
+  switch (nextKind) {
+    case ShapeGradientKind.linear:
+      return ShapeGradient.linear(
+        colors: nextColors,
+        stops: nextStops,
+        begin:
+            begin ??
+            (gradient.kind == ShapeGradientKind.linear
+                ? gradient.begin
+                : Alignment.centerLeft),
+        end:
+            end ??
+            (gradient.kind == ShapeGradientKind.linear
+                ? gradient.end
+                : Alignment.centerRight),
+        tileMode: tileMode ?? gradient.tileMode,
+      );
+    case ShapeGradientKind.radial:
+      return ShapeGradient.radial(
+        colors: nextColors,
+        stops: nextStops,
+        center:
+            center ??
+            (gradient.kind == ShapeGradientKind.linear
+                ? Alignment.center
+                : gradient.center),
+        radius:
+            radius ??
+            (gradient.kind == ShapeGradientKind.radial ? gradient.radius : 0.5),
+        tileMode: tileMode ?? gradient.tileMode,
+      );
+    case ShapeGradientKind.sweep:
+      return ShapeGradient.sweep(
+        colors: nextColors,
+        stops: nextStops,
+        center:
+            center ??
+            (gradient.kind == ShapeGradientKind.linear
+                ? Alignment.center
+                : gradient.center),
+        startAngle:
+            startAngle ??
+            (gradient.kind == ShapeGradientKind.sweep
+                ? gradient.startAngle
+                : 0.0),
+        endAngle:
+            endAngle ??
+            (gradient.kind == ShapeGradientKind.sweep
+                ? gradient.endAngle
+                : 6.283185307179586),
+        tileMode: tileMode ?? gradient.tileMode,
+      );
+  }
+}
+
+List<double> _normalizedStops(ShapeGradient gradient) {
+  if (gradient.stops != null &&
+      gradient.stops!.length == gradient.colors.length) {
+    return List<double>.from(gradient.stops!);
+  }
+  if (gradient.colors.length == 1) return [0.0];
+  final lastIndex = gradient.colors.length - 1;
+  return List<double>.generate(
+    gradient.colors.length,
+    (index) => index / lastIndex,
+  );
+}
+
+Gradient? _toFlutterGradient(ShapeGradient? gradient) {
+  if (gradient == null) return null;
+  switch (gradient.kind) {
+    case ShapeGradientKind.linear:
+      return LinearGradient(
+        begin: _asAlignment(gradient.begin, Alignment.centerLeft),
+        end: _asAlignment(gradient.end, Alignment.centerRight),
+        colors: gradient.colors,
+        stops: gradient.stops,
+        tileMode: gradient.tileMode,
+      );
+    case ShapeGradientKind.radial:
+      return RadialGradient(
+        center: _asAlignment(gradient.center, Alignment.center),
+        radius: gradient.radius,
+        colors: gradient.colors,
+        stops: gradient.stops,
+        tileMode: gradient.tileMode,
+      );
+    case ShapeGradientKind.sweep:
+      return SweepGradient(
+        center: _asAlignment(gradient.center, Alignment.center),
+        startAngle: gradient.startAngle,
+        endAngle: gradient.endAngle,
+        colors: gradient.colors,
+        stops: gradient.stops,
+        tileMode: gradient.tileMode,
+      );
+  }
+}
+
+Alignment _asAlignment(AlignmentGeometry geometry, Alignment fallback) {
+  return geometry is Alignment ? geometry : fallback;
+}
+
+String _shapePaintSummary(ShapePaintStyle style) {
+  final gradient = style.gradient;
+  if (gradient == null) {
+    return '#${style.color.toARGB32().toRadixString(16).toUpperCase().padLeft(8, '0')}';
+  }
+  return '${_shapeGradientKindLabel(gradient.kind)} • ${gradient.colors.length} stops';
+}
+
+String _shapeGradientKindLabel(ShapeGradientKind kind) {
+  switch (kind) {
+    case ShapeGradientKind.linear:
+      return 'Linear';
+    case ShapeGradientKind.radial:
+      return 'Radial';
+    case ShapeGradientKind.sweep:
+      return 'Sweep';
+  }
+}
+
+String _tileModeLabel(TileMode mode) {
+  switch (mode) {
+    case TileMode.clamp:
+      return 'Clamp';
+    case TileMode.repeated:
+      return 'Repeated';
+    case TileMode.mirror:
+      return 'Mirror';
+    case TileMode.decal:
+      return 'Decal';
   }
 }
 
