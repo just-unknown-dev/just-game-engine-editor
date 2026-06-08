@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Colors;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
@@ -223,14 +222,11 @@ const List<ComponentEntry> kComponentRegistry = [
 Component _makeTransform() => TransformComponent();
 Component _makeVelocity() => VelocityComponent(maxSpeed: 500);
 
-Component _makeRectangle() =>
-    RectangleComponent(width: 64, height: 64, color: Colors.white);
-Component _makeCircle() => CircleComponent(radius: 32, color: Colors.white);
-Component _makeCapsule() =>
-    CapsuleComponent(width: 32, height: 64, color: Colors.white);
+Component _makeRectangle() => RectangleComponent(width: 64, height: 64);
+Component _makeCircle() => CircleComponent(radius: 32);
+Component _makeCapsule() => CapsuleComponent(width: 32, height: 64);
 Component _makeSprite() => SpriteComponent(spritePath: '');
-Component _makeLine() =>
-    LineComponent(end: const Offset(100, 0), color: Colors.white);
+Component _makeLine() => LineComponent(end: const Offset(100, 0));
 Component _makePolygon() => PolygonComponent(
   vertices: const [
     Offset(-32, -32),
@@ -238,7 +234,6 @@ Component _makePolygon() => PolygonComponent(
     Offset(32, 32),
     Offset(-32, 32),
   ],
-  color: Colors.white,
 );
 
 Component _makePhysicsBody() => PhysicsBodyComponent(

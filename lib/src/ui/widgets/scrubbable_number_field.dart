@@ -49,7 +49,6 @@ class _ScrubbableNumberFieldState extends State<ScrubbableNumberField> {
   bool _isDragging = false;
   double _dragStartX = 0;
   double _dragStartValue = 0;
-  String _dragPreview = '';
 
   double _parseCurrentValue() {
     return double.tryParse(widget.controller.text.trim()) ?? 0.0;
@@ -78,7 +77,6 @@ class _ScrubbableNumberFieldState extends State<ScrubbableNumberField> {
       _isDragging = true;
       _dragStartX = details.globalPosition.dx;
       _dragStartValue = _parseCurrentValue();
-      _dragPreview = widget.controller.text;
     });
   }
 
@@ -96,7 +94,6 @@ class _ScrubbableNumberFieldState extends State<ScrubbableNumberField> {
     if (widget.controller.text == text) return;
 
     widget.controller.text = text;
-    _dragPreview = text;
     widget.onCommit();
     setState(() {});
   }
@@ -105,7 +102,6 @@ class _ScrubbableNumberFieldState extends State<ScrubbableNumberField> {
     if (!_isDragging) return;
     setState(() {
       _isDragging = false;
-      _dragPreview = '';
     });
   }
 

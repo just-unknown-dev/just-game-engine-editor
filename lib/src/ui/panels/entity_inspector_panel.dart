@@ -728,8 +728,17 @@ class _RectangleSectionState extends State<_RectangleSection> {
         scrub2: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0),
       ),
       const SizedBox(height: 6),
-      _ColorRow('Color', widget.comp.color, (c) {
-        widget.comp.color = c;
+      _ColorRow('Tint', widget.comp.fillStyle.color, (c) {
+        widget.comp.fillStyle = ShapePaintStyle(
+          color: c,
+          gradient: widget.comp.fillStyle.gradient,
+          blendMode: widget.comp.fillStyle.blendMode,
+        );
+        widget.comp.strokeStyle = ShapePaintStyle(
+          color: c,
+          gradient: widget.comp.strokeStyle.gradient,
+          blendMode: widget.comp.strokeStyle.blendMode,
+        );
         widget.sceneState.markDirty();
         setState(() {});
       }),
@@ -774,9 +783,12 @@ class _CircleSectionState extends State<_CircleSection> {
   @override
   void didUpdateWidget(_CircleSection old) {
     super.didUpdateWidget(old);
-    if (!_rF.hasFocus) _rCtrl.text = widget.comp.radius.toStringAsFixed(1);
-    if (!_swF.hasFocus)
+    if (!_rF.hasFocus) {
+      _rCtrl.text = widget.comp.radius.toStringAsFixed(1);
+    }
+    if (!_swF.hasFocus) {
       _swCtrl.text = widget.comp.strokeWidth.toStringAsFixed(1);
+    }
   }
 
   @override
@@ -813,8 +825,17 @@ class _CircleSectionState extends State<_CircleSection> {
         scrub2: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0),
       ),
       const SizedBox(height: 6),
-      _ColorRow('Color', widget.comp.color, (c) {
-        widget.comp.color = c;
+      _ColorRow('Tint', widget.comp.fillStyle.color, (c) {
+        widget.comp.fillStyle = ShapePaintStyle(
+          color: c,
+          gradient: widget.comp.fillStyle.gradient,
+          blendMode: widget.comp.fillStyle.blendMode,
+        );
+        widget.comp.strokeStyle = ShapePaintStyle(
+          color: c,
+          gradient: widget.comp.strokeStyle.gradient,
+          blendMode: widget.comp.strokeStyle.blendMode,
+        );
         widget.sceneState.markDirty();
         setState(() {});
       }),
@@ -895,8 +916,17 @@ class _CapsuleSectionState extends State<_CapsuleSection> {
         scrub2: const NumberScrubConfig(step: 1, fractionDigits: 1, min: 0),
       ),
       const SizedBox(height: 6),
-      _ColorRow('Color', widget.comp.color, (c) {
-        widget.comp.color = c;
+      _ColorRow('Tint', widget.comp.fillStyle.color, (c) {
+        widget.comp.fillStyle = ShapePaintStyle(
+          color: c,
+          gradient: widget.comp.fillStyle.gradient,
+          blendMode: widget.comp.fillStyle.blendMode,
+        );
+        widget.comp.strokeStyle = ShapePaintStyle(
+          color: c,
+          gradient: widget.comp.strokeStyle.gradient,
+          blendMode: widget.comp.strokeStyle.blendMode,
+        );
         widget.sceneState.markDirty();
         setState(() {});
       }),
@@ -1075,8 +1105,9 @@ class _LifetimeSectionState extends State<_LifetimeSection> {
   @override
   void didUpdateWidget(_LifetimeSection old) {
     super.didUpdateWidget(old);
-    if (!_focus.hasFocus)
+    if (!_focus.hasFocus) {
       _ctrl.text = widget.comp.initialLifetime.toStringAsFixed(2);
+    }
   }
 
   @override
@@ -1219,8 +1250,9 @@ class _CameraFollowSectionState extends State<_CameraFollowSection> {
   @override
   void didUpdateWidget(_CameraFollowSection old) {
     super.didUpdateWidget(old);
-    if (!_ldF.hasFocus)
+    if (!_ldF.hasFocus) {
       _ldCtrl.text = widget.comp.lookaheadDistance.toStringAsFixed(1);
+    }
   }
 
   @override
@@ -1447,10 +1479,15 @@ class _PhysicsBodySectionState extends State<_PhysicsBodySection> {
   @override
   void didUpdateWidget(_PhysicsBodySection old) {
     super.didUpdateWidget(old);
-    if (!_massF.hasFocus) _massCtrl.text = widget.comp.mass.toStringAsFixed(2);
-    if (!_restF.hasFocus)
+    if (!_massF.hasFocus) {
+      _massCtrl.text = widget.comp.mass.toStringAsFixed(2);
+    }
+    if (!_restF.hasFocus) {
       _restCtrl.text = widget.comp.restitution.toStringAsFixed(2);
-    if (!_dragF.hasFocus) _dragCtrl.text = widget.comp.drag.toStringAsFixed(2);
+    }
+    if (!_dragF.hasFocus) {
+      _dragCtrl.text = widget.comp.drag.toStringAsFixed(2);
+    }
   }
 
   @override
@@ -1542,11 +1579,15 @@ class _AnimationStateSectionState extends State<_AnimationStateSection> {
   @override
   void didUpdateWidget(_AnimationStateSection old) {
     super.didUpdateWidget(old);
-    if (!_nameF.hasFocus) _nameCtrl.text = widget.comp.currentAnimation;
-    if (!_framesF.hasFocus)
+    if (!_nameF.hasFocus) {
+      _nameCtrl.text = widget.comp.currentAnimation;
+    }
+    if (!_framesF.hasFocus) {
       _framesCtrl.text = widget.comp.frameCount.toString();
-    if (!_durF.hasFocus)
+    }
+    if (!_durF.hasFocus) {
       _durCtrl.text = widget.comp.frameDuration.toStringAsFixed(3);
+    }
   }
 
   @override
@@ -1637,9 +1678,12 @@ class _AudioSourceSectionState extends State<_AudioSourceSection> {
   @override
   void didUpdateWidget(_AudioSourceSection old) {
     super.didUpdateWidget(old);
-    if (!_volF.hasFocus) _volCtrl.text = widget.comp.volume.toStringAsFixed(2);
-    if (!_pitchF.hasFocus)
+    if (!_volF.hasFocus) {
+      _volCtrl.text = widget.comp.volume.toStringAsFixed(2);
+    }
+    if (!_pitchF.hasFocus) {
       _pitchCtrl.text = widget.comp.pitch.toStringAsFixed(2);
+    }
   }
 
   @override
@@ -2070,10 +2114,15 @@ class _LinearProgressSectionState extends State<_LinearProgressSection> {
   @override
   void didUpdateWidget(_LinearProgressSection old) {
     super.didUpdateWidget(old);
-    if (!_progF.hasFocus)
+    if (!_progF.hasFocus) {
       _progCtrl.text = widget.comp.progress.toStringAsFixed(2);
-    if (!_wF.hasFocus) _wCtrl.text = widget.comp.size.width.toStringAsFixed(1);
-    if (!_hF.hasFocus) _hCtrl.text = widget.comp.size.height.toStringAsFixed(1);
+    }
+    if (!_wF.hasFocus) {
+      _wCtrl.text = widget.comp.size.width.toStringAsFixed(1);
+    }
+    if (!_hF.hasFocus) {
+      _hCtrl.text = widget.comp.size.height.toStringAsFixed(1);
+    }
   }
 
   @override
@@ -2163,9 +2212,12 @@ class _CircularProgressSectionState extends State<_CircularProgressSection> {
   @override
   void didUpdateWidget(_CircularProgressSection old) {
     super.didUpdateWidget(old);
-    if (!_progF.hasFocus)
+    if (!_progF.hasFocus) {
       _progCtrl.text = widget.comp.progress.toStringAsFixed(2);
-    if (!_radF.hasFocus) _radCtrl.text = widget.comp.radius.toStringAsFixed(1);
+    }
+    if (!_radF.hasFocus) {
+      _radCtrl.text = widget.comp.radius.toStringAsFixed(1);
+    }
   }
 
   @override

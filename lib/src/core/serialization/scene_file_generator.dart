@@ -278,7 +278,16 @@ class ${cls}Level {
 
     // Shapes
     if (c is RectangleComponent) {
-      final col = c.color != Colors.white ? ', color: ${_color(c.color)}' : '';
+      final fillStyle = _shapeStyleArg(
+        'fillStyle',
+        c.fillStyle,
+        defaultColor: Colors.white,
+      );
+      final strokeStyle = _shapeStyleArg(
+        'strokeStyle',
+        c.strokeStyle,
+        defaultColor: const Color(0x73FFFFFF),
+      );
       final fil = !c.filled ? ', filled: false' : '';
       final sw = c.strokeWidth != 1.0
           ? ', strokeWidth: ${_d(c.strokeWidth)}'
@@ -286,33 +295,75 @@ class ${cls}Level {
       final cr = c.cornerRadius != 0.0
           ? ', cornerRadius: ${_d(c.cornerRadius)}'
           : '';
-      return 'RectangleComponent(width: ${_d(c.width)}, height: ${_d(c.height)}$col$fil$sw$cr)';
+      return 'RectangleComponent(width: ${_d(c.width)}, height: ${_d(c.height)}$fillStyle$strokeStyle$fil$sw$cr)';
     }
     if (c is CircleComponent) {
-      final col = c.color != Colors.white ? ', color: ${_color(c.color)}' : '';
+      final fillStyle = _shapeStyleArg(
+        'fillStyle',
+        c.fillStyle,
+        defaultColor: Colors.white,
+      );
+      final strokeStyle = _shapeStyleArg(
+        'strokeStyle',
+        c.strokeStyle,
+        defaultColor: const Color(0x73FFFFFF),
+      );
       final fil = !c.filled ? ', filled: false' : '';
       final sw = c.strokeWidth != 1.0
           ? ', strokeWidth: ${_d(c.strokeWidth)}'
           : '';
-      return 'CircleComponent(radius: ${_d(c.radius)}$col$fil$sw)';
+      return 'CircleComponent(radius: ${_d(c.radius)}$fillStyle$strokeStyle$fil$sw)';
     }
     if (c is CapsuleComponent) {
-      final col = c.color != Colors.white ? ', color: ${_color(c.color)}' : '';
+      final fillStyle = _shapeStyleArg(
+        'fillStyle',
+        c.fillStyle,
+        defaultColor: Colors.white,
+      );
+      final strokeStyle = _shapeStyleArg(
+        'strokeStyle',
+        c.strokeStyle,
+        defaultColor: const Color(0x73FFFFFF),
+      );
       final fil = !c.filled ? ', filled: false' : '';
-      return 'CapsuleComponent(width: ${_d(c.width)}, height: ${_d(c.height)}$col$fil)';
+      final sw = c.strokeWidth != 1.0
+          ? ', strokeWidth: ${_d(c.strokeWidth)}'
+          : '';
+      return 'CapsuleComponent(width: ${_d(c.width)}, height: ${_d(c.height)}$fillStyle$strokeStyle$fil$sw)';
     }
     if (c is LineComponent) {
-      final col = c.color != Colors.white ? ', color: ${_color(c.color)}' : '';
+      final strokeStyle = _shapeStyleArg(
+        'strokeStyle',
+        c.strokeStyle,
+        defaultColor: Colors.white,
+      );
       final st = 'start: Offset(${_d(c.start.dx)}, ${_d(c.start.dy)})';
       final en = 'end: Offset(${_d(c.end.dx)}, ${_d(c.end.dy)})';
-      return 'LineComponent($st, $en$col, strokeWidth: ${_d(c.strokeWidth)})';
+      final sw = c.strokeWidth != 1.0
+          ? ', strokeWidth: ${_d(c.strokeWidth)}'
+          : '';
+      final rc = c.roundCaps ? ', roundCaps: true' : '';
+      return 'LineComponent($st, $en$strokeStyle$sw$rc)';
     }
     if (c is PolygonComponent) {
       final verts = c.vertices
           .map((v) => 'Offset(${_d(v.dx)}, ${_d(v.dy)})')
           .join(', ');
-      final col = c.color != Colors.white ? ', color: ${_color(c.color)}' : '';
-      return 'PolygonComponent(vertices: [$verts]$col)';
+      final fillStyle = _shapeStyleArg(
+        'fillStyle',
+        c.fillStyle,
+        defaultColor: Colors.white,
+      );
+      final strokeStyle = _shapeStyleArg(
+        'strokeStyle',
+        c.strokeStyle,
+        defaultColor: const Color(0x73FFFFFF),
+      );
+      final fil = !c.filled ? ', filled: false' : '';
+      final sw = c.strokeWidth != 1.0
+          ? ', strokeWidth: ${_d(c.strokeWidth)}'
+          : '';
+      return 'PolygonComponent(vertices: [$verts]$fillStyle$strokeStyle$fil$sw)';
     }
     if (c is SpriteComponent) {
       return "SpriteComponent(spritePath: '${c.spritePath}')";
@@ -413,27 +464,58 @@ class ${cls}Level {
           scale: scale,
         );
       case 'RectangleComponent':
+        final legacyRectColor = j['color'];
         return RectangleComponent(
           width: _n(j['width']),
           height: _n(j['height']),
-          color: Color(j['color'] as int),
+          fillStyle: _shapeStyleFromJson(
+            j['fillStyle'],
+            fallbackColor: legacyRectColor is int
+                ? Color(legacyRectColor)
+                : Colors.white,
+          ),
+          strokeStyle: _shapeStyleFromJson(
+            j['strokeStyle'],
+            fallbackColor: const Color(0x73FFFFFF),
+          ),
           filled: j['filled'] as bool? ?? true,
           strokeWidth: _n(j['strokeWidth'] ?? 1.0),
           cornerRadius: _n(j['cornerRadius'] ?? 0.0),
         );
       case 'CircleComponent':
+        final legacyCircleColor = j['color'];
         return CircleComponent(
           radius: _n(j['radius']),
-          color: Color(j['color'] as int),
+          fillStyle: _shapeStyleFromJson(
+            j['fillStyle'],
+            fallbackColor: legacyCircleColor is int
+                ? Color(legacyCircleColor)
+                : Colors.white,
+          ),
+          strokeStyle: _shapeStyleFromJson(
+            j['strokeStyle'],
+            fallbackColor: const Color(0x73FFFFFF),
+          ),
           filled: j['filled'] as bool? ?? true,
           strokeWidth: _n(j['strokeWidth'] ?? 1.0),
         );
       case 'CapsuleComponent':
+        final legacyCapsuleColor = j['color'];
         return CapsuleComponent(
           width: _n(j['width']),
           height: _n(j['height']),
-          color: Color(j['color'] as int),
+          fillStyle: _shapeStyleFromJson(
+            j['fillStyle'],
+            fallbackColor: legacyCapsuleColor is int
+                ? Color(legacyCapsuleColor)
+                : Colors.white,
+          ),
+          strokeStyle: _shapeStyleFromJson(
+            j['strokeStyle'],
+            fallbackColor: const Color(0x73FFFFFF),
+          ),
           filled: j['filled'] as bool? ?? true,
+          strokeWidth: _n(j['strokeWidth'] ?? 1.0),
         );
       case 'TagComponent':
         return TagComponent(j['tag'] as String);
@@ -500,7 +582,8 @@ class ${cls}Level {
         'type': 'RectangleComponent',
         'width': c.width,
         'height': c.height,
-        'color': c.color.toARGB32(),
+        'fillStyle': _shapeStyleToJson(c.fillStyle),
+        'strokeStyle': _shapeStyleToJson(c.strokeStyle),
         'filled': c.filled,
         'strokeWidth': c.strokeWidth,
         'cornerRadius': c.cornerRadius,
@@ -510,7 +593,8 @@ class ${cls}Level {
       return {
         'type': 'CircleComponent',
         'radius': c.radius,
-        'color': c.color.toARGB32(),
+        'fillStyle': _shapeStyleToJson(c.fillStyle),
+        'strokeStyle': _shapeStyleToJson(c.strokeStyle),
         'filled': c.filled,
         'strokeWidth': c.strokeWidth,
       };
@@ -520,8 +604,10 @@ class ${cls}Level {
         'type': 'CapsuleComponent',
         'width': c.width,
         'height': c.height,
-        'color': c.color.toARGB32(),
+        'fillStyle': _shapeStyleToJson(c.fillStyle),
+        'strokeStyle': _shapeStyleToJson(c.strokeStyle),
         'filled': c.filled,
+        'strokeWidth': c.strokeWidth,
       };
     }
     if (c is TagComponent) return {'type': 'TagComponent', 'tag': c.tag};
@@ -593,6 +679,183 @@ class ${cls}Level {
   /// Converts a [Color] to its `Color(0xAARRGGBB)` Dart literal.
   static String _color(Color c) =>
       'Color(0x${c.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()})';
+
+  static String _shapeStyleArg(
+    String name,
+    ShapePaintStyle style, {
+    required Color defaultColor,
+  }) {
+    final isDefault =
+        style.color == defaultColor &&
+        style.gradient == null &&
+        style.blendMode == BlendMode.modulate;
+    if (isDefault) return '';
+    return ', $name: ${_shapeStyleCode(style)}';
+  }
+
+  static String _shapeStyleCode(ShapePaintStyle style) {
+    final g = style.gradient;
+    final gradient = g == null ? '' : ', gradient: ${_shapeGradientCode(g)}';
+    final blend = style.blendMode == BlendMode.modulate
+        ? ''
+        : ', blendMode: BlendMode.${style.blendMode.name}';
+    return 'ShapePaintStyle(color: ${_color(style.color)}$gradient$blend)';
+  }
+
+  static String _shapeGradientCode(ShapeGradient g) {
+    final colors = g.colors.map(_color).join(', ');
+    final stops = g.stops == null
+        ? ''
+        : ', stops: [${g.stops!.map(_d).join(', ')}]';
+    switch (g.kind) {
+      case ShapeGradientKind.linear:
+        return 'ShapeGradient.linear('
+            'colors: [$colors]'
+            '$stops'
+            ', begin: ${_alignmentCode(g.begin)}'
+            ', end: ${_alignmentCode(g.end)}'
+            ', tileMode: TileMode.${g.tileMode.name}'
+            ')';
+      case ShapeGradientKind.radial:
+        return 'ShapeGradient.radial('
+            'colors: [$colors]'
+            '$stops'
+            ', center: ${_alignmentCode(g.center)}'
+            ', radius: ${_d(g.radius)}'
+            ', tileMode: TileMode.${g.tileMode.name}'
+            ')';
+      case ShapeGradientKind.sweep:
+        return 'ShapeGradient.sweep('
+            'colors: [$colors]'
+            '$stops'
+            ', center: ${_alignmentCode(g.center)}'
+            ', startAngle: ${_d(g.startAngle)}'
+            ', endAngle: ${_d(g.endAngle)}'
+            ', tileMode: TileMode.${g.tileMode.name}'
+            ')';
+    }
+  }
+
+  static String _alignmentCode(AlignmentGeometry a) {
+    if (a is Alignment) {
+      return 'Alignment(${_d(a.x)}, ${_d(a.y)})';
+    }
+    return 'Alignment.center';
+  }
+
+  static Map<String, dynamic> _shapeStyleToJson(ShapePaintStyle style) => {
+    'color': style.color.toARGB32(),
+    'blendMode': style.blendMode.name,
+    if (style.gradient != null)
+      'gradient': _shapeGradientToJson(style.gradient!),
+  };
+
+  static ShapePaintStyle _shapeStyleFromJson(
+    dynamic raw, {
+    required Color fallbackColor,
+  }) {
+    if (raw is! Map<String, dynamic>) {
+      return ShapePaintStyle(color: fallbackColor);
+    }
+    final blendName = raw['blendMode'] as String?;
+    final blend = BlendMode.values.firstWhere(
+      (m) => m.name == blendName,
+      orElse: () => BlendMode.modulate,
+    );
+    final colorRaw = raw['color'];
+    final color = colorRaw is int ? Color(colorRaw) : fallbackColor;
+    return ShapePaintStyle(
+      color: color,
+      gradient: _shapeGradientFromJson(raw['gradient']),
+      blendMode: blend,
+    );
+  }
+
+  static Map<String, dynamic> _shapeGradientToJson(ShapeGradient gradient) => {
+    'kind': gradient.kind.name,
+    'colors': gradient.colors.map((c) => c.toARGB32()).toList(),
+    if (gradient.stops != null) 'stops': gradient.stops,
+    'begin': _alignmentToJson(gradient.begin),
+    'end': _alignmentToJson(gradient.end),
+    'center': _alignmentToJson(gradient.center),
+    'radius': gradient.radius,
+    'startAngle': gradient.startAngle,
+    'endAngle': gradient.endAngle,
+    'tileMode': gradient.tileMode.name,
+  };
+
+  static ShapeGradient? _shapeGradientFromJson(dynamic raw) {
+    if (raw is! Map<String, dynamic>) return null;
+    final kindName = raw['kind'] as String? ?? ShapeGradientKind.linear.name;
+    final kind = ShapeGradientKind.values.firstWhere(
+      (k) => k.name == kindName,
+      orElse: () => ShapeGradientKind.linear,
+    );
+    final colorRaw = raw['colors'];
+    final colors = colorRaw is List
+        ? colorRaw.whereType<int>().map(Color.new).toList()
+        : <Color>[];
+    if (colors.isEmpty) return null;
+
+    final stopsRaw = raw['stops'];
+    final stops = stopsRaw is List
+        ? stopsRaw.whereType<num>().map((v) => v.toDouble()).toList()
+        : null;
+    final tileName = raw['tileMode'] as String?;
+    final tileMode = TileMode.values.firstWhere(
+      (m) => m.name == tileName,
+      orElse: () => TileMode.clamp,
+    );
+
+    switch (kind) {
+      case ShapeGradientKind.linear:
+        return ShapeGradient.linear(
+          colors: colors,
+          stops: stops,
+          begin: _alignmentFromJson(
+            raw['begin'],
+            fallback: Alignment.centerLeft,
+          ),
+          end: _alignmentFromJson(raw['end'], fallback: Alignment.centerRight),
+          tileMode: tileMode,
+        );
+      case ShapeGradientKind.radial:
+        return ShapeGradient.radial(
+          colors: colors,
+          stops: stops,
+          center: _alignmentFromJson(raw['center'], fallback: Alignment.center),
+          radius: _n(raw['radius'] ?? 0.5),
+          tileMode: tileMode,
+        );
+      case ShapeGradientKind.sweep:
+        return ShapeGradient.sweep(
+          colors: colors,
+          stops: stops,
+          center: _alignmentFromJson(raw['center'], fallback: Alignment.center),
+          startAngle: _n(raw['startAngle'] ?? 0.0),
+          endAngle: _n(raw['endAngle'] ?? 6.283185307179586),
+          tileMode: tileMode,
+        );
+    }
+  }
+
+  static Map<String, double> _alignmentToJson(AlignmentGeometry alignment) {
+    if (alignment is Alignment) {
+      return {'x': alignment.x, 'y': alignment.y};
+    }
+    return {'x': 0.0, 'y': 0.0};
+  }
+
+  static Alignment _alignmentFromJson(
+    dynamic raw, {
+    required Alignment fallback,
+  }) {
+    if (raw is! Map<String, dynamic>) return fallback;
+    final x = raw['x'];
+    final y = raw['y'];
+    if (x is! num || y is! num) return fallback;
+    return Alignment(x.toDouble(), y.toDouble());
+  }
 
   /// Converts `my_level_name` → `MyLevelName`.
   static String _toPascalCase(String name) => name
