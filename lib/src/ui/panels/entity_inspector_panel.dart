@@ -2907,7 +2907,7 @@ class _ShapePaintRow extends StatelessWidget {
     final repository = await _getColourStorageRepository();
     if (!context.mounted) return;
 
-    final selection = await ColourGradientDialog.show(
+    final selection = await JustColourDialog.show(
       context,
       initialSelection: _shapePaintToColourSelection(style),
       repository: repository,
