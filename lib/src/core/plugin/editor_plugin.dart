@@ -122,7 +122,6 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     }
 
     if (event.logicalKey == _statusPanelToggleKey) {
-      if (!_isVisible) return false;
       toggleStatusPanelVisibility();
       return true;
     }
@@ -667,7 +666,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
       setStatusPanelVisible(!_isStatusPanelVisible);
 
   void setStatusPanelVisible(bool visible) {
-    final nextVisible = _isVisible && visible;
+    final nextVisible = visible;
     if (_isStatusPanelVisible == nextVisible) return;
     if (nextVisible) {
       _attachDebuggerIfReady();
@@ -677,10 +676,18 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   }
 
   void setVisible(bool visible) {
+    final shouldShowStatusPanel = visible && !_isStatusPanelVisible;
     final shouldHideStatusPanel = !visible && _isStatusPanelVisible;
-    if (_isVisible == visible && !shouldHideStatusPanel) return;
+    if (_isVisible == visible &&
+        !shouldShowStatusPanel &&
+        !shouldHideStatusPanel) {
+      return;
+    }
     _isVisible = visible;
-    if (!_isVisible) {
+    if (_isVisible) {
+      _isStatusPanelVisible = true;
+      _attachDebuggerIfReady();
+    } else {
       _isStatusPanelVisible = false;
     }
     if (kDebugMode) {

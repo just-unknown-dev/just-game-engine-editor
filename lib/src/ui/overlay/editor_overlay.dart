@@ -19,9 +19,10 @@ part 'overlay_settings_dialog.part.dart';
 
 /// Wraps the game surface with the runtime editor UI.
 ///
-/// When [plugin.isVisible] is false the widget is transparent and passes all
-/// events through to the game. When visible it switches to a full-screen split
-/// layout: game canvas on the left, editor panel on the right.
+/// When [plugin.isVisible] is false the widget keeps the game interactive.
+/// If [plugin.isStatusPanelVisible] is true, the compact dock can still be
+/// shown independently. When visible it switches to a split layout: game
+/// canvas on the left, editor panel on the right.
 class JustGameEditorOverlay extends StatelessWidget {
   const JustGameEditorOverlay({
     super.key,
@@ -45,7 +46,35 @@ class JustGameEditorOverlay extends StatelessWidget {
           animation: plugin,
           builder: (context, _) {
             if (!plugin.isVisible) {
-              return AbsorbPointer(absorbing: false, child: gameChild);
+              if (!plugin.isStatusPanelVisible) {
+                return AbsorbPointer(absorbing: false, child: gameChild);
+              }
+
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  return Stack(
+                    clipBehavior: Clip.hardEdge,
+                    children: <Widget>[
+                      Positioned.fill(
+                        child: AbsorbPointer(
+                          absorbing: false,
+                          child: gameChild,
+                        ),
+                      ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: _CompactStatusDock(
+                          plugin: plugin,
+                          maxDetailWidth: constraints.maxWidth,
+                          maxDetailHeight: constraints.maxHeight,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
             }
 
             return ValueListenableBuilder<_OverlayUiSettings>(
