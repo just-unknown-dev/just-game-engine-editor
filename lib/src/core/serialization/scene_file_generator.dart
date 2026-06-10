@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show Colors;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
+import '../components/physics_joint_components.dart';
 import '../components/simple_movement_component.dart';
 
 /// Writes and reads scene files inside the project's `lib/game/scenes/`
@@ -384,6 +385,34 @@ class ${cls}Level {
       return 'LifetimeComponent(${_d(c.initialLifetime)})';
     }
 
+    if (c is PhysicsBodyComponent) {
+      return 'PhysicsBodyComponent('
+          'shape: ${_physicsShapeCode(c.shape)}, '
+          'mass: ${_d(c.mass)}, '
+          'restitution: ${_d(c.restitution)}, '
+          'drag: ${_d(c.drag)}, '
+          'isStatic: ${c.isStatic}, '
+          'layer: ${c.layer}, '
+          'collisionMask: ${c.collisionMask}, '
+          'isOneWay: ${c.isOneWay}, '
+          'isSensor: ${c.isSensor}, '
+          'categoryBits: ${c.categoryBits}, '
+          'maskBits: ${c.maskBits}, '
+          'groupIndex: ${c.groupIndex})';
+    }
+    if (c is DistanceJointComponent) {
+      return "// TODO: DistanceJointComponent(target: '${c.targetEntityName}')";
+    }
+    if (c is WeldJointComponent) {
+      return "// TODO: WeldJointComponent(target: '${c.targetEntityName}')";
+    }
+    if (c is PrismaticJointComponent) {
+      return "// TODO: PrismaticJointComponent(target: '${c.targetEntityName}')";
+    }
+    if (c is WheelJointComponent) {
+      return "// TODO: WheelJointComponent(target: '${c.targetEntityName}')";
+    }
+
     // Input / Camera
     if (c is InputComponent) return 'InputComponent()';
     if (c is CameraFollowComponent) {
@@ -542,6 +571,21 @@ class ${cls}Level {
         s.flipX = j['flipX'] as bool? ?? false;
         s.flipY = j['flipY'] as bool? ?? false;
         return s;
+      case 'PhysicsBodyComponent':
+        return PhysicsBodyComponent(
+          shape: _shapeFromJson(j['shape']) ?? RectangleShape(64, 64),
+          mass: _n(j['mass'] ?? 1.0),
+          restitution: _n(j['restitution'] ?? 0.8),
+          drag: _n(j['drag'] ?? 0.98),
+          isStatic: j['isStatic'] as bool? ?? false,
+          layer: j['layer'] as int? ?? 1,
+          collisionMask: j['collisionMask'] as int? ?? -1,
+          isOneWay: j['isOneWay'] as bool? ?? false,
+          isSensor: j['isSensor'] as bool? ?? false,
+          categoryBits: j['categoryBits'] as int? ?? 0x0001,
+          maskBits: j['maskBits'] as int? ?? 0xFFFF,
+          groupIndex: j['groupIndex'] as int? ?? 0,
+        );
       case 'CameraFollowComponent':
         return CameraFollowComponent(
           enabled: j['enabled'] as bool? ?? true,
@@ -571,6 +615,49 @@ class ${cls}Level {
         return p2;
       case 'EffectComponent':
         return EffectComponent();
+      case 'DistanceJointComponent':
+        return DistanceJointComponent(
+          targetEntityName: j['targetEntityName'] as String? ?? '',
+          localAnchorA: _offsetFromJson(j['localAnchorA']),
+          localAnchorB: _offsetFromJson(j['localAnchorB']),
+          length: _n(j['length'] ?? 48.0),
+          stiffness: _n(j['stiffness'] ?? 80.0),
+          damping: _n(j['damping'] ?? 0.25),
+          collideConnected: j['collideConnected'] as bool? ?? false,
+        );
+      case 'WeldJointComponent':
+        return WeldJointComponent(
+          targetEntityName: j['targetEntityName'] as String? ?? '',
+          localAnchorA: _offsetFromJson(j['localAnchorA']),
+          localAnchorB: _offsetFromJson(j['localAnchorB']),
+          collideConnected: j['collideConnected'] as bool? ?? false,
+        );
+      case 'PrismaticJointComponent':
+        return PrismaticJointComponent(
+          targetEntityName: j['targetEntityName'] as String? ?? '',
+          axis: _offsetFromJson(j['axis'], fallback: const Offset(1, 0)),
+          enableLimit: j['enableLimit'] as bool? ?? false,
+          lowerTranslation: _n(j['lowerTranslation'] ?? -20.0),
+          upperTranslation: _n(j['upperTranslation'] ?? 20.0),
+          enableMotor: j['enableMotor'] as bool? ?? false,
+          motorSpeed: _n(j['motorSpeed'] ?? 0.0),
+          maxMotorForce: _n(j['maxMotorForce'] ?? 200.0),
+          collideConnected: j['collideConnected'] as bool? ?? false,
+        );
+      case 'WheelJointComponent':
+        return WheelJointComponent(
+          targetEntityName: j['targetEntityName'] as String? ?? '',
+          suspensionAxis: _offsetFromJson(
+            j['suspensionAxis'],
+            fallback: const Offset(0, 1),
+          ),
+          stiffness: _n(j['stiffness'] ?? 45.0),
+          damping: _n(j['damping'] ?? 0.65),
+          enableMotor: j['enableMotor'] as bool? ?? true,
+          motorSpeed: _n(j['motorSpeed'] ?? 12.0),
+          maxMotorTorque: _n(j['maxMotorTorque'] ?? 250.0),
+          collideConnected: j['collideConnected'] as bool? ?? false,
+        );
       default:
         return null;
     }
@@ -651,6 +738,23 @@ class ${cls}Level {
         'flipY': c.flipY,
       };
     }
+    if (c is PhysicsBodyComponent) {
+      return {
+        'type': 'PhysicsBodyComponent',
+        'shape': _shapeToJson(c.shape),
+        'mass': c.mass,
+        'restitution': c.restitution,
+        'drag': c.drag,
+        'isStatic': c.isStatic,
+        'layer': c.layer,
+        'collisionMask': c.collisionMask,
+        'isOneWay': c.isOneWay,
+        'isSensor': c.isSensor,
+        'categoryBits': c.categoryBits,
+        'maskBits': c.maskBits,
+        'groupIndex': c.groupIndex,
+      };
+    }
     if (c is CameraFollowComponent) {
       return {
         'type': 'CameraFollowComponent',
@@ -681,7 +785,194 @@ class ${cls}Level {
       };
     }
     if (c is EffectComponent) return {'type': 'EffectComponent'};
+    if (c is DistanceJointComponent) {
+      return {
+        'type': 'DistanceJointComponent',
+        'targetEntityName': c.targetEntityName,
+        'localAnchorA': _offsetToJson(c.localAnchorA),
+        'localAnchorB': _offsetToJson(c.localAnchorB),
+        'length': c.length,
+        'stiffness': c.stiffness,
+        'damping': c.damping,
+        'collideConnected': c.collideConnected,
+      };
+    }
+    if (c is WeldJointComponent) {
+      return {
+        'type': 'WeldJointComponent',
+        'targetEntityName': c.targetEntityName,
+        'localAnchorA': _offsetToJson(c.localAnchorA),
+        'localAnchorB': _offsetToJson(c.localAnchorB),
+        'collideConnected': c.collideConnected,
+      };
+    }
+    if (c is PrismaticJointComponent) {
+      return {
+        'type': 'PrismaticJointComponent',
+        'targetEntityName': c.targetEntityName,
+        'axis': _offsetToJson(c.axis),
+        'enableLimit': c.enableLimit,
+        'lowerTranslation': c.lowerTranslation,
+        'upperTranslation': c.upperTranslation,
+        'enableMotor': c.enableMotor,
+        'motorSpeed': c.motorSpeed,
+        'maxMotorForce': c.maxMotorForce,
+        'collideConnected': c.collideConnected,
+      };
+    }
+    if (c is WheelJointComponent) {
+      return {
+        'type': 'WheelJointComponent',
+        'targetEntityName': c.targetEntityName,
+        'suspensionAxis': _offsetToJson(c.suspensionAxis),
+        'stiffness': c.stiffness,
+        'damping': c.damping,
+        'enableMotor': c.enableMotor,
+        'motorSpeed': c.motorSpeed,
+        'maxMotorTorque': c.maxMotorTorque,
+        'collideConnected': c.collideConnected,
+      };
+    }
     return null;
+  }
+
+  static CollisionShape? _shapeFromJson(dynamic raw) {
+    if (raw is! Map<String, dynamic>) return null;
+    switch (raw['kind'] as String? ?? '') {
+      case 'circle':
+        return CircleShape(_n(raw['radius'] ?? 16.0));
+      case 'rectangle':
+        return RectangleShape(
+          _n(raw['width'] ?? 64.0),
+          _n(raw['height'] ?? 64.0),
+        );
+      case 'polygon':
+        final vertices = _offsetListFromJson(raw['vertices']);
+        if (vertices.isEmpty) return null;
+        return PolygonShape(vertices);
+      case 'capsule':
+        return CapsuleShape(
+          center1: _offsetFromJson(raw['center1']),
+          center2: _offsetFromJson(raw['center2']),
+          radius: _n(raw['radius'] ?? 8.0),
+        );
+      case 'segment':
+        return SegmentShape(
+          _offsetFromJson(raw['point1']),
+          _offsetFromJson(raw['point2']),
+          thickness: _n(raw['thickness'] ?? 2.0),
+        );
+      case 'chain':
+        final vertices = _offsetListFromJson(raw['vertices']);
+        if (vertices.isEmpty) return null;
+        return ChainShape(
+          vertices,
+          loop: raw['loop'] as bool? ?? false,
+          thickness: _n(raw['thickness'] ?? 2.0),
+        );
+      case 'rounded_polygon':
+        final vertices = _offsetListFromJson(raw['vertices']);
+        if (vertices.isEmpty) return null;
+        return RoundedPolygonShape(vertices, _n(raw['cornerRadius'] ?? 6.0));
+      default:
+        return null;
+    }
+  }
+
+  static Map<String, dynamic> _shapeToJson(CollisionShape shape) {
+    if (shape is CircleShape) {
+      return {'kind': 'circle', 'radius': shape.radius};
+    }
+    if (shape is RectangleShape) {
+      return {
+        'kind': 'rectangle',
+        'width': shape.width,
+        'height': shape.height,
+      };
+    }
+    if (shape is RoundedPolygonShape) {
+      return {
+        'kind': 'rounded_polygon',
+        'vertices': _offsetListToJson(shape.vertices),
+        'cornerRadius': shape.cornerRadius,
+      };
+    }
+    if (shape is PolygonShape) {
+      return {'kind': 'polygon', 'vertices': _offsetListToJson(shape.vertices)};
+    }
+    if (shape is CapsuleShape) {
+      return {
+        'kind': 'capsule',
+        'center1': _offsetToJson(shape.center1),
+        'center2': _offsetToJson(shape.center2),
+        'radius': shape.radius,
+      };
+    }
+    if (shape is SegmentShape) {
+      return {
+        'kind': 'segment',
+        'point1': _offsetToJson(shape.point1),
+        'point2': _offsetToJson(shape.point2),
+        'thickness': shape.thickness,
+      };
+    }
+    if (shape is ChainShape) {
+      return {
+        'kind': 'chain',
+        'vertices': _offsetListToJson(shape.vertices),
+        'loop': shape.loop,
+        'thickness': shape.thickness,
+      };
+    }
+    return {'kind': 'rectangle', 'width': 64.0, 'height': 64.0};
+  }
+
+  static String _physicsShapeCode(CollisionShape shape) {
+    if (shape is CircleShape) {
+      return 'CircleShape(${_d(shape.radius)})';
+    }
+    if (shape is RectangleShape) {
+      return 'RectangleShape(${_d(shape.width)}, ${_d(shape.height)})';
+    }
+    if (shape is RoundedPolygonShape) {
+      return 'RoundedPolygonShape([${shape.vertices.map((v) => 'Offset(${_d(v.dx)}, ${_d(v.dy)})').join(', ')}], ${_d(shape.cornerRadius)})';
+    }
+    if (shape is PolygonShape) {
+      return 'PolygonShape([${shape.vertices.map((v) => 'Offset(${_d(v.dx)}, ${_d(v.dy)})').join(', ')}])';
+    }
+    if (shape is CapsuleShape) {
+      return 'CapsuleShape(center1: Offset(${_d(shape.center1.dx)}, ${_d(shape.center1.dy)}), center2: Offset(${_d(shape.center2.dx)}, ${_d(shape.center2.dy)}), radius: ${_d(shape.radius)})';
+    }
+    if (shape is SegmentShape) {
+      return 'SegmentShape(Offset(${_d(shape.point1.dx)}, ${_d(shape.point1.dy)}), Offset(${_d(shape.point2.dx)}, ${_d(shape.point2.dy)}), thickness: ${_d(shape.thickness)})';
+    }
+    if (shape is ChainShape) {
+      return 'ChainShape([${shape.vertices.map((v) => 'Offset(${_d(v.dx)}, ${_d(v.dy)})').join(', ')}], loop: ${shape.loop}, thickness: ${_d(shape.thickness)})';
+    }
+    return 'RectangleShape(64, 64)';
+  }
+
+  static Offset _offsetFromJson(dynamic raw, {Offset fallback = Offset.zero}) {
+    if (raw is Map<String, dynamic>) {
+      return Offset(_n(raw['dx'] ?? 0), _n(raw['dy'] ?? 0));
+    }
+    return fallback;
+  }
+
+  static Map<String, dynamic> _offsetToJson(Offset value) {
+    return {'dx': value.dx, 'dy': value.dy};
+  }
+
+  static List<Offset> _offsetListFromJson(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .map((v) => Offset(_n(v['dx'] ?? 0), _n(v['dy'] ?? 0)))
+        .toList();
+  }
+
+  static List<Map<String, dynamic>> _offsetListToJson(List<Offset> values) {
+    return values.map(_offsetToJson).toList();
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

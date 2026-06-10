@@ -6,6 +6,7 @@ import 'package:just_colours/just_colours.dart';
 import '../dialogs/add_component_picker.dart';
 import '../theme/editor_theme.dart';
 import '../widgets/scrubbable_number_field.dart';
+import '../../core/components/physics_joint_components.dart';
 import '../../core/components/simple_movement_component.dart';
 import '../../core/services/color_history_service.dart';
 import '../../core/state/editor_scene_state.dart';
@@ -316,6 +317,50 @@ class _EntityInspector extends StatelessWidget {
           comp: physics,
           sceneState: sceneState,
           onDelete: () => _removeComponent<PhysicsBodyComponent>(),
+        ),
+      );
+    }
+
+    final distanceJoint = entity.getComponent<DistanceJointComponent>();
+    if (distanceJoint != null) {
+      sections.add(
+        _DistanceJointSection(
+          comp: distanceJoint,
+          sceneState: sceneState,
+          onDelete: () => _removeComponent<DistanceJointComponent>(),
+        ),
+      );
+    }
+
+    final weldJoint = entity.getComponent<WeldJointComponent>();
+    if (weldJoint != null) {
+      sections.add(
+        _WeldJointSection(
+          comp: weldJoint,
+          sceneState: sceneState,
+          onDelete: () => _removeComponent<WeldJointComponent>(),
+        ),
+      );
+    }
+
+    final prismaticJoint = entity.getComponent<PrismaticJointComponent>();
+    if (prismaticJoint != null) {
+      sections.add(
+        _PrismaticJointSection(
+          comp: prismaticJoint,
+          sceneState: sceneState,
+          onDelete: () => _removeComponent<PrismaticJointComponent>(),
+        ),
+      );
+    }
+
+    final wheelJoint = entity.getComponent<WheelJointComponent>();
+    if (wheelJoint != null) {
+      sections.add(
+        _WheelJointSection(
+          comp: wheelJoint,
+          sceneState: sceneState,
+          onDelete: () => _removeComponent<WheelJointComponent>(),
         ),
       );
     }
@@ -1841,8 +1886,22 @@ class _PhysicsBodySection extends StatefulWidget {
 }
 
 class _PhysicsBodySectionState extends State<_PhysicsBodySection> {
-  late TextEditingController _massCtrl, _restCtrl, _dragCtrl;
-  final _massF = FocusNode(), _restF = FocusNode(), _dragF = FocusNode();
+  late TextEditingController _massCtrl;
+  late TextEditingController _restCtrl;
+  late TextEditingController _dragCtrl;
+  late TextEditingController _layerCtrl;
+  late TextEditingController _collisionMaskCtrl;
+  late TextEditingController _categoryBitsCtrl;
+  late TextEditingController _maskBitsCtrl;
+  late TextEditingController _groupIndexCtrl;
+  final _massF = FocusNode();
+  final _restF = FocusNode();
+  final _dragF = FocusNode();
+  final _layerF = FocusNode();
+  final _collisionMaskF = FocusNode();
+  final _categoryBitsF = FocusNode();
+  final _maskBitsF = FocusNode();
+  final _groupIndexF = FocusNode();
 
   @override
   void initState() {
@@ -1855,6 +1914,19 @@ class _PhysicsBodySectionState extends State<_PhysicsBodySection> {
     );
     _dragCtrl = TextEditingController(
       text: widget.comp.drag.toStringAsFixed(2),
+    );
+    _layerCtrl = TextEditingController(text: widget.comp.layer.toString());
+    _collisionMaskCtrl = TextEditingController(
+      text: widget.comp.collisionMask.toString(),
+    );
+    _categoryBitsCtrl = TextEditingController(
+      text: widget.comp.categoryBits.toString(),
+    );
+    _maskBitsCtrl = TextEditingController(
+      text: widget.comp.maskBits.toString(),
+    );
+    _groupIndexCtrl = TextEditingController(
+      text: widget.comp.groupIndex.toString(),
     );
   }
 
@@ -1870,14 +1942,47 @@ class _PhysicsBodySectionState extends State<_PhysicsBodySection> {
     if (!_dragF.hasFocus) {
       _dragCtrl.text = widget.comp.drag.toStringAsFixed(2);
     }
+    if (!_layerF.hasFocus) {
+      _layerCtrl.text = widget.comp.layer.toString();
+    }
+    if (!_collisionMaskF.hasFocus) {
+      _collisionMaskCtrl.text = widget.comp.collisionMask.toString();
+    }
+    if (!_categoryBitsF.hasFocus) {
+      _categoryBitsCtrl.text = widget.comp.categoryBits.toString();
+    }
+    if (!_maskBitsF.hasFocus) {
+      _maskBitsCtrl.text = widget.comp.maskBits.toString();
+    }
+    if (!_groupIndexF.hasFocus) {
+      _groupIndexCtrl.text = widget.comp.groupIndex.toString();
+    }
   }
 
   @override
   void dispose() {
-    for (final c in [_massCtrl, _restCtrl, _dragCtrl]) {
+    for (final c in [
+      _massCtrl,
+      _restCtrl,
+      _dragCtrl,
+      _layerCtrl,
+      _collisionMaskCtrl,
+      _categoryBitsCtrl,
+      _maskBitsCtrl,
+      _groupIndexCtrl,
+    ]) {
       c.dispose();
     }
-    for (final f in [_massF, _restF, _dragF]) {
+    for (final f in [
+      _massF,
+      _restF,
+      _dragF,
+      _layerF,
+      _collisionMaskF,
+      _categoryBitsF,
+      _maskBitsF,
+      _groupIndexF,
+    ]) {
       f.dispose();
     }
     super.dispose();
@@ -1890,6 +1995,16 @@ class _PhysicsBodySectionState extends State<_PhysicsBodySection> {
     if (r != null) widget.comp.restitution = r;
     final d = double.tryParse(_dragCtrl.text);
     if (d != null) widget.comp.drag = d;
+    final layer = int.tryParse(_layerCtrl.text);
+    if (layer != null) widget.comp.layer = layer;
+    final collisionMask = int.tryParse(_collisionMaskCtrl.text);
+    if (collisionMask != null) widget.comp.collisionMask = collisionMask;
+    final categoryBits = int.tryParse(_categoryBitsCtrl.text);
+    if (categoryBits != null) widget.comp.categoryBits = categoryBits;
+    final maskBits = int.tryParse(_maskBitsCtrl.text);
+    if (maskBits != null) widget.comp.maskBits = maskBits;
+    final groupIndex = int.tryParse(_groupIndexCtrl.text);
+    if (groupIndex != null) widget.comp.groupIndex = groupIndex;
     widget.sceneState.markDirty();
   }
 
@@ -1920,6 +2035,563 @@ class _PhysicsBodySectionState extends State<_PhysicsBodySection> {
       const SizedBox(height: 6),
       _BoolRow('Static', widget.comp.isStatic, (v) {
         widget.comp.isStatic = v;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 4),
+      _BoolRow('Sensor', widget.comp.isSensor, (v) {
+        widget.comp.isSensor = v;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 4),
+      _BoolRow('One-way', widget.comp.isOneWay, (v) {
+        widget.comp.isOneWay = v;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 6),
+      _Row2(
+        'Layer',
+        _layerCtrl,
+        _layerF,
+        'Coll. Mask',
+        _collisionMaskCtrl,
+        _collisionMaskF,
+        _commit,
+        scrub1: const NumberScrubConfig(step: 1, integer: true),
+        scrub2: const NumberScrubConfig(step: 1, integer: true),
+      ),
+      const SizedBox(height: 6),
+      _Row2(
+        'Category',
+        _categoryBitsCtrl,
+        _categoryBitsF,
+        'Mask Bits',
+        _maskBitsCtrl,
+        _maskBitsF,
+        _commit,
+        scrub1: const NumberScrubConfig(step: 1, integer: true),
+        scrub2: const NumberScrubConfig(step: 1, integer: true),
+      ),
+      const SizedBox(height: 6),
+      _FieldRow(
+        'Group Index',
+        _groupIndexCtrl,
+        _groupIndexF,
+        _commit,
+        scrub: const NumberScrubConfig(step: 1, integer: true),
+      ),
+    ],
+  );
+}
+
+class _DistanceJointSection extends StatefulWidget {
+  const _DistanceJointSection({
+    required this.comp,
+    required this.sceneState,
+    required this.onDelete,
+  });
+
+  final DistanceJointComponent comp;
+  final EditorSceneState sceneState;
+  final VoidCallback onDelete;
+
+  @override
+  State<_DistanceJointSection> createState() => _DistanceJointSectionState();
+}
+
+class _DistanceJointSectionState extends State<_DistanceJointSection> {
+  late TextEditingController _targetCtrl;
+  late TextEditingController _lengthCtrl;
+  late TextEditingController _stiffnessCtrl;
+  late TextEditingController _dampingCtrl;
+  final _targetF = FocusNode();
+  final _lengthF = FocusNode();
+  final _stiffnessF = FocusNode();
+  final _dampingF = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _targetCtrl = TextEditingController(text: widget.comp.targetEntityName);
+    _lengthCtrl = TextEditingController(
+      text: widget.comp.length.toStringAsFixed(2),
+    );
+    _stiffnessCtrl = TextEditingController(
+      text: widget.comp.stiffness.toStringAsFixed(2),
+    );
+    _dampingCtrl = TextEditingController(
+      text: widget.comp.damping.toStringAsFixed(2),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_DistanceJointSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_targetF.hasFocus) _targetCtrl.text = widget.comp.targetEntityName;
+    if (!_lengthF.hasFocus)
+      _lengthCtrl.text = widget.comp.length.toStringAsFixed(2);
+    if (!_stiffnessF.hasFocus)
+      _stiffnessCtrl.text = widget.comp.stiffness.toStringAsFixed(2);
+    if (!_dampingF.hasFocus)
+      _dampingCtrl.text = widget.comp.damping.toStringAsFixed(2);
+  }
+
+  @override
+  void dispose() {
+    _targetCtrl.dispose();
+    _lengthCtrl.dispose();
+    _stiffnessCtrl.dispose();
+    _dampingCtrl.dispose();
+    _targetF.dispose();
+    _lengthF.dispose();
+    _stiffnessF.dispose();
+    _dampingF.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    widget.comp.targetEntityName = _targetCtrl.text.trim();
+    final length = double.tryParse(_lengthCtrl.text);
+    if (length != null) widget.comp.length = length;
+    final stiffness = double.tryParse(_stiffnessCtrl.text);
+    if (stiffness != null) widget.comp.stiffness = stiffness;
+    final damping = double.tryParse(_dampingCtrl.text);
+    if (damping != null) widget.comp.damping = damping;
+    widget.sceneState.markDirty();
+  }
+
+  @override
+  Widget build(BuildContext context) => _Section(
+    title: 'Distance Joint',
+    onDelete: widget.onDelete,
+    children: [
+      _FieldRow('Target Name', _targetCtrl, _targetF, _commit),
+      const SizedBox(height: 6),
+      _Row2(
+        'Length',
+        _lengthCtrl,
+        _lengthF,
+        'Stiff.',
+        _stiffnessCtrl,
+        _stiffnessF,
+        _commit,
+        scrub1: const NumberScrubConfig(step: 1, fractionDigits: 2, min: 0),
+        scrub2: const NumberScrubConfig(step: 1, fractionDigits: 2, min: 0),
+      ),
+      const SizedBox(height: 6),
+      _FieldRow(
+        'Damping',
+        _dampingCtrl,
+        _dampingF,
+        _commit,
+        scrub: const NumberScrubConfig(step: 0.05, fractionDigits: 2, min: 0),
+      ),
+      const SizedBox(height: 4),
+      _BoolRow('Collide Connected', widget.comp.collideConnected, (v) {
+        widget.comp.collideConnected = v;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+    ],
+  );
+}
+
+class _WeldJointSection extends StatefulWidget {
+  const _WeldJointSection({
+    required this.comp,
+    required this.sceneState,
+    required this.onDelete,
+  });
+
+  final WeldJointComponent comp;
+  final EditorSceneState sceneState;
+  final VoidCallback onDelete;
+
+  @override
+  State<_WeldJointSection> createState() => _WeldJointSectionState();
+}
+
+class _WeldJointSectionState extends State<_WeldJointSection> {
+  late TextEditingController _targetCtrl;
+  final _targetF = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _targetCtrl = TextEditingController(text: widget.comp.targetEntityName);
+  }
+
+  @override
+  void didUpdateWidget(_WeldJointSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_targetF.hasFocus) _targetCtrl.text = widget.comp.targetEntityName;
+  }
+
+  @override
+  void dispose() {
+    _targetCtrl.dispose();
+    _targetF.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    widget.comp.targetEntityName = _targetCtrl.text.trim();
+    widget.sceneState.markDirty();
+  }
+
+  @override
+  Widget build(BuildContext context) => _Section(
+    title: 'Weld Joint',
+    onDelete: widget.onDelete,
+    children: [
+      _FieldRow('Target Name', _targetCtrl, _targetF, _commit),
+      const SizedBox(height: 4),
+      _BoolRow('Collide Connected', widget.comp.collideConnected, (v) {
+        widget.comp.collideConnected = v;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+    ],
+  );
+}
+
+class _PrismaticJointSection extends StatefulWidget {
+  const _PrismaticJointSection({
+    required this.comp,
+    required this.sceneState,
+    required this.onDelete,
+  });
+
+  final PrismaticJointComponent comp;
+  final EditorSceneState sceneState;
+  final VoidCallback onDelete;
+
+  @override
+  State<_PrismaticJointSection> createState() => _PrismaticJointSectionState();
+}
+
+class _PrismaticJointSectionState extends State<_PrismaticJointSection> {
+  late TextEditingController _targetCtrl;
+  late TextEditingController _axisXCtrl;
+  late TextEditingController _axisYCtrl;
+  late TextEditingController _lowerCtrl;
+  late TextEditingController _upperCtrl;
+  late TextEditingController _motorSpeedCtrl;
+  late TextEditingController _maxForceCtrl;
+  final _targetF = FocusNode();
+  final _axisXF = FocusNode();
+  final _axisYF = FocusNode();
+  final _lowerF = FocusNode();
+  final _upperF = FocusNode();
+  final _motorSpeedF = FocusNode();
+  final _maxForceF = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _targetCtrl = TextEditingController(text: widget.comp.targetEntityName);
+    _axisXCtrl = TextEditingController(
+      text: widget.comp.axis.dx.toStringAsFixed(2),
+    );
+    _axisYCtrl = TextEditingController(
+      text: widget.comp.axis.dy.toStringAsFixed(2),
+    );
+    _lowerCtrl = TextEditingController(
+      text: widget.comp.lowerTranslation.toStringAsFixed(2),
+    );
+    _upperCtrl = TextEditingController(
+      text: widget.comp.upperTranslation.toStringAsFixed(2),
+    );
+    _motorSpeedCtrl = TextEditingController(
+      text: widget.comp.motorSpeed.toStringAsFixed(2),
+    );
+    _maxForceCtrl = TextEditingController(
+      text: widget.comp.maxMotorForce.toStringAsFixed(2),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_PrismaticJointSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_targetF.hasFocus) _targetCtrl.text = widget.comp.targetEntityName;
+    if (!_axisXF.hasFocus)
+      _axisXCtrl.text = widget.comp.axis.dx.toStringAsFixed(2);
+    if (!_axisYF.hasFocus)
+      _axisYCtrl.text = widget.comp.axis.dy.toStringAsFixed(2);
+    if (!_lowerF.hasFocus)
+      _lowerCtrl.text = widget.comp.lowerTranslation.toStringAsFixed(2);
+    if (!_upperF.hasFocus)
+      _upperCtrl.text = widget.comp.upperTranslation.toStringAsFixed(2);
+    if (!_motorSpeedF.hasFocus)
+      _motorSpeedCtrl.text = widget.comp.motorSpeed.toStringAsFixed(2);
+    if (!_maxForceF.hasFocus)
+      _maxForceCtrl.text = widget.comp.maxMotorForce.toStringAsFixed(2);
+  }
+
+  @override
+  void dispose() {
+    _targetCtrl.dispose();
+    _axisXCtrl.dispose();
+    _axisYCtrl.dispose();
+    _lowerCtrl.dispose();
+    _upperCtrl.dispose();
+    _motorSpeedCtrl.dispose();
+    _maxForceCtrl.dispose();
+    _targetF.dispose();
+    _axisXF.dispose();
+    _axisYF.dispose();
+    _lowerF.dispose();
+    _upperF.dispose();
+    _motorSpeedF.dispose();
+    _maxForceF.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    widget.comp.targetEntityName = _targetCtrl.text.trim();
+    final axisX = double.tryParse(_axisXCtrl.text);
+    final axisY = double.tryParse(_axisYCtrl.text);
+    if (axisX != null && axisY != null) {
+      widget.comp.axis = Offset(axisX, axisY);
+    }
+    final lower = double.tryParse(_lowerCtrl.text);
+    if (lower != null) widget.comp.lowerTranslation = lower;
+    final upper = double.tryParse(_upperCtrl.text);
+    if (upper != null) widget.comp.upperTranslation = upper;
+    final motorSpeed = double.tryParse(_motorSpeedCtrl.text);
+    if (motorSpeed != null) widget.comp.motorSpeed = motorSpeed;
+    final maxForce = double.tryParse(_maxForceCtrl.text);
+    if (maxForce != null) widget.comp.maxMotorForce = maxForce;
+    widget.sceneState.markDirty();
+  }
+
+  @override
+  Widget build(BuildContext context) => _Section(
+    title: 'Prismatic Joint',
+    onDelete: widget.onDelete,
+    children: [
+      _FieldRow('Target Name', _targetCtrl, _targetF, _commit),
+      const SizedBox(height: 6),
+      _Row2(
+        'Axis X',
+        _axisXCtrl,
+        _axisXF,
+        'Axis Y',
+        _axisYCtrl,
+        _axisYF,
+        _commit,
+        scrub1: const NumberScrubConfig(step: 0.1, fractionDigits: 2),
+        scrub2: const NumberScrubConfig(step: 0.1, fractionDigits: 2),
+      ),
+      const SizedBox(height: 4),
+      _BoolRow('Enable Limit', widget.comp.enableLimit, (v) {
+        widget.comp.enableLimit = v;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 4),
+      _Row2(
+        'Lower',
+        _lowerCtrl,
+        _lowerF,
+        'Upper',
+        _upperCtrl,
+        _upperF,
+        _commit,
+        scrub1: const NumberScrubConfig(step: 1, fractionDigits: 2),
+        scrub2: const NumberScrubConfig(step: 1, fractionDigits: 2),
+      ),
+      const SizedBox(height: 4),
+      _BoolRow('Enable Motor', widget.comp.enableMotor, (v) {
+        widget.comp.enableMotor = v;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 4),
+      _Row2(
+        'Motor Speed',
+        _motorSpeedCtrl,
+        _motorSpeedF,
+        'Max Force',
+        _maxForceCtrl,
+        _maxForceF,
+        _commit,
+        scrub1: const NumberScrubConfig(step: 0.5, fractionDigits: 2),
+        scrub2: const NumberScrubConfig(step: 5, fractionDigits: 2, min: 0),
+      ),
+      const SizedBox(height: 4),
+      _BoolRow('Collide Connected', widget.comp.collideConnected, (v) {
+        widget.comp.collideConnected = v;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+    ],
+  );
+}
+
+class _WheelJointSection extends StatefulWidget {
+  const _WheelJointSection({
+    required this.comp,
+    required this.sceneState,
+    required this.onDelete,
+  });
+
+  final WheelJointComponent comp;
+  final EditorSceneState sceneState;
+  final VoidCallback onDelete;
+
+  @override
+  State<_WheelJointSection> createState() => _WheelJointSectionState();
+}
+
+class _WheelJointSectionState extends State<_WheelJointSection> {
+  late TextEditingController _targetCtrl;
+  late TextEditingController _axisXCtrl;
+  late TextEditingController _axisYCtrl;
+  late TextEditingController _stiffnessCtrl;
+  late TextEditingController _dampingCtrl;
+  late TextEditingController _motorSpeedCtrl;
+  late TextEditingController _maxTorqueCtrl;
+  final _targetF = FocusNode();
+  final _axisXF = FocusNode();
+  final _axisYF = FocusNode();
+  final _stiffnessF = FocusNode();
+  final _dampingF = FocusNode();
+  final _motorSpeedF = FocusNode();
+  final _maxTorqueF = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _targetCtrl = TextEditingController(text: widget.comp.targetEntityName);
+    _axisXCtrl = TextEditingController(
+      text: widget.comp.suspensionAxis.dx.toStringAsFixed(2),
+    );
+    _axisYCtrl = TextEditingController(
+      text: widget.comp.suspensionAxis.dy.toStringAsFixed(2),
+    );
+    _stiffnessCtrl = TextEditingController(
+      text: widget.comp.stiffness.toStringAsFixed(2),
+    );
+    _dampingCtrl = TextEditingController(
+      text: widget.comp.damping.toStringAsFixed(2),
+    );
+    _motorSpeedCtrl = TextEditingController(
+      text: widget.comp.motorSpeed.toStringAsFixed(2),
+    );
+    _maxTorqueCtrl = TextEditingController(
+      text: widget.comp.maxMotorTorque.toStringAsFixed(2),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_WheelJointSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_targetF.hasFocus) _targetCtrl.text = widget.comp.targetEntityName;
+    if (!_axisXF.hasFocus)
+      _axisXCtrl.text = widget.comp.suspensionAxis.dx.toStringAsFixed(2);
+    if (!_axisYF.hasFocus)
+      _axisYCtrl.text = widget.comp.suspensionAxis.dy.toStringAsFixed(2);
+    if (!_stiffnessF.hasFocus)
+      _stiffnessCtrl.text = widget.comp.stiffness.toStringAsFixed(2);
+    if (!_dampingF.hasFocus)
+      _dampingCtrl.text = widget.comp.damping.toStringAsFixed(2);
+    if (!_motorSpeedF.hasFocus)
+      _motorSpeedCtrl.text = widget.comp.motorSpeed.toStringAsFixed(2);
+    if (!_maxTorqueF.hasFocus)
+      _maxTorqueCtrl.text = widget.comp.maxMotorTorque.toStringAsFixed(2);
+  }
+
+  @override
+  void dispose() {
+    _targetCtrl.dispose();
+    _axisXCtrl.dispose();
+    _axisYCtrl.dispose();
+    _stiffnessCtrl.dispose();
+    _dampingCtrl.dispose();
+    _motorSpeedCtrl.dispose();
+    _maxTorqueCtrl.dispose();
+    _targetF.dispose();
+    _axisXF.dispose();
+    _axisYF.dispose();
+    _stiffnessF.dispose();
+    _dampingF.dispose();
+    _motorSpeedF.dispose();
+    _maxTorqueF.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    widget.comp.targetEntityName = _targetCtrl.text.trim();
+    final axisX = double.tryParse(_axisXCtrl.text);
+    final axisY = double.tryParse(_axisYCtrl.text);
+    if (axisX != null && axisY != null) {
+      widget.comp.suspensionAxis = Offset(axisX, axisY);
+    }
+    final stiffness = double.tryParse(_stiffnessCtrl.text);
+    if (stiffness != null) widget.comp.stiffness = stiffness;
+    final damping = double.tryParse(_dampingCtrl.text);
+    if (damping != null) widget.comp.damping = damping;
+    final motorSpeed = double.tryParse(_motorSpeedCtrl.text);
+    if (motorSpeed != null) widget.comp.motorSpeed = motorSpeed;
+    final maxTorque = double.tryParse(_maxTorqueCtrl.text);
+    if (maxTorque != null) widget.comp.maxMotorTorque = maxTorque;
+    widget.sceneState.markDirty();
+  }
+
+  @override
+  Widget build(BuildContext context) => _Section(
+    title: 'Wheel Joint',
+    onDelete: widget.onDelete,
+    children: [
+      _FieldRow('Target Name', _targetCtrl, _targetF, _commit),
+      const SizedBox(height: 6),
+      _Row2(
+        'Axis X',
+        _axisXCtrl,
+        _axisXF,
+        'Axis Y',
+        _axisYCtrl,
+        _axisYF,
+        _commit,
+        scrub1: const NumberScrubConfig(step: 0.1, fractionDigits: 2),
+        scrub2: const NumberScrubConfig(step: 0.1, fractionDigits: 2),
+      ),
+      const SizedBox(height: 6),
+      _Row2(
+        'Stiff.',
+        _stiffnessCtrl,
+        _stiffnessF,
+        'Damping',
+        _dampingCtrl,
+        _dampingF,
+        _commit,
+        scrub1: const NumberScrubConfig(step: 1, fractionDigits: 2, min: 0),
+        scrub2: const NumberScrubConfig(step: 0.05, fractionDigits: 2, min: 0),
+      ),
+      const SizedBox(height: 4),
+      _BoolRow('Enable Motor', widget.comp.enableMotor, (v) {
+        widget.comp.enableMotor = v;
+        widget.sceneState.markDirty();
+        setState(() {});
+      }),
+      const SizedBox(height: 4),
+      _Row2(
+        'Motor Speed',
+        _motorSpeedCtrl,
+        _motorSpeedF,
+        'Max Torque',
+        _maxTorqueCtrl,
+        _maxTorqueF,
+        _commit,
+        scrub1: const NumberScrubConfig(step: 0.5, fractionDigits: 2),
+        scrub2: const NumberScrubConfig(step: 5, fractionDigits: 2, min: 0),
+      ),
+      const SizedBox(height: 4),
+      _BoolRow('Collide Connected', widget.comp.collideConnected, (v) {
+        widget.comp.collideConnected = v;
         widget.sceneState.markDirty();
         setState(() {});
       }),

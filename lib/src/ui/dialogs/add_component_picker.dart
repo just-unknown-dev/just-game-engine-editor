@@ -63,8 +63,8 @@ class _AddComponentPickerState extends State<AddComponentPicker>
     }
   }
 
-  /// Returns the types of components already attached to the entity so we can
-  /// grey out duplicates.
+  /// Returns the runtime types of components already attached to the entity so
+  /// we can grey out duplicates.
   Set<String> get _existingTypes =>
       widget.entity.components.map((c) => c.runtimeType.toString()).toSet();
 
@@ -298,7 +298,8 @@ class _PickerList extends StatelessWidget {
       final localIndex = index - cursor;
       if (localIndex < entries.length) {
         final entry = entries[localIndex];
-        final alreadyAdded = existingTypes.contains(entry.name);
+        final typeKey = entry.componentTypeName ?? entry.name;
+        final alreadyAdded = existingTypes.contains(typeKey);
         return _ComponentRow(
           entry: entry,
           alreadyAdded: alreadyAdded,

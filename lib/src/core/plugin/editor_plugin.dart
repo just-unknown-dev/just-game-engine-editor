@@ -7,6 +7,8 @@ import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../debugger/engine_debugger.dart';
+import '../systems/physics_body_binding_system.dart';
+import '../systems/physics_joint_binding_system.dart';
 import '../systems/simple_movement_system.dart';
 import '../serialization/scene_file_generator.dart';
 import '../state/editor_scene_state.dart';
@@ -101,6 +103,25 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     _isInitialized = true;
     if (!engine.world.systems.any((system) => system is SimpleMovementSystem)) {
       engine.world.addSystem(SimpleMovementSystem(engine.input));
+    }
+    if (!engine.world.systems.any((system) => system is PhysicsBridgeSystem)) {
+      engine.world.addSystem(PhysicsBridgeSystem());
+    }
+    if (!engine.world.systems.any(
+      (system) => system is PhysicsBodyBindingSystem,
+    )) {
+      engine.world.addSystem(
+        PhysicsBodyBindingSystem(
+          engine.physics,
+          sceneState: sceneState,
+          isAuthoringActive: () => isVisible,
+        ),
+      );
+    }
+    if (!engine.world.systems.any(
+      (system) => system is PhysicsJointBindingSystem,
+    )) {
+      engine.world.addSystem(PhysicsJointBindingSystem(engine.physics));
     }
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);

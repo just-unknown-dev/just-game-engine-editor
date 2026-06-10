@@ -1,6 +1,7 @@
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
+import '../components/physics_joint_components.dart';
 import '../components/simple_movement_component.dart';
 
 /// A single entry in the component picker catalogue.
@@ -10,11 +11,13 @@ class ComponentEntry {
     required this.group,
     required this.description,
     required this.factory,
+    this.componentTypeName,
   });
 
   final String name;
   final String group;
   final String description;
+  final String? componentTypeName;
 
   /// Produces a new component instance with sensible editor defaults.
   final Component Function() factory;
@@ -95,10 +98,99 @@ const List<ComponentEntry> kComponentRegistry = [
 
   // ── Physics ──────────────────────────────────────────────────────────────
   ComponentEntry(
-    name: 'PhysicsBodyComponent',
+    name: 'PhysicsBodyCircle',
     group: 'Physics',
-    description: 'Rigid-body physics with a 64×64 box shape by default.',
-    factory: _makePhysicsBody,
+    description: 'Dynamic rigid body with a circular collision shape.',
+    factory: _makePhysicsBodyCircle,
+    componentTypeName: 'PhysicsBodyComponent',
+  ),
+  ComponentEntry(
+    name: 'PhysicsBodyRectangle',
+    group: 'Physics',
+    description: 'Dynamic rigid body with a rectangle collision shape.',
+    factory: _makePhysicsBodyRectangle,
+    componentTypeName: 'PhysicsBodyComponent',
+  ),
+  ComponentEntry(
+    name: 'PhysicsBodyPolygon',
+    group: 'Physics',
+    description: 'Dynamic rigid body with a convex polygon collision shape.',
+    factory: _makePhysicsBodyPolygon,
+    componentTypeName: 'PhysicsBodyComponent',
+  ),
+  ComponentEntry(
+    name: 'PhysicsBodyCapsule',
+    group: 'Physics',
+    description: 'Dynamic rigid body with a capsule collision shape.',
+    factory: _makePhysicsBodyCapsule,
+    componentTypeName: 'PhysicsBodyComponent',
+  ),
+  ComponentEntry(
+    name: 'PhysicsBodySegment',
+    group: 'Physics',
+    description: 'Static line segment collider, useful for ramps/platforms.',
+    factory: _makePhysicsBodySegment,
+    componentTypeName: 'PhysicsBodyComponent',
+  ),
+  ComponentEntry(
+    name: 'PhysicsBodyChain',
+    group: 'Physics',
+    description: 'Static chain collider for terrain-like collision paths.',
+    factory: _makePhysicsBodyChain,
+    componentTypeName: 'PhysicsBodyComponent',
+  ),
+  ComponentEntry(
+    name: 'PhysicsBodyRoundedRect',
+    group: 'Physics',
+    description: 'Dynamic rigid body with rounded rectangle collision.',
+    factory: _makePhysicsBodyRoundedRect,
+    componentTypeName: 'PhysicsBodyComponent',
+  ),
+  ComponentEntry(
+    name: 'PhysicsSensorCircle',
+    group: 'Physics',
+    description: 'Static circular sensor body (overlap detection only).',
+    factory: _makePhysicsSensorCircle,
+    componentTypeName: 'PhysicsBodyComponent',
+  ),
+  ComponentEntry(
+    name: 'PhysicsSensorRectangle',
+    group: 'Physics',
+    description: 'Static rectangle sensor body (overlap detection only).',
+    factory: _makePhysicsSensorRectangle,
+    componentTypeName: 'PhysicsBodyComponent',
+  ),
+  ComponentEntry(
+    name: 'PhysicsSensorCapsule',
+    group: 'Physics',
+    description: 'Static capsule sensor body (overlap detection only).',
+    factory: _makePhysicsSensorCapsule,
+    componentTypeName: 'PhysicsBodyComponent',
+  ),
+  ComponentEntry(
+    name: 'DistanceJointComponent',
+    group: 'Physics',
+    description:
+        'Distance/spring joint descriptor linking this entity to targetEntityName.',
+    factory: _makeDistanceJoint,
+  ),
+  ComponentEntry(
+    name: 'WeldJointComponent',
+    group: 'Physics',
+    description: 'Rigid weld joint descriptor linking to targetEntityName.',
+    factory: _makeWeldJoint,
+  ),
+  ComponentEntry(
+    name: 'PrismaticJointComponent',
+    group: 'Physics',
+    description: 'Slider joint descriptor with optional limits/motor.',
+    factory: _makePrismaticJoint,
+  ),
+  ComponentEntry(
+    name: 'WheelJointComponent',
+    group: 'Physics',
+    description: 'Wheel suspension + motor joint descriptor.',
+    factory: _makeWheelJoint,
   ),
 
   // ── Gameplay ─────────────────────────────────────────────────────────────
@@ -245,16 +337,117 @@ Component _makePolygon() => PolygonComponent(
   ],
 );
 
-Component _makePhysicsBody() => PhysicsBodyComponent(
-  shape: PolygonShape([
-    const Offset(-32, -32),
-    const Offset(32, -32),
-    const Offset(32, 32),
-    const Offset(-32, 32),
-  ]),
+Component _makePhysicsBodyCircle() => PhysicsBodyComponent(
+  shape: CircleShape(24),
   mass: 1.0,
   isStatic: false,
+  restitution: 0.6,
+  drag: 0.98,
 );
+
+Component _makePhysicsBodyRectangle() => PhysicsBodyComponent(
+  shape: RectangleShape(64, 40),
+  mass: 1.2,
+  isStatic: false,
+  restitution: 0.4,
+  drag: 0.98,
+);
+
+Component _makePhysicsBodyPolygon() => PhysicsBodyComponent(
+  shape: PolygonShape([
+    const Offset(0, -30),
+    const Offset(28, -8),
+    const Offset(18, 28),
+    const Offset(-18, 28),
+    const Offset(-28, -8),
+  ]),
+  mass: 1.1,
+  isStatic: false,
+  restitution: 0.45,
+  drag: 0.98,
+);
+
+Component _makePhysicsBodyCapsule() => PhysicsBodyComponent(
+  shape: CapsuleShape(
+    center1: const Offset(0, -16),
+    center2: const Offset(0, 16),
+    radius: 10,
+  ),
+  mass: 1.2,
+  isStatic: false,
+  restitution: 0.5,
+  drag: 0.98,
+);
+
+Component _makePhysicsBodySegment() => PhysicsBodyComponent(
+  shape: SegmentShape(
+    const Offset(-48, 0),
+    const Offset(48, -20),
+    thickness: 3,
+  ),
+  mass: 0,
+  isStatic: true,
+  restitution: 0.3,
+  drag: 0.98,
+);
+
+Component _makePhysicsBodyChain() => PhysicsBodyComponent(
+  shape: ChainShape(const [
+    Offset(-60, 8),
+    Offset(-30, -14),
+    Offset(0, 8),
+    Offset(30, -14),
+    Offset(60, 8),
+  ], thickness: 3),
+  mass: 0,
+  isStatic: true,
+  restitution: 0.3,
+  drag: 0.98,
+);
+
+Component _makePhysicsBodyRoundedRect() => PhysicsBodyComponent(
+  shape: RoundedPolygonShape.rect(width: 56, height: 36, cornerRadius: 8),
+  mass: 1.3,
+  isStatic: false,
+  restitution: 0.5,
+  drag: 0.98,
+);
+
+Component _makePhysicsSensorCircle() => PhysicsBodyComponent(
+  shape: CircleShape(48),
+  mass: 0,
+  isStatic: true,
+  isSensor: true,
+  restitution: 0.0,
+  drag: 0.98,
+);
+
+Component _makePhysicsSensorRectangle() => PhysicsBodyComponent(
+  shape: RectangleShape(96, 48),
+  mass: 0,
+  isStatic: true,
+  isSensor: true,
+  restitution: 0.0,
+  drag: 0.98,
+);
+
+Component _makePhysicsSensorCapsule() => PhysicsBodyComponent(
+  shape: CapsuleShape(
+    center1: const Offset(0, -20),
+    center2: const Offset(0, 20),
+    radius: 14,
+  ),
+  mass: 0,
+  isStatic: true,
+  isSensor: true,
+  restitution: 0.0,
+  drag: 0.98,
+);
+
+Component _makeDistanceJoint() => DistanceJointComponent();
+Component _makeWeldJoint() => WeldJointComponent();
+Component _makePrismaticJoint() => PrismaticJointComponent();
+Component _makeWheelJoint() => WheelJointComponent();
 
 Component _makeHealth() => HealthComponent(maxHealth: 100);
 Component _makeTag() => TagComponent('entity');
