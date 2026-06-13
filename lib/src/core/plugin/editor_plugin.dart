@@ -7,12 +7,14 @@ import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../debugger/engine_debugger.dart';
-import '../systems/physics_body_binding_system.dart';
-import '../systems/physics_joint_binding_system.dart';
-import '../systems/simple_movement_system.dart';
+import '../ecs/components/editor_components_registrant.jge.dart';
+import '../ecs/systems/physics_body_binding_system.dart';
+import '../ecs/systems/physics_joint_binding_system.dart';
+import '../ecs/systems/simple_movement_system.dart';
 import '../serialization/scene_file_generator.dart';
 import '../state/editor_scene_state.dart';
 import '../../ui/overlay/gizmo_painter.dart';
+import '../ecs/generator/component_registry.dart';
 
 /// Hypothetical plugin contract used by runtime editor integrations.
 abstract interface class EnginePlugin {
@@ -25,6 +27,7 @@ abstract interface class EnginePlugin {
 class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   JustGameEditorPlugin({
     required this.engine,
+    this.componentRegistrar,
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
   }) : _toggleKey = toggleKey,
@@ -39,6 +42,13 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
        _hitTester = GizmoHitTester();
 
   final Engine engine;
+
+  /// Optional callback that registers all game custom components with
+  /// [CustomComponentRegistry.instance]. Called automatically during
+  /// [onInitialize] and again on [reassemble] (hot-reload) and after a
+  /// successful component codegen refresh.
+  final VoidCallback? componentRegistrar;
+
   final LogicalKeyboardKey _toggleKey;
   final LogicalKeyboardKey _statusPanelToggleKey;
   final JustDebuggerController debuggerController;
@@ -81,8 +91,12 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   LogicalKeyboardKey get statusPanelToggleKey => _statusPanelToggleKey;
 
   /// Factory for debug-only plugin registration.
+  ///
+  /// Pass [componentRegistrar] to automatically register game-specific
+  /// custom components when the editor initializes and on hot-reload.
   static Future<JustGameEditorPlugin?> register({
     required Engine engine,
+    VoidCallback? componentRegistrar,
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
   }) async {
@@ -90,6 +104,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
 
     final plugin = JustGameEditorPlugin(
       engine: engine,
+      componentRegistrar: componentRegistrar,
       toggleKey: toggleKey,
       statusPanelToggleKey: statusPanelToggleKey,
     );
@@ -125,7 +140,22 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     }
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
+    // Register game custom components and wire post-refresh re-registration.
+    _runComponentRegistrar();
+    sceneState.onComponentsRefreshed = _runComponentRegistrar;
   }
+
+  /// Re-registers all game custom components. Clears first so stale
+  /// descriptors from a previous build are removed before the new ones land.
+  void _runComponentRegistrar() {
+    CustomComponentRegistry.instance.clear();
+    registerAllEditorCustomComponents();
+    componentRegistrar?.call();
+  }
+
+  /// Called by [State.reassemble] on hot-reload to pick up newly generated
+  /// component descriptors without restarting the app.
+  void reassemble() => _runComponentRegistrar();
 
   void _attachDebuggerIfReady() {
     if (_isDebuggerAttached || !engine.isInitialized) return;

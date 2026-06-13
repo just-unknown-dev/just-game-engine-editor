@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_colours/just_colours.dart';
 import '../dialogs/add_component_picker.dart';
+import 'custom_component_section.dart';
 import '../theme/editor_theme.dart';
 import '../widgets/scrubbable_number_field.dart';
-import '../../core/components/physics_joint_components.dart';
-import '../../core/components/simple_movement_component.dart';
+import '../../core/ecs/components/physics/physics_joint_components.dart';
+import '../../core/ecs/components/input/simple_movement_component.dart';
 import '../../core/services/color_history_service.dart';
 import '../../core/state/editor_scene_state.dart';
 
@@ -489,6 +490,11 @@ class _EntityInspector extends StatelessWidget {
         ),
       );
     }
+
+    // ── Custom Components (descriptor-driven) ──────────────────────────────
+    sections.addAll(
+      buildCustomComponentSections(entity: entity, sceneState: sceneState),
+    );
 
     // ── Add Component picker (search + grouped results) ─────────────────────
     sections.add(AddComponentPicker(entity: entity, sceneState: sceneState));
@@ -2129,13 +2135,18 @@ class _DistanceJointSectionState extends State<_DistanceJointSection> {
   @override
   void didUpdateWidget(_DistanceJointSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_targetF.hasFocus) _targetCtrl.text = widget.comp.targetEntityName;
-    if (!_lengthF.hasFocus)
+    if (!_targetF.hasFocus) {
+      _targetCtrl.text = widget.comp.targetEntityName;
+    }
+    if (!_lengthF.hasFocus) {
       _lengthCtrl.text = widget.comp.length.toStringAsFixed(2);
-    if (!_stiffnessF.hasFocus)
+    }
+    if (!_stiffnessF.hasFocus) {
       _stiffnessCtrl.text = widget.comp.stiffness.toStringAsFixed(2);
-    if (!_dampingF.hasFocus)
+    }
+    if (!_dampingF.hasFocus) {
       _dampingCtrl.text = widget.comp.damping.toStringAsFixed(2);
+    }
   }
 
   @override
@@ -2315,19 +2326,27 @@ class _PrismaticJointSectionState extends State<_PrismaticJointSection> {
   @override
   void didUpdateWidget(_PrismaticJointSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_targetF.hasFocus) _targetCtrl.text = widget.comp.targetEntityName;
-    if (!_axisXF.hasFocus)
+    if (!_targetF.hasFocus) {
+      _targetCtrl.text = widget.comp.targetEntityName;
+    }
+    if (!_axisXF.hasFocus) {
       _axisXCtrl.text = widget.comp.axis.dx.toStringAsFixed(2);
-    if (!_axisYF.hasFocus)
+    }
+    if (!_axisYF.hasFocus) {
       _axisYCtrl.text = widget.comp.axis.dy.toStringAsFixed(2);
-    if (!_lowerF.hasFocus)
+    }
+    if (!_lowerF.hasFocus) {
       _lowerCtrl.text = widget.comp.lowerTranslation.toStringAsFixed(2);
-    if (!_upperF.hasFocus)
+    }
+    if (!_upperF.hasFocus) {
       _upperCtrl.text = widget.comp.upperTranslation.toStringAsFixed(2);
-    if (!_motorSpeedF.hasFocus)
+    }
+    if (!_motorSpeedF.hasFocus) {
       _motorSpeedCtrl.text = widget.comp.motorSpeed.toStringAsFixed(2);
-    if (!_maxForceF.hasFocus)
+    }
+    if (!_maxForceF.hasFocus) {
       _maxForceCtrl.text = widget.comp.maxMotorForce.toStringAsFixed(2);
+    }
   }
 
   @override
@@ -2489,19 +2508,27 @@ class _WheelJointSectionState extends State<_WheelJointSection> {
   @override
   void didUpdateWidget(_WheelJointSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_targetF.hasFocus) _targetCtrl.text = widget.comp.targetEntityName;
-    if (!_axisXF.hasFocus)
+    if (!_targetF.hasFocus) {
+      _targetCtrl.text = widget.comp.targetEntityName;
+    }
+    if (!_axisXF.hasFocus) {
       _axisXCtrl.text = widget.comp.suspensionAxis.dx.toStringAsFixed(2);
-    if (!_axisYF.hasFocus)
+    }
+    if (!_axisYF.hasFocus) {
       _axisYCtrl.text = widget.comp.suspensionAxis.dy.toStringAsFixed(2);
-    if (!_stiffnessF.hasFocus)
+    }
+    if (!_stiffnessF.hasFocus) {
       _stiffnessCtrl.text = widget.comp.stiffness.toStringAsFixed(2);
-    if (!_dampingF.hasFocus)
+    }
+    if (!_dampingF.hasFocus) {
       _dampingCtrl.text = widget.comp.damping.toStringAsFixed(2);
-    if (!_motorSpeedF.hasFocus)
+    }
+    if (!_motorSpeedF.hasFocus) {
       _motorSpeedCtrl.text = widget.comp.motorSpeed.toStringAsFixed(2);
-    if (!_maxTorqueF.hasFocus)
+    }
+    if (!_maxTorqueF.hasFocus) {
       _maxTorqueCtrl.text = widget.comp.maxMotorTorque.toStringAsFixed(2);
+    }
   }
 
   @override

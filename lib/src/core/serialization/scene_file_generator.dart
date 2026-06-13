@@ -5,8 +5,9 @@ import 'package:flutter/material.dart' show Colors;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../components/physics_joint_components.dart';
-import '../components/simple_movement_component.dart';
+import '../ecs/generator/component_registry.dart';
+import '../ecs/components/physics/physics_joint_components.dart';
+import '../ecs/components/input/simple_movement_component.dart';
 
 /// Writes and reads scene files inside the project's `lib/game/scenes/`
 /// directory using [dart:io].
@@ -659,7 +660,7 @@ class ${cls}Level {
           collideConnected: j['collideConnected'] as bool? ?? false,
         );
       default:
-        return null;
+        return CustomComponentRegistry.instance.componentFromJson(j);
     }
   }
 
@@ -833,7 +834,7 @@ class ${cls}Level {
         'collideConnected': c.collideConnected,
       };
     }
-    return null;
+    return CustomComponentRegistry.instance.componentToJson(c);
   }
 
   static CollisionShape? _shapeFromJson(dynamic raw) {

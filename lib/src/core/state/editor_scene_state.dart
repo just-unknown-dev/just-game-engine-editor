@@ -154,6 +154,17 @@ class EditorSceneState extends ChangeNotifier {
   /// dirty flag alone wouldn't trigger a rebuild for.
   void refresh() => notifyListeners();
 
+  /// Set by [JustGameEditorPlugin] to re-register game custom components after
+  /// a component refresh or hot-reload.
+  VoidCallback? onComponentsRefreshed;
+
+  /// Triggers a custom-component re-registration (e.g. after component refresh
+  /// completes) and then rebuilds the UI.
+  void reloadCustomComponents() {
+    onComponentsRefreshed?.call();
+    notifyListeners();
+  }
+
   void setGridSnapping({
     required bool enabled,
     required double gridSize,

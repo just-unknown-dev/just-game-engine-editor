@@ -1,8 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' hide Animation;
 import '../theme/editor_theme.dart';
 
-import '../../core/registry/component_registry.dart';
+import '../../core/ecs/registry/component_registry.dart';
+import '../../core/ecs/generator/component_registry.dart';
+import '../../core/services/component_codegen_runner.dart';
+import '../../core/services/component_indexing_service.dart';
 import '../../core/state/editor_scene_state.dart';
 
 /// An expandable in-place panel that lets the user search for and add a
@@ -27,6 +31,8 @@ class AddComponentPicker extends StatefulWidget {
 class _AddComponentPickerState extends State<AddComponentPicker>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
+  bool _isRefreshing = false;
+  bool _didScheduleInitialRefresh = false;
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
 
@@ -44,19 +50,32 @@ class _AddComponentPickerState extends State<AddComponentPicker>
     _searchCtrl.addListener(() {
       setState(() => _query = _searchCtrl.text.toLowerCase());
     });
+
+    ComponentIndexingService.instance.addListener(_onBackgroundIndexRefreshed);
   }
 
   @override
   void dispose() {
+    ComponentIndexingService.instance.removeListener(
+      _onBackgroundIndexRefreshed,
+    );
     _animCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _onBackgroundIndexRefreshed() {
+    if (!mounted) return;
+    widget.sceneState.reloadCustomComponents();
   }
 
   void _toggle() {
     setState(() => _expanded = !_expanded);
     if (_expanded) {
       _animCtrl.forward();
+      // Start/refresh background indexing while picker is open.
+      ComponentIndexingService.instance.scheduleRefresh();
+      _didScheduleInitialRefresh = true;
     } else {
       _animCtrl.reverse();
       _searchCtrl.clear();
@@ -69,8 +88,9 @@ class _AddComponentPickerState extends State<AddComponentPicker>
       widget.entity.components.map((c) => c.runtimeType.toString()).toSet();
 
   List<ComponentEntry> get _filtered {
-    if (_query.isEmpty) return kComponentRegistry;
-    return kComponentRegistry
+    final allEntries = getComponentRegistryEntries();
+    if (_query.isEmpty) return allEntries;
+    return allEntries
         .where(
           (e) =>
               e.name.toLowerCase().contains(_query) ||
@@ -80,69 +100,212 @@ class _AddComponentPickerState extends State<AddComponentPicker>
         .toList();
   }
 
-  void _addComponent(ComponentEntry entry) {
-    final component = entry.factory();
+  Future<void> _addComponent(ComponentEntry entry) async {
+    ComponentEntry resolvedEntry = entry;
+    if (entry.isCustom && entry.sourcePath != null) {
+      final result = await runComponentGenerateOne(
+        entry.sourcePath!,
+        editorScope: entry.isEditorComponent,
+      );
+      if (!mounted) return;
+      if (!result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Component generation failed: ${result.output}'),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+      widget.sceneState.reloadCustomComponents();
+      final typeName = entry.componentTypeName;
+      if (typeName != null) {
+        final refreshed = CustomComponentRegistry.instance.descriptorByTypeName(
+          typeName,
+        );
+        if (refreshed != null) {
+          resolvedEntry = ComponentEntry(
+            name: refreshed.name,
+            group: refreshed.group ?? entry.group,
+            description: refreshed.description ?? entry.description,
+            factory: refreshed.factory,
+            componentTypeName: refreshed.type,
+            sourcePath: entry.sourcePath,
+            isCustom: true,
+            isEditorComponent: entry.isEditorComponent,
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Component generation completed but descriptor is unavailable.',
+              ),
+              duration: Duration(seconds: 4),
+            ),
+          );
+          return;
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Custom component type name is missing.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+    }
+
+    final component = resolvedEntry.factory();
     widget.entity.addComponent(component);
     widget.sceneState.markDirty();
     widget.sceneState.refresh(); // rebuild inspector to show new component
     _toggle(); // collapse picker
   }
 
+  Future<void> _refreshComponents() async {
+    if (_isRefreshing) return;
+
+    setState(() => _isRefreshing = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Running just_code_gen scan to refresh components...'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    final result = await ComponentIndexingService.instance.refreshNow();
+    if (!mounted) return;
+
+    setState(() => _isRefreshing = false);
+
+    if (result.success) {
+      // Re-register components from the freshly generated descriptors, then
+      // rebuild the picker list.
+      widget.sceneState.reloadCustomComponents();
+    } else {
+      widget.sceneState.refresh();
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.success
+              ? 'Custom components refreshed successfully.'
+              : 'Component refresh failed: ${result.output}',
+        ),
+        duration: Duration(seconds: result.success ? 2 : 4),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!_didScheduleInitialRefresh) {
+      _didScheduleInitialRefresh = true;
+      // Kick off one background refresh so annotation-discovered components
+      // appear even before the user manually opens the refresh action.
+      ComponentIndexingService.instance.scheduleRefresh();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        // ── Toggle button ─────────────────────────────────────────────────
+        // ── Add + Refresh row ─────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: InkWell(
-            onTap: _toggle,
-            borderRadius: BorderRadius.circular(6),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: _expanded
-                    ? EditorTheme.selectionBg
-                    : EditorTheme.surfaceDark,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: _expanded
-                      ? EditorTheme.primaryActive
-                      : EditorTheme.border,
-                ),
-              ),
-              child: Row(
-                children: <Widget>[
-                  Icon(
-                    _expanded ? Icons.remove_rounded : Icons.add_rounded,
-                    size: 16,
-                    color: EditorTheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Add Component',
-                      style: TextStyle(
-                        color: EditorTheme.primaryBright,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: InkWell(
+                  onTap: _toggle,
+                  borderRadius: BorderRadius.circular(6),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _expanded
+                          ? EditorTheme.selectionBg
+                          : EditorTheme.surfaceDark,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: _expanded
+                            ? EditorTheme.primaryActive
+                            : EditorTheme.border,
                       ),
                     ),
-                  ),
-                  AnimatedRotation(
-                    turns: _expanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 160),
-                    child: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 16,
-                      color: EditorTheme.primaryMuted,
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          _expanded ? Icons.remove_rounded : Icons.add_rounded,
+                          size: 16,
+                          color: EditorTheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Add Component',
+                            style: TextStyle(
+                              color: EditorTheme.primaryBright,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        AnimatedRotation(
+                          turns: _expanded ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 160),
+                          child: const Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            size: 16,
+                            color: EditorTheme.primaryMuted,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Tooltip(
+                message: kIsWeb
+                    ? 'Refresh is only available on desktop builds.'
+                    : 'Run just_code_gen scan and refresh component list',
+                child: InkWell(
+                  onTap: _isRefreshing || kIsWeb ? null : _refreshComponents,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: EditorTheme.surfaceDark,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: EditorTheme.border),
+                    ),
+                    alignment: Alignment.center,
+                    child: _isRefreshing
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: EditorTheme.primary,
+                            ),
+                          )
+                        : Icon(
+                            Icons.refresh_rounded,
+                            size: 16,
+                            color: kIsWeb
+                                ? EditorTheme.primaryMuted
+                                : EditorTheme.primary,
+                          ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
 
