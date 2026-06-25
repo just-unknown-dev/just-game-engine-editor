@@ -7,22 +7,27 @@ import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotat
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
 import 'physics_body_circle_component.dart';
 
-final CustomComponentDescriptor _$customComponentDescriptor0 =
-    CustomComponentDescriptor(
-      id: 'physicsbodycircle_526076f8',
-      name: 'PhysicsBodyCircle',
-      type: 'PhysicsBodyCircleCatalogComponent',
+final EditorComponentDescriptor _$editorComponentDescriptor0 =
+    EditorComponentDescriptor(
+      id: 'physics_body_circle_526076f8',
+      name: 'Physics Body (Circle)',
+      type: 'PhysicsBodyCircleEditorComponent',
       group: 'Physics',
       description: 'Dynamic rigid body with a circular collision shape.',
       allowMultiple: false,
-      factory: () => PhysicsBodyCircleCatalogComponent(),
-      fields: <EditorComponentField>[],
+      deletable: true,
+      componentType: ComponentType.core,
+      factory: () => PhysicsBodyCircleEditorComponent(),
+      fields: <EditorComponentField>[
+      ],
     );
 
-final List<CustomComponentDescriptor> _generatedCustomComponentDescriptors =
-    <CustomComponentDescriptor>[_$customComponentDescriptor0];
+final List<EditorComponentDescriptor> _generatedEditorComponentDescriptors =
+    <EditorComponentDescriptor>[
+      _$editorComponentDescriptor0,
+    ];
 
 void registerGeneratedCustomComponents([CustomComponentRegistry? registry]) {
   final target = registry ?? CustomComponentRegistry.instance;
-  target.registerAll(_generatedCustomComponentDescriptors);
+  target.registerAll(_generatedEditorComponentDescriptors);
 }

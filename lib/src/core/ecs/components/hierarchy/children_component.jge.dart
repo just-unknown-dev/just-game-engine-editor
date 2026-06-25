@@ -7,22 +7,27 @@ import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotat
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
 import 'children_component.dart';
 
-final CustomComponentDescriptor _$customComponentDescriptor0 =
-    CustomComponentDescriptor(
-      id: 'childrencomponent_b35c783e',
-      name: 'ChildrenComponent',
-      type: 'ChildrenCatalogComponent',
+final EditorComponentDescriptor _$editorComponentDescriptor0 =
+    EditorComponentDescriptor(
+      id: 'children_b35c783e',
+      name: 'Children',
+      type: 'ChildrenEditorComponent',
       group: 'Hierarchy',
-      description: 'Marks entity as a parent that can have child entities.',
+      description: 'Groups child entities.',
       allowMultiple: false,
-      factory: () => ChildrenCatalogComponent(),
-      fields: <EditorComponentField>[],
+      deletable: true,
+      componentType: ComponentType.core,
+      factory: () => ChildrenEditorComponent(),
+      fields: <EditorComponentField>[
+      ],
     );
 
-final List<CustomComponentDescriptor> _generatedCustomComponentDescriptors =
-    <CustomComponentDescriptor>[_$customComponentDescriptor0];
+final List<EditorComponentDescriptor> _generatedEditorComponentDescriptors =
+    <EditorComponentDescriptor>[
+      _$editorComponentDescriptor0,
+    ];
 
 void registerGeneratedCustomComponents([CustomComponentRegistry? registry]) {
   final target = registry ?? CustomComponentRegistry.instance;
-  target.registerAll(_generatedCustomComponentDescriptors);
+  target.registerAll(_generatedEditorComponentDescriptors);
 }

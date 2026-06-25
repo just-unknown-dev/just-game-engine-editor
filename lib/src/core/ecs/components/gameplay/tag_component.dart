@@ -1,12 +1,16 @@
-import 'package:just_game_engine/just_game_engine.dart';
+﻿import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_annotations.dart';
 
 @ECSComponent(
-  name: 'TagComponent',
+  name: 'Tag',
   group: 'Gameplay',
-  description: 'String tag for entity categorisation.',
+  description: 'String tag for filtering entities.',
+  componentType: ECSComponentType.core,
 )
-class TagCatalogComponent extends Component {
-  TagCatalogComponent();
+class TagEditorComponent extends TagComponent {
+  TagEditorComponent() : super('');
+
+  @EditorField(label: 'Tag', readOnly: true)
+  String get tagValue => super.tag;
 }

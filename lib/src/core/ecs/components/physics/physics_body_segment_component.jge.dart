@@ -7,22 +7,27 @@ import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotat
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
 import 'physics_body_segment_component.dart';
 
-final CustomComponentDescriptor _$customComponentDescriptor0 =
-    CustomComponentDescriptor(
-      id: 'physicsbodysegment_03c88561',
-      name: 'PhysicsBodySegment',
-      type: 'PhysicsBodySegmentCatalogComponent',
+final EditorComponentDescriptor _$editorComponentDescriptor0 =
+    EditorComponentDescriptor(
+      id: 'physics_body_segment_03c88561',
+      name: 'Physics Body (Segment)',
+      type: 'PhysicsBodySegmentEditorComponent',
       group: 'Physics',
       description: 'Static line segment collider, useful for ramps/platforms.',
       allowMultiple: false,
-      factory: () => PhysicsBodySegmentCatalogComponent(),
-      fields: <EditorComponentField>[],
+      deletable: true,
+      componentType: ComponentType.core,
+      factory: () => PhysicsBodySegmentEditorComponent(),
+      fields: <EditorComponentField>[
+      ],
     );
 
-final List<CustomComponentDescriptor> _generatedCustomComponentDescriptors =
-    <CustomComponentDescriptor>[_$customComponentDescriptor0];
+final List<EditorComponentDescriptor> _generatedEditorComponentDescriptors =
+    <EditorComponentDescriptor>[
+      _$editorComponentDescriptor0,
+    ];
 
 void registerGeneratedCustomComponents([CustomComponentRegistry? registry]) {
   final target = registry ?? CustomComponentRegistry.instance;
-  target.registerAll(_generatedCustomComponentDescriptors);
+  target.registerAll(_generatedEditorComponentDescriptors);
 }

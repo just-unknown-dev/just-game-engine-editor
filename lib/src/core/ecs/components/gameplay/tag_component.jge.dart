@@ -7,22 +7,39 @@ import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotat
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
 import 'tag_component.dart';
 
-final CustomComponentDescriptor _$customComponentDescriptor0 =
-    CustomComponentDescriptor(
-      id: 'tagcomponent_8a41b7f8',
-      name: 'TagComponent',
-      type: 'TagCatalogComponent',
+final EditorComponentDescriptor _$editorComponentDescriptor0 =
+    EditorComponentDescriptor(
+      id: 'tag_8a41b7f8',
+      name: 'Tag',
+      type: 'TagEditorComponent',
       group: 'Gameplay',
-      description: 'String tag for entity categorisation.',
+      description: 'String tag for filtering entities.',
       allowMultiple: false,
-      factory: () => TagCatalogComponent(),
-      fields: <EditorComponentField>[],
+      deletable: true,
+      componentType: ComponentType.core,
+      factory: () => TagEditorComponent(),
+      fields: <EditorComponentField>[
+        EditorComponentField(
+          name: 'tagValue',
+          label: 'Tag',
+          kind: EditorFieldKind.text,
+          visible: true,
+          editable: false,
+          includeInJson: true,
+          read: (component) => (component as TagEditorComponent).tagValue,
+          write: null,
+          enumValues: null,
+          enumParser: null,
+        ),
+      ],
     );
 
-final List<CustomComponentDescriptor> _generatedCustomComponentDescriptors =
-    <CustomComponentDescriptor>[_$customComponentDescriptor0];
+final List<EditorComponentDescriptor> _generatedEditorComponentDescriptors =
+    <EditorComponentDescriptor>[
+      _$editorComponentDescriptor0,
+    ];
 
 void registerGeneratedCustomComponents([CustomComponentRegistry? registry]) {
   final target = registry ?? CustomComponentRegistry.instance;
-  target.registerAll(_generatedCustomComponentDescriptors);
+  target.registerAll(_generatedEditorComponentDescriptors);
 }

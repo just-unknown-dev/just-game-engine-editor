@@ -1,15 +1,8 @@
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../generator/component_annotations.dart';
-
-/// Editor-side data component describing a weld joint.
-
-@ECSComponent(
-  name: 'WeldJointComponent',
-  group: 'Physics',
-  description: 'Rigid weld joint descriptor linking to targetEntityName.',
-)
+/// Rigid weld joint data component.
+/// Editor registration lives in WeldJointEditorComponent.
 class WeldJointComponent extends Component {
   WeldJointComponent({
     this.targetEntityName = '',

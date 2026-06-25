@@ -1,12 +1,13 @@
-import 'package:just_game_engine/just_game_engine.dart';
+﻿import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_annotations.dart';
 
 @ECSComponent(
-  name: 'JoystickInputComponent',
+  name: 'Joystick Input',
   group: 'Input',
-  description: 'Virtual joystick input state.',
+  description: 'Virtual joystick input source.',
+  componentType: ECSComponentType.core,
 )
-class JoystickInputCatalogComponent extends Component {
-  JoystickInputCatalogComponent();
+class JoystickInputEditorComponent extends JoystickInputComponent {
+  JoystickInputEditorComponent() : super();
 }

@@ -7,22 +7,27 @@ import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotat
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
 import 'joystick_input_component.dart';
 
-final CustomComponentDescriptor _$customComponentDescriptor0 =
-    CustomComponentDescriptor(
-      id: 'joystickinputcomponent_ae2e7fcb',
-      name: 'JoystickInputComponent',
-      type: 'JoystickInputCatalogComponent',
+final EditorComponentDescriptor _$editorComponentDescriptor0 =
+    EditorComponentDescriptor(
+      id: 'joystick_input_ae2e7fcb',
+      name: 'Joystick Input',
+      type: 'JoystickInputEditorComponent',
       group: 'Input',
-      description: 'Virtual joystick input state.',
+      description: 'Virtual joystick input source.',
       allowMultiple: false,
-      factory: () => JoystickInputCatalogComponent(),
-      fields: <EditorComponentField>[],
+      deletable: true,
+      componentType: ComponentType.core,
+      factory: () => JoystickInputEditorComponent(),
+      fields: <EditorComponentField>[
+      ],
     );
 
-final List<CustomComponentDescriptor> _generatedCustomComponentDescriptors =
-    <CustomComponentDescriptor>[_$customComponentDescriptor0];
+final List<EditorComponentDescriptor> _generatedEditorComponentDescriptors =
+    <EditorComponentDescriptor>[
+      _$editorComponentDescriptor0,
+    ];
 
 void registerGeneratedCustomComponents([CustomComponentRegistry? registry]) {
   final target = registry ?? CustomComponentRegistry.instance;
-  target.registerAll(_generatedCustomComponentDescriptors);
+  target.registerAll(_generatedEditorComponentDescriptors);
 }

@@ -1,12 +1,13 @@
-import 'package:just_game_engine/just_game_engine.dart';
+﻿import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_annotations.dart';
 
 @ECSComponent(
-  name: 'EffectComponent',
+  name: 'Effects',
   group: 'Effects',
-  description: 'Marker for deterministic tween effects.',
+  description: 'Enables the effects system on this entity.',
+  componentType: ECSComponentType.core,
 )
-class EffectCatalogComponent extends Component {
-  EffectCatalogComponent();
+class EffectEditorComponent extends EffectComponent {
+  EffectEditorComponent() : super();
 }

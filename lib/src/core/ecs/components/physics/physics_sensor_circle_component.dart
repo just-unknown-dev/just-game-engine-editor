@@ -1,12 +1,14 @@
-import 'package:just_game_engine/just_game_engine.dart';
+﻿import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_annotations.dart';
 
 @ECSComponent(
-  name: 'PhysicsSensorCircle',
+  name: 'Physics Sensor (Circle)',
   group: 'Physics',
   description: 'Static circular sensor body (overlap detection only).',
+  componentType: ECSComponentType.core,
 )
-class PhysicsSensorCircleCatalogComponent extends Component {
-  PhysicsSensorCircleCatalogComponent();
+class PhysicsSensorCircleEditorComponent extends PhysicsBodyComponent {
+  PhysicsSensorCircleEditorComponent()
+      : super(shape: CircleShape(25), isSensor: true);
 }

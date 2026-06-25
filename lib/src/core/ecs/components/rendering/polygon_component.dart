@@ -1,12 +1,40 @@
+﻿import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_annotations.dart';
 
 @ECSComponent(
-  name: 'PolygonComponent',
+  name: 'Polygon',
   group: 'Rendering',
-  description: 'Convex polygon (default: square outline).',
+  description: 'Filled or stroked polygon.',
+  componentType: ECSComponentType.core,
 )
-class PolygonCatalogComponent extends Component {
-  PolygonCatalogComponent();
+class PolygonEditorComponent extends PolygonComponent {
+  // ignore: invalid_factory_annotation
+  factory PolygonEditorComponent() => PolygonComponent(
+    vertices: const [Offset(-32, -32), Offset(32, -32), Offset(0, 32)],
+  ) as PolygonEditorComponent;
+
+  @EditorField(label: 'Verts', readOnly: true)
+  int get vertCount => vertices.length;
+
+  @override
+  @EditorField(label: 'Stroke', scrubStep: 0.5, scrubFractionDigits: 1, scrubMin: 0)
+  double get strokeWidth => super.strokeWidth;
+  @override
+  set strokeWidth(double v) => super.strokeWidth = v;
+
+  @EditorField(label: 'Fill')
+  Color get fillColor => fillStyle.color;
+  set fillColor(Color v) => fillStyle = ShapePaintStyle(color: v);
+
+  @EditorField(label: 'Stroke Color')
+  Color get strokeColor => strokeStyle.color;
+  set strokeColor(Color v) => strokeStyle = ShapePaintStyle(color: v);
+
+  @override
+  @EditorField(label: 'Filled')
+  bool get filled => super.filled;
+  @override
+  set filled(bool v) => super.filled = v;
 }

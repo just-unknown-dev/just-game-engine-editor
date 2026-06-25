@@ -1,7 +1,26 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import 'component_annotations.dart';
+
+/// Drag-to-scrub configuration for numeric inspector fields.
+class NumberScrubConfig {
+  const NumberScrubConfig({
+    this.step = 1.0,
+    this.pixelsPerStep = 12.0,
+    this.fractionDigits = 2,
+    this.min,
+    this.max,
+    this.integer = false,
+  });
+
+  final double step;
+  final double pixelsPerStep;
+  final int fractionDigits;
+  final double? min;
+  final double? max;
+  final bool integer;
+}
 
 /// Runtime descriptor for one component property.
 class EditorComponentField {
@@ -17,6 +36,7 @@ class EditorComponentField {
     this.enumValues,
     this.enumParser,
     this.valueFormatter,
+    this.scrubConfig,
   });
 
   final String name;
@@ -30,15 +50,30 @@ class EditorComponentField {
   final List<String>? enumValues;
   final Object? Function(String value)? enumParser;
   final String Function(Object? value)? valueFormatter;
+  final NumberScrubConfig? scrubConfig;
 
   bool get isReadOnly => !editable || write == null;
 
   String get displayLabel => (label == null || label!.isEmpty) ? name : label!;
 }
 
+enum ComponentType {
+  /// Wraps a component from the game engine package.
+  core,
+
+  /// Defined inside the editor package itself.
+  editor,
+
+  /// Reserved for future use.
+  experimental,
+
+  /// Defined inside the user's project.
+  custom,
+}
+
 /// Runtime descriptor for one custom component type.
-class CustomComponentDescriptor {
-  const CustomComponentDescriptor({
+class EditorComponentDescriptor {
+  const EditorComponentDescriptor({
     required this.id,
     required this.name,
     required this.type,
@@ -47,6 +82,8 @@ class CustomComponentDescriptor {
     this.group,
     this.description,
     this.allowMultiple = false,
+    this.deletable = true,
+    this.componentType = ComponentType.custom,
   });
 
   final String id;
@@ -55,6 +92,8 @@ class CustomComponentDescriptor {
   final String? group;
   final String? description;
   final bool allowMultiple;
+  final bool deletable;
+  final ComponentType componentType;
   final jge.Component Function() factory;
   final List<EditorComponentField> fields;
 }
@@ -65,39 +104,39 @@ class CustomComponentRegistry {
 
   static final CustomComponentRegistry instance = CustomComponentRegistry._();
 
-  final Map<String, CustomComponentDescriptor> _byId =
-      <String, CustomComponentDescriptor>{};
-  final Map<String, CustomComponentDescriptor> _byType =
-      <String, CustomComponentDescriptor>{};
+  final Map<String, EditorComponentDescriptor> _byId =
+      <String, EditorComponentDescriptor>{};
+  final Map<String, EditorComponentDescriptor> _byType =
+      <String, EditorComponentDescriptor>{};
 
-  List<CustomComponentDescriptor> get descriptors =>
-      List<CustomComponentDescriptor>.unmodifiable(_byId.values);
+  List<EditorComponentDescriptor> get descriptors =>
+      List<EditorComponentDescriptor>.unmodifiable(_byId.values);
 
   void clear() {
     _byId.clear();
     _byType.clear();
   }
 
-  void register(CustomComponentDescriptor descriptor) {
+  void register(EditorComponentDescriptor descriptor) {
     _byId[descriptor.id] = descriptor;
     _byType[descriptor.type] = descriptor;
   }
 
-  void registerAll(Iterable<CustomComponentDescriptor> descriptors) {
+  void registerAll(Iterable<EditorComponentDescriptor> descriptors) {
     for (final descriptor in descriptors) {
       register(descriptor);
     }
   }
 
-  CustomComponentDescriptor? descriptorById(String id) => _byId[id];
+  EditorComponentDescriptor? descriptorById(String id) => _byId[id];
 
-  CustomComponentDescriptor? descriptorByType(Type type) =>
+  EditorComponentDescriptor? descriptorByType(Type type) =>
       _byType[type.toString()];
 
-  CustomComponentDescriptor? descriptorByTypeName(String typeName) =>
+  EditorComponentDescriptor? descriptorByTypeName(String typeName) =>
       _byType[typeName];
 
-  CustomComponentDescriptor? descriptorForComponent(jge.Component component) =>
+  EditorComponentDescriptor? descriptorForComponent(jge.Component component) =>
       _byType[component.runtimeType.toString()];
 
   Map<String, dynamic>? componentToJson(jge.Component component) {

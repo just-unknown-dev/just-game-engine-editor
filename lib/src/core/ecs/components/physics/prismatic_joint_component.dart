@@ -1,15 +1,8 @@
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../generator/component_annotations.dart';
-
-/// Editor-side data component describing a prismatic/slider joint.
-
-@ECSComponent(
-  name: 'PrismaticJointComponent',
-  group: 'Physics',
-  description: 'Slider joint descriptor with optional limits/motor.',
-)
+/// Prismatic/slider joint data component.
+/// Editor registration lives in PrismaticJointEditorComponent.
 class PrismaticJointComponent extends Component {
   PrismaticJointComponent({
     this.targetEntityName = '',

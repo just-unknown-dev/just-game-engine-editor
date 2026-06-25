@@ -1,12 +1,13 @@
-import 'package:just_game_engine/just_game_engine.dart';
+﻿import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_annotations.dart';
 
 @ECSComponent(
-  name: 'InputComponent',
+  name: 'Input',
   group: 'Input',
-  description: 'Marks entity as the keyboard/gamepad input receiver.',
+  description: 'Enables keyboard/mouse input on this entity.',
+  componentType: ECSComponentType.core,
 )
-class InputCatalogComponent extends Component {
-  InputCatalogComponent();
+class InputEditorComponent extends InputComponent {
+  InputEditorComponent() : super();
 }

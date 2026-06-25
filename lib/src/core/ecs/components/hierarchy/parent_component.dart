@@ -1,12 +1,13 @@
-import 'package:just_game_engine/just_game_engine.dart';
+﻿import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_annotations.dart';
 
 @ECSComponent(
-  name: 'ParentComponent',
+  name: 'Parent',
   group: 'Hierarchy',
-  description: 'Attaches entity to a parent entity.',
+  description: 'Attaches this entity to a parent.',
+  componentType: ECSComponentType.core,
 )
-class ParentCatalogComponent extends Component {
-  ParentCatalogComponent();
+class ParentEditorComponent extends ParentComponent {
+  ParentEditorComponent() : super();
 }

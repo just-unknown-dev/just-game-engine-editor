@@ -1,12 +1,13 @@
-import 'package:just_game_engine/just_game_engine.dart';
+﻿import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_annotations.dart';
 
 @ECSComponent(
-  name: 'ChildrenComponent',
+  name: 'Children',
   group: 'Hierarchy',
-  description: 'Marks entity as a parent that can have child entities.',
+  description: 'Groups child entities.',
+  componentType: ECSComponentType.core,
 )
-class ChildrenCatalogComponent extends Component {
-  ChildrenCatalogComponent();
+class ChildrenEditorComponent extends ChildrenComponent {
+  ChildrenEditorComponent() : super();
 }

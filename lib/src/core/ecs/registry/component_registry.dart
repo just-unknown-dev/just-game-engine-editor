@@ -1,4 +1,4 @@
-import 'package:flutter/painting.dart';
+﻿import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../generator/component_registry.dart';
@@ -202,7 +202,7 @@ final Map<String, _BuiltInComponentDefinition> _builtInComponentDefinitions =
 List<ComponentEntry> getComponentRegistryEntries() {
   final entries = <ComponentEntry>[];
   final discoveredTypes = <String>{};
-  final descriptorByType = <String, CustomComponentDescriptor>{
+  final descriptorByType = <String, EditorComponentDescriptor>{
     for (final descriptor in CustomComponentRegistry.instance.descriptors)
       descriptor.type: descriptor,
   };

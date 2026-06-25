@@ -7,22 +7,71 @@ import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotat
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
 import 'button_component.dart';
 
-final CustomComponentDescriptor _$customComponentDescriptor0 =
-    CustomComponentDescriptor(
-      id: 'buttoncomponent_388d5c40',
-      name: 'ButtonComponent',
-      type: 'ButtonCatalogComponent',
+final EditorComponentDescriptor _$editorComponentDescriptor0 =
+    EditorComponentDescriptor(
+      id: 'button_388d5c40',
+      name: 'Button',
+      type: 'ButtonEditorComponent',
       group: 'UI',
-      description: 'Clickable button (120x40).',
+      description: 'Interactive button widget.',
       allowMultiple: false,
-      factory: () => ButtonCatalogComponent(),
-      fields: <EditorComponentField>[],
+      deletable: true,
+      componentType: ComponentType.core,
+      factory: () => ButtonEditorComponent(),
+      fields: <EditorComponentField>[
+        EditorComponentField(
+          name: 'h',
+          label: 'H',
+          kind: EditorFieldKind.decimal,
+          visible: true,
+          editable: true,
+          includeInJson: true,
+          scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
+          read: (component) => (component as ButtonEditorComponent).h,
+          write: (component, value) {
+            (component as ButtonEditorComponent).h = (value as num).toDouble();
+          },
+          enumValues: null,
+          enumParser: null,
+        ),
+        EditorComponentField(
+          name: 'label',
+          label: 'Label',
+          kind: EditorFieldKind.text,
+          visible: true,
+          editable: true,
+          includeInJson: true,
+          read: (component) => (component as ButtonEditorComponent).label,
+          write: (component, value) {
+            (component as ButtonEditorComponent).label = value as String;
+          },
+          enumValues: null,
+          enumParser: null,
+        ),
+        EditorComponentField(
+          name: 'w',
+          label: 'W',
+          kind: EditorFieldKind.decimal,
+          visible: true,
+          editable: true,
+          includeInJson: true,
+          scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
+          read: (component) => (component as ButtonEditorComponent).w,
+          write: (component, value) {
+            (component as ButtonEditorComponent).w = (value as num).toDouble();
+          },
+          enumValues: null,
+          enumParser: null,
+        ),
+      ],
     );
 
-final List<CustomComponentDescriptor> _generatedCustomComponentDescriptors =
-    <CustomComponentDescriptor>[_$customComponentDescriptor0];
+final List<EditorComponentDescriptor> _generatedEditorComponentDescriptors =
+    <EditorComponentDescriptor>[
+      _$editorComponentDescriptor0,
+    ];
 
 void registerGeneratedCustomComponents([CustomComponentRegistry? registry]) {
   final target = registry ?? CustomComponentRegistry.instance;
-  target.registerAll(_generatedCustomComponentDescriptors);
+  target.registerAll(_generatedEditorComponentDescriptors);
 }

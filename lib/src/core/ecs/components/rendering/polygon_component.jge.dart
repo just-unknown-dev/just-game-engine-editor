@@ -7,22 +7,96 @@ import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotat
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
 import 'polygon_component.dart';
 
-final CustomComponentDescriptor _$customComponentDescriptor0 =
-    CustomComponentDescriptor(
-      id: 'polygoncomponent_671a97e0',
-      name: 'PolygonComponent',
-      type: 'PolygonCatalogComponent',
+final EditorComponentDescriptor _$editorComponentDescriptor0 =
+    EditorComponentDescriptor(
+      id: 'polygon_671a97e0',
+      name: 'Polygon',
+      type: 'PolygonEditorComponent',
       group: 'Rendering',
-      description: 'Convex polygon (default: square outline).',
+      description: 'Filled or stroked polygon.',
       allowMultiple: false,
-      factory: () => PolygonCatalogComponent(),
-      fields: <EditorComponentField>[],
+      deletable: true,
+      componentType: ComponentType.core,
+      factory: () => PolygonEditorComponent(),
+      fields: <EditorComponentField>[
+        EditorComponentField(
+          name: 'fillColor',
+          label: 'Fill',
+          kind: EditorFieldKind.color,
+          visible: true,
+          editable: true,
+          includeInJson: true,
+          read: (component) => (component as PolygonEditorComponent).fillColor,
+          write: (component, value) {
+            (component as PolygonEditorComponent).fillColor = value as Color;
+          },
+          enumValues: null,
+          enumParser: null,
+        ),
+        EditorComponentField(
+          name: 'filled',
+          label: 'Filled',
+          kind: EditorFieldKind.boolean,
+          visible: true,
+          editable: true,
+          includeInJson: true,
+          read: (component) => (component as PolygonEditorComponent).filled,
+          write: (component, value) {
+            (component as PolygonEditorComponent).filled = value as bool;
+          },
+          enumValues: null,
+          enumParser: null,
+        ),
+        EditorComponentField(
+          name: 'strokeColor',
+          label: 'Stroke Color',
+          kind: EditorFieldKind.color,
+          visible: true,
+          editable: true,
+          includeInJson: true,
+          read: (component) => (component as PolygonEditorComponent).strokeColor,
+          write: (component, value) {
+            (component as PolygonEditorComponent).strokeColor = value as Color;
+          },
+          enumValues: null,
+          enumParser: null,
+        ),
+        EditorComponentField(
+          name: 'strokeWidth',
+          label: 'Stroke',
+          kind: EditorFieldKind.decimal,
+          visible: true,
+          editable: true,
+          includeInJson: true,
+          scrubConfig: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0.0),
+          read: (component) => (component as PolygonEditorComponent).strokeWidth,
+          write: (component, value) {
+            (component as PolygonEditorComponent).strokeWidth = (value as num).toDouble();
+          },
+          enumValues: null,
+          enumParser: null,
+        ),
+        EditorComponentField(
+          name: 'vertCount',
+          label: 'Verts',
+          kind: EditorFieldKind.integer,
+          visible: true,
+          editable: false,
+          includeInJson: true,
+          read: (component) => (component as PolygonEditorComponent).vertCount,
+          write: null,
+          enumValues: null,
+          enumParser: null,
+        ),
+      ],
     );
 
-final List<CustomComponentDescriptor> _generatedCustomComponentDescriptors =
-    <CustomComponentDescriptor>[_$customComponentDescriptor0];
+final List<EditorComponentDescriptor> _generatedEditorComponentDescriptors =
+    <EditorComponentDescriptor>[
+      _$editorComponentDescriptor0,
+    ];
 
 void registerGeneratedCustomComponents([CustomComponentRegistry? registry]) {
   final target = registry ?? CustomComponentRegistry.instance;
-  target.registerAll(_generatedCustomComponentDescriptors);
+  target.registerAll(_generatedEditorComponentDescriptors);
 }

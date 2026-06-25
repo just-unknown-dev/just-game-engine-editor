@@ -7,22 +7,56 @@ import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotat
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
 import 'camera_follow_component.dart';
 
-final CustomComponentDescriptor _$customComponentDescriptor0 =
-    CustomComponentDescriptor(
-      id: 'camerafollowcomponent_168e2c1e',
-      name: 'CameraFollowComponent',
-      type: 'CameraFollowCatalogComponent',
+final EditorComponentDescriptor _$editorComponentDescriptor0 =
+    EditorComponentDescriptor(
+      id: 'camera_follow_168e2c1e',
+      name: 'Camera Follow',
+      type: 'CameraFollowEditorComponent',
       group: 'Camera',
-      description: 'Camera smoothly follows this entity.',
+      description: 'Locks the camera onto this entity.',
       allowMultiple: false,
-      factory: () => CameraFollowCatalogComponent(),
-      fields: <EditorComponentField>[],
+      deletable: true,
+      componentType: ComponentType.core,
+      factory: () => CameraFollowEditorComponent(),
+      fields: <EditorComponentField>[
+        EditorComponentField(
+          name: 'enabled',
+          label: 'Enabled',
+          kind: EditorFieldKind.boolean,
+          visible: true,
+          editable: true,
+          includeInJson: true,
+          read: (component) => (component as CameraFollowEditorComponent).enabled,
+          write: (component, value) {
+            (component as CameraFollowEditorComponent).enabled = value as bool;
+          },
+          enumValues: null,
+          enumParser: null,
+        ),
+        EditorComponentField(
+          name: 'lookahead',
+          label: 'Lookahead',
+          kind: EditorFieldKind.decimal,
+          visible: true,
+          editable: true,
+          includeInJson: true,
+          scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
+          read: (component) => (component as CameraFollowEditorComponent).lookahead,
+          write: (component, value) {
+            (component as CameraFollowEditorComponent).lookahead = (value as num).toDouble();
+          },
+          enumValues: null,
+          enumParser: null,
+        ),
+      ],
     );
 
-final List<CustomComponentDescriptor> _generatedCustomComponentDescriptors =
-    <CustomComponentDescriptor>[_$customComponentDescriptor0];
+final List<EditorComponentDescriptor> _generatedEditorComponentDescriptors =
+    <EditorComponentDescriptor>[
+      _$editorComponentDescriptor0,
+    ];
 
 void registerGeneratedCustomComponents([CustomComponentRegistry? registry]) {
   final target = registry ?? CustomComponentRegistry.instance;
-  target.registerAll(_generatedCustomComponentDescriptors);
+  target.registerAll(_generatedEditorComponentDescriptors);
 }

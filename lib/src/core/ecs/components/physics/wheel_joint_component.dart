@@ -1,15 +1,8 @@
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../generator/component_annotations.dart';
-
-/// Editor-side data component describing a wheel joint.
-
-@ECSComponent(
-  name: 'WheelJointComponent',
-  group: 'Physics',
-  description: 'Wheel suspension + motor joint descriptor.',
-)
+/// Wheel suspension + motor joint data component.
+/// Editor registration lives in WheelJointEditorComponent.
 class WheelJointComponent extends Component {
   WheelJointComponent({
     this.targetEntityName = '',

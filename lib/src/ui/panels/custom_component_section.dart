@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
@@ -7,6 +7,7 @@ import '../../core/ecs/generator/component_annotations.dart';
 import '../../core/ecs/generator/component_registry.dart';
 import '../../core/state/editor_scene_state.dart';
 import '../theme/editor_theme.dart';
+import '../widgets/scrubbable_number_field.dart';
 
 List<Widget> buildCustomComponentSections({
   required jge.Entity entity,
@@ -48,7 +49,7 @@ class CustomComponentSection extends StatelessWidget {
   });
 
   final jge.Component component;
-  final CustomComponentDescriptor descriptor;
+  final EditorComponentDescriptor descriptor;
   final VoidCallback onDelete;
   final VoidCallback onChanged;
 
@@ -58,78 +59,148 @@ class CustomComponentSection extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: EditorTheme.surfaceDark,
-        borderRadius: BorderRadius.circular(8),
+        color: EditorTheme.dialogBg,
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: EditorTheme.border),
       ),
-      padding: const EdgeInsets.all(10),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              children: [
+                Text(
                   descriptor.name,
                   style: const TextStyle(
-                    color: EditorTheme.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    color: EditorTheme.primaryMutedLight,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
                   ),
                 ),
-              ),
-              GestureDetector(
-                onTap: onDelete,
-                child: const Icon(
-                  Icons.delete_outline_rounded,
-                  size: 16,
-                  color: EditorTheme.textMuted,
-                ),
-              ),
-            ],
+                const SizedBox(width: 6),
+                _ComponentTag(componentType: descriptor.componentType),
+                const Spacer(),
+                if (descriptor.deletable)
+                  GestureDetector(
+                    onTap: onDelete,
+                    child: const Icon(
+                      Icons.close,
+                      size: 14,
+                      color: EditorTheme.textMuted,
+                    ),
+                  ),
+              ],
+            ),
           ),
-          if (descriptor.description != null &&
-              descriptor.description!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4, bottom: 8),
-              child: Text(
-                descriptor.description!,
-                style: const TextStyle(
-                  color: EditorTheme.textMuted,
-                  fontSize: 10,
-                ),
-              ),
-            )
-          else
-            const SizedBox(height: 8),
-          if (visibleFields.isEmpty)
-            const Text(
-              'No visible properties',
-              style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
-            )
-          else
-            ...visibleFields.map((field) {
-              final value = field.read(component);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: _EditorFieldControl(
-                  label: field.displayLabel,
-                  field: field,
-                  value: value,
-                  onChanged: (next) {
-                    final writer = field.write;
-                    if (writer == null) return;
-                    writer(component, next);
-                    onChanged();
-                  },
-                ),
-              );
-            }),
+          const Divider(height: 1, color: EditorTheme.border),
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (descriptor.description != null &&
+                    descriptor.description!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      descriptor.description!,
+                      style: const TextStyle(
+                        color: EditorTheme.textMuted,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                if (visibleFields.isEmpty)
+                  const Text(
+                    'No visible properties',
+                    style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
+                  )
+                else
+                  ...visibleFields.map((field) {
+                    final value = field.read(component);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: _EditorFieldControl(
+                        label: field.displayLabel,
+                        field: field,
+                        value: value,
+                        onChanged: (next) {
+                          final writer = field.write;
+                          if (writer == null) return;
+                          writer(component, next);
+                          onChanged();
+                        },
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
+
+// ── Tag chip ──────────────────────────────────────────────────────────────────
+
+class _ComponentTag extends StatelessWidget {
+  const _ComponentTag({required this.componentType});
+
+  final ComponentType componentType;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, fg, bg, border) = switch (componentType) {
+      ComponentType.core => (
+          'CORE',
+          EditorTheme.primaryMutedLight,
+          EditorTheme.primaryMuted.withValues(alpha: 0.18),
+          EditorTheme.primaryMuted.withValues(alpha: 0.5),
+        ),
+      ComponentType.editor => (
+          'EDITOR',
+          const Color(0xFF81C9E8),
+          const Color(0xFF81C9E8).withValues(alpha: 0.12),
+          const Color(0xFF81C9E8).withValues(alpha: 0.45),
+        ),
+      ComponentType.experimental => (
+          'EXP',
+          const Color(0xFFE8C47A),
+          const Color(0xFFE8C47A).withValues(alpha: 0.12),
+          const Color(0xFFE8C47A).withValues(alpha: 0.45),
+        ),
+      ComponentType.custom => (
+          'CUSTOM',
+          EditorTheme.textMuted,
+          EditorTheme.surfaceDark,
+          EditorTheme.border,
+        ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: fg,
+          fontSize: 8,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.6,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Field control dispatcher ──────────────────────────────────────────────────
 
 class _EditorFieldControl extends StatelessWidget {
   const _EditorFieldControl({
@@ -157,6 +228,42 @@ class _EditorFieldControl extends StatelessWidget {
           value: value == true,
           onChanged: (v) => onChanged(v),
         );
+      case EditorFieldKind.decimal:
+        if (field.scrubConfig != null) {
+          return _ScrubFieldRow(
+            label: label,
+            value: (value as num?)?.toDouble() ?? 0.0,
+            scrubConfig: field.scrubConfig!,
+            onChanged: (v) => onChanged(v),
+          );
+        }
+        return _TextEditorRow(
+          label: label,
+          initialValue: _displayValue(field, value),
+          onSubmitted: (text) {
+            final parsed = double.tryParse(text.trim());
+            if (parsed != null) onChanged(parsed);
+          },
+        );
+      case EditorFieldKind.integer:
+        if (field.scrubConfig != null) {
+          return _ScrubFieldRow(
+            label: label,
+            value: (value as num?)?.toDouble() ?? 0.0,
+            scrubConfig: field.scrubConfig!,
+            onChanged: (v) => onChanged(
+              field.scrubConfig!.integer ? v.round() : v,
+            ),
+          );
+        }
+        return _TextEditorRow(
+          label: label,
+          initialValue: _displayValue(field, value),
+          onSubmitted: (text) {
+            final parsed = int.tryParse(text.trim());
+            if (parsed != null) onChanged(parsed);
+          },
+        );
       case EditorFieldKind.enumeration:
         final options = field.enumValues ?? const <String>[];
         final selected = _enumSelectedValue(value);
@@ -175,8 +282,6 @@ class _EditorFieldControl extends StatelessWidget {
             }
           },
         );
-      case EditorFieldKind.integer:
-      case EditorFieldKind.decimal:
       case EditorFieldKind.text:
       case EditorFieldKind.list:
       case EditorFieldKind.map:
@@ -201,9 +306,7 @@ class _EditorFieldControl extends StatelessWidget {
   static String _enumSelectedValue(Object? value) {
     if (value == null) return '';
     final raw = value.toString();
-    if (raw.contains('.')) {
-      return raw.split('.').last;
-    }
+    if (raw.contains('.')) return raw.split('.').last;
     return raw;
   }
 
@@ -219,7 +322,9 @@ class _EditorFieldControl extends StatelessWidget {
         if (value is jge.Vector2) return '${value.x}, ${value.y}';
         return value.toString();
       case EditorFieldKind.vector3:
-        if (value is jge.Vector3) return '${value.x}, ${value.y}, ${value.z}';
+        if (value is jge.Vector3) {
+          return '${value.x}, ${value.y}, ${value.z}';
+        }
         return value.toString();
       case EditorFieldKind.offset:
         if (value is Offset) return '${value.dx}, ${value.dy}';
@@ -302,6 +407,8 @@ class _EditorFieldControl extends StatelessWidget {
   }
 }
 
+// ── Row widgets ───────────────────────────────────────────────────────────────
+
 class _ReadonlyRow extends StatelessWidget {
   const _ReadonlyRow({required this.label, required this.value});
 
@@ -355,12 +462,85 @@ class _BoolEditorRow extends StatelessWidget {
             style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
           ),
         ),
-        Switch(
-          value: value,
-          onChanged: onChanged,
-          activeThumbColor: EditorTheme.primary,
+        SizedBox(
+          width: 20,
+          height: 20,
+          child: Checkbox(
+            value: value,
+            onChanged: (v) => onChanged(v ?? false),
+            activeColor: EditorTheme.primaryMutedLight,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            side: const BorderSide(color: EditorTheme.border),
+          ),
         ),
       ],
+    );
+  }
+}
+
+/// Stateful row that owns its controller/focus and supports drag-scrub.
+class _ScrubFieldRow extends StatefulWidget {
+  const _ScrubFieldRow({
+    required this.label,
+    required this.value,
+    required this.scrubConfig,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final NumberScrubConfig scrubConfig;
+  final ValueChanged<double> onChanged;
+
+  @override
+  State<_ScrubFieldRow> createState() => _ScrubFieldRowState();
+}
+
+class _ScrubFieldRowState extends State<_ScrubFieldRow> {
+  late TextEditingController _ctrl;
+  late FocusNode _focus;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: _fmt(widget.value));
+    _focus = FocusNode();
+  }
+
+  @override
+  void didUpdateWidget(_ScrubFieldRow old) {
+    super.didUpdateWidget(old);
+    if (!_focus.hasFocus && widget.value != old.value) {
+      _ctrl.text = _fmt(widget.value);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  String _fmt(double v) {
+    if (widget.scrubConfig.integer) return v.round().toString();
+    return v.toStringAsFixed(widget.scrubConfig.fractionDigits);
+  }
+
+  void _commit() {
+    final v = double.tryParse(_ctrl.text.trim());
+    if (v != null) widget.onChanged(v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScrubbableNumberField(
+      label: widget.label,
+      controller: _ctrl,
+      focusNode: _focus,
+      onCommit: _commit,
+      config: widget.scrubConfig,
+      labelWidth: 96,
     );
   }
 }
