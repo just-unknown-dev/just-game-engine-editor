@@ -8,7 +8,14 @@ export 'src/core/ecs/components/physics/physics_joint_components.dart';
 export 'src/core/ecs/registry/component_registry.dart';
 export 'src/ui/dialogs/create_scene_overlay.dart';
 export 'src/core/serialization/ecs_level_mapper.dart';
-export 'src/ui/overlay/editor_overlay.dart';
+export 'src/ui/overlay/editor_overlay.dart'
+    show
+        JustGameEditorOverlay,
+        EditorSnackBarHost,
+        EditorSnackBarController,
+        EditorSnackBarEntry,
+        EditorSnackBarStep,
+        EditorSnackBarType;
 export 'src/core/plugin/editor_plugin.dart';
 export 'src/core/state/editor_scene_state.dart';
 export 'src/core/serialization/editor_serialization_service.dart';

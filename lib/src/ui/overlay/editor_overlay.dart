@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -23,6 +24,7 @@ part 'overlay_compact_dock.part.dart';
 part 'overlay_dock_logs_panel.part.dart';
 part 'overlay_detail_cards.part.dart';
 part 'overlay_right_panel.part.dart';
+part 'overlay_snackbar.part.dart';
 
 // ─ Frame-safe overlay settings watcher ────────────────────────────────────
 
@@ -100,75 +102,87 @@ class JustGameEditorOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!kDebugMode) return gameChild;
 
-    return FocusScope(
-      node: plugin.gameFocusScopeNode,
-      child: Focus(
-        autofocus: true,
-        canRequestFocus: true,
-        child: AnimatedBuilder(
-          animation: plugin,
-          builder: (context, _) {
-            if (!plugin.isVisible) {
-              if (!plugin.isStatusPanelVisible) {
-                return AbsorbPointer(absorbing: false, child: gameChild);
+    return EditorMessenger(
+      child: FocusScope(
+        node: plugin.gameFocusScopeNode,
+        child: Focus(
+          autofocus: true,
+          canRequestFocus: true,
+          child: AnimatedBuilder(
+            animation: plugin,
+            builder: (context, _) {
+              if (!plugin.isVisible) {
+                if (!plugin.isStatusPanelVisible) {
+                  return AbsorbPointer(absorbing: false, child: gameChild);
+                }
+
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Stack(
+                      clipBehavior: Clip.hardEdge,
+                      children: <Widget>[
+                        Positioned.fill(
+                          child: AbsorbPointer(
+                            absorbing: false,
+                            child: gameChild,
+                          ),
+                        ),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: _CompactStatusDock(
+                            plugin: plugin,
+                            maxDetailWidth: constraints.maxWidth,
+                            maxDetailHeight: constraints.maxHeight,
+                          ),
+                        ),
+                        const Positioned(
+                          bottom: _CompactStatusDock._panelHeight + 8,
+                          right: 8,
+                          child: _EditorSnackBarLayer(),
+                        ),
+                      ],
+                    );
+                  },
+                );
               }
 
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  return Stack(
-                    clipBehavior: Clip.hardEdge,
-                    children: <Widget>[
-                      Positioned.fill(
-                        child: AbsorbPointer(
-                          absorbing: false,
-                          child: gameChild,
+              return ValueListenableBuilder<_OverlayUiSettings>(
+                valueListenable: _overlayUiSettingsSignal,
+                builder: (context, settings, _) {
+                  return _OverlayUiSettingsWatcher(
+                    plugin: plugin,
+                    settings: settings,
+                    child: Stack(
+                      children: <Widget>[
+                        Positioned.fill(
+                          child: _EditorSplitLayout(
+                            plugin: plugin,
+                            gameChild: gameChild,
+                            settings: settings,
+                          ),
                         ),
-                      ),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: _CompactStatusDock(
-                          plugin: plugin,
-                          maxDetailWidth: constraints.maxWidth,
-                          maxDetailHeight: constraints.maxHeight,
+                        if (settings.showStatusBadge)
+                          Positioned(
+                            top: 16,
+                            left: 16,
+                            child: IgnorePointer(
+                              child: _EditorStatusBadge(settings: settings),
+                            ),
+                          ),
+                        const Positioned(
+                          bottom: _CompactStatusDock._panelHeight + 8,
+                          right: _EditorRightPanel.panelWidth + 8,
+                          child: _EditorSnackBarLayer(),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   );
                 },
               );
-            }
-
-            return ValueListenableBuilder<_OverlayUiSettings>(
-              valueListenable: _overlayUiSettingsSignal,
-              builder: (context, settings, _) {
-                return _OverlayUiSettingsWatcher(
-                  plugin: plugin,
-                  settings: settings,
-                  child: Stack(
-                    children: <Widget>[
-                      Positioned.fill(
-                        child: _EditorSplitLayout(
-                          plugin: plugin,
-                          gameChild: gameChild,
-                          settings: settings,
-                        ),
-                      ),
-                      if (settings.showStatusBadge)
-                        Positioned(
-                          top: 16,
-                          left: 16,
-                          child: IgnorePointer(
-                            child: _EditorStatusBadge(settings: settings),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
+            },
+          ),
         ),
       ),
     );
@@ -418,7 +432,7 @@ class _EditorSplitLayout extends StatelessWidget {
           child: _EditorWorkspaceArea(plugin: plugin, gameChild: gameChild),
         ),
         SizedBox(
-          width: 360,
+          width: _EditorRightPanel.panelWidth,
           child: _EditorRightPanel(plugin: plugin, settings: settings),
         ),
       ],

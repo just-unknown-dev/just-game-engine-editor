@@ -3,6 +3,8 @@ part of 'editor_overlay.dart';
 class _EditorRightPanel extends StatelessWidget {
   const _EditorRightPanel({required this.plugin, required this.settings});
 
+  static const double panelWidth = 360;
+
   final JustGameEditorPlugin plugin;
   final _OverlayUiSettings settings;
 

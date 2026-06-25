@@ -1,8 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart' hide Animation;
 import '../theme/editor_theme.dart';
+import '../overlay/editor_overlay.dart'
+    show
+        EditorSnackBarEntry,
+        EditorMessenger,
+        EditorSnackBarStep,
+        EditorSnackBarType;
 
 import '../../core/ecs/registry/component_registry.dart';
 import '../../core/ecs/generator/component_registry.dart';
@@ -124,9 +132,10 @@ class _AddComponentPickerState extends State<AddComponentPicker>
           level: DebuggerLogLevel.error,
           details: result.output,
         );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Component generation failed: ${result.output}'),
+        EditorMessenger.of(context).showSnackBar(
+          EditorSnackBarEntry(
+            message: 'Component generation failed: ${result.output}',
+            type: EditorSnackBarType.error,
             duration: const Duration(seconds: 4),
           ),
         );
@@ -155,20 +164,21 @@ class _AddComponentPickerState extends State<AddComponentPicker>
             isEditorComponent: entry.isEditorComponent,
           );
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Component generation completed but descriptor is unavailable.',
-              ),
+          EditorMessenger.of(context).showSnackBar(
+            const EditorSnackBarEntry(
+              message:
+                  'Component generation completed but descriptor is unavailable.',
+              type: EditorSnackBarType.warning,
               duration: Duration(seconds: 4),
             ),
           );
           return;
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Custom component type name is missing.'),
+        EditorMessenger.of(context).showSnackBar(
+          const EditorSnackBarEntry(
+            message: 'Custom component type name is missing.',
+            type: EditorSnackBarType.error,
             duration: Duration(seconds: 4),
           ),
         );
@@ -187,15 +197,22 @@ class _AddComponentPickerState extends State<AddComponentPicker>
     if (_isRefreshing) return;
 
     setState(() => _isRefreshing = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Running just_code_gen scan to refresh components...'),
-        duration: Duration(seconds: 2),
+
+    final steps = StreamController<EditorSnackBarStep>();
+    EditorMessenger.of(context).showSnackBar(
+      EditorSnackBarEntry(
+        title: 'Refreshing Components',
+        message: 'Running just_code_gen scan...',
+        type: EditorSnackBarType.info,
+        progressStream: steps.stream,
       ),
     );
 
     final result = await ComponentIndexingService.instance.refreshNow();
-    if (!mounted) return;
+    if (!mounted) {
+      await steps.close();
+      return;
+    }
 
     setState(() => _isRefreshing = false);
 
@@ -203,20 +220,21 @@ class _AddComponentPickerState extends State<AddComponentPicker>
       // Re-register components from the freshly generated descriptors, then
       // rebuild the picker list.
       widget.sceneState.reloadCustomComponents();
+      steps.add(
+        const EditorSnackBarStep(
+          message: 'Custom components refreshed successfully.',
+        ),
+      );
     } else {
       widget.sceneState.refresh();
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          result.success
-              ? 'Custom components refreshed successfully.'
-              : 'Component refresh failed: ${result.output}',
+      steps.add(
+        EditorSnackBarStep(
+          message: 'Component refresh failed: ${result.output}',
+          isError: true,
         ),
-        duration: Duration(seconds: result.success ? 2 : 4),
-      ),
-    );
+      );
+    }
+    await steps.close();
   }
 
   @override

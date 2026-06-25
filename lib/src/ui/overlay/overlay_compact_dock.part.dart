@@ -259,7 +259,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                             horizontal: panelPadding,
                             vertical: panelVertical,
                           ),
-                          child: Column(
+                          child: Row(
                             children: <Widget>[
                               Expanded(
                                 child: SingleChildScrollView(
@@ -324,16 +324,17 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                                         onTap: (_) => _toggleLogsPanel(),
                                         settings: settings,
                                       ),
-                                      const SizedBox(width: 8),
-                                      _EditorSettingsButton(
-                                        anchorKey: _settingsAnchorKey,
-                                        settings: settings,
-                                        isSelected: _isSettingsOpen,
-                                        onPressed: _toggleSettings,
-                                      ),
                                     ],
                                   ),
                                 ),
+                              ),
+                              const _MinimizedSnackChip(),
+                              const SizedBox(width: 8),
+                              _EditorSettingsButton(
+                                anchorKey: _settingsAnchorKey,
+                                settings: settings,
+                                isSelected: _isSettingsOpen,
+                                onPressed: _toggleSettings,
                               ),
                             ],
                           ),
@@ -396,6 +397,77 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
               ),
             );
           },
+        );
+      },
+    );
+  }
+}
+
+// ── Minimized snackbar chip ───────────────────────────────────────────────────
+
+class _MinimizedSnackChip extends StatelessWidget {
+  const _MinimizedSnackChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = EditorMessenger.of(context);
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final entry = controller.current;
+        if (entry == null || !controller.isMinimized) {
+          return const SizedBox.shrink();
+        }
+        final accent = entry.type.accentColor;
+        return Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: controller.expand,
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: accent.withValues(alpha: 0.28)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(entry.type.iconData, size: 11, color: accent),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        entry.title ?? entry.message,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: EditorTheme.textSecondary,
+                          height: 1.0,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    GestureDetector(
+                      onTap: controller.dismiss,
+                      behavior: HitTestBehavior.opaque,
+                      child: const Padding(
+                        padding: EdgeInsets.all(2),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 10,
+                          color: EditorTheme.textMuted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         );
       },
     );

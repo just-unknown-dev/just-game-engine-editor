@@ -604,9 +604,10 @@ class _RuntimeDetailContent extends StatelessWidget {
                                   Clipboard.setData(
                                     ClipboardData(text: message),
                                   );
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Warning copied'),
+                                  EditorMessenger.of(context).showSnackBar(
+                                    const EditorSnackBarEntry(
+                                      message: 'Warning copied',
+                                      type: EditorSnackBarType.success,
                                       duration: Duration(milliseconds: 1500),
                                     ),
                                   );
@@ -637,9 +638,10 @@ class _RuntimeDetailContent extends StatelessWidget {
                               Clipboard.setData(
                                 ClipboardData(text: allMessages),
                               );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('All warnings copied'),
+                              EditorMessenger.of(context).showSnackBar(
+                                const EditorSnackBarEntry(
+                                  message: 'All warnings copied',
+                                  type: EditorSnackBarType.success,
                                   duration: Duration(milliseconds: 1500),
                                 ),
                               );
