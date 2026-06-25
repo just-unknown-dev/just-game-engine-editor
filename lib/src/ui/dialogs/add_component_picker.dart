@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart' hide Animation;
 import '../theme/editor_theme.dart';
 
@@ -7,6 +8,7 @@ import '../../core/ecs/registry/component_registry.dart';
 import '../../core/ecs/generator/component_registry.dart';
 import '../../core/services/component_codegen_runner.dart';
 import '../../core/services/component_indexing_service.dart';
+import '../../core/services/editor_log_service.dart';
 import '../../core/state/editor_scene_state.dart';
 
 /// An expandable in-place panel that lets the user search for and add a
@@ -103,12 +105,25 @@ class _AddComponentPickerState extends State<AddComponentPicker>
   Future<void> _addComponent(ComponentEntry entry) async {
     ComponentEntry resolvedEntry = entry;
     if (entry.isCustom && entry.sourcePath != null) {
+      EditorLogService.instance.log(
+        'Generating descriptor for ${entry.name}.',
+        source: 'codegen',
+        category: 'generate-one',
+      );
       final result = await runComponentGenerateOne(
         entry.sourcePath!,
         editorScope: entry.isEditorComponent,
+        onLog: (line) => EditorLogService.instance.logProcessChunk(line),
       );
       if (!mounted) return;
       if (!result.success) {
+        EditorLogService.instance.log(
+          'Component generation failed for ${entry.name}.',
+          source: 'codegen',
+          category: 'generate-one',
+          level: DebuggerLogLevel.error,
+          details: result.output,
+        );
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Component generation failed: ${result.output}'),
@@ -118,6 +133,11 @@ class _AddComponentPickerState extends State<AddComponentPicker>
         return;
       }
       widget.sceneState.reloadCustomComponents();
+      EditorLogService.instance.log(
+        'Component generation completed for ${entry.name}.',
+        source: 'codegen',
+        category: 'generate-one',
+      );
       final typeName = entry.componentTypeName;
       if (typeName != null) {
         final refreshed = CustomComponentRegistry.instance.descriptorByTypeName(

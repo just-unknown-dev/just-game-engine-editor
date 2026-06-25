@@ -52,6 +52,7 @@ void main() {
     expect(countSystem<PhysicsBridgeSystem>(), 1);
     expect(countSystem<PhysicsBodyBindingSystem>(), 1);
     expect(countSystem<PhysicsJointBindingSystem>(), 1);
+    expect(countSystem<EditorLogCaptureSystem>(), 1);
 
     plugin.dispose();
     Engine.resetInstance();
@@ -79,6 +80,7 @@ void main() {
     expect(countSystem<PhysicsBridgeSystem>(), 1);
     expect(countSystem<PhysicsBodyBindingSystem>(), 1);
     expect(countSystem<PhysicsJointBindingSystem>(), 1);
+    expect(countSystem<EditorLogCaptureSystem>(), 1);
 
     plugin.dispose();
     Engine.resetInstance();
@@ -121,6 +123,7 @@ void main() {
       PhysicsBridgeSystem,
       PhysicsBodyBindingSystem,
       PhysicsJointBindingSystem,
+      EditorLogCaptureSystem,
     };
 
     final actuallyAddedTypes = <Type>{};
@@ -142,6 +145,7 @@ void main() {
       engine.world.systems.whereType<PhysicsJointBindingSystem>().length,
       1,
     );
+    expect(engine.world.systems.whereType<EditorLogCaptureSystem>().length, 1);
 
     plugin.dispose();
     Engine.resetInstance();

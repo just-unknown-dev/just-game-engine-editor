@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'component_codegen_runner.dart';
+import 'editor_log_service.dart';
 
 /// Debounced background indexing service for custom component discovery.
 ///
@@ -37,13 +38,19 @@ class ComponentIndexingService {
   }) {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(debounce, () async {
-      await refreshNow(onLog: onLog);
+      await refreshNow(
+        onLog:
+            onLog ?? (line) => EditorLogService.instance.logProcessChunk(line),
+      );
     });
   }
 
   Future<ComponentCodegenResult> refreshNow({
     ComponentCodegenLog? onLog,
   }) async {
+    final logSink =
+        onLog ??
+        (String line) => EditorLogService.instance.logProcessChunk(line);
     if (_refreshInFlight) {
       return const ComponentCodegenResult(
         success: false,
@@ -53,7 +60,7 @@ class ComponentIndexingService {
 
     _refreshInFlight = true;
     try {
-      final result = await runComponentIndexScan(onLog: onLog);
+      final result = await runComponentIndexScan(onLog: logSink);
       if (result.success) {
         for (final listener in _listeners.toList(growable: false)) {
           listener();
