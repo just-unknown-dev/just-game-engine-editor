@@ -1,10 +1,15 @@
 ﻿import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../core/ecs/generator/component_annotations.dart';
 import '../../core/ecs/generator/component_registry.dart';
+import '../../core/services/component_codegen_runner.dart';
+import '../../core/services/component_source_index.dart';
+import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
+import '../../core/services/editor_log_service.dart';
 import '../../core/state/editor_scene_state.dart';
 import '../theme/editor_theme.dart';
 import '../widgets/scrubbable_number_field.dart';
@@ -15,15 +20,46 @@ List<Widget> buildCustomComponentSections({
 }) {
   final sections = <Widget>[];
   for (final component in entity.components) {
+    final typeName = component.runtimeType.toString();
     final descriptor = CustomComponentRegistry.instance.descriptorForComponent(
       component,
     );
-    if (descriptor == null) continue;
+
+    if (descriptor == null) {
+      // No descriptor — show skeleton if code gen is in progress for this type.
+      if (sceneState.isCodegenInProgress(typeName)) {
+        sections.add(_SkeletonSection(typeName: typeName));
+      }
+      continue;
+    }
+
+    final codegenInProgress = sceneState.isCodegenInProgress(descriptor.type);
+
+    // _sourcePathByType is keyed by the EditorComponent class name, not the
+    // base type name. Derive it: 'HealthPowerupComponent' →
+    // 'HealthPowerupEditorComponent'. Fall back to direct lookup for cases
+    // where the class name matches (e.g. non-editor custom components).
+    final editorClassName = descriptor.type.endsWith('Component')
+        ? descriptor.type.replaceFirst('Component', 'EditorComponent')
+        : null;
+    final sourcePath =
+        (editorClassName != null
+            ? ComponentSourceIndex.instance.sourcePathForType(editorClassName)
+            : null) ??
+        ComponentSourceIndex.instance.sourcePathForType(descriptor.type);
+
+    // Reload is only meaningful for project-level custom components — not for
+    // core or editor-package components whose .jge.dart files are static.
+    // For debug builds, allow reload for all components to support rapid iteration.
+    final isReloadable =
+        (kDebugMode || descriptor.componentType == ComponentType.custom) &&
+        sourcePath != null;
 
     sections.add(
       CustomComponentSection(
         component: component,
         descriptor: descriptor,
+        codegenInProgress: codegenInProgress,
         onDelete: () {
           entity.removeComponentByType(component.componentType);
           sceneState.markDirty();
@@ -34,10 +70,72 @@ List<Widget> buildCustomComponentSections({
           sceneState.markDirty();
           sceneState.refresh();
         },
+        onReload: isReloadable
+            ? () => _triggerSectionCodegen(
+                sourcePath: sourcePath,
+                typeName: descriptor.type,
+                componentName: descriptor.name,
+                sceneState: sceneState,
+              )
+            : null,
       ),
     );
   }
   return sections;
+}
+
+void _triggerSectionCodegen({
+  required String sourcePath,
+  required String typeName,
+  required String componentName,
+  required EditorSceneState sceneState,
+}) {
+  if (sceneState.isCodegenInProgress(typeName)) return;
+  sceneState.startCodegen(typeName);
+
+  final log = EditorLogService.instance;
+  final stopwatch = Stopwatch()..start();
+  final outputBuffer = StringBuffer();
+
+  log.log(
+    'Regenerating "$componentName" ($typeName)…',
+    source: 'codegen',
+    category: 'generate-one',
+  );
+
+  runComponentGenerateOne(
+    sourcePath,
+    editorScope: true,
+    onLog: (line) {
+      log.logProcessChunk(line);
+      outputBuffer.writeln(line);
+    },
+  ).then((result) {
+    stopwatch.stop();
+    final ms = stopwatch.elapsedMilliseconds;
+
+    if (result.success) {
+      log.log(
+        '"$componentName" code gen completed in ${ms}ms.',
+        source: 'codegen',
+        category: 'generate-one',
+        details: outputBuffer.isNotEmpty ? outputBuffer.toString().trim() : null,
+      );
+    } else {
+      log.log(
+        '"$componentName" code gen failed after ${ms}ms.',
+        source: 'codegen',
+        category: 'generate-one',
+        level: DebuggerLogLevel.error,
+        details: outputBuffer.isNotEmpty
+            ? outputBuffer.toString().trim()
+            : result.output,
+      );
+    }
+    sceneState.reloadCustomComponents();
+  }).whenComplete(() {
+    sceneState.finishCodegen(typeName);
+  });
 }
 
 class CustomComponentSection extends StatelessWidget {
@@ -47,12 +145,21 @@ class CustomComponentSection extends StatelessWidget {
     required this.descriptor,
     required this.onDelete,
     required this.onChanged,
+    this.codegenInProgress = false,
+    this.onReload,
   });
 
   final jge.Component component;
   final EditorComponentDescriptor descriptor;
   final VoidCallback onDelete;
   final VoidCallback onChanged;
+
+  /// True while background code gen is running for this component type.
+  final bool codegenInProgress;
+
+  /// Triggers a targeted code gen re-run for this component's source file.
+  /// Null when no source path is available (e.g. core/editor components).
+  final VoidCallback? onReload;
 
   @override
   Widget build(BuildContext context) {
@@ -83,6 +190,19 @@ class CustomComponentSection extends StatelessWidget {
                 const SizedBox(width: 6),
                 _ComponentTag(componentType: descriptor.componentType),
                 const Spacer(),
+                if (onReload != null)
+                  GestureDetector(
+                    onTap: codegenInProgress ? null : onReload,
+                    child: Icon(
+                      Icons.refresh_rounded,
+                      size: 14,
+                      color: codegenInProgress
+                          ? EditorTheme.textMuted.withValues(alpha: 0.4)
+                          : EditorTheme.textMuted,
+                    ),
+                  ),
+                if (onReload != null && descriptor.deletable)
+                  const SizedBox(width: 6),
                 if (descriptor.deletable)
                   GestureDetector(
                     onTap: onDelete,
@@ -95,7 +215,15 @@ class CustomComponentSection extends StatelessWidget {
               ],
             ),
           ),
-          const Divider(height: 1, color: EditorTheme.border),
+          // Divider becomes a thin progress bar while code gen is running.
+          if (codegenInProgress)
+            const LinearProgressIndicator(
+              minHeight: 1,
+              backgroundColor: EditorTheme.border,
+              valueColor: AlwaysStoppedAnimation<Color>(EditorTheme.primary),
+            )
+          else
+            const Divider(height: 1, color: EditorTheme.border),
           Padding(
             padding: const EdgeInsets.all(10),
             child: Column(
@@ -116,7 +244,10 @@ class CustomComponentSection extends StatelessWidget {
                 if (visibleFields.isEmpty)
                   const Text(
                     'No visible properties',
-                    style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
+                    style: TextStyle(
+                      color: EditorTheme.textMuted,
+                      fontSize: 11,
+                    ),
                   )
                 else
                   ...visibleFields.map((field) {
@@ -145,6 +276,82 @@ class CustomComponentSection extends StatelessWidget {
   }
 }
 
+// ── Skeleton section (shown while first-time codegen is pending) ──────────────
+
+class _SkeletonSection extends StatelessWidget {
+  const _SkeletonSection({required this.typeName});
+
+  final String typeName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: EditorTheme.dialogBg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: EditorTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              children: [
+                Text(
+                  typeName,
+                  style: const TextStyle(
+                    color: EditorTheme.primaryMutedLight,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const Spacer(),
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      EditorTheme.primaryMutedLight,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const LinearProgressIndicator(
+            minHeight: 1,
+            backgroundColor: EditorTheme.border,
+            valueColor: AlwaysStoppedAnimation<Color>(EditorTheme.primary),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: List.generate(
+                3,
+                (i) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Container(
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: EditorTheme.border.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    width: i == 2 ? 80 : double.infinity,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Tag chip ──────────────────────────────────────────────────────────────────
 
 class _ComponentTag extends StatelessWidget {
@@ -156,29 +363,29 @@ class _ComponentTag extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, fg, bg, border) = switch (componentType) {
       ComponentType.core => (
-          'CORE',
-          EditorTheme.primaryMutedLight,
-          EditorTheme.primaryMuted.withValues(alpha: 0.18),
-          EditorTheme.primaryMuted.withValues(alpha: 0.5),
-        ),
+        'CORE',
+        EditorTheme.primaryMutedLight,
+        EditorTheme.primaryMuted.withValues(alpha: 0.18),
+        EditorTheme.primaryMuted.withValues(alpha: 0.5),
+      ),
       ComponentType.editor => (
-          'EDITOR',
-          const Color(0xFF81C9E8),
-          const Color(0xFF81C9E8).withValues(alpha: 0.12),
-          const Color(0xFF81C9E8).withValues(alpha: 0.45),
-        ),
+        'EDITOR',
+        const Color(0xFF81C9E8),
+        const Color(0xFF81C9E8).withValues(alpha: 0.12),
+        const Color(0xFF81C9E8).withValues(alpha: 0.45),
+      ),
       ComponentType.experimental => (
-          'EXP',
-          const Color(0xFFE8C47A),
-          const Color(0xFFE8C47A).withValues(alpha: 0.12),
-          const Color(0xFFE8C47A).withValues(alpha: 0.45),
-        ),
+        'EXP',
+        const Color(0xFFE8C47A),
+        const Color(0xFFE8C47A).withValues(alpha: 0.12),
+        const Color(0xFFE8C47A).withValues(alpha: 0.45),
+      ),
       ComponentType.custom => (
-          'CUSTOM',
-          EditorTheme.textMuted,
-          EditorTheme.surfaceDark,
-          EditorTheme.border,
-        ),
+        'CUSTOM',
+        EditorTheme.textMuted,
+        EditorTheme.surfaceDark,
+        EditorTheme.border,
+      ),
     };
 
     return Container(
@@ -252,9 +459,8 @@ class _EditorFieldControl extends StatelessWidget {
             label: label,
             value: (value as num?)?.toDouble() ?? 0.0,
             scrubConfig: field.scrubConfig!,
-            onChanged: (v) => onChanged(
-              field.scrubConfig!.integer ? v.round() : v,
-            ),
+            onChanged: (v) =>
+                onChanged(field.scrubConfig!.integer ? v.round() : v),
           );
         }
         return _TextEditorRow(

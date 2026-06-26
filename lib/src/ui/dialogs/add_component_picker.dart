@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart' hide Animation;
@@ -110,27 +112,67 @@ class _AddComponentPickerState extends State<AddComponentPicker>
         .toList();
   }
 
+  /// True when this entry should trigger background code gen after adding:
+  /// only project-level custom components (not editor-package ones).
+  bool _needsBackgroundCodegen(ComponentEntry entry) =>
+      entry.isCustom && !entry.isEditorComponent && entry.sourcePath != null;
+
+  /// Resolves the descriptor for a custom entry, trying both the entry's
+  /// componentTypeName and the EditorComponent → base-type fallback.
+  EditorComponentDescriptor? _resolveDescriptor(ComponentEntry entry) {
+    final typeName = entry.componentTypeName;
+    if (typeName == null) return null;
+    var descriptor =
+        CustomComponentRegistry.instance.descriptorByTypeName(typeName);
+    if (descriptor == null && typeName.endsWith('EditorComponent')) {
+      final base = typeName.replaceFirst('EditorComponent', 'Component');
+      descriptor = CustomComponentRegistry.instance.descriptorByTypeName(base);
+    }
+    return descriptor;
+  }
+
   Future<void> _addComponent(ComponentEntry entry) async {
-    ComponentEntry resolvedEntry = entry;
-    if (entry.isCustom && entry.sourcePath != null) {
-      EditorLogService.instance.log(
-        'Generating descriptor for ${entry.name}.',
+    // Determine whether a descriptor (and therefore a factory) is available.
+    final descriptor = _needsBackgroundCodegen(entry)
+        ? _resolveDescriptor(entry)
+        : null;
+    final hasDescriptor = !_needsBackgroundCodegen(entry) || descriptor != null;
+
+    if (_needsBackgroundCodegen(entry) && !hasDescriptor) {
+      // ── First-time add: no descriptor yet. Run generation synchronously,
+      //    then add the component once the factory is available. ──
+      final log = EditorLogService.instance;
+      final stopwatch = Stopwatch()..start();
+      final outputBuffer = StringBuffer();
+
+      log.log(
+        'Generating "${entry.name}" for first-time add…',
         source: 'codegen',
         category: 'generate-one',
       );
+
       final result = await runComponentGenerateOne(
         entry.sourcePath!,
         editorScope: entry.isEditorComponent,
-        onLog: (line) => EditorLogService.instance.logProcessChunk(line),
+        onLog: (line) {
+          log.logProcessChunk(line);
+          outputBuffer.writeln(line);
+        },
       );
       if (!mounted) return;
+
+      stopwatch.stop();
+      final ms = stopwatch.elapsedMilliseconds;
+
       if (!result.success) {
-        EditorLogService.instance.log(
-          'Component generation failed for ${entry.name}.',
+        log.log(
+          '"${entry.name}" code gen failed after ${ms}ms.',
           source: 'codegen',
           category: 'generate-one',
           level: DebuggerLogLevel.error,
-          details: result.output,
+          details: outputBuffer.isNotEmpty
+              ? outputBuffer.toString().trim()
+              : result.output,
         );
         EditorMessenger.of(context).showSnackBar(
           EditorSnackBarEntry(
@@ -141,65 +183,183 @@ class _AddComponentPickerState extends State<AddComponentPicker>
         );
         return;
       }
-      widget.sceneState.reloadCustomComponents();
-      EditorLogService.instance.log(
-        'Component generation completed for ${entry.name}.',
+
+      log.log(
+        '"${entry.name}" code gen completed in ${ms}ms.',
         source: 'codegen',
         category: 'generate-one',
+        details: outputBuffer.isNotEmpty ? outputBuffer.toString().trim() : null,
       );
-      final typeName = entry.componentTypeName;
-      if (typeName != null) {
-        // Primary lookup by class name. Falls back to the base type name for
-        // XxxEditorComponent classes, whose descriptor is registered under
-        // the superclass type (e.g. 'HealthPowerupComponent').
-        var refreshed = CustomComponentRegistry.instance.descriptorByTypeName(
-          typeName,
+      // Write/update the project-level registrant so the descriptor is
+      // available on the next hot-reload.
+      final jgePath = entry.sourcePath!.replaceFirst('.dart', '.jge.dart');
+      final registrantPath = _writeProjectRegistrant(jgePath);
+
+      widget.sceneState.reloadCustomComponents();
+      final refreshed = _resolveDescriptor(entry);
+      if (refreshed == null) {
+        final hint = registrantPath != null
+            ? 'Registrant written to:\n  $registrantPath\n\n'
+                'Add this to your app startup:\n'
+                '  plugin.componentRegistrar = registerCustomComponents;\n\n'
+                'Then hot-reload to complete registration.'
+            : 'Expected type: ${entry.componentTypeName ?? "(unknown)"}\n'
+                'Registered: ${CustomComponentRegistry.instance.descriptors.map((d) => d.type).join(", ")}';
+        log.log(
+          '"${entry.name}" descriptor unavailable — hot-reload required.',
+          source: 'codegen',
+          category: 'generate-one',
+          level: DebuggerLogLevel.warning,
+          details: hint,
         );
-        if (refreshed == null && typeName.endsWith('EditorComponent')) {
-          final baseTypeName = typeName.replaceFirst('EditorComponent', 'Component');
-          refreshed = CustomComponentRegistry.instance.descriptorByTypeName(
-            baseTypeName,
-          );
-        }
-        if (refreshed != null) {
-          resolvedEntry = ComponentEntry(
-            name: refreshed.name,
-            group: refreshed.group ?? entry.group,
-            description: refreshed.description ?? entry.description,
-            factory: refreshed.factory,
-            componentTypeName: refreshed.type,
-            sourcePath: entry.sourcePath,
-            isCustom: true,
-            isEditorComponent: entry.isEditorComponent,
-          );
-        } else {
-          EditorMessenger.of(context).showSnackBar(
-            const EditorSnackBarEntry(
-              message:
-                  'Component generation completed but descriptor is unavailable.',
-              type: EditorSnackBarType.warning,
-              duration: Duration(seconds: 4),
-            ),
-          );
-          return;
-        }
-      } else {
         EditorMessenger.of(context).showSnackBar(
           const EditorSnackBarEntry(
-            message: 'Custom component type name is missing.',
-            type: EditorSnackBarType.error,
-            duration: Duration(seconds: 4),
+            message: 'Generated! Hot-reload to register the new component.',
+            type: EditorSnackBarType.warning,
+            duration: Duration(seconds: 5),
           ),
         );
         return;
       }
+      widget.entity.addComponent(refreshed.factory());
+      widget.sceneState.markDirty();
+      widget.sceneState.refresh();
+      _toggle();
+      return;
     }
 
-    final component = resolvedEntry.factory();
-    widget.entity.addComponent(component);
+    // ── Normal add: factory is available. Add immediately. ──
+    widget.entity.addComponent(entry.factory());
     widget.sceneState.markDirty();
-    widget.sceneState.refresh(); // rebuild inspector to show new component
-    _toggle(); // collapse picker
+    widget.sceneState.refresh();
+    _toggle();
+
+    // ── Background codegen for custom project components that already have a
+    //    descriptor — re-generate to pick up any source changes. The inspector
+    //    shows a progress bar on the new section while gen runs. ──
+    if (_needsBackgroundCodegen(entry)) {
+      final codegenType = descriptor?.type ?? entry.componentTypeName ?? '';
+      widget.sceneState.startCodegen(codegenType);
+      _runBackgroundCodegen(entry, codegenType);
+    }
+  }
+
+  void _runBackgroundCodegen(ComponentEntry entry, String codegenType) {
+    final log = EditorLogService.instance;
+    final stopwatch = Stopwatch()..start();
+    final outputBuffer = StringBuffer();
+
+    log.log(
+      'Regenerating "${entry.name}" in the background…',
+      source: 'codegen',
+      category: 'generate-one',
+    );
+
+    runComponentGenerateOne(
+      entry.sourcePath!,
+      editorScope: entry.isEditorComponent,
+      onLog: (line) {
+        log.logProcessChunk(line);
+        outputBuffer.writeln(line);
+      },
+    ).then((result) {
+      if (!mounted) return;
+      stopwatch.stop();
+      final ms = stopwatch.elapsedMilliseconds;
+
+      if (result.success) {
+        log.log(
+          '"${entry.name}" background code gen completed in ${ms}ms.',
+          source: 'codegen',
+          category: 'generate-one',
+          details:
+              outputBuffer.isNotEmpty ? outputBuffer.toString().trim() : null,
+        );
+      } else {
+        log.log(
+          '"${entry.name}" background code gen failed after ${ms}ms.',
+          source: 'codegen',
+          category: 'generate-one',
+          level: DebuggerLogLevel.error,
+          details: outputBuffer.isNotEmpty
+              ? outputBuffer.toString().trim()
+              : result.output,
+        );
+      }
+      widget.sceneState.reloadCustomComponents();
+    }).whenComplete(() {
+      if (mounted) widget.sceneState.finishCodegen(codegenType);
+    });
+  }
+
+  /// Writes (or updates) a `generated_component_registrant.dart` file in the
+  /// same directory as [jgeDartPath]. It imports every
+  /// `*_editor_component.jge.dart` sibling and exposes a single
+  /// `registerCustomComponents()` function.
+  ///
+  /// Returns the path of the written file, or null on failure.
+  String? _writeProjectRegistrant(String jgeDartPath) {
+    try {
+      final dir = p.dirname(jgeDartPath);
+      final jgeFiles = Directory(dir)
+          .listSync()
+          .whereType<File>()
+          .where(
+            (f) =>
+                p.basename(f.path).endsWith('_editor_component.jge.dart') &&
+                !p.basename(f.path).startsWith('generated_component_registrant'),
+          )
+          .toList()
+        ..sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
+
+      if (jgeFiles.isEmpty) return null;
+
+      final buf = StringBuffer()
+        ..writeln(
+          '// AUTO-GENERATED by just_game_engine_editor — do not modify.',
+        )
+        ..writeln('// Re-generated whenever a custom component is added.')
+        ..writeln('// ignore_for_file: type=lint, unused_import')
+        ..writeln();
+
+      for (var i = 0; i < jgeFiles.length; i++) {
+        final name = p.basename(jgeFiles[i].path);
+        buf.writeln("import '$name' as _c$i;");
+      }
+
+      buf
+        ..writeln()
+        ..writeln(
+          '/// Registers all project custom component descriptors.',
+        )
+        ..writeln(
+          '/// Call this once inside `plugin.componentRegistrar`:',
+        )
+        ..writeln('///')
+        ..writeln(
+          "///   plugin.componentRegistrar = registerCustomComponents;",
+        )
+        ..writeln('void registerCustomComponents([dynamic registry]) {');
+
+      for (var i = 0; i < jgeFiles.length; i++) {
+        buf.writeln('  _c$i.registerGeneratedCustomComponents(registry);');
+      }
+
+      buf.writeln('}');
+
+      final registrantPath =
+          p.join(dir, 'generated_component_registrant.dart');
+      File(registrantPath).writeAsStringSync(buf.toString());
+      return registrantPath;
+    } catch (e) {
+      EditorLogService.instance.log(
+        'Failed to write project registrant: $e',
+        source: 'codegen',
+        category: 'generate-one',
+        level: DebuggerLogLevel.error,
+      );
+      return null;
+    }
   }
 
   Future<void> _refreshComponents() async {

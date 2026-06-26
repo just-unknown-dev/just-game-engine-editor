@@ -198,10 +198,11 @@ final Map<String, _BuiltInComponentDefinition> _builtInComponentDefinitions =
       ),
     };
 
-/// Returns editor catalogue entries including registered custom components.
+/// Returns editor catalogue entries driven purely by source-scanned
+/// XxxEditorComponent classes. Registry descriptors are used only for
+/// factory lookup — they never add extra picker rows.
 List<ComponentEntry> getComponentRegistryEntries() {
   final entries = <ComponentEntry>[];
-  final discoveredTypes = <String>{};
   final descriptorByType = <String, EditorComponentDescriptor>{
     for (final descriptor in CustomComponentRegistry.instance.descriptors)
       descriptor.type: descriptor,
@@ -211,8 +212,14 @@ List<ComponentEntry> getComponentRegistryEntries() {
     final builtIn =
         _builtInComponentDefinitions[discovered.typeName] ??
         _builtInComponentDefinitions[discovered.displayName];
-    final runtimeDescriptor = descriptorByType[discovered.typeName];
-    discoveredTypes.add(discovered.typeName);
+
+    // For XxxEditorComponent classes the descriptor is keyed by the base type.
+    final baseTypeName = discovered.typeName.endsWith('EditorComponent')
+        ? discovered.typeName.replaceFirst('EditorComponent', 'Component')
+        : null;
+    final runtimeDescriptor = descriptorByType[discovered.typeName] ??
+        (baseTypeName != null ? descriptorByType[baseTypeName] : null);
+
     entries.add(
       ComponentEntry(
         name: discovered.displayName,
@@ -225,37 +232,12 @@ List<ComponentEntry> getComponentRegistryEntries() {
                 : () => throw UnsupportedError(
                     'Custom component factory is unavailable until generation completes.',
                   )),
-        componentTypeName: builtIn?.componentTypeName ?? discovered.typeName,
+        componentTypeName: builtIn?.componentTypeName ??
+            runtimeDescriptor?.type ??
+            discovered.typeName,
         sourcePath: discovered.sourcePath,
         isCustom: builtIn == null,
         isEditorComponent: discovered.isEditorComponent,
-      ),
-    );
-  }
-
-  // Keep runtime descriptors as a fallback for already-registered custom
-  // components that might not have been present in the latest scan output.
-  for (final descriptor in CustomComponentRegistry.instance.descriptors) {
-    if (discoveredTypes.contains(descriptor.type)) {
-      continue;
-    }
-    final builtIn =
-        _builtInComponentDefinitions[descriptor.type] ??
-        _builtInComponentDefinitions[descriptor.name];
-    entries.add(
-      ComponentEntry(
-        name: descriptor.name,
-        group: descriptor.group ?? (builtIn == null ? 'Custom' : 'Core'),
-        description:
-            descriptor.description ??
-            (builtIn == null ? 'Custom component.' : 'Built-in component.'),
-        factory: builtIn?.factory ?? () => descriptor.factory(),
-        componentTypeName: builtIn?.componentTypeName ?? descriptor.type,
-        sourcePath: ComponentSourceIndex.instance.sourcePathForType(
-          descriptor.type,
-        ),
-        isCustom: builtIn == null,
-        isEditorComponent: false,
       ),
     );
   }

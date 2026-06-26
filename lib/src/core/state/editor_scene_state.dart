@@ -12,6 +12,23 @@ class EditorSceneState extends ChangeNotifier {
   SceneNode? _selectedNode;
   bool _isDirty = false;
   final Map<EntityId, SceneNode> _entityNodeMap = {};
+
+  /// Component type names currently being re-generated in the background.
+  final Set<String> _codegenInProgress = {};
+
+  /// Returns true while code gen is running for the given component type.
+  bool isCodegenInProgress(String typeName) =>
+      _codegenInProgress.contains(typeName);
+
+  /// Marks [typeName] as having an active background code gen and notifies.
+  void startCodegen(String typeName) {
+    if (_codegenInProgress.add(typeName)) notifyListeners();
+  }
+
+  /// Clears the background code gen flag for [typeName] and notifies.
+  void finishCodegen(String typeName) {
+    if (_codegenInProgress.remove(typeName)) notifyListeners();
+  }
   final Set<EntityId> _multiSelectedIds = {};
   bool _gridSnappingEnabled = true;
   double _gridSize = 32.0;
