@@ -5,7 +5,7 @@ import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotations.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
-import 'physics_joint_components.dart';
+import 'package:just_game_engine_editor/src/core/ecs/components/physics/physics_joint_components.dart';
 
 final List<EditorComponentDescriptor> _generatedEditorComponentDescriptors =
     <EditorComponentDescriptor>[

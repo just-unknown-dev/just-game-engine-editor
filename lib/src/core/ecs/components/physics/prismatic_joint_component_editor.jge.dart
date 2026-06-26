@@ -5,8 +5,7 @@ import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotations.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
-import 'prismatic_joint_component_editor.dart';
-import 'prismatic_joint_component.dart';
+import 'package:just_game_engine_editor/src/core/ecs/components/physics/prismatic_joint_component.dart';
 
 final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(

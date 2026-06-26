@@ -149,9 +149,18 @@ class _AddComponentPickerState extends State<AddComponentPicker>
       );
       final typeName = entry.componentTypeName;
       if (typeName != null) {
-        final refreshed = CustomComponentRegistry.instance.descriptorByTypeName(
+        // Primary lookup by class name. Falls back to the base type name for
+        // XxxEditorComponent classes, whose descriptor is registered under
+        // the superclass type (e.g. 'HealthPowerupComponent').
+        var refreshed = CustomComponentRegistry.instance.descriptorByTypeName(
           typeName,
         );
+        if (refreshed == null && typeName.endsWith('EditorComponent')) {
+          final baseTypeName = typeName.replaceFirst('EditorComponent', 'Component');
+          refreshed = CustomComponentRegistry.instance.descriptorByTypeName(
+            baseTypeName,
+          );
+        }
         if (refreshed != null) {
           resolvedEntry = ComponentEntry(
             name: refreshed.name,
