@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'joystick_input_ae2e7fcb',
       name: 'Joystick Input',
-      type: 'JoystickInputEditorComponent',
+      type: 'JoystickInputComponent',
       group: 'Input',
       description: 'Virtual joystick input source.',
       allowMultiple: false,

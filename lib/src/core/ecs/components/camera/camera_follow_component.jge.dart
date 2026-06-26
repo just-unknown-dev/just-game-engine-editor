@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'camera_follow_168e2c1e',
       name: 'Camera Follow',
-      type: 'CameraFollowEditorComponent',
+      type: 'CameraFollowComponent',
       group: 'Camera',
       description: 'Locks the camera onto this entity.',
       allowMultiple: false,
@@ -26,9 +26,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as CameraFollowEditorComponent).enabled,
+          read: (component) => (component as CameraFollowComponent).enabled,
           write: (component, value) {
-            (component as CameraFollowEditorComponent).enabled = value as bool;
+            (component as CameraFollowComponent).enabled = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -41,9 +41,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as CameraFollowEditorComponent).lookahead,
+          read: (component) => (component as CameraFollowComponent).lookaheadDistance,
           write: (component, value) {
-            (component as CameraFollowEditorComponent).lookahead = (value as num).toDouble();
+            (component as CameraFollowComponent).lookaheadDistance = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,

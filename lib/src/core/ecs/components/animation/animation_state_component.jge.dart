@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'animation_state_40e001f0',
       name: 'Animation State',
-      type: 'AnimationStateEditorComponent',
+      type: 'AnimationStateComponent',
       group: 'Animation',
       description: 'Drives sprite sheet animation.',
       allowMultiple: false,
@@ -26,9 +26,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as AnimationStateEditorComponent).animName,
+          read: (component) => (component as AnimationStateComponent).currentAnimation,
           write: (component, value) {
-            (component as AnimationStateEditorComponent).animName = value as String;
+            (component as AnimationStateComponent).currentAnimation = value as String;
           },
           enumValues: null,
           enumParser: null,
@@ -41,9 +41,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, min: 1.0, integer: true),
-          read: (component) => (component as AnimationStateEditorComponent).frameCount,
+          read: (component) => (component as AnimationStateComponent).frameCount,
           write: (component, value) {
-            (component as AnimationStateEditorComponent).frameCount = (value as num).toInt();
+            (component as AnimationStateComponent).frameCount = (value as num).toInt();
           },
           enumValues: null,
           enumParser: null,
@@ -56,9 +56,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.01, fractionDigits: 3, min: 0.0),
-          read: (component) => (component as AnimationStateEditorComponent).frameDuration,
+          read: (component) => (component as AnimationStateComponent).frameDuration,
           write: (component, value) {
-            (component as AnimationStateEditorComponent).frameDuration = (value as num).toDouble();
+            (component as AnimationStateComponent).frameDuration = (value as num).toDouble();
           },
           enumValues: null,
           enumParser: null,
@@ -70,9 +70,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as AnimationStateEditorComponent).loop,
+          read: (component) => (component as AnimationStateComponent).loop,
           write: (component, value) {
-            (component as AnimationStateEditorComponent).loop = value as bool;
+            (component as AnimationStateComponent).loop = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -84,9 +84,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as AnimationStateEditorComponent).playing,
+          read: (component) => (component as AnimationStateComponent).isPlaying,
           write: (component, value) {
-            (component as AnimationStateEditorComponent).playing = value as bool;
+            (component as AnimationStateComponent).isPlaying = (value as bool);
           },
           enumValues: null,
           enumParser: null,

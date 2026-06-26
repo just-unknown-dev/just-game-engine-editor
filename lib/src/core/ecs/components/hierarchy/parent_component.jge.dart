@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'parent_a33bbdfb',
       name: 'Parent',
-      type: 'ParentEditorComponent',
+      type: 'ParentComponent',
       group: 'Hierarchy',
       description: 'Attaches this entity to a parent.',
       allowMultiple: false,

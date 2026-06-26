@@ -1,4 +1,4 @@
-﻿import 'package:flutter/painting.dart';
+import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_annotations.dart';
@@ -18,11 +18,9 @@ class PolygonEditorComponent extends PolygonComponent {
   @EditorField(label: 'Verts', readOnly: true)
   int get vertCount => vertices.length;
 
-  @override
   @EditorField(label: 'Stroke', scrubStep: 0.5, scrubFractionDigits: 1, scrubMin: 0)
-  double get strokeWidth => super.strokeWidth;
-  @override
-  set strokeWidth(double v) => super.strokeWidth = v;
+  double get strokeW => strokeWidth;
+  set strokeW(double v) => super.strokeWidth = v;
 
   @EditorField(label: 'Fill')
   Color get fillColor => fillStyle.color;
@@ -32,9 +30,7 @@ class PolygonEditorComponent extends PolygonComponent {
   Color get strokeColor => strokeStyle.color;
   set strokeColor(Color v) => strokeStyle = ShapePaintStyle(color: v);
 
-  @override
   @EditorField(label: 'Filled')
   bool get filled => super.filled;
-  @override
   set filled(bool v) => super.filled = v;
 }

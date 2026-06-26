@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'physics_body_rect_552c5849',
       name: 'Physics Body (Rect)',
-      type: 'PhysicsBodyRectangleEditorComponent',
+      type: 'PhysicsBodyComponent',
       group: 'Physics',
       description: 'Rigid body with rectangle shape.',
       allowMultiple: false,
@@ -27,9 +27,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, integer: true),
-          read: (component) => (component as PhysicsBodyRectangleEditorComponent).categoryBits,
+          read: (component) => (component as PhysicsBodyComponent).categoryBits,
           write: (component, value) {
-            (component as PhysicsBodyRectangleEditorComponent).categoryBits = (value as num).toInt();
+            (component as PhysicsBodyComponent).categoryBits = ((value as num).toInt());
           },
           enumValues: null,
           enumParser: null,
@@ -42,9 +42,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, integer: true),
-          read: (component) => (component as PhysicsBodyRectangleEditorComponent).collisionMask,
+          read: (component) => (component as PhysicsBodyComponent).collisionMask,
           write: (component, value) {
-            (component as PhysicsBodyRectangleEditorComponent).collisionMask = (value as num).toInt();
+            (component as PhysicsBodyComponent).collisionMask = ((value as num).toInt());
           },
           enumValues: null,
           enumParser: null,
@@ -57,9 +57,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.05, fractionDigits: 2, min: 0.0),
-          read: (component) => (component as PhysicsBodyRectangleEditorComponent).drag,
+          read: (component) => (component as PhysicsBodyComponent).drag,
           write: (component, value) {
-            (component as PhysicsBodyRectangleEditorComponent).drag = (value as num).toDouble();
+            (component as PhysicsBodyComponent).drag = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -72,9 +72,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, integer: true),
-          read: (component) => (component as PhysicsBodyRectangleEditorComponent).groupIndex,
+          read: (component) => (component as PhysicsBodyComponent).groupIndex,
           write: (component, value) {
-            (component as PhysicsBodyRectangleEditorComponent).groupIndex = (value as num).toInt();
+            (component as PhysicsBodyComponent).groupIndex = ((value as num).toInt());
           },
           enumValues: null,
           enumParser: null,
@@ -86,9 +86,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as PhysicsBodyRectangleEditorComponent).isOneWay,
+          read: (component) => (component as PhysicsBodyComponent).isOneWay,
           write: (component, value) {
-            (component as PhysicsBodyRectangleEditorComponent).isOneWay = value as bool;
+            (component as PhysicsBodyComponent).isOneWay = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -100,9 +100,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as PhysicsBodyRectangleEditorComponent).isSensor,
+          read: (component) => (component as PhysicsBodyComponent).isSensor,
           write: (component, value) {
-            (component as PhysicsBodyRectangleEditorComponent).isSensor = value as bool;
+            (component as PhysicsBodyComponent).isSensor = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -114,9 +114,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as PhysicsBodyRectangleEditorComponent).isStatic,
+          read: (component) => (component as PhysicsBodyComponent).isStatic,
           write: (component, value) {
-            (component as PhysicsBodyRectangleEditorComponent).isStatic = value as bool;
+            (component as PhysicsBodyComponent).isStatic = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -129,9 +129,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, integer: true),
-          read: (component) => (component as PhysicsBodyRectangleEditorComponent).layer,
+          read: (component) => (component as PhysicsBodyComponent).layer,
           write: (component, value) {
-            (component as PhysicsBodyRectangleEditorComponent).layer = (value as num).toInt();
+            (component as PhysicsBodyComponent).layer = ((value as num).toInt());
           },
           enumValues: null,
           enumParser: null,
@@ -144,9 +144,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, integer: true),
-          read: (component) => (component as PhysicsBodyRectangleEditorComponent).maskBits,
+          read: (component) => (component as PhysicsBodyComponent).maskBits,
           write: (component, value) {
-            (component as PhysicsBodyRectangleEditorComponent).maskBits = (value as num).toInt();
+            (component as PhysicsBodyComponent).maskBits = ((value as num).toInt());
           },
           enumValues: null,
           enumParser: null,
@@ -159,9 +159,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.1, fractionDigits: 2, min: 0.0),
-          read: (component) => (component as PhysicsBodyRectangleEditorComponent).massValue,
+          read: (component) => (component as PhysicsBodyComponent).mass,
           write: (component, value) {
-            (component as PhysicsBodyRectangleEditorComponent).massValue = (value as num).toDouble();
+            (component as PhysicsBodyComponent).mass = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -174,9 +174,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.05, fractionDigits: 2, min: 0.0),
-          read: (component) => (component as PhysicsBodyRectangleEditorComponent).restitution,
+          read: (component) => (component as PhysicsBodyComponent).restitution,
           write: (component, value) {
-            (component as PhysicsBodyRectangleEditorComponent).restitution = (value as num).toDouble();
+            (component as PhysicsBodyComponent).restitution = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,

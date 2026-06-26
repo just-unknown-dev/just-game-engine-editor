@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'circular_progress_d287c579',
       name: 'Circular Progress',
-      type: 'CircularProgressEditorComponent',
+      type: 'CircularProgressComponent',
       group: 'UI',
       description: 'Radial progress indicator.',
       allowMultiple: false,
@@ -27,9 +27,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.02, fractionDigits: 2, min: 0.0, max: 1.0),
-          read: (component) => (component as CircularProgressEditorComponent).progressValue,
+          read: (component) => (component as CircularProgressComponent).progress,
           write: (component, value) {
-            (component as CircularProgressEditorComponent).progressValue = (value as num).toDouble();
+            (component as CircularProgressComponent).setProgress(((value as num).toDouble()));
           },
           enumValues: null,
           enumParser: null,
@@ -42,10 +42,8 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as CircularProgressEditorComponent).radius,
-          write: (component, value) {
-            (component as CircularProgressEditorComponent).radius = (value as num).toDouble();
-          },
+          read: (component) => (component as CircularProgressComponent).size.width / 2,
+          write: null,
           enumValues: null,
           enumParser: null,
         ),

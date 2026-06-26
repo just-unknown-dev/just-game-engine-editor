@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'tag_8a41b7f8',
       name: 'Tag',
-      type: 'TagEditorComponent',
+      type: 'TagComponent',
       group: 'Gameplay',
       description: 'String tag for filtering entities.',
       allowMultiple: false,
@@ -26,7 +26,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: false,
           includeInJson: true,
-          read: (component) => (component as TagEditorComponent).tagValue,
+          read: (component) => (component as TagComponent).tag,
           write: null,
           enumValues: null,
           enumParser: null,

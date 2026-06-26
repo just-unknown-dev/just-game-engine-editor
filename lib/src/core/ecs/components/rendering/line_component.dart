@@ -1,4 +1,4 @@
-﻿import 'package:flutter/painting.dart';
+import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_annotations.dart';
@@ -30,19 +30,15 @@ class LineEditorComponent extends LineComponent {
   double get endY => end.dy;
   set endY(double v) => end = Offset(end.dx, v);
 
-  @override
   @EditorField(label: 'Stroke', scrubStep: 0.5, scrubFractionDigits: 1, scrubMin: 0)
-  double get strokeWidth => super.strokeWidth;
-  @override
-  set strokeWidth(double v) => super.strokeWidth = v;
+  double get strokeW => strokeWidth;
+  set strokeW(double v) => super.strokeWidth = v;
 
   @EditorField(label: 'Paint')
   Color get strokeColor => strokeStyle.color;
   set strokeColor(Color v) => strokeStyle = ShapePaintStyle(color: v);
 
-  @override
   @EditorField(label: 'Round')
   bool get roundCaps => super.roundCaps;
-  @override
   set roundCaps(bool v) => super.roundCaps = v;
 }

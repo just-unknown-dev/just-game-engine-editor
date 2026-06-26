@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'input_e2d1c96e',
       name: 'Input',
-      type: 'InputEditorComponent',
+      type: 'InputComponent',
       group: 'Input',
       description: 'Enables keyboard/mouse input on this entity.',
       allowMultiple: false,

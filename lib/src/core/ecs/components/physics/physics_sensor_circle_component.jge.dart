@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'physics_sensor_circle_e9a23cf2',
       name: 'Physics Sensor (Circle)',
-      type: 'PhysicsSensorCircleEditorComponent',
+      type: 'PhysicsBodyComponent',
       group: 'Physics',
       description: 'Static circular sensor body (overlap detection only).',
       allowMultiple: false,

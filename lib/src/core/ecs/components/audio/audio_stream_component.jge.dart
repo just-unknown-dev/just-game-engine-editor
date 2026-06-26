@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'audio_stream_91f6500b',
       name: 'Audio Stream',
-      type: 'AudioStreamEditorComponent',
+      type: 'AudioStreamComponent',
       group: 'Audio',
       description: 'Streaming audio playback.',
       allowMultiple: false,
@@ -26,9 +26,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as AudioStreamEditorComponent).loop,
+          read: (component) => (component as AudioStreamComponent).loop,
           write: (component, value) {
-            (component as AudioStreamEditorComponent).loop = value as bool;
+            (component as AudioStreamComponent).loop = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -40,9 +40,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as AudioStreamEditorComponent).playOnAdd,
+          read: (component) => (component as AudioStreamComponent).playOnAdd,
           write: (component, value) {
-            (component as AudioStreamEditorComponent).playOnAdd = value as bool;
+            (component as AudioStreamComponent).playOnAdd = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -54,7 +54,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: false,
           includeInJson: true,
-          read: (component) => (component as AudioStreamEditorComponent).streamPath,
+          read: (component) => (component as AudioStreamComponent).path,
           write: null,
           enumValues: null,
           enumParser: null,
@@ -67,9 +67,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.05, fractionDigits: 2, min: 0.0, max: 1.0),
-          read: (component) => (component as AudioStreamEditorComponent).volume,
+          read: (component) => (component as AudioStreamComponent).volume,
           write: (component, value) {
-            (component as AudioStreamEditorComponent).volume = (value as num).toDouble();
+            (component as AudioStreamComponent).volume = ((value as num).toDouble()).clamp(0.0, 1.0);
           },
           enumValues: null,
           enumParser: null,

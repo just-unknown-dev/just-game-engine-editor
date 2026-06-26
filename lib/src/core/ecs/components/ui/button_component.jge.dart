@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'button_388d5c40',
       name: 'Button',
-      type: 'ButtonEditorComponent',
+      type: 'ButtonComponent',
       group: 'UI',
       description: 'Interactive button widget.',
       allowMultiple: false,
@@ -27,9 +27,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as ButtonEditorComponent).h,
+          read: (component) => (component as ButtonComponent).size.height,
           write: (component, value) {
-            (component as ButtonEditorComponent).h = (value as num).toDouble();
+            (component as ButtonComponent).size = Size((component as ButtonComponent).size.width, ((value as num).toDouble()));
           },
           enumValues: null,
           enumParser: null,
@@ -41,9 +41,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as ButtonEditorComponent).label,
+          read: (component) => (component as ButtonComponent).text,
           write: (component, value) {
-            (component as ButtonEditorComponent).label = value as String;
+            (component as ButtonComponent).text = (value as String);
           },
           enumValues: null,
           enumParser: null,
@@ -56,9 +56,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as ButtonEditorComponent).w,
+          read: (component) => (component as ButtonComponent).size.width,
           write: (component, value) {
-            (component as ButtonEditorComponent).w = (value as num).toDouble();
+            (component as ButtonComponent).size = Size(((value as num).toDouble()), (component as ButtonComponent).size.height);
           },
           enumValues: null,
           enumParser: null,

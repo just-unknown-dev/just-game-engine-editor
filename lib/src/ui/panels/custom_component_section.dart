@@ -30,6 +30,7 @@ List<Widget> buildCustomComponentSections({
           sceneState.refresh();
         },
         onChanged: () {
+          sceneState.syncEntityNode(entity);
           sceneState.markDirty();
           sceneState.refresh();
         },

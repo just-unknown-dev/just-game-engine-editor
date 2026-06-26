@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'physics_body_capsule_a8e1b7e3',
       name: 'Physics Body (Capsule)',
-      type: 'PhysicsBodyCapsuleEditorComponent',
+      type: 'PhysicsBodyComponent',
       group: 'Physics',
       description: 'Dynamic rigid body with a capsule collision shape.',
       allowMultiple: false,

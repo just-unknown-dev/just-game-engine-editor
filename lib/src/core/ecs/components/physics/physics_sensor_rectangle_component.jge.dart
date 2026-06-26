@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'physics_sensor_rect_fc75383b',
       name: 'Physics Sensor (Rect)',
-      type: 'PhysicsSensorRectangleEditorComponent',
+      type: 'PhysicsBodyComponent',
       group: 'Physics',
       description: 'Static rectangle sensor body (overlap detection only).',
       allowMultiple: false,

@@ -11,13 +11,13 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'capsule_2de9600b',
       name: 'Capsule',
-      type: 'CapsuleEditorComponent',
+      type: 'CapsuleComponent',
       group: 'Rendering',
       description: 'Filled or stroked capsule.',
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => CapsuleEditorComponent(),
+      factory: () => CapsuleComponent(width: 32, height: 64),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'fillColor',
@@ -26,9 +26,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as CapsuleEditorComponent).fillColor,
+          read: (component) => (component as CapsuleComponent).fillStyle.color,
           write: (component, value) {
-            (component as CapsuleEditorComponent).fillColor = value as Color;
+            (component as CapsuleComponent).fillStyle = ShapePaintStyle(color: (value as Color));
           },
           enumValues: null,
           enumParser: null,
@@ -40,24 +40,24 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as CapsuleEditorComponent).filled,
+          read: (component) => (component as CapsuleComponent).filled,
           write: (component, value) {
-            (component as CapsuleEditorComponent).filled = value as bool;
+            (component as CapsuleComponent).filled = (value as bool);
           },
           enumValues: null,
           enumParser: null,
         ),
         EditorComponentField(
-          name: 'height',
+          name: 'h',
           label: 'H',
           kind: EditorFieldKind.decimal,
           visible: true,
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as CapsuleEditorComponent).height,
+          read: (component) => (component as CapsuleComponent).height,
           write: (component, value) {
-            (component as CapsuleEditorComponent).height = (value as num).toDouble();
+            (component as CapsuleComponent).height = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -69,24 +69,24 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as CapsuleEditorComponent).strokeColor,
+          read: (component) => (component as CapsuleComponent).strokeStyle.color,
           write: (component, value) {
-            (component as CapsuleEditorComponent).strokeColor = value as Color;
+            (component as CapsuleComponent).strokeStyle = ShapePaintStyle(color: (value as Color));
           },
           enumValues: null,
           enumParser: null,
         ),
         EditorComponentField(
-          name: 'width',
+          name: 'w',
           label: 'W',
           kind: EditorFieldKind.decimal,
           visible: true,
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as CapsuleEditorComponent).width,
+          read: (component) => (component as CapsuleComponent).width,
           write: (component, value) {
-            (component as CapsuleEditorComponent).width = (value as num).toDouble();
+            (component as CapsuleComponent).width = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,

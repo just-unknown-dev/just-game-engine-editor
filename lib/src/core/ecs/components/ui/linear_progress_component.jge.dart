@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'linear_progress_006125a9',
       name: 'Linear Progress',
-      type: 'LinearProgressEditorComponent',
+      type: 'LinearProgressComponent',
       group: 'UI',
       description: 'Horizontal progress bar.',
       allowMultiple: false,
@@ -27,9 +27,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as LinearProgressEditorComponent).h,
+          read: (component) => (component as LinearProgressComponent).size.height,
           write: (component, value) {
-            (component as LinearProgressEditorComponent).h = (value as num).toDouble();
+            (component as LinearProgressComponent).size = Size((component as LinearProgressComponent).size.width, ((value as num).toDouble()));
           },
           enumValues: null,
           enumParser: null,
@@ -42,9 +42,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.02, fractionDigits: 2, min: 0.0, max: 1.0),
-          read: (component) => (component as LinearProgressEditorComponent).progressValue,
+          read: (component) => (component as LinearProgressComponent).progress,
           write: (component, value) {
-            (component as LinearProgressEditorComponent).progressValue = (value as num).toDouble();
+            (component as LinearProgressComponent).setProgress(((value as num).toDouble()));
           },
           enumValues: null,
           enumParser: null,
@@ -57,9 +57,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as LinearProgressEditorComponent).w,
+          read: (component) => (component as LinearProgressComponent).size.width,
           write: (component, value) {
-            (component as LinearProgressEditorComponent).w = (value as num).toDouble();
+            (component as LinearProgressComponent).size = Size(((value as num).toDouble()), (component as LinearProgressComponent).size.height);
           },
           enumValues: null,
           enumParser: null,

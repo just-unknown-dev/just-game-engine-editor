@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'ui_6018ae16',
       name: 'UI',
-      type: 'UIEditorComponent',
+      type: 'UIComponent',
       group: 'UI',
       description: 'Base UI layout container.',
       allowMultiple: false,
@@ -26,9 +26,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as UIEditorComponent).enabled,
+          read: (component) => (component as UIComponent).enabled,
           write: (component, value) {
-            (component as UIEditorComponent).enabled = value as bool;
+            (component as UIComponent).enabled = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -41,9 +41,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as UIEditorComponent).h,
+          read: (component) => (component as UIComponent).size.height,
           write: (component, value) {
-            (component as UIEditorComponent).h = (value as num).toDouble();
+            (component as UIComponent).size = Size((component as UIComponent).size.width, ((value as num).toDouble()));
           },
           enumValues: null,
           enumParser: null,
@@ -55,9 +55,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as UIEditorComponent).visible,
+          read: (component) => (component as UIComponent).visible,
           write: (component, value) {
-            (component as UIEditorComponent).visible = value as bool;
+            (component as UIComponent).visible = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -70,9 +70,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as UIEditorComponent).w,
+          read: (component) => (component as UIComponent).size.width,
           write: (component, value) {
-            (component as UIEditorComponent).w = (value as num).toDouble();
+            (component as UIComponent).size = Size(((value as num).toDouble()), (component as UIComponent).size.height);
           },
           enumValues: null,
           enumParser: null,

@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'health_cf522cfc',
       name: 'Health',
-      type: 'HealthEditorComponent',
+      type: 'HealthComponent',
       group: 'Gameplay',
       description: 'Hit-point pool with optional invulnerability.',
       allowMultiple: false,
@@ -27,9 +27,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as HealthEditorComponent).hp,
+          read: (component) => (component as HealthComponent).health,
           write: (component, value) {
-            (component as HealthEditorComponent).hp = (value as num).toDouble();
+            (component as HealthComponent).health = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -41,9 +41,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as HealthEditorComponent).invulnerable,
+          read: (component) => (component as HealthComponent).isInvulnerable,
           write: (component, value) {
-            (component as HealthEditorComponent).invulnerable = value as bool;
+            (component as HealthComponent).isInvulnerable = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -56,9 +56,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as HealthEditorComponent).maxHp,
+          read: (component) => (component as HealthComponent).maxHealth,
           write: (component, value) {
-            (component as HealthEditorComponent).maxHp = (value as num).toDouble();
+            (component as HealthComponent).maxHealth = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,

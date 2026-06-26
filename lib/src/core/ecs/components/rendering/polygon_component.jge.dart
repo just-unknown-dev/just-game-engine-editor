@@ -11,13 +11,13 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'polygon_671a97e0',
       name: 'Polygon',
-      type: 'PolygonEditorComponent',
+      type: 'PolygonComponent',
       group: 'Rendering',
       description: 'Filled or stroked polygon.',
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => PolygonEditorComponent(),
+      factory: () => PolygonComponent(vertices: const [Offset(-32, -32), Offset(32, -32), Offset(0, 32)]),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'fillColor',
@@ -26,9 +26,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as PolygonEditorComponent).fillColor,
+          read: (component) => (component as PolygonComponent).fillStyle.color,
           write: (component, value) {
-            (component as PolygonEditorComponent).fillColor = value as Color;
+            (component as PolygonComponent).fillStyle = ShapePaintStyle(color: (value as Color));
           },
           enumValues: null,
           enumParser: null,
@@ -40,9 +40,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as PolygonEditorComponent).filled,
+          read: (component) => (component as PolygonComponent).filled,
           write: (component, value) {
-            (component as PolygonEditorComponent).filled = value as bool;
+            (component as PolygonComponent).filled = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -54,24 +54,24 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as PolygonEditorComponent).strokeColor,
+          read: (component) => (component as PolygonComponent).strokeStyle.color,
           write: (component, value) {
-            (component as PolygonEditorComponent).strokeColor = value as Color;
+            (component as PolygonComponent).strokeStyle = ShapePaintStyle(color: (value as Color));
           },
           enumValues: null,
           enumParser: null,
         ),
         EditorComponentField(
-          name: 'strokeWidth',
+          name: 'strokeW',
           label: 'Stroke',
           kind: EditorFieldKind.decimal,
           visible: true,
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as PolygonEditorComponent).strokeWidth,
+          read: (component) => (component as PolygonComponent).strokeWidth,
           write: (component, value) {
-            (component as PolygonEditorComponent).strokeWidth = (value as num).toDouble();
+            (component as PolygonComponent).strokeWidth = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -83,7 +83,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: false,
           includeInJson: true,
-          read: (component) => (component as PolygonEditorComponent).vertCount,
+          read: (component) => (component as PolygonComponent).vertices.length,
           write: null,
           enumValues: null,
           enumParser: null,

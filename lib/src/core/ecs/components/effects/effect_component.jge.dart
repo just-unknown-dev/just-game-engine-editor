@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'effects_79525c29',
       name: 'Effects',
-      type: 'EffectEditorComponent',
+      type: 'EffectComponent',
       group: 'Effects',
       description: 'Enables the effects system on this entity.',
       allowMultiple: false,

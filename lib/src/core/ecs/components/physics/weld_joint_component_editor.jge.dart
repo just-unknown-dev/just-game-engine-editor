@@ -6,12 +6,13 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotations.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
 import 'weld_joint_component_editor.dart';
+import 'weld_joint_component.dart';
 
 final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'weld_joint_8369677a',
       name: 'Weld Joint',
-      type: 'WeldJointEditorComponent',
+      type: 'WeldJointComponent',
       group: 'Physics',
       description: 'Rigid weld joint linking this entity to targetEntityName.',
       allowMultiple: false,
@@ -26,9 +27,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as WeldJointEditorComponent).collideConnected,
+          read: (component) => (component as WeldJointComponent).collideConnected,
           write: (component, value) {
-            (component as WeldJointEditorComponent).collideConnected = value as bool;
+            (component as WeldJointComponent).collideConnected = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -40,9 +41,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as WeldJointEditorComponent).targetEntityName,
+          read: (component) => (component as WeldJointComponent).targetEntityName,
           write: (component, value) {
-            (component as WeldJointEditorComponent).targetEntityName = value as String;
+            (component as WeldJointComponent).targetEntityName = (value as String).trim();
           },
           enumValues: null,
           enumParser: null,

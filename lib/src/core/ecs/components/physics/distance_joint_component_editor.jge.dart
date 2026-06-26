@@ -6,12 +6,13 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotations.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
 import 'distance_joint_component_editor.dart';
+import 'distance_joint_component.dart';
 
 final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'distance_joint_ed004dd9',
       name: 'Distance Joint',
-      type: 'DistanceJointEditorComponent',
+      type: 'DistanceJointComponent',
       group: 'Physics',
       description: 'Distance/spring joint linking this entity to targetEntityName.',
       allowMultiple: false,
@@ -26,9 +27,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as DistanceJointEditorComponent).collideConnected,
+          read: (component) => (component as DistanceJointComponent).collideConnected,
           write: (component, value) {
-            (component as DistanceJointEditorComponent).collideConnected = value as bool;
+            (component as DistanceJointComponent).collideConnected = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -41,9 +42,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.05, fractionDigits: 2, min: 0.0),
-          read: (component) => (component as DistanceJointEditorComponent).damping,
+          read: (component) => (component as DistanceJointComponent).damping,
           write: (component, value) {
-            (component as DistanceJointEditorComponent).damping = (value as num).toDouble();
+            (component as DistanceJointComponent).damping = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -56,9 +57,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 2, min: 0.0),
-          read: (component) => (component as DistanceJointEditorComponent).length,
+          read: (component) => (component as DistanceJointComponent).length,
           write: (component, value) {
-            (component as DistanceJointEditorComponent).length = (value as num).toDouble();
+            (component as DistanceJointComponent).length = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -71,9 +72,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 2, min: 0.0),
-          read: (component) => (component as DistanceJointEditorComponent).stiffness,
+          read: (component) => (component as DistanceJointComponent).stiffness,
           write: (component, value) {
-            (component as DistanceJointEditorComponent).stiffness = (value as num).toDouble();
+            (component as DistanceJointComponent).stiffness = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -85,9 +86,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as DistanceJointEditorComponent).targetEntityName,
+          read: (component) => (component as DistanceJointComponent).targetEntityName,
           write: (component, value) {
-            (component as DistanceJointEditorComponent).targetEntityName = value as String;
+            (component as DistanceJointComponent).targetEntityName = (value as String).trim();
           },
           enumValues: null,
           enumParser: null,

@@ -11,25 +11,25 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'rectangle_c9214e61',
       name: 'Rectangle',
-      type: 'RectangleEditorComponent',
+      type: 'RectangleComponent',
       group: 'Rendering',
       description: 'Filled or stroked rectangle.',
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => RectangleEditorComponent(),
+      factory: () => RectangleComponent(width: 64, height: 64),
       fields: <EditorComponentField>[
         EditorComponentField(
-          name: 'cornerRadius',
+          name: 'cr',
           label: 'CR',
           kind: EditorFieldKind.decimal,
           visible: true,
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as RectangleEditorComponent).cornerRadius,
+          read: (component) => (component as RectangleComponent).cornerRadius,
           write: (component, value) {
-            (component as RectangleEditorComponent).cornerRadius = (value as num).toDouble();
+            (component as RectangleComponent).cornerRadius = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -41,9 +41,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as RectangleEditorComponent).fillColor,
+          read: (component) => (component as RectangleComponent).fillStyle.color,
           write: (component, value) {
-            (component as RectangleEditorComponent).fillColor = value as Color;
+            (component as RectangleComponent).fillStyle = ShapePaintStyle(color: (value as Color));
           },
           enumValues: null,
           enumParser: null,
@@ -55,24 +55,24 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as RectangleEditorComponent).filled,
+          read: (component) => (component as RectangleComponent).filled,
           write: (component, value) {
-            (component as RectangleEditorComponent).filled = value as bool;
+            (component as RectangleComponent).filled = (value as bool);
           },
           enumValues: null,
           enumParser: null,
         ),
         EditorComponentField(
-          name: 'height',
+          name: 'h',
           label: 'H',
           kind: EditorFieldKind.decimal,
           visible: true,
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as RectangleEditorComponent).height,
+          read: (component) => (component as RectangleComponent).height,
           write: (component, value) {
-            (component as RectangleEditorComponent).height = (value as num).toDouble();
+            (component as RectangleComponent).height = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -84,39 +84,39 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as RectangleEditorComponent).strokeColor,
+          read: (component) => (component as RectangleComponent).strokeStyle.color,
           write: (component, value) {
-            (component as RectangleEditorComponent).strokeColor = value as Color;
+            (component as RectangleComponent).strokeStyle = ShapePaintStyle(color: (value as Color));
           },
           enumValues: null,
           enumParser: null,
         ),
         EditorComponentField(
-          name: 'strokeWidth',
+          name: 'sw',
           label: 'SW',
           kind: EditorFieldKind.decimal,
           visible: true,
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as RectangleEditorComponent).strokeWidth,
+          read: (component) => (component as RectangleComponent).strokeWidth,
           write: (component, value) {
-            (component as RectangleEditorComponent).strokeWidth = (value as num).toDouble();
+            (component as RectangleComponent).strokeWidth = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
         ),
         EditorComponentField(
-          name: 'width',
+          name: 'w',
           label: 'W',
           kind: EditorFieldKind.decimal,
           visible: true,
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as RectangleEditorComponent).width,
+          read: (component) => (component as RectangleComponent).width,
           write: (component, value) {
-            (component as RectangleEditorComponent).width = (value as num).toDouble();
+            (component as RectangleComponent).width = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,

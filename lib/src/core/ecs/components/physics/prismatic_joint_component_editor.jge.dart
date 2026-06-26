@@ -6,12 +6,13 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotations.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
 import 'prismatic_joint_component_editor.dart';
+import 'prismatic_joint_component.dart';
 
 final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'prismatic_joint_12030a86',
       name: 'Prismatic Joint',
-      type: 'PrismaticJointEditorComponent',
+      type: 'PrismaticJointComponent',
       group: 'Physics',
       description: 'Slider joint with optional limits and motor.',
       allowMultiple: false,
@@ -26,9 +27,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as PrismaticJointEditorComponent).axis,
+          read: (component) => (component as PrismaticJointComponent).axis,
           write: (component, value) {
-            (component as PrismaticJointEditorComponent).axis = value as Offset;
+            (component as PrismaticJointComponent).axis = (value as Offset);
           },
           enumValues: null,
           enumParser: null,
@@ -40,9 +41,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as PrismaticJointEditorComponent).collideConnected,
+          read: (component) => (component as PrismaticJointComponent).collideConnected,
           write: (component, value) {
-            (component as PrismaticJointEditorComponent).collideConnected = value as bool;
+            (component as PrismaticJointComponent).collideConnected = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -54,9 +55,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as PrismaticJointEditorComponent).enableLimit,
+          read: (component) => (component as PrismaticJointComponent).enableLimit,
           write: (component, value) {
-            (component as PrismaticJointEditorComponent).enableLimit = value as bool;
+            (component as PrismaticJointComponent).enableLimit = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -68,9 +69,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as PrismaticJointEditorComponent).enableMotor,
+          read: (component) => (component as PrismaticJointComponent).enableMotor,
           write: (component, value) {
-            (component as PrismaticJointEditorComponent).enableMotor = value as bool;
+            (component as PrismaticJointComponent).enableMotor = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -83,9 +84,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 2),
-          read: (component) => (component as PrismaticJointEditorComponent).lowerTranslation,
+          read: (component) => (component as PrismaticJointComponent).lowerTranslation,
           write: (component, value) {
-            (component as PrismaticJointEditorComponent).lowerTranslation = (value as num).toDouble();
+            (component as PrismaticJointComponent).lowerTranslation = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -98,9 +99,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 5.0, fractionDigits: 2, min: 0.0),
-          read: (component) => (component as PrismaticJointEditorComponent).maxMotorForce,
+          read: (component) => (component as PrismaticJointComponent).maxMotorForce,
           write: (component, value) {
-            (component as PrismaticJointEditorComponent).maxMotorForce = (value as num).toDouble();
+            (component as PrismaticJointComponent).maxMotorForce = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -113,9 +114,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.5, fractionDigits: 2),
-          read: (component) => (component as PrismaticJointEditorComponent).motorSpeed,
+          read: (component) => (component as PrismaticJointComponent).motorSpeed,
           write: (component, value) {
-            (component as PrismaticJointEditorComponent).motorSpeed = (value as num).toDouble();
+            (component as PrismaticJointComponent).motorSpeed = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -127,9 +128,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as PrismaticJointEditorComponent).targetEntityName,
+          read: (component) => (component as PrismaticJointComponent).targetEntityName,
           write: (component, value) {
-            (component as PrismaticJointEditorComponent).targetEntityName = value as String;
+            (component as PrismaticJointComponent).targetEntityName = (value as String).trim();
           },
           enumValues: null,
           enumParser: null,
@@ -142,9 +143,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 2),
-          read: (component) => (component as PrismaticJointEditorComponent).upperTranslation,
+          read: (component) => (component as PrismaticJointComponent).upperTranslation,
           write: (component, value) {
-            (component as PrismaticJointEditorComponent).upperTranslation = (value as num).toDouble();
+            (component as PrismaticJointComponent).upperTranslation = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,

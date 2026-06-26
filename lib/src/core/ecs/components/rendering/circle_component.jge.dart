@@ -11,13 +11,13 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'circle_1d72ae60',
       name: 'Circle',
-      type: 'CircleEditorComponent',
+      type: 'CircleComponent',
       group: 'Rendering',
       description: 'Filled or stroked circle.',
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => CircleEditorComponent(),
+      factory: () => CircleComponent(radius: 32),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'fillColor',
@@ -26,9 +26,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as CircleEditorComponent).fillColor,
+          read: (component) => (component as CircleComponent).fillStyle.color,
           write: (component, value) {
-            (component as CircleEditorComponent).fillColor = value as Color;
+            (component as CircleComponent).fillStyle = ShapePaintStyle(color: (value as Color));
           },
           enumValues: null,
           enumParser: null,
@@ -40,9 +40,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as CircleEditorComponent).filled,
+          read: (component) => (component as CircleComponent).filled,
           write: (component, value) {
-            (component as CircleEditorComponent).filled = value as bool;
+            (component as CircleComponent).filled = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -55,9 +55,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as CircleEditorComponent).radius,
+          read: (component) => (component as CircleComponent).radius,
           write: (component, value) {
-            (component as CircleEditorComponent).radius = (value as num).toDouble();
+            (component as CircleComponent).radius = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -69,24 +69,24 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as CircleEditorComponent).strokeColor,
+          read: (component) => (component as CircleComponent).strokeStyle.color,
           write: (component, value) {
-            (component as CircleEditorComponent).strokeColor = value as Color;
+            (component as CircleComponent).strokeStyle = ShapePaintStyle(color: (value as Color));
           },
           enumValues: null,
           enumParser: null,
         ),
         EditorComponentField(
-          name: 'strokeWidth',
+          name: 'sw',
           label: 'SW',
           kind: EditorFieldKind.decimal,
           visible: true,
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as CircleEditorComponent).strokeWidth,
+          read: (component) => (component as CircleComponent).strokeWidth,
           write: (component, value) {
-            (component as CircleEditorComponent).strokeWidth = (value as num).toDouble();
+            (component as CircleComponent).strokeWidth = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,

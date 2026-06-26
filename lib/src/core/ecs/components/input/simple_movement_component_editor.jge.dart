@@ -6,12 +6,13 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotations.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
 import 'simple_movement_component_editor.dart';
+import 'simple_movement_component.dart';
 
 final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'simple_movement_78b8f78a',
       name: 'Simple Movement',
-      type: 'SimpleMovementEditorComponent',
+      type: 'SimpleMovementComponent',
       group: 'Input',
       description: 'Moves Transform from keyboard/joystick direction with a speed scalar.',
       allowMultiple: false,
@@ -27,9 +28,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.01, fractionDigits: 2),
-          read: (component) => (component as SimpleMovementEditorComponent).deadZone,
+          read: (component) => (component as SimpleMovementComponent).deadZone,
           write: (component, value) {
-            (component as SimpleMovementEditorComponent).deadZone = (value as num).toDouble();
+            (component as SimpleMovementComponent).deadZone = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -41,7 +42,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: false,
           editable: false,
           includeInJson: false,
-          read: (component) => (component as SimpleMovementEditorComponent).lastDirection,
+          read: (component) => (component as SimpleMovementComponent).lastDirection,
           write: null,
           enumValues: null,
           enumParser: null,
@@ -53,9 +54,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as SimpleMovementEditorComponent).normalizeDiagonal,
+          read: (component) => (component as SimpleMovementComponent).normalizeDiagonal,
           write: (component, value) {
-            (component as SimpleMovementEditorComponent).normalizeDiagonal = value as bool;
+            (component as SimpleMovementComponent).normalizeDiagonal = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -68,9 +69,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 5.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as SimpleMovementEditorComponent).speed,
+          read: (component) => (component as SimpleMovementComponent).speed,
           write: (component, value) {
-            (component as SimpleMovementEditorComponent).speed = (value as num).toDouble();
+            (component as SimpleMovementComponent).speed = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -82,9 +83,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as SimpleMovementEditorComponent).useJoystick,
+          read: (component) => (component as SimpleMovementComponent).useJoystick,
           write: (component, value) {
-            (component as SimpleMovementEditorComponent).useJoystick = value as bool;
+            (component as SimpleMovementComponent).useJoystick = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -96,9 +97,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as SimpleMovementEditorComponent).useKeyboard,
+          read: (component) => (component as SimpleMovementComponent).useKeyboard,
           write: (component, value) {
-            (component as SimpleMovementEditorComponent).useKeyboard = value as bool;
+            (component as SimpleMovementComponent).useKeyboard = (value as bool);
           },
           enumValues: null,
           enumParser: null,

@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'physics_body_circle_526076f8',
       name: 'Physics Body (Circle)',
-      type: 'PhysicsBodyCircleEditorComponent',
+      type: 'PhysicsBodyComponent',
       group: 'Physics',
       description: 'Dynamic rigid body with a circular collision shape.',
       allowMultiple: false,

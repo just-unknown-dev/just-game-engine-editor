@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'audio_source_111e2e48',
       name: 'Audio Source',
-      type: 'AudioSourceEditorComponent',
+      type: 'AudioSourceComponent',
       group: 'Audio',
       description: 'One-shot audio clip playback.',
       allowMultiple: false,
@@ -26,9 +26,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as AudioSourceEditorComponent).loop,
+          read: (component) => (component as AudioSourceComponent).loop,
           write: (component, value) {
-            (component as AudioSourceEditorComponent).loop = value as bool;
+            (component as AudioSourceComponent).loop = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -40,7 +40,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: false,
           includeInJson: true,
-          read: (component) => (component as AudioSourceEditorComponent).path,
+          read: (component) => (component as AudioSourceComponent).clipPath,
           write: null,
           enumValues: null,
           enumParser: null,
@@ -53,9 +53,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.05, fractionDigits: 2, min: 0.0),
-          read: (component) => (component as AudioSourceEditorComponent).pitch,
+          read: (component) => (component as AudioSourceComponent).pitch,
           write: (component, value) {
-            (component as AudioSourceEditorComponent).pitch = (value as num).toDouble();
+            (component as AudioSourceComponent).pitch = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -67,9 +67,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as AudioSourceEditorComponent).playOnAdd,
+          read: (component) => (component as AudioSourceComponent).playOnAdd,
           write: (component, value) {
-            (component as AudioSourceEditorComponent).playOnAdd = value as bool;
+            (component as AudioSourceComponent).playOnAdd = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -82,9 +82,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.05, fractionDigits: 2, min: 0.0, max: 1.0),
-          read: (component) => (component as AudioSourceEditorComponent).volume,
+          read: (component) => (component as AudioSourceComponent).volume,
           write: (component, value) {
-            (component as AudioSourceEditorComponent).volume = (value as num).toDouble();
+            (component as AudioSourceComponent).volume = ((value as num).toDouble()).clamp(0.0, 1.0);
           },
           enumValues: null,
           enumParser: null,

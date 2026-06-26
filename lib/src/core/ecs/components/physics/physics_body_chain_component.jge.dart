@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'physics_body_chain_02eccc81',
       name: 'Physics Body (Chain)',
-      type: 'PhysicsBodyChainEditorComponent',
+      type: 'PhysicsBodyComponent',
       group: 'Physics',
       description: 'Static chain collider for terrain-like collision paths.',
       allowMultiple: false,

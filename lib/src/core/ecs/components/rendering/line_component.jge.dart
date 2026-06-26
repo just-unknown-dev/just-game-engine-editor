@@ -11,13 +11,13 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'line_5a69b8e2',
       name: 'Line',
-      type: 'LineEditorComponent',
+      type: 'LineComponent',
       group: 'Rendering',
       description: 'A stroked line between two points.',
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => LineEditorComponent(),
+      factory: () => LineComponent(end: const Offset(100, 0)),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'endX',
@@ -27,9 +27,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1),
-          read: (component) => (component as LineEditorComponent).endX,
+          read: (component) => (component as LineComponent).end.dx,
           write: (component, value) {
-            (component as LineEditorComponent).endX = (value as num).toDouble();
+            (component as LineComponent).end = Offset(((value as num).toDouble()), (component as LineComponent).end.dy);
           },
           enumValues: null,
           enumParser: null,
@@ -42,9 +42,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1),
-          read: (component) => (component as LineEditorComponent).endY,
+          read: (component) => (component as LineComponent).end.dy,
           write: (component, value) {
-            (component as LineEditorComponent).endY = (value as num).toDouble();
+            (component as LineComponent).end = Offset((component as LineComponent).end.dx, ((value as num).toDouble()));
           },
           enumValues: null,
           enumParser: null,
@@ -56,9 +56,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as LineEditorComponent).roundCaps,
+          read: (component) => (component as LineComponent).roundCaps,
           write: (component, value) {
-            (component as LineEditorComponent).roundCaps = value as bool;
+            (component as LineComponent).roundCaps = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -71,9 +71,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1),
-          read: (component) => (component as LineEditorComponent).startX,
+          read: (component) => (component as LineComponent).start.dx,
           write: (component, value) {
-            (component as LineEditorComponent).startX = (value as num).toDouble();
+            (component as LineComponent).start = Offset(((value as num).toDouble()), (component as LineComponent).start.dy);
           },
           enumValues: null,
           enumParser: null,
@@ -86,9 +86,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1),
-          read: (component) => (component as LineEditorComponent).startY,
+          read: (component) => (component as LineComponent).start.dy,
           write: (component, value) {
-            (component as LineEditorComponent).startY = (value as num).toDouble();
+            (component as LineComponent).start = Offset((component as LineComponent).start.dx, ((value as num).toDouble()));
           },
           enumValues: null,
           enumParser: null,
@@ -100,24 +100,24 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as LineEditorComponent).strokeColor,
+          read: (component) => (component as LineComponent).strokeStyle.color,
           write: (component, value) {
-            (component as LineEditorComponent).strokeColor = value as Color;
+            (component as LineComponent).strokeStyle = ShapePaintStyle(color: (value as Color));
           },
           enumValues: null,
           enumParser: null,
         ),
         EditorComponentField(
-          name: 'strokeWidth',
+          name: 'strokeW',
           label: 'Stroke',
           kind: EditorFieldKind.decimal,
           visible: true,
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.5, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as LineEditorComponent).strokeWidth,
+          read: (component) => (component as LineComponent).strokeWidth,
           write: (component, value) {
-            (component as LineEditorComponent).strokeWidth = (value as num).toDouble();
+            (component as LineComponent).strokeWidth = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,

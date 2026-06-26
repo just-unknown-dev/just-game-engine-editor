@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'text_effcff19',
       name: 'Text',
-      type: 'TextEditorComponent',
+      type: 'TextComponent',
       group: 'UI',
       description: 'Renders a text label.',
       allowMultiple: false,
@@ -27,9 +27,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as TextEditorComponent).h,
+          read: (component) => (component as TextComponent).size.height,
           write: (component, value) {
-            (component as TextEditorComponent).h = (value as num).toDouble();
+            (component as TextComponent).size = Size((component as TextComponent).size.width, ((value as num).toDouble()));
           },
           enumValues: null,
           enumParser: null,
@@ -41,9 +41,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as TextEditorComponent).textValue,
+          read: (component) => (component as TextComponent).text,
           write: (component, value) {
-            (component as TextEditorComponent).textValue = value as String;
+            (component as TextComponent).text = (value as String);
           },
           enumValues: null,
           enumParser: null,
@@ -56,9 +56,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as TextEditorComponent).w,
+          read: (component) => (component as TextComponent).size.width,
           write: (component, value) {
-            (component as TextEditorComponent).w = (value as num).toDouble();
+            (component as TextComponent).size = Size(((value as num).toDouble()), (component as TextComponent).size.height);
           },
           enumValues: null,
           enumParser: null,

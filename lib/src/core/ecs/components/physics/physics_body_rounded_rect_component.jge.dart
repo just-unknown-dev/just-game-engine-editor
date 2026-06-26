@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'physics_body_rounded_rect_e4a568a0',
       name: 'Physics Body (Rounded Rect)',
-      type: 'PhysicsBodyRoundedRectEditorComponent',
+      type: 'PhysicsBodyComponent',
       group: 'Physics',
       description: 'Dynamic rigid body with rounded rectangle collision.',
       allowMultiple: false,

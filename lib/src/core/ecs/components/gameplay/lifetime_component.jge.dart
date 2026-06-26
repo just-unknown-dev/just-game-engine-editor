@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'lifetime_0ec055c7',
       name: 'Lifetime',
-      type: 'LifetimeEditorComponent',
+      type: 'LifetimeComponent',
       group: 'Gameplay',
       description: 'Destroys the entity after a fixed duration.',
       allowMultiple: false,
@@ -27,7 +27,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: false,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.1, fractionDigits: 2, min: 0.0),
-          read: (component) => (component as LifetimeEditorComponent).duration,
+          read: (component) => (component as LifetimeComponent).initialLifetime,
           write: null,
           enumValues: null,
           enumParser: null,

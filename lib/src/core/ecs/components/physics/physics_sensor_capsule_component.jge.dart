@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'physics_sensor_capsule_2dedb6e5',
       name: 'Physics Sensor (Capsule)',
-      type: 'PhysicsSensorCapsuleEditorComponent',
+      type: 'PhysicsBodyComponent',
       group: 'Physics',
       description: 'Static capsule sensor body (overlap detection only).',
       allowMultiple: false,

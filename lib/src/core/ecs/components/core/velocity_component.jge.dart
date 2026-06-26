@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'velocity_88533db4',
       name: 'Velocity',
-      type: 'VelocityEditorComponent',
+      type: 'VelocityComponent',
       group: 'Core',
       description: 'Linear velocity with an optional max-speed cap.',
       allowMultiple: false,
@@ -27,9 +27,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1, min: 0.0),
-          read: (component) => (component as VelocityEditorComponent).maxSpeed,
+          read: (component) => (component as VelocityComponent).maxSpeed,
           write: (component, value) {
-            (component as VelocityEditorComponent).maxSpeed = (value as num).toDouble();
+            (component as VelocityComponent).maxSpeed = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -42,9 +42,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1),
-          read: (component) => (component as VelocityEditorComponent).velocityX,
+          read: (component) => (component as VelocityComponent).velocity.x,
           write: (component, value) {
-            (component as VelocityEditorComponent).velocityX = (value as num).toDouble();
+            (component as VelocityComponent).setVelocityXY(((value as num).toDouble()), (component as VelocityComponent).velocity.y);
           },
           enumValues: null,
           enumParser: null,
@@ -57,9 +57,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1),
-          read: (component) => (component as VelocityEditorComponent).velocityY,
+          read: (component) => (component as VelocityComponent).velocity.y,
           write: (component, value) {
-            (component as VelocityEditorComponent).velocityY = (value as num).toDouble();
+            (component as VelocityComponent).setVelocityXY((component as VelocityComponent).velocity.x, ((value as num).toDouble()));
           },
           enumValues: null,
           enumParser: null,

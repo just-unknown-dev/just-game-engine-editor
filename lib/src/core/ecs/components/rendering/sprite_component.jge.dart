@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'sprite_1cc5c09b',
       name: 'Sprite',
-      type: 'SpriteEditorComponent',
+      type: 'SpriteComponent',
       group: 'Rendering',
       description: 'Sprite sheet renderer.',
       allowMultiple: false,
@@ -26,9 +26,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as SpriteEditorComponent).flipX,
+          read: (component) => (component as SpriteComponent).flipX,
           write: (component, value) {
-            (component as SpriteEditorComponent).flipX = value as bool;
+            (component as SpriteComponent).flipX = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -40,9 +40,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as SpriteEditorComponent).flipY,
+          read: (component) => (component as SpriteComponent).flipY,
           write: (component, value) {
-            (component as SpriteEditorComponent).flipY = value as bool;
+            (component as SpriteComponent).flipY = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -55,9 +55,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, min: 0.0, integer: true),
-          read: (component) => (component as SpriteEditorComponent).frame,
+          read: (component) => (component as SpriteComponent).frame,
           write: (component, value) {
-            (component as SpriteEditorComponent).frame = (value as num).toInt();
+            (component as SpriteComponent).frame = ((value as num).toInt());
           },
           enumValues: null,
           enumParser: null,
@@ -69,9 +69,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as SpriteEditorComponent).path,
+          read: (component) => (component as SpriteComponent).spritePath,
           write: (component, value) {
-            (component as SpriteEditorComponent).path = value as String;
+            (component as SpriteComponent).spritePath = (value as String);
           },
           enumValues: null,
           enumParser: null,

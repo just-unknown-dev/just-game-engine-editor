@@ -225,6 +225,18 @@ class EditorSceneState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Syncs the scene-graph node for [entity] from its current TransformComponent
+  /// values. Called after any inspector write so the canvas reflects changes.
+  void syncEntityNode(Entity entity) {
+    final transform = entity.getComponent<TransformComponent>();
+    if (transform == null) return;
+    final node = _entityNodeMap[entity.id];
+    if (node == null) return;
+    node.localPosition = transform.position.toOffset();
+    node.localRotation = transform.rotation;
+    node.localScale = (transform.scale.x + transform.scale.y) / 2;
+  }
+
   /// Set [entity]'s position directly (used by inspector text fields).
   void setPosition(Entity entity, Offset position) {
     final transform = entity.getComponent<TransformComponent>();

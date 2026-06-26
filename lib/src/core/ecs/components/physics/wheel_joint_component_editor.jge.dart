@@ -6,12 +6,13 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_annotations.dart';
 import 'package:just_game_engine_editor/src/core/ecs/generator/component_registry.dart';
 import 'wheel_joint_component_editor.dart';
+import 'wheel_joint_component.dart';
 
 final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'wheel_joint_a8fea139',
       name: 'Wheel Joint',
-      type: 'WheelJointEditorComponent',
+      type: 'WheelJointComponent',
       group: 'Physics',
       description: 'Wheel suspension and motor joint.',
       allowMultiple: false,
@@ -26,9 +27,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as WheelJointEditorComponent).collideConnected,
+          read: (component) => (component as WheelJointComponent).collideConnected,
           write: (component, value) {
-            (component as WheelJointEditorComponent).collideConnected = value as bool;
+            (component as WheelJointComponent).collideConnected = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -41,9 +42,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.05, fractionDigits: 2, min: 0.0),
-          read: (component) => (component as WheelJointEditorComponent).damping,
+          read: (component) => (component as WheelJointComponent).damping,
           write: (component, value) {
-            (component as WheelJointEditorComponent).damping = (value as num).toDouble();
+            (component as WheelJointComponent).damping = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -55,9 +56,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as WheelJointEditorComponent).enableMotor,
+          read: (component) => (component as WheelJointComponent).enableMotor,
           write: (component, value) {
-            (component as WheelJointEditorComponent).enableMotor = value as bool;
+            (component as WheelJointComponent).enableMotor = (value as bool);
           },
           enumValues: null,
           enumParser: null,
@@ -70,9 +71,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 5.0, fractionDigits: 2, min: 0.0),
-          read: (component) => (component as WheelJointEditorComponent).maxMotorTorque,
+          read: (component) => (component as WheelJointComponent).maxMotorTorque,
           write: (component, value) {
-            (component as WheelJointEditorComponent).maxMotorTorque = (value as num).toDouble();
+            (component as WheelJointComponent).maxMotorTorque = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -85,9 +86,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.5, fractionDigits: 2),
-          read: (component) => (component as WheelJointEditorComponent).motorSpeed,
+          read: (component) => (component as WheelJointComponent).motorSpeed,
           write: (component, value) {
-            (component as WheelJointEditorComponent).motorSpeed = (value as num).toDouble();
+            (component as WheelJointComponent).motorSpeed = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -100,9 +101,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 2, min: 0.0),
-          read: (component) => (component as WheelJointEditorComponent).stiffness,
+          read: (component) => (component as WheelJointComponent).stiffness,
           write: (component, value) {
-            (component as WheelJointEditorComponent).stiffness = (value as num).toDouble();
+            (component as WheelJointComponent).stiffness = ((value as num).toDouble());
           },
           enumValues: null,
           enumParser: null,
@@ -114,9 +115,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as WheelJointEditorComponent).suspensionAxis,
+          read: (component) => (component as WheelJointComponent).suspensionAxis,
           write: (component, value) {
-            (component as WheelJointEditorComponent).suspensionAxis = value as Offset;
+            (component as WheelJointComponent).suspensionAxis = (value as Offset);
           },
           enumValues: null,
           enumParser: null,
@@ -128,9 +129,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           visible: true,
           editable: true,
           includeInJson: true,
-          read: (component) => (component as WheelJointEditorComponent).targetEntityName,
+          read: (component) => (component as WheelJointComponent).targetEntityName,
           write: (component, value) {
-            (component as WheelJointEditorComponent).targetEntityName = value as String;
+            (component as WheelJointComponent).targetEntityName = (value as String).trim();
           },
           enumValues: null,
           enumParser: null,

@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'physics_body_polygon_804a6518',
       name: 'Physics Body (Polygon)',
-      type: 'PhysicsBodyPolygonEditorComponent',
+      type: 'PhysicsBodyComponent',
       group: 'Physics',
       description: 'Dynamic rigid body with a convex polygon collision shape.',
       allowMultiple: false,

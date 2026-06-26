@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'transform_5b740729',
       name: 'Transform',
-      type: 'TransformEditorComponent',
+      type: 'TransformComponent',
       group: 'Core',
       description: 'Position, rotation, and scale.',
       allowMultiple: false,
@@ -27,9 +27,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1),
-          read: (component) => (component as TransformEditorComponent).posX,
+          read: (component) => (component as TransformComponent).position.x,
           write: (component, value) {
-            (component as TransformEditorComponent).posX = (value as num).toDouble();
+            (component as TransformComponent).position = Vector3(((value as num).toDouble()), (component as TransformComponent).position.y, (component as TransformComponent).position.z);
           },
           enumValues: null,
           enumParser: null,
@@ -42,9 +42,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1),
-          read: (component) => (component as TransformEditorComponent).posY,
+          read: (component) => (component as TransformComponent).position.y,
           write: (component, value) {
-            (component as TransformEditorComponent).posY = (value as num).toDouble();
+            (component as TransformComponent).position = Vector3((component as TransformComponent).position.x, ((value as num).toDouble()), (component as TransformComponent).position.z);
           },
           enumValues: null,
           enumParser: null,
@@ -57,9 +57,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 1.0, fractionDigits: 1),
-          read: (component) => (component as TransformEditorComponent).rotation,
+          read: (component) => (component as TransformComponent).rotation * 180 / 3.14159265,
           write: (component, value) {
-            (component as TransformEditorComponent).rotation = (value as num).toDouble();
+            (component as TransformComponent).rotation = ((value as num).toDouble()) * 3.14159265 / 180;
           },
           enumValues: null,
           enumParser: null,
@@ -72,9 +72,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.05, fractionDigits: 3),
-          read: (component) => (component as TransformEditorComponent).scaleX,
+          read: (component) => (component as TransformComponent).scale.x,
           write: (component, value) {
-            (component as TransformEditorComponent).scaleX = (value as num).toDouble();
+            (component as TransformComponent).scale = Vector3(((value as num).toDouble()), (component as TransformComponent).scale.y, (component as TransformComponent).scale.z);
           },
           enumValues: null,
           enumParser: null,
@@ -87,9 +87,9 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
           editable: true,
           includeInJson: true,
           scrubConfig: const NumberScrubConfig(step: 0.05, fractionDigits: 3),
-          read: (component) => (component as TransformEditorComponent).scaleY,
+          read: (component) => (component as TransformComponent).scale.y,
           write: (component, value) {
-            (component as TransformEditorComponent).scaleY = (value as num).toDouble();
+            (component as TransformComponent).scale = Vector3((component as TransformComponent).scale.x, ((value as num).toDouble()), (component as TransformComponent).scale.z);
           },
           enumValues: null,
           enumParser: null,

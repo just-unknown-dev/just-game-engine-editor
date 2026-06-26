@@ -11,7 +11,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
     EditorComponentDescriptor(
       id: 'physics_body_segment_03c88561',
       name: 'Physics Body (Segment)',
-      type: 'PhysicsBodySegmentEditorComponent',
+      type: 'PhysicsBodyComponent',
       group: 'Physics',
       description: 'Static line segment collider, useful for ramps/platforms.',
       allowMultiple: false,
