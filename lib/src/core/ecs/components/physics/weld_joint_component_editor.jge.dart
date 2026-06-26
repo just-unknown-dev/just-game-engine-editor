@@ -18,7 +18,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.editor,
-      factory: () => WeldJointEditorComponent(),
+      factory: () => WeldJointComponent(),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'collideConnected',

@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => ButtonEditorComponent(),
+      factory: () => ButtonComponent(text: 'Button', size: const Size(120, 40)),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'h',

@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => LinearProgressEditorComponent(),
+      factory: () => LinearProgressComponent(size: const Size(200, 20)),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'h',

@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => LifetimeEditorComponent(),
+      factory: () => LifetimeComponent(1.0),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'duration',

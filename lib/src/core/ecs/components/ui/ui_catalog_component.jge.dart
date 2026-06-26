@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => UIEditorComponent(),
+      factory: () => UIComponent(size: const Size(100, 40)),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'enabled',

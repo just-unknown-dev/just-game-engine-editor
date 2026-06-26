@@ -18,7 +18,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.editor,
-      factory: () => PrismaticJointEditorComponent(),
+      factory: () => PrismaticJointComponent(),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'axis',

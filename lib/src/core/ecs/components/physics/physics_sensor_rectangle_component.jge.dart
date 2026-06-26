@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => PhysicsSensorRectangleEditorComponent(),
+      factory: () => PhysicsBodyComponent(shape: RectangleShape(50, 50), isSensor: true),
       fields: <EditorComponentField>[
       ],
     );

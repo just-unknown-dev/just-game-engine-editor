@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => PhysicsBodyChainEditorComponent(),
+      factory: () => PhysicsBodyComponent(shape: ChainShape(const [Offset(-50, 0), Offset(0, -30), Offset(50, 0)]), isStatic: true),
       fields: <EditorComponentField>[
       ],
     );

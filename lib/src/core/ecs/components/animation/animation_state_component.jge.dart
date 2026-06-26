@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => AnimationStateEditorComponent(),
+      factory: () => AnimationStateComponent(currentAnimation: 'idle'),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'animName',

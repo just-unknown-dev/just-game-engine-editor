@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => PhysicsBodyCircleEditorComponent(),
+      factory: () => PhysicsBodyComponent(shape: CircleShape(25)),
       fields: <EditorComponentField>[
       ],
     );

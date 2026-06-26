@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => PhysicsBodyRectangleEditorComponent(),
+      factory: () => PhysicsBodyComponent(shape: RectangleShape(50, 50)),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'categoryBits',

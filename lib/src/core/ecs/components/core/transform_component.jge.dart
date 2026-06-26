@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: false,
       componentType: ComponentType.core,
-      factory: () => TransformEditorComponent(),
+      factory: () => TransformComponent(),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'posX',

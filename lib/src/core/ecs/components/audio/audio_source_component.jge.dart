@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => AudioSourceEditorComponent(),
+      factory: () => AudioSourceComponent(clipPath: ''),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'loop',

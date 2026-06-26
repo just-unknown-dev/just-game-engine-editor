@@ -18,7 +18,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.editor,
-      factory: () => SimpleMovementEditorComponent(),
+      factory: () => SimpleMovementComponent(),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'deadZone',

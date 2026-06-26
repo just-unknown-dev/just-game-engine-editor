@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => PhysicsBodyPolygonEditorComponent(),
+      factory: () => PhysicsBodyComponent(shape: PolygonShape(const [Offset(-25, -25), Offset(25, -25), Offset(0, 25)])),
       fields: <EditorComponentField>[
       ],
     );

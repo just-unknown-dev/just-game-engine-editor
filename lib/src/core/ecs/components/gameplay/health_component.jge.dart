@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => HealthEditorComponent(),
+      factory: () => HealthComponent(maxHealth: 100),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'hp',

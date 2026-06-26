@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => CircularProgressEditorComponent(),
+      factory: () => CircularProgressComponent(radius: 30),
       fields: <EditorComponentField>[
         EditorComponentField(
           name: 'progressValue',

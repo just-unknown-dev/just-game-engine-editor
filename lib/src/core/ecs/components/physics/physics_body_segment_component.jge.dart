@@ -17,7 +17,7 @@ final EditorComponentDescriptor _$editorComponentDescriptor0 =
       allowMultiple: false,
       deletable: true,
       componentType: ComponentType.core,
-      factory: () => PhysicsBodySegmentEditorComponent(),
+      factory: () => PhysicsBodyComponent(shape: SegmentShape(const Offset(-50, 0), const Offset(50, 0)), isStatic: true),
       fields: <EditorComponentField>[
       ],
     );
