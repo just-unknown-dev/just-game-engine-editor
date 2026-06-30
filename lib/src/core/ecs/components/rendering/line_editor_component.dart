@@ -69,8 +69,8 @@ class LineEditorComponent extends EditorComponent {
           EditorComponentField(
             name: 'strokeColor',
             label: 'Paint',
-            kind: EditorFieldKind.color,
-            read: (c) => (c as LineComponent).strokeStyle.color,
+            kind: EditorFieldKind.shapePaintStyle,
+            read: (c) => (c as LineComponent).strokeStyle,
             write: (c, v) => (c as LineComponent).strokeStyle =
                 ShapePaintStyle(color: v as Color),
           ),

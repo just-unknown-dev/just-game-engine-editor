@@ -50,16 +50,16 @@ class CapsuleEditorComponent extends EditorComponent {
           EditorComponentField(
             name: 'fillColor',
             label: 'Fill',
-            kind: EditorFieldKind.color,
-            read: (c) => (c as CapsuleComponent).fillStyle.color,
+            kind: EditorFieldKind.shapePaintStyle,
+            read: (c) => (c as CapsuleComponent).fillStyle,
             write: (c, v) => (c as CapsuleComponent).fillStyle =
                 ShapePaintStyle(color: v as Color),
           ),
           EditorComponentField(
             name: 'strokeColor',
             label: 'Stroke',
-            kind: EditorFieldKind.color,
-            read: (c) => (c as CapsuleComponent).strokeStyle.color,
+            kind: EditorFieldKind.shapePaintStyle,
+            read: (c) => (c as CapsuleComponent).strokeStyle,
             write: (c, v) => (c as CapsuleComponent).strokeStyle =
                 ShapePaintStyle(color: v as Color),
           ),

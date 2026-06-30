@@ -60,16 +60,16 @@ class RectangleEditorComponent extends EditorComponent {
           EditorComponentField(
             name: 'fillColor',
             label: 'Fill',
-            kind: EditorFieldKind.color,
-            read: (c) => (c as RectangleComponent).fillStyle.color,
+            kind: EditorFieldKind.shapePaintStyle,
+            read: (c) => (c as RectangleComponent).fillStyle,
             write: (c, v) => (c as RectangleComponent).fillStyle =
                 ShapePaintStyle(color: v as Color),
           ),
           EditorComponentField(
             name: 'strokeColor',
             label: 'Stroke',
-            kind: EditorFieldKind.color,
-            read: (c) => (c as RectangleComponent).strokeStyle.color,
+            kind: EditorFieldKind.shapePaintStyle,
+            read: (c) => (c as RectangleComponent).strokeStyle,
             write: (c, v) => (c as RectangleComponent).strokeStyle =
                 ShapePaintStyle(color: v as Color),
           ),

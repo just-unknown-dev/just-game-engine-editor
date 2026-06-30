@@ -1,6 +1,8 @@
-import 'dart:convert';
+﻿import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:just_colours/just_colours.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../core/ecs/generator/component_registry.dart';
@@ -146,8 +148,9 @@ class CustomComponentSection extends StatelessWidget {
   }
 
   List<Widget> _buildGroupedFields(List<EditorFieldGroup> groups) {
-    final visibleGroups =
-        groups.where((g) => g.fields.any((f) => f.visible)).toList();
+    final visibleGroups = groups
+        .where((g) => g.fields.any((f) => f.visible))
+        .toList();
 
     if (visibleGroups.isEmpty) {
       return [
@@ -342,12 +345,30 @@ class _EditorFieldControl extends StatelessWidget {
             }
           },
         );
+      case EditorFieldKind.color:
+        final colorStyle = value is Color
+            ? jge.ShapePaintStyle(color: value as Color)
+            : const jge.ShapePaintStyle();
+        return _ColorEditorRow(
+          label: label,
+          paintStyle: colorStyle,
+          onChanged: (s) => onChanged(s.color),
+        );
+      case EditorFieldKind.shapePaintStyle:
+        final paintStyle = value is jge.ShapePaintStyle
+            ? value as jge.ShapePaintStyle
+            : const jge.ShapePaintStyle();
+        return _ColorEditorRow(
+          label: label,
+          paintStyle: paintStyle,
+          supportsGradient: true,
+          onChanged: (s) => onChanged(s),
+        );
       case EditorFieldKind.text:
       case EditorFieldKind.list:
       case EditorFieldKind.map:
       case EditorFieldKind.vector2:
       case EditorFieldKind.vector3:
-      case EditorFieldKind.color:
       case EditorFieldKind.offset:
       case EditorFieldKind.unknown:
         return _TextEditorRow(
@@ -393,6 +414,11 @@ class _EditorFieldControl extends StatelessWidget {
         if (value is Color) {
           final hex = value.toARGB32().toRadixString(16).padLeft(8, '0');
           return '#${hex.toUpperCase()}';
+        }
+        return value.toString();
+      case EditorFieldKind.shapePaintStyle:
+        if (value is jge.ShapePaintStyle) {
+          return value.gradient != null ? 'Gradient' : '#${value.color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
         }
         return value.toString();
       case EditorFieldKind.boolean:
@@ -459,6 +485,7 @@ class _EditorFieldControl extends StatelessWidget {
         final argb = int.tryParse(normalized, radix: 16);
         if (argb == null) return previous;
         return Color(argb);
+      case EditorFieldKind.shapePaintStyle:
       case EditorFieldKind.boolean:
       case EditorFieldKind.enumeration:
       case EditorFieldKind.unknown:
@@ -467,7 +494,167 @@ class _EditorFieldControl extends StatelessWidget {
   }
 }
 
+// ── Colour ↔ ShapePaintStyle bridge ──────────────────────────────────────────
+
+jge.ShapePaintStyle _selectionToShapePaintStyle(ColourSelection sel) {
+  if (!sel.useGradient) return jge.ShapePaintStyle(color: sel.color);
+  final cfg = sel.gradient;
+  final colors = cfg.colors.isEmpty ? [sel.color] : cfg.colors;
+  jge.ShapeGradient gradient;
+  switch (cfg.type) {
+    case GradientType.linear:
+      final rad = cfg.angle * math.pi / 180;
+      gradient = jge.ShapeGradient.linear(
+        colors: colors,
+        stops: cfg.stops,
+        begin: Alignment(math.cos(rad + math.pi), math.sin(rad + math.pi)),
+        end: Alignment(math.cos(rad), math.sin(rad)),
+        tileMode: cfg.tileMode,
+      );
+    case GradientType.radial:
+      gradient = jge.ShapeGradient.radial(
+        colors: colors,
+        stops: cfg.stops,
+        center: cfg.center,
+        radius: cfg.radius,
+        tileMode: cfg.tileMode,
+      );
+    case GradientType.sweep:
+      gradient = jge.ShapeGradient.sweep(
+        colors: colors,
+        stops: cfg.stops,
+        center: cfg.center,
+        tileMode: cfg.tileMode,
+      );
+  }
+  return jge.ShapePaintStyle(color: sel.color, gradient: gradient);
+}
+
+ColourSelection _shapePaintStyleToSelection(jge.ShapePaintStyle style) {
+  final g = style.gradient;
+  if (g == null) return ColourSelection(color: style.color);
+  GradientType type;
+  switch (g.kind) {
+    case jge.ShapeGradientKind.linear:
+      type = GradientType.linear;
+    case jge.ShapeGradientKind.radial:
+      type = GradientType.radial;
+    case jge.ShapeGradientKind.sweep:
+      type = GradientType.sweep;
+  }
+  final angle = type == GradientType.linear
+      ? math.atan2(
+          g.end is Alignment ? (g.end as Alignment).y : 0.0,
+          g.end is Alignment ? (g.end as Alignment).x : 1.0,
+        ) * 180 / math.pi
+      : 0.0;
+  return ColourSelection(
+    color: style.color,
+    useGradient: true,
+    gradient: GradientConfig(
+      type: type,
+      colors: g.colors,
+      stops: g.stops,
+      angle: angle,
+      center: g.center is Alignment ? g.center as Alignment : Alignment.center,
+      radius: g.radius,
+      tileMode: g.tileMode,
+    ),
+  );
+}
+
 // ── Row widgets ───────────────────────────────────────────────────────────────
+
+class _ColorEditorRow extends StatelessWidget {
+  const _ColorEditorRow({
+    required this.label,
+    required this.paintStyle,
+    required this.onChanged,
+    this.supportsGradient = false,
+  });
+
+  final String label;
+  final jge.ShapePaintStyle paintStyle;
+  final ValueChanged<jge.ShapePaintStyle> onChanged;
+  final bool supportsGradient;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasGradient = supportsGradient && paintStyle.gradient != null;
+    final gradColors = paintStyle.gradient?.colors ?? [];
+    final hex =
+        '#${paintStyle.color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
+
+    return Row(
+      children: [
+        SizedBox(
+          width: 96,
+          child: Text(
+            label,
+            style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+          ),
+        ),
+        Expanded(
+          child: InkWell(
+            onTap: () async {
+              final initial = _shapePaintStyleToSelection(paintStyle);
+              final picked = await JustColourDialog.show(
+                context,
+                initialSelection: initial,
+                view: supportsGradient
+                    ? ColourDialogView.both
+                    : ColourDialogView.colourOnly,
+              );
+              if (picked != null) onChanged(_selectionToShapePaintStyle(picked));
+            },
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: EditorTheme.inputBg,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: EditorTheme.border),
+              ),
+              child: Row(
+                children: [
+                  // Swatch: gradient preview or solid colour
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: hasGradient ? null : paintStyle.color,
+                      gradient: hasGradient && gradColors.length >= 2
+                          ? LinearGradient(colors: gradColors.take(2).toList())
+                          : null,
+                      borderRadius: BorderRadius.circular(3),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.25),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    hasGradient ? 'Gradient' : hex,
+                    style: const TextStyle(
+                      color: EditorTheme.textPrimary,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const Spacer(),
+                  const Icon(
+                    Icons.colorize_rounded,
+                    size: 13,
+                    color: EditorTheme.primaryMuted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _ReadonlyRow extends StatelessWidget {
   const _ReadonlyRow({required this.label, required this.value});

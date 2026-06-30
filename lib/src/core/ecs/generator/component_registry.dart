@@ -33,6 +33,7 @@ enum EditorFieldKind {
   vector3,
   color,
   offset,
+  shapePaintStyle,
   unknown,
 }
 
@@ -144,10 +145,8 @@ class CustomComponentRegistry {
 
   static final CustomComponentRegistry instance = CustomComponentRegistry._();
 
-  final Map<String, EditorComponent> _byId =
-      <String, EditorComponent>{};
-  final Map<String, EditorComponent> _byType =
-      <String, EditorComponent>{};
+  final Map<String, EditorComponent> _byId = <String, EditorComponent>{};
+  final Map<String, EditorComponent> _byType = <String, EditorComponent>{};
 
   List<EditorComponent> get descriptors =>
       List<EditorComponent>.unmodifiable(_byId.values);
@@ -170,11 +169,9 @@ class CustomComponentRegistry {
 
   EditorComponent? descriptorById(String id) => _byId[id];
 
-  EditorComponent? descriptorByType(Type type) =>
-      _byType[type.toString()];
+  EditorComponent? descriptorByType(Type type) => _byType[type.toString()];
 
-  EditorComponent? descriptorByTypeName(String typeName) =>
-      _byType[typeName];
+  EditorComponent? descriptorByTypeName(String typeName) => _byType[typeName];
 
   EditorComponent? descriptorForComponent(jge.Component component) =>
       _byType[component.runtimeType.toString()];
@@ -242,6 +239,36 @@ class CustomComponentRegistry {
         return value;
       case EditorFieldKind.enumeration:
         return value.toString().split('.').last;
+      case EditorFieldKind.shapePaintStyle:
+        if (value is jge.ShapePaintStyle) {
+          final g = value.gradient;
+          return <String, dynamic>{
+            'color': value.color.toARGB32(),
+            if (g != null)
+              'gradient': <String, dynamic>{
+                'kind': g.kind.name,
+                'colors': g.colors.map((c) => c.toARGB32()).toList(),
+                if (g.stops != null) 'stops': g.stops,
+                'beginX': g.begin is Alignment
+                    ? (g.begin as Alignment).x
+                    : -1.0,
+                'beginY': g.begin is Alignment ? (g.begin as Alignment).y : 0.0,
+                'endX': g.end is Alignment ? (g.end as Alignment).x : 1.0,
+                'endY': g.end is Alignment ? (g.end as Alignment).y : 0.0,
+                'centerX': g.center is Alignment
+                    ? (g.center as Alignment).x
+                    : 0.0,
+                'centerY': g.center is Alignment
+                    ? (g.center as Alignment).y
+                    : 0.0,
+                'radius': g.radius,
+                'startAngle': g.startAngle,
+                'endAngle': g.endAngle,
+                'tileMode': g.tileMode.index,
+              },
+          };
+        }
+        return value;
       case EditorFieldKind.list:
       case EditorFieldKind.map:
       case EditorFieldKind.boolean:
@@ -289,6 +316,69 @@ class CustomComponentRegistry {
         return value;
       case EditorFieldKind.decimal:
         if (value is num) return value.toDouble();
+        return value;
+      case EditorFieldKind.shapePaintStyle:
+        if (value is Map) {
+          final m = value.cast<String, dynamic>();
+          final color = Color((m['color'] as num?)?.toInt() ?? 0xFFFFFFFF);
+          final gMap = m['gradient'] as Map<String, dynamic>?;
+          if (gMap == null) return jge.ShapePaintStyle(color: color);
+          final kindName = gMap['kind'] as String? ?? 'linear';
+          final kind = jge.ShapeGradientKind.values.firstWhere(
+            (k) => k.name == kindName,
+            orElse: () => jge.ShapeGradientKind.linear,
+          );
+          final colors = ((gMap['colors'] as List?)?.cast<dynamic>() ?? [])
+              .map((e) => Color((e as num).toInt()))
+              .toList();
+          final stops = (gMap['stops'] as List?)
+              ?.map((e) => (e as num).toDouble())
+              .toList();
+          final tileIdx = (gMap['tileMode'] as num?)?.toInt() ?? 0;
+          final tileMode =
+              TileMode.values[tileIdx.clamp(0, TileMode.values.length - 1)];
+          jge.ShapeGradient gradient;
+          switch (kind) {
+            case jge.ShapeGradientKind.linear:
+              gradient = jge.ShapeGradient.linear(
+                colors: colors.isEmpty ? [color] : colors,
+                stops: stops,
+                begin: Alignment(
+                  _toDouble(gMap['beginX']),
+                  _toDouble(gMap['beginY']),
+                ),
+                end: Alignment(
+                  _toDouble(gMap['endX'] ?? 1.0),
+                  _toDouble(gMap['endY']),
+                ),
+                tileMode: tileMode,
+              );
+            case jge.ShapeGradientKind.radial:
+              gradient = jge.ShapeGradient.radial(
+                colors: colors.isEmpty ? [color] : colors,
+                stops: stops,
+                center: Alignment(
+                  _toDouble(gMap['centerX']),
+                  _toDouble(gMap['centerY']),
+                ),
+                radius: _toDouble(gMap['radius'] ?? 0.5),
+                tileMode: tileMode,
+              );
+            case jge.ShapeGradientKind.sweep:
+              gradient = jge.ShapeGradient.sweep(
+                colors: colors.isEmpty ? [color] : colors,
+                stops: stops,
+                center: Alignment(
+                  _toDouble(gMap['centerX']),
+                  _toDouble(gMap['centerY']),
+                ),
+                startAngle: _toDouble(gMap['startAngle']),
+                endAngle: _toDouble(gMap['endAngle'] ?? 6.283185307),
+                tileMode: tileMode,
+              );
+          }
+          return jge.ShapePaintStyle(color: color, gradient: gradient);
+        }
         return value;
       case EditorFieldKind.list:
       case EditorFieldKind.map:
