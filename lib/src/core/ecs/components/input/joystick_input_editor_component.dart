@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kJoystickInputEditorComponent =
-    EditorComponentDescriptor(
+class JoystickInputEditorComponent extends EditorComponent {
+  JoystickInputEditorComponent()
+    : super(
       id: 'joystick_input_ae2e7fcb',
       name: 'Joystick Input',
       type: 'JoystickInputComponent',
@@ -17,4 +18,5 @@ final EditorComponentDescriptor kJoystickInputEditorComponent =
       accentColor: const Color(0xFFEF5350),
       factory: () => JoystickInputComponent(),
       fields: const [],
-    );
+      );
+}

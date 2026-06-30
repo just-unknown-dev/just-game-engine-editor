@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kCapsuleEditorComponent =
-    EditorComponentDescriptor(
+class CapsuleEditorComponent extends EditorComponent {
+  CapsuleEditorComponent()
+    : super(
       id: 'capsule_2de9600b',
       name: 'Capsule',
       type: 'CapsuleComponent',
@@ -64,4 +65,5 @@ final EditorComponentDescriptor kCapsuleEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

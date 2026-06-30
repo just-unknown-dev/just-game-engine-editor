@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../generator/component_registry.dart';
 import 'distance_joint_component.dart';
 
-final EditorComponentDescriptor kDistanceJointEditorComponent =
-    EditorComponentDescriptor(
+class DistanceJointEditorComponent extends EditorComponent {
+  DistanceJointEditorComponent()
+    : super(
       id: 'distance_joint_ed004dd9',
       name: 'Distance Joint',
       type: 'DistanceJointComponent',
@@ -67,4 +68,5 @@ final EditorComponentDescriptor kDistanceJointEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

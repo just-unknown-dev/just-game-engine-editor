@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kPhysicsSensorCircleEditorComponent =
-    EditorComponentDescriptor(
+class PhysicsSensorCircleEditorComponent extends EditorComponent {
+  PhysicsSensorCircleEditorComponent()
+    : super(
       id: 'physics_sensor_circle_e9a23cf2',
       name: 'Physics Sensor (Circle)',
       type: 'PhysicsBodyComponent',
@@ -24,4 +25,5 @@ final EditorComponentDescriptor kPhysicsSensorCircleEditorComponent =
         drag: 0.98,
       ),
       fields: const [],
-    );
+      );
+}

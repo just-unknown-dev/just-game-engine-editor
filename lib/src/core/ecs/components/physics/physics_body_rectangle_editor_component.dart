@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
@@ -6,8 +6,9 @@ import '../../generator/component_registry.dart';
 // Shared fields used by all PhysicsBodyComponent variants.
 // Register this descriptor LAST among physics bodies so the inspector
 // uses it for all runtime PhysicsBodyComponent instances.
-final EditorComponentDescriptor kPhysicsBodyRectEditorComponent =
-    EditorComponentDescriptor(
+class PhysicsBodyRectEditorComponent extends EditorComponent {
+  PhysicsBodyRectEditorComponent()
+    : super(
       id: 'physics_body_rect_552c5849',
       name: 'Physics Body (Rect)',
       type: 'PhysicsBodyComponent',
@@ -128,4 +129,5 @@ final EditorComponentDescriptor kPhysicsBodyRectEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

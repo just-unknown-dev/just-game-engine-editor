@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kPolygonEditorComponent =
-    EditorComponentDescriptor(
+class PolygonEditorComponent extends EditorComponent {
+  PolygonEditorComponent()
+    : super(
       id: 'polygon_671a97e0',
       name: 'Polygon',
       type: 'PolygonComponent',
@@ -64,4 +65,5 @@ final EditorComponentDescriptor kPolygonEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

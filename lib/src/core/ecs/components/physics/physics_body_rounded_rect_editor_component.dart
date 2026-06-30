@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kPhysicsBodyRoundedRectEditorComponent =
-    EditorComponentDescriptor(
+class PhysicsBodyRoundedRectEditorComponent extends EditorComponent {
+  PhysicsBodyRoundedRectEditorComponent()
+    : super(
       id: 'physics_body_rounded_rect_e4a568a0',
       name: 'Physics Body (Rounded Rect)',
       type: 'PhysicsBodyComponent',
@@ -23,4 +24,5 @@ final EditorComponentDescriptor kPhysicsBodyRoundedRectEditorComponent =
         drag: 0.98,
       ),
       fields: const [],
-    );
+      );
+}

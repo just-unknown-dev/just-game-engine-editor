@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kChildrenEditorComponent =
-    EditorComponentDescriptor(
+class ChildrenEditorComponent extends EditorComponent {
+  ChildrenEditorComponent()
+    : super(
       id: 'children_b35c783e',
       name: 'Children',
       type: 'ChildrenComponent',
@@ -17,4 +18,5 @@ final EditorComponentDescriptor kChildrenEditorComponent =
       accentColor: const Color(0xFF26A69A),
       factory: () => ChildrenComponent(),
       fields: const [],
-    );
+      );
+}

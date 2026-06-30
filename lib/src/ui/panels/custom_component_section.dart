@@ -49,7 +49,7 @@ class CustomComponentSection extends StatelessWidget {
   });
 
   final jge.Component component;
-  final EditorComponentDescriptor descriptor;
+  final EditorComponent descriptor;
   final VoidCallback onDelete;
   final VoidCallback onChanged;
 

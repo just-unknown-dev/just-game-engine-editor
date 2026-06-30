@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kCameraFollowEditorComponent =
-    EditorComponentDescriptor(
+class CameraFollowEditorComponent extends EditorComponent {
+  CameraFollowEditorComponent()
+    : super(
       id: 'camera_follow_168e2c1e',
       name: 'Camera Follow',
       type: 'CameraFollowComponent',
@@ -34,4 +35,5 @@ final EditorComponentDescriptor kCameraFollowEditorComponent =
               (c as CameraFollowComponent).lookaheadDistance = (v as num).toDouble(),
         ),
       ],
-    );
+      );
+}

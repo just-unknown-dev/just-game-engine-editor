@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kTagEditorComponent =
-    EditorComponentDescriptor(
+class TagEditorComponent extends EditorComponent {
+  TagEditorComponent()
+    : super(
       id: 'tag_8a41b7f8',
       name: 'Tag',
       type: 'TagComponent',
@@ -25,4 +26,5 @@ final EditorComponentDescriptor kTagEditorComponent =
           read: (c) => (c as TagComponent).tag,
         ),
       ],
-    );
+      );
+}

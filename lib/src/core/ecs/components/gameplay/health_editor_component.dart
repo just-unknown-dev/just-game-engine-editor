@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kHealthEditorComponent =
-    EditorComponentDescriptor(
+class HealthEditorComponent extends EditorComponent {
+  HealthEditorComponent()
+    : super(
       id: 'health_cf522cfc',
       name: 'Health',
       type: 'HealthComponent',
@@ -49,4 +50,5 @@ final EditorComponentDescriptor kHealthEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../generator/component_registry.dart';
 import 'prismatic_joint_component.dart';
 
-final EditorComponentDescriptor kPrismaticJointEditorComponent =
-    EditorComponentDescriptor(
+class PrismaticJointEditorComponent extends EditorComponent {
+  PrismaticJointEditorComponent()
+    : super(
       id: 'prismatic_joint_12030a86',
       name: 'Prismatic Joint',
       type: 'PrismaticJointComponent',
@@ -104,4 +105,5 @@ final EditorComponentDescriptor kPrismaticJointEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

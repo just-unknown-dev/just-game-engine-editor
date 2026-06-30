@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kPhysicsBodyChainEditorComponent =
-    EditorComponentDescriptor(
+class PhysicsBodyChainEditorComponent extends EditorComponent {
+  PhysicsBodyChainEditorComponent()
+    : super(
       id: 'physics_body_chain_02eccc81',
       name: 'Physics Body (Chain)',
       type: 'PhysicsBodyComponent',
@@ -29,4 +30,5 @@ final EditorComponentDescriptor kPhysicsBodyChainEditorComponent =
         drag: 0.98,
       ),
       fields: const [],
-    );
+      );
+}

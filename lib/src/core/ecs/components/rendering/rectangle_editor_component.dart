@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kRectangleEditorComponent =
-    EditorComponentDescriptor(
+class RectangleEditorComponent extends EditorComponent {
+  RectangleEditorComponent()
+    : super(
       id: 'rectangle_c9214e61',
       name: 'Rectangle',
       type: 'RectangleComponent',
@@ -83,4 +84,5 @@ final EditorComponentDescriptor kRectangleEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

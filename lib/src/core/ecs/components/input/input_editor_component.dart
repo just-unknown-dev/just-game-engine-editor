@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kInputEditorComponent =
-    EditorComponentDescriptor(
+class InputEditorComponent extends EditorComponent {
+  InputEditorComponent()
+    : super(
       id: 'input_e2d1c96e',
       name: 'Input',
       type: 'InputComponent',
@@ -17,4 +18,5 @@ final EditorComponentDescriptor kInputEditorComponent =
       accentColor: const Color(0xFFEF5350),
       factory: () => InputComponent(),
       fields: const [],
-    );
+      );
+}

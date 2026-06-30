@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kLineEditorComponent =
-    EditorComponentDescriptor(
+class LineEditorComponent extends EditorComponent {
+  LineEditorComponent()
+    : super(
       id: 'line_5a69b8e2',
       name: 'Line',
       type: 'LineComponent',
@@ -91,4 +92,5 @@ final EditorComponentDescriptor kLineEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

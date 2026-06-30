@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kAudioStreamEditorComponent =
-    EditorComponentDescriptor(
+class AudioStreamEditorComponent extends EditorComponent {
+  AudioStreamEditorComponent()
+    : super(
       id: 'audio_stream_91f6500b',
       name: 'Audio Stream',
       type: 'AudioStreamComponent',
@@ -54,4 +55,5 @@ final EditorComponentDescriptor kAudioStreamEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

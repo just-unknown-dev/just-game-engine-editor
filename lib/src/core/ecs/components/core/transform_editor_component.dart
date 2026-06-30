@@ -1,12 +1,13 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kTransformEditorComponent =
-    EditorComponentDescriptor(
+class TransformEditorComponent extends EditorComponent {
+  TransformEditorComponent()
+    : super(
       id: 'transform_5b740729',
       name: 'Transform',
       type: 'TransformComponent',
@@ -80,4 +81,5 @@ final EditorComponentDescriptor kTransformEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

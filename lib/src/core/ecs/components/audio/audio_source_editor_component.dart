@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kAudioSourceEditorComponent =
-    EditorComponentDescriptor(
+class AudioSourceEditorComponent extends EditorComponent {
+  AudioSourceEditorComponent()
+    : super(
       id: 'audio_source_111e2e48',
       name: 'Audio Source',
       type: 'AudioSourceComponent',
@@ -63,4 +64,5 @@ final EditorComponentDescriptor kAudioSourceEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

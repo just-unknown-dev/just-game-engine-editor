@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kCircleEditorComponent =
-    EditorComponentDescriptor(
+class CircleEditorComponent extends EditorComponent {
+  CircleEditorComponent()
+    : super(
       id: 'circle_1d72ae60',
       name: 'Circle',
       type: 'CircleComponent',
@@ -64,4 +65,5 @@ final EditorComponentDescriptor kCircleEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

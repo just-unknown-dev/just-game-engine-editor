@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kPhysicsBodyPolygonEditorComponent =
-    EditorComponentDescriptor(
+class PhysicsBodyPolygonEditorComponent extends EditorComponent {
+  PhysicsBodyPolygonEditorComponent()
+    : super(
       id: 'physics_body_polygon_804a6518',
       name: 'Physics Body (Polygon)',
       type: 'PhysicsBodyComponent',
@@ -29,4 +30,5 @@ final EditorComponentDescriptor kPhysicsBodyPolygonEditorComponent =
         drag: 0.98,
       ),
       fields: const [],
-    );
+      );
+}

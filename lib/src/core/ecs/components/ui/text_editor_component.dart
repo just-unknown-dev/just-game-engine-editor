@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kTextEditorComponent =
-    EditorComponentDescriptor(
+class TextEditorComponent extends EditorComponent {
+  TextEditorComponent()
+    : super(
       id: 'text_effcff19',
       name: 'Text',
       type: 'TextComponent',
@@ -52,4 +53,5 @@ final EditorComponentDescriptor kTextEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

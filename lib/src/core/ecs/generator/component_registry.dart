@@ -91,8 +91,8 @@ enum ComponentType {
 }
 
 /// Runtime descriptor for one component type.
-class EditorComponentDescriptor {
-  const EditorComponentDescriptor({
+class EditorComponent {
+  const EditorComponent({
     required this.id,
     required this.name,
     required this.type,
@@ -144,39 +144,39 @@ class CustomComponentRegistry {
 
   static final CustomComponentRegistry instance = CustomComponentRegistry._();
 
-  final Map<String, EditorComponentDescriptor> _byId =
-      <String, EditorComponentDescriptor>{};
-  final Map<String, EditorComponentDescriptor> _byType =
-      <String, EditorComponentDescriptor>{};
+  final Map<String, EditorComponent> _byId =
+      <String, EditorComponent>{};
+  final Map<String, EditorComponent> _byType =
+      <String, EditorComponent>{};
 
-  List<EditorComponentDescriptor> get descriptors =>
-      List<EditorComponentDescriptor>.unmodifiable(_byId.values);
+  List<EditorComponent> get descriptors =>
+      List<EditorComponent>.unmodifiable(_byId.values);
 
   void clear() {
     _byId.clear();
     _byType.clear();
   }
 
-  void register(EditorComponentDescriptor descriptor) {
+  void register(EditorComponent descriptor) {
     _byId[descriptor.id] = descriptor;
     _byType[descriptor.type] = descriptor;
   }
 
-  void registerAll(Iterable<EditorComponentDescriptor> descriptors) {
+  void registerAll(Iterable<EditorComponent> descriptors) {
     for (final descriptor in descriptors) {
       register(descriptor);
     }
   }
 
-  EditorComponentDescriptor? descriptorById(String id) => _byId[id];
+  EditorComponent? descriptorById(String id) => _byId[id];
 
-  EditorComponentDescriptor? descriptorByType(Type type) =>
+  EditorComponent? descriptorByType(Type type) =>
       _byType[type.toString()];
 
-  EditorComponentDescriptor? descriptorByTypeName(String typeName) =>
+  EditorComponent? descriptorByTypeName(String typeName) =>
       _byType[typeName];
 
-  EditorComponentDescriptor? descriptorForComponent(jge.Component component) =>
+  EditorComponent? descriptorForComponent(jge.Component component) =>
       _byType[component.runtimeType.toString()];
 
   Map<String, dynamic>? componentToJson(jge.Component component) {

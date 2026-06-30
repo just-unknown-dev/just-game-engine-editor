@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kVelocityEditorComponent =
-    EditorComponentDescriptor(
+class VelocityEditorComponent extends EditorComponent {
+  VelocityEditorComponent()
+    : super(
       id: 'velocity_88533db4',
       name: 'Velocity',
       type: 'VelocityComponent',
@@ -54,4 +55,5 @@ final EditorComponentDescriptor kVelocityEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

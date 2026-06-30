@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kEffectEditorComponent =
-    EditorComponentDescriptor(
+class EffectEditorComponent extends EditorComponent {
+  EffectEditorComponent()
+    : super(
       id: 'effects_79525c29',
       name: 'Effects',
       type: 'EffectComponent',
@@ -17,4 +18,5 @@ final EditorComponentDescriptor kEffectEditorComponent =
       accentColor: const Color(0xFFFF4081),
       factory: () => EffectComponent(),
       fields: const [],
-    );
+      );
+}

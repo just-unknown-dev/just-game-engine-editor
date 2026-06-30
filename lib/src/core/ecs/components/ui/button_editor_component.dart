@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kButtonEditorComponent =
-    EditorComponentDescriptor(
+class ButtonEditorComponent extends EditorComponent {
+  ButtonEditorComponent()
+    : super(
       id: 'button_388d5c40',
       name: 'Button',
       type: 'ButtonComponent',
@@ -52,4 +53,5 @@ final EditorComponentDescriptor kButtonEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

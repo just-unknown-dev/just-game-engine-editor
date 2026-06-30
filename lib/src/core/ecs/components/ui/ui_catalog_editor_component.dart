@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kUICatalogEditorComponent =
-    EditorComponentDescriptor(
+class UICatalogEditorComponent extends EditorComponent {
+  UICatalogEditorComponent()
+    : super(
       id: 'ui_6018ae16',
       name: 'UI',
       type: 'UIComponent',
@@ -59,4 +60,5 @@ final EditorComponentDescriptor kUICatalogEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

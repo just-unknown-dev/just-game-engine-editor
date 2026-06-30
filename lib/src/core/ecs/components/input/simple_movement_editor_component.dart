@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../generator/component_registry.dart';
 import 'simple_movement_component.dart';
 
-final EditorComponentDescriptor kSimpleMovementEditorComponent =
-    EditorComponentDescriptor(
+class SimpleMovementEditorComponent extends EditorComponent {
+  SimpleMovementEditorComponent()
+    : super(
       id: 'simple_movement_78b8f78a',
       name: 'Simple Movement',
       type: 'SimpleMovementComponent',
@@ -66,4 +67,5 @@ final EditorComponentDescriptor kSimpleMovementEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

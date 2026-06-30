@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../generator/component_registry.dart';
 import 'weld_joint_component.dart';
 
-final EditorComponentDescriptor kWeldJointEditorComponent =
-    EditorComponentDescriptor(
+class WeldJointEditorComponent extends EditorComponent {
+  WeldJointEditorComponent()
+    : super(
       id: 'weld_joint_8369677a',
       name: 'Weld Joint',
       type: 'WeldJointComponent',
@@ -34,4 +35,5 @@ final EditorComponentDescriptor kWeldJointEditorComponent =
               (c as WeldJointComponent).collideConnected = v as bool,
         ),
       ],
-    );
+      );
+}

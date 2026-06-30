@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kPhysicsSensorCapsuleEditorComponent =
-    EditorComponentDescriptor(
+class PhysicsSensorCapsuleEditorComponent extends EditorComponent {
+  PhysicsSensorCapsuleEditorComponent()
+    : super(
       id: 'physics_sensor_capsule_2dedb6e5',
       name: 'Physics Sensor (Capsule)',
       type: 'PhysicsBodyComponent',
@@ -28,4 +29,5 @@ final EditorComponentDescriptor kPhysicsSensorCapsuleEditorComponent =
         drag: 0.98,
       ),
       fields: const [],
-    );
+      );
+}

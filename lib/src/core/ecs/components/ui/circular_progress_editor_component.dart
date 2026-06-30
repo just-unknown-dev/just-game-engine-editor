@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../generator/component_registry.dart';
 
-final EditorComponentDescriptor kCircularProgressEditorComponent =
-    EditorComponentDescriptor(
+class CircularProgressEditorComponent extends EditorComponent {
+  CircularProgressEditorComponent()
+    : super(
       id: 'circular_progress_d287c579',
       name: 'Circular Progress',
       type: 'CircularProgressComponent',
@@ -40,4 +41,5 @@ final EditorComponentDescriptor kCircularProgressEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}

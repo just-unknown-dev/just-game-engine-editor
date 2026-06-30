@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../generator/component_registry.dart';
 import 'wheel_joint_component.dart';
 
-final EditorComponentDescriptor kWheelJointEditorComponent =
-    EditorComponentDescriptor(
+class WheelJointEditorComponent extends EditorComponent {
+  WheelJointEditorComponent()
+    : super(
       id: 'wheel_joint_a8fea139',
       name: 'Wheel Joint',
       type: 'WheelJointComponent',
@@ -94,4 +95,5 @@ final EditorComponentDescriptor kWheelJointEditorComponent =
           ),
         ]),
       ],
-    );
+      );
+}
