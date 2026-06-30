@@ -1,7 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
-
-import 'component_annotations.dart';
 
 /// Drag-to-scrub configuration for numeric inspector fields.
 class NumberScrubConfig {
@@ -20,6 +18,22 @@ class NumberScrubConfig {
   final double? min;
   final double? max;
   final bool integer;
+}
+
+/// Strongly typed kind used by editor controls and JSON conversion.
+enum EditorFieldKind {
+  boolean,
+  integer,
+  decimal,
+  text,
+  enumeration,
+  list,
+  map,
+  vector2,
+  vector3,
+  color,
+  offset,
+  unknown,
 }
 
 /// Runtime descriptor for one component property.
@@ -57,6 +71,14 @@ class EditorComponentField {
   String get displayLabel => (label == null || label!.isEmpty) ? name : label!;
 }
 
+/// A named group of fields shown as a sub-section inside the inspector.
+class EditorFieldGroup {
+  const EditorFieldGroup({required this.name, required this.fields});
+
+  final String name;
+  final List<EditorComponentField> fields;
+}
+
 enum ComponentType {
   /// Wraps a component from the game engine package.
   core,
@@ -66,24 +88,24 @@ enum ComponentType {
 
   /// Reserved for future use.
   experimental,
-
-  /// Defined inside the user's project.
-  custom,
 }
 
-/// Runtime descriptor for one custom component type.
+/// Runtime descriptor for one component type.
 class EditorComponentDescriptor {
   const EditorComponentDescriptor({
     required this.id,
     required this.name,
     required this.type,
     required this.factory,
-    required this.fields,
+    this.fields = const [],
+    this.fieldGroups,
     this.group,
     this.description,
     this.allowMultiple = false,
     this.deletable = true,
-    this.componentType = ComponentType.custom,
+    this.componentType = ComponentType.core,
+    this.icon,
+    this.accentColor,
   });
 
   final String id;
@@ -95,10 +117,28 @@ class EditorComponentDescriptor {
   final bool deletable;
   final ComponentType componentType;
   final jge.Component Function() factory;
+
+  /// Flat field list — used directly when [fieldGroups] is null.
   final List<EditorComponentField> fields;
+
+  /// Optional sub-groups; when set the inspector renders a header per group.
+  final List<EditorFieldGroup>? fieldGroups;
+
+  /// Icon shown in the component picker row and inspector header.
+  final IconData? icon;
+
+  /// Accent colour applied to the inspector header bar.
+  final Color? accentColor;
+
+  /// All fields flattened: direct [fields] + all fields from [fieldGroups].
+  List<EditorComponentField> get allFields => [
+    ...fields,
+    if (fieldGroups != null)
+      for (final g in fieldGroups!) ...g.fields,
+  ];
 }
 
-/// Global registry consumed by runtime/editor for custom components.
+/// Global registry consumed by runtime/editor for component descriptors.
 class CustomComponentRegistry {
   CustomComponentRegistry._();
 
@@ -144,7 +184,7 @@ class CustomComponentRegistry {
     if (descriptor == null) return null;
 
     final fieldsJson = <String, dynamic>{};
-    for (final field in descriptor.fields) {
+    for (final field in descriptor.allFields) {
       if (!field.includeInJson) continue;
       final rawValue = field.read(component);
       fieldsJson[field.name] = _encodeValue(field, rawValue);
@@ -169,7 +209,7 @@ class CustomComponentRegistry {
         (json['fields'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
 
-    for (final field in resolved.fields) {
+    for (final field in resolved.allFields) {
       final writer = field.write;
       if (writer == null) continue;
       if (!fieldsJson.containsKey(field.name)) continue;

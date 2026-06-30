@@ -1,5 +1,4 @@
 export 'plugin/editor_plugin.dart';
-export 'ecs/generator/component_annotations.dart';
 export 'ecs/generator/component_registry.dart';
 export 'ecs/components/physics/physics_joint_components.dart';
 export 'ecs/components/input/simple_movement_component.dart';

@@ -7,7 +7,7 @@ import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../debugger/engine_debugger.dart';
-import '../ecs/components/editor_components_registrant.jge.dart';
+import '../ecs/components/editor_components_registrant.dart';
 import '../ecs/systems/editor_log_capture_system.dart';
 import '../ecs/systems/physics_body_binding_system.dart';
 import '../ecs/systems/physics_joint_binding_system.dart';
@@ -192,7 +192,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   /// descriptors from a previous build are removed before the new ones land.
   void _runComponentRegistrar() {
     CustomComponentRegistry.instance.clear();
-    registerAllEditorCustomComponents();
+    registerAllEditorComponents();
     // Call all static project registrants (registered via
     // JustGameEditorPlugin.registerProjectComponents).
     for (final fn in _staticProjectRegistrants) {

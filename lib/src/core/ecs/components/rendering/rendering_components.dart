@@ -1,6 +1,6 @@
-export 'rectangle_component.dart';
-export 'circle_component.dart';
-export 'capsule_component.dart';
-export 'sprite_component.dart';
-export 'line_component.dart';
-export 'polygon_component.dart';
+export 'rectangle_editor_component.dart';
+export 'circle_editor_component.dart';
+export 'capsule_editor_component.dart';
+export 'sprite_editor_component.dart';
+export 'line_editor_component.dart';
+export 'polygon_editor_component.dart';

@@ -1,2 +1,2 @@
-export 'transform_component.dart';
-export 'velocity_component.dart';
+export 'transform_editor_component.dart';
+export 'velocity_editor_component.dart';

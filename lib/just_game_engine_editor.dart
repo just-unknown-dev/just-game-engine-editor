@@ -1,6 +1,5 @@
 library;
 
-export 'src/core/ecs/generator/component_annotations.dart';
 export 'src/core/ecs/generator/component_registry.dart';
 export 'src/ui/dialogs/add_component_picker.dart';
 export 'src/core/ecs/components/input/simple_movement_component.dart';

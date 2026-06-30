@@ -1,1 +1,1 @@
-export 'animation_state_component.dart';
+export 'animation_state_editor_component.dart';

@@ -1,1 +1,1 @@
-export 'effect_component.dart';
+export 'effect_editor_component.dart';
