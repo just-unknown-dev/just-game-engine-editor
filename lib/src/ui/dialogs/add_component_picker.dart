@@ -190,8 +190,8 @@ class _AddComponentPickerState extends State<AddComponentPicker>
         category: 'generate-one',
         details: outputBuffer.isNotEmpty ? outputBuffer.toString().trim() : null,
       );
-      // Write/update the project-level registrant so the descriptor is
-      // available on the next hot-reload.
+      // Write/update the project-level registrant so the new .jge.dart
+      // self-registers on the next hot-reload.
       final jgePath = entry.sourcePath!.replaceFirst('.dart', '.jge.dart');
       final registrantPath = _writeProjectRegistrant(jgePath);
 
@@ -200,9 +200,10 @@ class _AddComponentPickerState extends State<AddComponentPicker>
       if (refreshed == null) {
         final hint = registrantPath != null
             ? 'Registrant written to:\n  $registrantPath\n\n'
-                'Add this to your app startup:\n'
-                '  plugin.componentRegistrar = registerCustomComponents;\n\n'
-                'Then hot-reload to complete registration.'
+                'ONE-TIME SETUP — add ONE import to your app (e.g. main.dart):\n\n'
+                "  import '<path>/generated_component_registrant.dart';\n\n"
+                'No function calls needed. Importing the file is enough.\n'
+                'After that, every new component is auto-registered on hot-reload.'
             : 'Expected type: ${entry.componentTypeName ?? "(unknown)"}\n'
                 'Registered: ${CustomComponentRegistry.instance.descriptors.map((d) => d.type).join(", ")}';
         log.log(
@@ -320,32 +321,39 @@ class _AddComponentPickerState extends State<AddComponentPicker>
         )
         ..writeln('// Re-generated whenever a custom component is added.')
         ..writeln('// ignore_for_file: type=lint, unused_import')
+        ..writeln()
+        ..writeln('// ── ONE-TIME SETUP ──────────────────────────────────')
+        ..writeln('//')
+        ..writeln('// Add ONE import to your app startup (e.g. main.dart):')
+        ..writeln('//')
+        ..writeln("// import 'path/to/this/generated_component_registrant.dart';")
+        ..writeln('//')
+        ..writeln('// That is ALL. No function calls needed.')
+        ..writeln('// Each component self-registers the moment this file')
+        ..writeln('// is imported. Every new component added after that')
+        ..writeln('// is automatically included here and registered on')
+        ..writeln('// the next hot-reload.')
+        ..writeln('// ─────────────────────────────────────────────────────')
         ..writeln();
 
+      // Each .jge.dart file self-registers when imported (via _$registered).
+      // Importing this registrant is ALL that's needed — no function call.
       for (var i = 0; i < jgeFiles.length; i++) {
         final name = p.basename(jgeFiles[i].path);
-        buf.writeln("import '$name' as _c$i;");
+        buf.writeln("import '$name';  // self-registers on import");
       }
 
+      // Named function kept for backward compatibility and explicit use.
       buf
         ..writeln()
         ..writeln(
           '/// Registers all project custom component descriptors.',
         )
-        ..writeln(
-          '/// Call this once inside `plugin.componentRegistrar`:',
-        )
-        ..writeln('///')
-        ..writeln(
-          "///   plugin.componentRegistrar = registerCustomComponents;",
-        )
-        ..writeln('void registerCustomComponents([dynamic registry]) {');
-
-      for (var i = 0; i < jgeFiles.length; i++) {
-        buf.writeln('  _c$i.registerGeneratedCustomComponents(registry);');
-      }
-
-      buf.writeln('}');
+        ..writeln('/// Importing this file is sufficient — this function')
+        ..writeln('/// is provided only for explicit/legacy call sites.')
+        ..writeln('void registerCustomComponents([dynamic registry]) {')
+        ..writeln('  // Registration already happened on import.')
+        ..writeln('}');
 
       final registrantPath =
           p.join(dir, 'generated_component_registrant.dart');

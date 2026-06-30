@@ -54,6 +54,16 @@ final List<EditorComponentDescriptor> _generatedEditorComponentDescriptors =
       _$editorComponentDescriptor0,
     ];
 
+// Registers all descriptors on first import of this file.
+// ignore: unused_element
+final bool _$registered = () {
+  CustomComponentRegistry.instance.registerAll(
+    _generatedEditorComponentDescriptors,
+  );
+  return true;
+}();
+
+// Legacy named function kept for backward compatibility.
 void registerGeneratedCustomComponents([CustomComponentRegistry? registry]) {
   final target = registry ?? CustomComponentRegistry.instance;
   target.registerAll(_generatedEditorComponentDescriptors);

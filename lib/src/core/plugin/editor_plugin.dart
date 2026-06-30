@@ -51,6 +51,35 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   /// successful component codegen refresh.
   final VoidCallback? componentRegistrar;
 
+  // ── Static project-component registration ──────────────────────────────────
+
+  static final List<VoidCallback> _staticProjectRegistrants = [];
+
+  /// Registers [fn] as a project-level component registrant.
+  ///
+  /// Call this **once** at app startup, before or after the plugin is
+  /// created. The editor calls [fn] automatically on every
+  /// [reassemble] (hot-reload) so newly generated descriptors are
+  /// picked up without any extra setup.
+  ///
+  /// Typical usage:
+  /// ```dart
+  /// // Import your generated registrant once:
+  /// import 'game/custom_components/generated_component_registrant.dart';
+  ///
+  /// JustGameEditorPlugin.registerProjectComponents(registerCustomComponents);
+  /// ```
+  static void registerProjectComponents(VoidCallback fn) {
+    if (!_staticProjectRegistrants.contains(fn)) {
+      _staticProjectRegistrants.add(fn);
+    }
+  }
+
+  /// Removes a previously registered project-component registrant.
+  static void unregisterProjectComponents(VoidCallback fn) {
+    _staticProjectRegistrants.remove(fn);
+  }
+
   final LogicalKeyboardKey _toggleKey;
   final LogicalKeyboardKey _statusPanelToggleKey;
   final JustDebuggerController debuggerController;
@@ -164,6 +193,12 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   void _runComponentRegistrar() {
     CustomComponentRegistry.instance.clear();
     registerAllEditorCustomComponents();
+    // Call all static project registrants (registered via
+    // JustGameEditorPlugin.registerProjectComponents).
+    for (final fn in _staticProjectRegistrants) {
+      fn();
+    }
+    // Legacy per-instance callback for backward compatibility.
     componentRegistrar?.call();
     logService.log(
       'Custom component registries reloaded.',
