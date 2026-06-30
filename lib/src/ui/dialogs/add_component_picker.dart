@@ -28,6 +28,7 @@ class _AddComponentPickerState extends State<AddComponentPicker>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
   final TextEditingController _searchCtrl = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
   String _query = '';
 
   late final AnimationController _animCtrl;
@@ -50,6 +51,7 @@ class _AddComponentPickerState extends State<AddComponentPicker>
   void dispose() {
     _animCtrl.dispose();
     _searchCtrl.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -57,6 +59,9 @@ class _AddComponentPickerState extends State<AddComponentPicker>
     setState(() => _expanded = !_expanded);
     if (_expanded) {
       _animCtrl.forward();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchFocus.requestFocus();
+      });
     } else {
       _animCtrl.reverse();
       _searchCtrl.clear();
@@ -149,6 +154,7 @@ class _AddComponentPickerState extends State<AddComponentPicker>
           sizeFactor: _heightFactor,
           child: _PickerList(
             searchCtrl: _searchCtrl,
+            searchFocus: _searchFocus,
             filtered: _filtered,
             existingTypes: _existingTypes,
             onAdd: _addComponent,
@@ -164,12 +170,14 @@ class _AddComponentPickerState extends State<AddComponentPicker>
 class _PickerList extends StatelessWidget {
   const _PickerList({
     required this.searchCtrl,
+    required this.searchFocus,
     required this.filtered,
     required this.existingTypes,
     required this.onAdd,
   });
 
   final TextEditingController searchCtrl;
+  final FocusNode searchFocus;
   final List<ComponentEntry> filtered;
   final Set<String> existingTypes;
   final void Function(ComponentEntry) onAdd;
@@ -197,7 +205,7 @@ class _PickerList extends StatelessWidget {
             padding: const EdgeInsets.all(8),
             child: TextField(
               controller: searchCtrl,
-              autofocus: true,
+              focusNode: searchFocus,
               style: const TextStyle(
                 color: EditorTheme.textPrimary,
                 fontSize: 12,
