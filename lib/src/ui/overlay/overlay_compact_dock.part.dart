@@ -29,6 +29,9 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
   bool _isSettingsOpen = false;
   bool _isLogsPanelOpen = false;
   double _logsPanelHeight = 280.0;
+  bool _isAssetsPanelOpen = false;
+  double _assetsPanelHeight = 280.0;
+  int _assetFileCount = 0;
 
   GlobalKey _anchorKeyFor(_StatusMetricId metric) {
     return _anchorKeys.putIfAbsent(metric, GlobalKey.new);
@@ -38,6 +41,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
     setState(() {
       _isSettingsOpen = false;
       _isLogsPanelOpen = false;
+      _isAssetsPanelOpen = false;
       _selectedMetric = _selectedMetric == metric ? null : metric;
     });
   }
@@ -47,6 +51,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
       _selectedMetric = null;
       _isSettingsOpen = false;
       _isLogsPanelOpen = false;
+      _isAssetsPanelOpen = false;
     });
   }
 
@@ -59,6 +64,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
     setState(() {
       _selectedMetric = null;
       _isLogsPanelOpen = false;
+      _isAssetsPanelOpen = false;
       _isSettingsOpen = !_isSettingsOpen;
     });
   }
@@ -67,7 +73,17 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
     setState(() {
       _selectedMetric = null;
       _isSettingsOpen = false;
+      _isAssetsPanelOpen = false;
       _isLogsPanelOpen = !_isLogsPanelOpen;
+    });
+  }
+
+  void _toggleAssetsPanel() {
+    setState(() {
+      _selectedMetric = null;
+      _isSettingsOpen = false;
+      _isLogsPanelOpen = false;
+      _isAssetsPanelOpen = !_isAssetsPanelOpen;
     });
   }
 
@@ -80,10 +96,31 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
     });
   }
 
+  void _onAssetsPanelResize(double dy) {
+    setState(() {
+      _assetsPanelHeight = (_assetsPanelHeight - dy).clamp(
+        120.0,
+        (widget.maxDetailHeight * 0.75).clamp(120.0, 600.0),
+      );
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     _loadPersistedSettings();
+    _scanAssetFileCount();
+  }
+
+  Future<void> _scanAssetFileCount() async {
+    final dir = Directory('${Directory.current.path}/assets');
+    if (!await dir.exists()) return;
+    int count = 0;
+    await for (final entity in dir.list(recursive: true, followLinks: false)) {
+      if (entity is File) count++;
+    }
+    if (!mounted) return;
+    setState(() => _assetFileCount = count);
   }
 
   Future<void> _loadPersistedSettings() async {
@@ -205,6 +242,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
         final dockHeight =
             _CompactStatusDock._panelHeight +
             (_isLogsPanelOpen ? _logsPanelHeight : 0.0) +
+            (_isAssetsPanelOpen ? _assetsPanelHeight : 0.0) +
             (floatingPanelHeight > 0 ? floatingPanelHeight + 12.0 : 0.0);
 
         return ValueListenableBuilder<_OverlayUiSettings>(
@@ -324,6 +362,18 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                                         onTap: (_) => _toggleLogsPanel(),
                                         settings: settings,
                                       ),
+                                      _StatusSeparator(settings: settings),
+                                      _StatusMetricButton(
+                                        metric: _StatusMetricId.assets,
+                                        anchorKey: _anchorKeyFor(
+                                          _StatusMetricId.assets,
+                                        ),
+                                        value: '$_assetFileCount files',
+                                        accent: const Color(0xFF7DD8E0),
+                                        isSelected: _isAssetsPanelOpen,
+                                        onTap: (_) => _toggleAssetsPanel(),
+                                        settings: settings,
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -351,6 +401,18 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                           height: _logsPanelHeight,
                           onResize: _onLogsPanelResize,
                           onClose: _toggleLogsPanel,
+                          settings: settings,
+                        ),
+                      ),
+                    if (_isAssetsPanelOpen)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: _CompactStatusDock._panelHeight,
+                        child: _DockAssetsPanel(
+                          height: _assetsPanelHeight,
+                          onResize: _onAssetsPanelResize,
+                          onClose: _toggleAssetsPanel,
                           settings: settings,
                         ),
                       ),

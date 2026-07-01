@@ -200,6 +200,12 @@ class _StatusDetailCard extends StatelessWidget {
           ),
         ],
       ),
+      _StatusDetailSection.assets => const TextSpan(
+        style: TextStyle(fontSize: 9, color: EditorTheme.textMuted),
+        children: <InlineSpan>[
+          TextSpan(text: 'File system browser'),
+        ],
+      ),
     };
   }
 
@@ -221,6 +227,7 @@ class _StatusDetailCard extends StatelessWidget {
         controller: controller,
         settings: settings,
       ),
+      _StatusDetailSection.assets => const SizedBox.shrink(),
     };
   }
 }

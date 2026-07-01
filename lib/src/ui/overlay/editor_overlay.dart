@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -22,6 +23,7 @@ part 'overlay_settings_dialog.part.dart';
 part 'overlay_shared_widgets.part.dart';
 part 'overlay_compact_dock.part.dart';
 part 'overlay_dock_logs_panel.part.dart';
+part 'overlay_dock_assets_panel.part.dart';
 part 'overlay_detail_cards.part.dart';
 part 'overlay_right_panel.part.dart';
 part 'overlay_snackbar.part.dart';
@@ -260,7 +262,7 @@ extension on _SettingsThemePreset {
   };
 }
 
-enum _StatusMetricId { fps, entities, memory, logs }
+enum _StatusMetricId { fps, entities, memory, logs, assets }
 
 extension on _StatusMetricId {
   _StatusDetailSection get section => switch (this) {
@@ -268,6 +270,7 @@ extension on _StatusMetricId {
     _StatusMetricId.entities => _StatusDetailSection.ecs,
     _StatusMetricId.memory => _StatusDetailSection.memory,
     _StatusMetricId.logs => _StatusDetailSection.logs,
+    _StatusMetricId.assets => _StatusDetailSection.assets,
   };
 
   String get label => switch (this) {
@@ -275,6 +278,7 @@ extension on _StatusMetricId {
     _StatusMetricId.entities => 'Entities',
     _StatusMetricId.memory => 'Runtime',
     _StatusMetricId.logs => 'Logs',
+    _StatusMetricId.assets => 'Assets',
   };
 
   IconData get icon => switch (this) {
@@ -282,10 +286,11 @@ extension on _StatusMetricId {
     _StatusMetricId.entities => Icons.blur_linear_rounded,
     _StatusMetricId.memory => Icons.memory_rounded,
     _StatusMetricId.logs => Icons.article_outlined,
+    _StatusMetricId.assets => Icons.folder_outlined,
   };
 }
 
-enum _StatusDetailSection { performance, ecs, memory, logs }
+enum _StatusDetailSection { performance, ecs, memory, logs, assets }
 
 extension on _StatusDetailSection {
   String get title => switch (this) {
@@ -293,6 +298,7 @@ extension on _StatusDetailSection {
     _StatusDetailSection.ecs => 'ECS Details',
     _StatusDetailSection.memory => 'Runtime Details',
     _StatusDetailSection.logs => 'Log Details',
+    _StatusDetailSection.assets => 'Asset Browser',
   };
 
   IconData get icon => switch (this) {
@@ -300,6 +306,7 @@ extension on _StatusDetailSection {
     _StatusDetailSection.ecs => Icons.hub_rounded,
     _StatusDetailSection.memory => Icons.monitor_heart_rounded,
     _StatusDetailSection.logs => Icons.subject_rounded,
+    _StatusDetailSection.assets => Icons.folder_outlined,
   };
 }
 
