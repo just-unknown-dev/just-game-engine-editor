@@ -130,6 +130,15 @@ class _DockAssetsPanelState extends State<_DockAssetsPanel> {
     });
   }
 
+  String _toRelativePath(String absolute) {
+    final base = Directory.current.path.replaceAll(r'\', '/');
+    final normalized = absolute.replaceAll(r'\', '/');
+    if (normalized.startsWith('$base/')) {
+      return normalized.substring(base.length + 1);
+    }
+    return normalized;
+  }
+
   IconData _fileIcon(String name) {
     final ext =
         name.contains('.') ? name.split('.').last.toLowerCase() : '';
@@ -190,7 +199,7 @@ class _DockAssetsPanelState extends State<_DockAssetsPanel> {
       );
     }
 
-    return _buildRowTile(
+    final tile = _buildRowTile(
       icon: _fileIcon(node.name),
       iconColor: EditorTheme.textMuted,
       label: node.name,
@@ -198,6 +207,50 @@ class _DockAssetsPanelState extends State<_DockAssetsPanel> {
       isSelected: isSelected,
       onTap: () => setState(() => _selectedPath = node.path),
       trailing: null,
+    );
+
+    return Draggable<String>(
+      data: _toRelativePath(node.path),
+      feedback: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1B1B1B),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.15),
+            ),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x55000000),
+                blurRadius: 8,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                _fileIcon(node.name),
+                size: 12,
+                color: EditorTheme.textMuted,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                node.name,
+                style: const TextStyle(
+                  color: EditorTheme.textPrimary,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.4, child: tile),
+      child: tile,
     );
   }
 

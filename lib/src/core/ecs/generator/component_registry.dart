@@ -26,6 +26,7 @@ enum EditorFieldKind {
   integer,
   decimal,
   text,
+  assetRef,
   enumeration,
   list,
   map,
@@ -275,6 +276,7 @@ class CustomComponentRegistry {
       case EditorFieldKind.integer:
       case EditorFieldKind.decimal:
       case EditorFieldKind.text:
+      case EditorFieldKind.assetRef:
       case EditorFieldKind.unknown:
         return value;
     }
@@ -384,6 +386,7 @@ class CustomComponentRegistry {
       case EditorFieldKind.map:
       case EditorFieldKind.boolean:
       case EditorFieldKind.text:
+      case EditorFieldKind.assetRef:
       case EditorFieldKind.unknown:
         return value;
     }

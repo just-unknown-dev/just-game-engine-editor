@@ -1,4 +1,5 @@
 ﻿import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -364,6 +365,12 @@ class _EditorFieldControl extends StatelessWidget {
           supportsGradient: true,
           onChanged: (s) => onChanged(s),
         );
+      case EditorFieldKind.assetRef:
+        return _AssetRefEditorRow(
+          label: label,
+          value: value as String? ?? '',
+          onChanged: (path) => onChanged(path),
+        );
       case EditorFieldKind.text:
       case EditorFieldKind.list:
       case EditorFieldKind.map:
@@ -418,13 +425,16 @@ class _EditorFieldControl extends StatelessWidget {
         return value.toString();
       case EditorFieldKind.shapePaintStyle:
         if (value is jge.ShapePaintStyle) {
-          return value.gradient != null ? 'Gradient' : '#${value.color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
+          return value.gradient != null
+              ? 'Gradient'
+              : '#${value.color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
         }
         return value.toString();
       case EditorFieldKind.boolean:
       case EditorFieldKind.integer:
       case EditorFieldKind.decimal:
       case EditorFieldKind.text:
+      case EditorFieldKind.assetRef:
       case EditorFieldKind.enumeration:
       case EditorFieldKind.unknown:
         return value.toString();
@@ -443,6 +453,7 @@ class _EditorFieldControl extends StatelessWidget {
       case EditorFieldKind.decimal:
         return double.tryParse(raw) ?? previous;
       case EditorFieldKind.text:
+      case EditorFieldKind.assetRef:
         return raw;
       case EditorFieldKind.list:
         try {
@@ -544,9 +555,11 @@ ColourSelection _shapePaintStyleToSelection(jge.ShapePaintStyle style) {
   }
   final angle = type == GradientType.linear
       ? math.atan2(
-          g.end is Alignment ? (g.end as Alignment).y : 0.0,
-          g.end is Alignment ? (g.end as Alignment).x : 1.0,
-        ) * 180 / math.pi
+              g.end is Alignment ? (g.end as Alignment).y : 0.0,
+              g.end is Alignment ? (g.end as Alignment).x : 1.0,
+            ) *
+            180 /
+            math.pi
       : 0.0;
   return ColourSelection(
     color: style.color,
@@ -605,7 +618,8 @@ class _ColorEditorRow extends StatelessWidget {
                     ? ColourDialogView.both
                     : ColourDialogView.colourOnly,
               );
-              if (picked != null) onChanged(_selectionToShapePaintStyle(picked));
+              if (picked != null)
+                onChanged(_selectionToShapePaintStyle(picked));
             },
             borderRadius: BorderRadius.circular(4),
             child: Container(
@@ -911,6 +925,333 @@ class _DropdownEditorRow extends StatelessWidget {
                   if (next != null) onChanged(next);
                 },
               ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Asset path picker row ─────────────────────────────────────────────────────
+
+class _AssetRefEditorRow extends StatefulWidget {
+  const _AssetRefEditorRow({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_AssetRefEditorRow> createState() => _AssetRefEditorRowState();
+}
+
+class _AssetRefEditorRowState extends State<_AssetRefEditorRow>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _anim;
+  late final Animation<double> _sizeAnim;
+  final TextEditingController _searchCtrl = TextEditingController();
+  List<String> _pngPaths = [];
+  bool _isExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 160),
+    );
+    _sizeAnim = CurvedAnimation(parent: _anim, curve: Curves.easeOut);
+    _scanPngs();
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _scanPngs() async {
+    final base = Directory.current.path.replaceAll(r'\', '/');
+    final assetsDir = Directory('$base/assets');
+    if (!await assetsDir.exists()) return;
+    final paths = <String>[];
+    await for (final entity in assetsDir.list(
+      recursive: true,
+      followLinks: false,
+    )) {
+      if (entity is File && entity.path.toLowerCase().endsWith('.png')) {
+        final relative = entity.path
+            .replaceAll(r'\', '/')
+            .replaceFirst('$base/', '');
+        paths.add(relative);
+      }
+    }
+    paths.sort();
+    if (!mounted) return;
+    setState(() => _pngPaths = paths);
+  }
+
+  void _toggleExpanded() {
+    setState(() {
+      _isExpanded = !_isExpanded;
+      if (_isExpanded) {
+        _anim.forward();
+      } else {
+        _anim.reverse();
+      }
+    });
+  }
+
+  void _selectPath(String path) {
+    widget.onChanged(path);
+    setState(() {
+      _isExpanded = false;
+      _anim.reverse();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _searchCtrl.text.trim().toLowerCase();
+    final filtered = query.isEmpty
+        ? _pngPaths
+        : _pngPaths
+              .where(
+                (p) =>
+                    p.split('/').last.toLowerCase().contains(query) ||
+                    p.toLowerCase().contains(query),
+              )
+              .toList(growable: false);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: <Widget>[
+            SizedBox(
+              width: 96,
+              child: Text(
+                widget.label,
+                style: const TextStyle(
+                  color: EditorTheme.textMuted,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+            Expanded(
+              child: DragTarget<String>(
+                onWillAcceptWithDetails: (details) =>
+                    details.data.toLowerCase().endsWith('.png'),
+                onAcceptWithDetails: (details) => _selectPath(details.data),
+                builder: (context, candidateData, rejectedData) {
+                  Color borderColor = EditorTheme.border;
+                  if (candidateData.isNotEmpty) {
+                    borderColor = const Color(0xFF4CAF50);
+                  } else if (rejectedData.isNotEmpty) {
+                    borderColor = EditorTheme.error;
+                  }
+                  return GestureDetector(
+                    onTap: _toggleExpanded,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: EditorTheme.inputBg,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          const Icon(
+                            Icons.image_outlined,
+                            size: 12,
+                            color: EditorTheme.textMuted,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              widget.value.isEmpty
+                                  ? 'Select PNG…'
+                                  : widget.value,
+                              style: TextStyle(
+                                color: widget.value.isEmpty
+                                    ? EditorTheme.textMuted
+                                    : EditorTheme.textPrimary,
+                                fontSize: 11,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Icon(
+                            _isExpanded
+                                ? Icons.expand_less_rounded
+                                : Icons.expand_more_rounded,
+                            size: 14,
+                            color: EditorTheme.textMuted,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+        SizeTransition(
+          sizeFactor: _sizeAnim,
+          child: Container(
+            margin: const EdgeInsets.only(left: 96, top: 4),
+            constraints: const BoxConstraints(maxHeight: 220),
+            decoration: BoxDecoration(
+              color: EditorTheme.surfaceDark,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: EditorTheme.border),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: SizedBox(
+                    height: 24,
+                    child: TextField(
+                      controller: _searchCtrl,
+                      onChanged: (_) => setState(() {}),
+                      style: const TextStyle(
+                        color: EditorTheme.textPrimary,
+                        fontSize: 11,
+                      ),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: 'Search PNG files…',
+                        hintStyle: const TextStyle(
+                          color: EditorTheme.textMuted,
+                          fontSize: 11,
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.search_rounded,
+                          size: 14,
+                          color: EditorTheme.textMuted,
+                        ),
+                        filled: true,
+                        fillColor: EditorTheme.inputBg,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: const BorderSide(
+                            color: EditorTheme.border,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: const BorderSide(
+                            color: EditorTheme.border,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: const BorderSide(
+                            color: EditorTheme.primaryActive,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1, color: EditorTheme.border),
+                Flexible(
+                  child: filtered.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            _pngPaths.isEmpty
+                                ? 'No PNG files found in assets/'
+                                : 'No matches for "$query"',
+                            style: const TextStyle(
+                              color: EditorTheme.textMuted,
+                              fontSize: 10,
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            final path = filtered[index];
+                            final isSelected = path == widget.value;
+                            final filename = path.split('/').last;
+                            return InkWell(
+                              onTap: () => _selectPath(path),
+                              child: Container(
+                                color: isSelected
+                                    ? EditorTheme.selectionBg
+                                    : Colors.transparent,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                child: Row(
+                                  children: <Widget>[
+                                    const Icon(
+                                      Icons.image_outlined,
+                                      size: 12,
+                                      color: Color(0xFF7DD8E0),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Text(
+                                            filename,
+                                            style: TextStyle(
+                                              color: isSelected
+                                                  ? EditorTheme.textPrimary
+                                                  : EditorTheme.textSecondary,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                          Text(
+                                            path,
+                                            style: const TextStyle(
+                                              color: EditorTheme.textMuted,
+                                              fontSize: 9,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (isSelected)
+                                      const Icon(
+                                        Icons.check_rounded,
+                                        size: 12,
+                                        color: EditorTheme.primaryMutedLight,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
           ),
         ),

@@ -23,7 +23,7 @@ class SpriteEditorComponent extends EditorComponent {
           EditorComponentField(
             name: 'path',
             label: 'Path',
-            kind: EditorFieldKind.text,
+            kind: EditorFieldKind.assetRef,
             read: (c) => (c as SpriteComponent).spritePath,
             write: (c, v) =>
                 (c as SpriteComponent).spritePath = v as String,
