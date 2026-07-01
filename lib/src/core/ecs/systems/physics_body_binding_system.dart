@@ -1,6 +1,6 @@
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../state/editor_scene_state.dart';
+import '../../state/editor_scene_state.dart';
 
 /// Ensures editor [PhysicsBodyComponent] entities have runtime subsystem
 /// [PhysicsBody] instances via [PhysicsBodyRefComponent].

@@ -1,7 +1,7 @@
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../components/simple_movement_component.dart';
+import '../components/input/simple_movement_component.dart';
 
 /// Applies directional input directly to [TransformComponent].
 class SimpleMovementSystem extends System {

@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' hide Animation;
-import '../theme/editor_theme.dart';
 
-import '../../core/registry/component_registry.dart';
+import '../theme/editor_theme.dart';
+import '../../core/ecs/registry/component_registry.dart';
 import '../../core/state/editor_scene_state.dart';
 
 /// An expandable in-place panel that lets the user search for and add a
 /// component to the currently selected entity.
 ///
-/// Place this at the bottom of the inspector.  It expands downward when the
+/// Place this at the bottom of the inspector. It expands downward when the
 /// user taps "+ Add Component".
 class AddComponentPicker extends StatefulWidget {
   const AddComponentPicker({
@@ -28,6 +28,7 @@ class _AddComponentPickerState extends State<AddComponentPicker>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
   final TextEditingController _searchCtrl = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
   String _query = '';
 
   late final AnimationController _animCtrl;
@@ -50,6 +51,7 @@ class _AddComponentPickerState extends State<AddComponentPicker>
   void dispose() {
     _animCtrl.dispose();
     _searchCtrl.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -57,20 +59,22 @@ class _AddComponentPickerState extends State<AddComponentPicker>
     setState(() => _expanded = !_expanded);
     if (_expanded) {
       _animCtrl.forward();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchFocus.requestFocus();
+      });
     } else {
       _animCtrl.reverse();
       _searchCtrl.clear();
     }
   }
 
-  /// Returns the runtime types of components already attached to the entity so
-  /// we can grey out duplicates.
   Set<String> get _existingTypes =>
       widget.entity.components.map((c) => c.runtimeType.toString()).toSet();
 
   List<ComponentEntry> get _filtered {
-    if (_query.isEmpty) return kComponentRegistry;
-    return kComponentRegistry
+    final allEntries = getComponentRegistryEntries();
+    if (_query.isEmpty) return allEntries;
+    return allEntries
         .where(
           (e) =>
               e.name.toLowerCase().contains(_query) ||
@@ -81,11 +85,10 @@ class _AddComponentPickerState extends State<AddComponentPicker>
   }
 
   void _addComponent(ComponentEntry entry) {
-    final component = entry.factory();
-    widget.entity.addComponent(component);
+    widget.entity.addComponent(entry.factory());
     widget.sceneState.markDirty();
-    widget.sceneState.refresh(); // rebuild inspector to show new component
-    _toggle(); // collapse picker
+    widget.sceneState.refresh();
+    _toggle();
   }
 
   @override
@@ -93,7 +96,7 @@ class _AddComponentPickerState extends State<AddComponentPicker>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        // ── Toggle button ─────────────────────────────────────────────────
+        // ── Add Component button ───────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: InkWell(
@@ -146,12 +149,12 @@ class _AddComponentPickerState extends State<AddComponentPicker>
           ),
         ),
 
-        // ── Expandable list ───────────────────────────────────────────────
+        // ── Expandable list ────────────────────────────────────────────────
         SizeTransition(
           sizeFactor: _heightFactor,
-          axisAlignment: -1,
           child: _PickerList(
             searchCtrl: _searchCtrl,
+            searchFocus: _searchFocus,
             filtered: _filtered,
             existingTypes: _existingTypes,
             onAdd: _addComponent,
@@ -162,29 +165,29 @@ class _AddComponentPickerState extends State<AddComponentPicker>
   }
 }
 
-// ── Picker list (search field + grouped results) ──────────────────────────────
+// ── Picker list ───────────────────────────────────────────────────────────────
 
 class _PickerList extends StatelessWidget {
   const _PickerList({
     required this.searchCtrl,
+    required this.searchFocus,
     required this.filtered,
     required this.existingTypes,
     required this.onAdd,
   });
 
   final TextEditingController searchCtrl;
+  final FocusNode searchFocus;
   final List<ComponentEntry> filtered;
   final Set<String> existingTypes;
   final void Function(ComponentEntry) onAdd;
 
   @override
   Widget build(BuildContext context) {
-    // Group filtered entries
     final Map<String, List<ComponentEntry>> grouped = {};
     for (final entry in filtered) {
       grouped.putIfAbsent(entry.group, () => []).add(entry);
     }
-    // Sort groups in canonical order
     final orderedGroups = kComponentGroups
         .where((g) => grouped.containsKey(g))
         .toList();
@@ -198,12 +201,11 @@ class _PickerList extends StatelessWidget {
       ),
       child: Column(
         children: <Widget>[
-          // Search field
           Padding(
             padding: const EdgeInsets.all(8),
             child: TextField(
               controller: searchCtrl,
-              autofocus: true,
+              focusNode: searchFocus,
               style: const TextStyle(
                 color: EditorTheme.textPrimary,
                 fontSize: 12,
@@ -248,7 +250,6 @@ class _PickerList extends StatelessWidget {
             ),
           ),
           const Divider(height: 1, color: EditorTheme.surfaceBg),
-          // Results
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 280),
             child: filtered.isEmpty
@@ -276,8 +277,6 @@ class _PickerList extends StatelessWidget {
     );
   }
 
-  // We render group headers + component rows in a flat list — compute the
-  // total item count for the builder.
   int _countItems(
     List<String> groups,
     Map<String, List<ComponentEntry>> grouped,

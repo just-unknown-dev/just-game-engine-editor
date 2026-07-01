@@ -7,12 +7,16 @@ import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../debugger/engine_debugger.dart';
-import '../systems/physics_body_binding_system.dart';
-import '../systems/physics_joint_binding_system.dart';
-import '../systems/simple_movement_system.dart';
+import '../ecs/components/editor_components_registrant.dart';
+import '../ecs/systems/editor_log_capture_system.dart';
+import '../ecs/systems/physics_body_binding_system.dart';
+import '../ecs/systems/physics_joint_binding_system.dart';
+import '../ecs/systems/simple_movement_system.dart';
 import '../serialization/scene_file_generator.dart';
+import '../services/editor_log_service.dart';
 import '../state/editor_scene_state.dart';
 import '../../ui/overlay/gizmo_painter.dart';
+import '../ecs/generator/component_registry.dart';
 
 /// Hypothetical plugin contract used by runtime editor integrations.
 abstract interface class EnginePlugin {
@@ -25,6 +29,7 @@ abstract interface class EnginePlugin {
 class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   JustGameEditorPlugin({
     required this.engine,
+    this.componentRegistrar,
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
   }) : _toggleKey = toggleKey,
@@ -39,12 +44,49 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
        _hitTester = GizmoHitTester();
 
   final Engine engine;
+
+  /// Optional callback that registers all game custom components with
+  /// [CustomComponentRegistry.instance]. Called automatically during
+  /// [onInitialize] and again on [reassemble] (hot-reload) and after a
+  /// successful component codegen refresh.
+  final VoidCallback? componentRegistrar;
+
+  // ── Static project-component registration ──────────────────────────────────
+
+  static final List<VoidCallback> _staticProjectRegistrants = [];
+
+  /// Registers [fn] as a project-level component registrant.
+  ///
+  /// Call this **once** at app startup, before or after the plugin is
+  /// created. The editor calls [fn] automatically on every
+  /// [reassemble] (hot-reload) so newly generated descriptors are
+  /// picked up without any extra setup.
+  ///
+  /// Typical usage:
+  /// ```dart
+  /// // Import your generated registrant once:
+  /// import 'game/custom_components/generated_component_registrant.dart';
+  ///
+  /// JustGameEditorPlugin.registerProjectComponents(registerCustomComponents);
+  /// ```
+  static void registerProjectComponents(VoidCallback fn) {
+    if (!_staticProjectRegistrants.contains(fn)) {
+      _staticProjectRegistrants.add(fn);
+    }
+  }
+
+  /// Removes a previously registered project-component registrant.
+  static void unregisterProjectComponents(VoidCallback fn) {
+    _staticProjectRegistrants.remove(fn);
+  }
+
   final LogicalKeyboardKey _toggleKey;
   final LogicalKeyboardKey _statusPanelToggleKey;
   final JustDebuggerController debuggerController;
 
   /// Shared scene state — read by overlay widgets and gizmo logic.
   final EditorSceneState sceneState;
+  final EditorLogService logService = EditorLogService.instance;
 
   final GizmoPainter _gizmoPainter;
   final GizmoHitTester _hitTester;
@@ -81,8 +123,12 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   LogicalKeyboardKey get statusPanelToggleKey => _statusPanelToggleKey;
 
   /// Factory for debug-only plugin registration.
+  ///
+  /// Pass [componentRegistrar] to automatically register game-specific
+  /// custom components when the editor initializes and on hot-reload.
   static Future<JustGameEditorPlugin?> register({
     required Engine engine,
+    VoidCallback? componentRegistrar,
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
   }) async {
@@ -90,6 +136,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
 
     final plugin = JustGameEditorPlugin(
       engine: engine,
+      componentRegistrar: componentRegistrar,
       toggleKey: toggleKey,
       statusPanelToggleKey: statusPanelToggleKey,
     );
@@ -101,6 +148,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   Future<void> onInitialize() async {
     if (!kDebugMode || _isInitialized) return;
     _isInitialized = true;
+    await logService.startSession(controller: debuggerController);
     if (!engine.world.systems.any((system) => system is SimpleMovementSystem)) {
       engine.world.addSystem(SimpleMovementSystem(engine.input));
     }
@@ -123,9 +171,46 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     )) {
       engine.world.addSystem(PhysicsJointBindingSystem(engine.physics));
     }
+    if (!engine.world.systems.any(
+      (system) => system is EditorLogCaptureSystem,
+    )) {
+      engine.world.addSystem(EditorLogCaptureSystem(logService));
+    }
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
+    // Register game custom components and wire post-refresh re-registration.
+    _runComponentRegistrar();
+    sceneState.onComponentsRefreshed = _runComponentRegistrar;
+    logService.log(
+      'Runtime editor initialized.',
+      source: 'editor',
+      category: 'lifecycle',
+    );
   }
+
+  /// Re-registers all game custom components. Clears first so stale
+  /// descriptors from a previous build are removed before the new ones land.
+  void _runComponentRegistrar() {
+    CustomComponentRegistry.instance.clear();
+    registerAllEditorComponents();
+    // Call all static project registrants (registered via
+    // JustGameEditorPlugin.registerProjectComponents).
+    for (final fn in _staticProjectRegistrants) {
+      fn();
+    }
+    // Legacy per-instance callback for backward compatibility.
+    componentRegistrar?.call();
+    logService.log(
+      'Custom component registries reloaded.',
+      source: 'editor',
+      category: 'components',
+      mirrorToDebugger: false,
+    );
+  }
+
+  /// Called by [State.reassemble] on hot-reload to pick up newly generated
+  /// component descriptors without restarting the app.
+  void reassemble() => _runComponentRegistrar();
 
   void _attachDebuggerIfReady() {
     if (_isDebuggerAttached || !engine.isInitialized) return;
@@ -398,6 +483,11 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
 
     sceneState.registerEntity(entity);
     sceneState.selectEntity(entity);
+    logService.log(
+      'Created entity ${entity.name ?? entity.id}.',
+      source: 'editor',
+      category: 'entity',
+    );
   }
 
   // ── Entity operations ─────────────────────────────────────────────────────
@@ -416,6 +506,12 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     }
     sceneState.removeEntityNode(entity.id);
     engine.world.destroyEntity(entity);
+    logService.log(
+      'Deleted entity ${entity.name ?? entity.id}.',
+      source: 'editor',
+      category: 'entity',
+      level: DebuggerLogLevel.warning,
+    );
     notifyListeners();
   }
 
@@ -457,6 +553,11 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     sceneState.clearMultiSelection();
     sceneState.selectEntity(groupEntity);
     sceneState.refresh();
+    logService.log(
+      'Created group ${groupEntity.name ?? groupEntity.id}.',
+      source: 'editor',
+      category: 'group',
+    );
   }
 
   /// Makes [child] a child of [newParent], auto-computing localOffset.
@@ -501,6 +602,12 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
 
     sceneState.markDirty();
     sceneState.refresh();
+    logService.log(
+      'Reparented ${child.name ?? child.id} under ${newParent.name ?? newParent.id}.',
+      source: 'editor',
+      category: 'hierarchy',
+      mirrorToDebugger: false,
+    );
   }
 
   /// Removes [child] from its parent, making it a root entity.
@@ -515,6 +622,12 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
 
     sceneState.markDirty();
     sceneState.refresh();
+    logService.log(
+      'Detached ${child.name ?? child.id} from parent.',
+      source: 'editor',
+      category: 'hierarchy',
+      mirrorToDebugger: false,
+    );
   }
 
   bool _isDescendantOf(Entity candidate, Entity ancestor) {
@@ -533,6 +646,12 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
         .whereType<Map<String, dynamic>>()
         .toList();
     sceneState.setClipboard(components);
+    logService.log(
+      'Copied entity ${entity.name ?? entity.id} to clipboard.',
+      source: 'editor',
+      category: 'clipboard',
+      mirrorToDebugger: false,
+    );
   }
 
   /// Spawns a new entity from the clipboard, offset from the camera centre.
@@ -563,6 +682,11 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
 
     sceneState.registerEntity(entity);
     sceneState.selectEntity(entity);
+    logService.log(
+      'Pasted entity ${entity.name ?? entity.id} from clipboard.',
+      source: 'editor',
+      category: 'clipboard',
+    );
     notifyListeners();
   }
 
@@ -656,6 +780,11 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     }
 
     sceneState.openScene(scene, nodeMap);
+    logService.log(
+      'Opened scene $sceneName with ${nodeMap.length} linked entities.',
+      source: 'editor',
+      category: 'scene',
+    );
     notifyListeners();
   }
 
@@ -677,6 +806,11 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     ]);
 
     sceneState.markClean();
+    logService.log(
+      'Saved scene ${scene.name} with ${entities.length} active entities.',
+      source: 'editor',
+      category: 'scene',
+    );
   }
 
   // ── Visibility ────────────────────────────────────────────────────────────
@@ -717,6 +851,12 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
         '(toggle: ${toggleKey.keyLabel.isEmpty ? toggleKey.debugName : toggleKey.keyLabel})',
       );
     }
+    logService.log(
+      'Editor ${_isVisible ? 'opened' : 'closed'}.',
+      source: 'editor',
+      category: 'visibility',
+      mirrorToDebugger: false,
+    );
     _syncFocus();
     notifyListeners();
   }
@@ -738,6 +878,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     } catch (_) {
       // The keyboard singleton is unavailable if no binding was initialized.
     }
+    logService.stopSession();
     debuggerController.dispose();
     sceneState.dispose();
     editorFocusNode.dispose();

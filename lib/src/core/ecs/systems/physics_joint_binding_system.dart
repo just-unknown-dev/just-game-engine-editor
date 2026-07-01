@@ -1,7 +1,7 @@
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../components/physics_joint_components.dart';
+import '../components/physics/physics_joint_components.dart';
 
 /// Binds editor joint components to runtime physics-engine joint constraints.
 ///

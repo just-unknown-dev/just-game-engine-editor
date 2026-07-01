@@ -12,6 +12,7 @@ class EditorSceneState extends ChangeNotifier {
   SceneNode? _selectedNode;
   bool _isDirty = false;
   final Map<EntityId, SceneNode> _entityNodeMap = {};
+
   final Set<EntityId> _multiSelectedIds = {};
   bool _gridSnappingEnabled = true;
   double _gridSize = 32.0;
@@ -154,6 +155,17 @@ class EditorSceneState extends ChangeNotifier {
   /// dirty flag alone wouldn't trigger a rebuild for.
   void refresh() => notifyListeners();
 
+  /// Set by [JustGameEditorPlugin] to re-register game custom components after
+  /// a component refresh or hot-reload.
+  VoidCallback? onComponentsRefreshed;
+
+  /// Triggers a custom-component re-registration (e.g. after component refresh
+  /// completes) and then rebuilds the UI.
+  void reloadCustomComponents() {
+    onComponentsRefreshed?.call();
+    notifyListeners();
+  }
+
   void setGridSnapping({
     required bool enabled,
     required double gridSize,
@@ -212,6 +224,18 @@ class EditorSceneState extends ChangeNotifier {
     }
     markDirty();
     notifyListeners();
+  }
+
+  /// Syncs the scene-graph node for [entity] from its current TransformComponent
+  /// values. Called after any inspector write so the canvas reflects changes.
+  void syncEntityNode(Entity entity) {
+    final transform = entity.getComponent<TransformComponent>();
+    if (transform == null) return;
+    final node = _entityNodeMap[entity.id];
+    if (node == null) return;
+    node.localPosition = transform.position.toOffset();
+    node.localRotation = transform.rotation;
+    node.localScale = (transform.scale.x + transform.scale.y) / 2;
   }
 
   /// Set [entity]'s position directly (used by inspector text fields).

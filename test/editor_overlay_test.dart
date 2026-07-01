@@ -67,7 +67,6 @@ void main() {
     expect(find.text('Status Panel'), findsNothing);
 
     plugin.toggleVisibility();
-    plugin.toggleStatusPanelVisibility();
     await tester.pumpAndSettle();
 
     expect(find.text('FPS'), findsOneWidget);
