@@ -43,16 +43,16 @@ class CircleEditorComponent extends EditorComponent {
             label: 'Fill',
             kind: EditorFieldKind.shapePaintStyle,
             read: (c) => (c as CircleComponent).fillStyle,
-            write: (c, v) => (c as CircleComponent).fillStyle =
-                ShapePaintStyle(color: v as Color),
+            write: (c, v) =>
+                (c as CircleComponent).fillStyle = v as ShapePaintStyle,
           ),
           EditorComponentField(
             name: 'strokeColor',
             label: 'Stroke',
             kind: EditorFieldKind.shapePaintStyle,
             read: (c) => (c as CircleComponent).strokeStyle,
-            write: (c, v) => (c as CircleComponent).strokeStyle =
-                ShapePaintStyle(color: v as Color),
+            write: (c, v) =>
+                (c as CircleComponent).strokeStyle = v as ShapePaintStyle,
           ),
           EditorComponentField(
             name: 'sw',

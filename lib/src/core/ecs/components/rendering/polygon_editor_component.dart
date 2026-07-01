@@ -43,16 +43,16 @@ class PolygonEditorComponent extends EditorComponent {
             label: 'Fill',
             kind: EditorFieldKind.shapePaintStyle,
             read: (c) => (c as PolygonComponent).fillStyle,
-            write: (c, v) => (c as PolygonComponent).fillStyle =
-                ShapePaintStyle(color: v as Color),
+            write: (c, v) =>
+                (c as PolygonComponent).fillStyle = v as ShapePaintStyle,
           ),
           EditorComponentField(
             name: 'strokeColor',
             label: 'Stroke Color',
             kind: EditorFieldKind.shapePaintStyle,
             read: (c) => (c as PolygonComponent).strokeStyle,
-            write: (c, v) => (c as PolygonComponent).strokeStyle =
-                ShapePaintStyle(color: v as Color),
+            write: (c, v) =>
+                (c as PolygonComponent).strokeStyle = v as ShapePaintStyle,
           ),
           EditorComponentField(
             name: 'strokeW',
