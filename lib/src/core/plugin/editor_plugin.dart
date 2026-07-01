@@ -8,6 +8,8 @@ import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../debugger/engine_debugger.dart';
 import '../ecs/components/editor_components_registrant.dart';
+import '../ecs/systems/editor_animated_sprite_system.dart';
+import '../ecs/systems/editor_animation_controller_system.dart';
 import '../ecs/systems/editor_log_capture_system.dart';
 import '../ecs/systems/editor_sprite_system.dart';
 import '../ecs/systems/physics_body_binding_system.dart';
@@ -181,6 +183,16 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
       (system) => system is EditorSpriteSystem,
     )) {
       engine.world.addSystem(EditorSpriteSystem());
+    }
+    if (!engine.world.systems.any(
+      (system) => system is EditorAnimatedSpriteSystem,
+    )) {
+      engine.world.addSystem(EditorAnimatedSpriteSystem());
+    }
+    if (!engine.world.systems.any(
+      (system) => system is EditorAnimationControllerSystem,
+    )) {
+      engine.world.addSystem(EditorAnimationControllerSystem());
     }
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);

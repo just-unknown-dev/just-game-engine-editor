@@ -32,6 +32,8 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
   bool _isAssetsPanelOpen = false;
   double _assetsPanelHeight = 280.0;
   int _assetFileCount = 0;
+  bool _isTimelinePanelOpen = false;
+  double _timelinePanelHeight = 300.0;
 
   GlobalKey _anchorKeyFor(_StatusMetricId metric) {
     return _anchorKeys.putIfAbsent(metric, GlobalKey.new);
@@ -42,6 +44,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
       _isSettingsOpen = false;
       _isLogsPanelOpen = false;
       _isAssetsPanelOpen = false;
+      _isTimelinePanelOpen = false;
       _selectedMetric = _selectedMetric == metric ? null : metric;
     });
   }
@@ -52,6 +55,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
       _isSettingsOpen = false;
       _isLogsPanelOpen = false;
       _isAssetsPanelOpen = false;
+      _isTimelinePanelOpen = false;
     });
   }
 
@@ -65,6 +69,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
       _selectedMetric = null;
       _isLogsPanelOpen = false;
       _isAssetsPanelOpen = false;
+      _isTimelinePanelOpen = false;
       _isSettingsOpen = !_isSettingsOpen;
     });
   }
@@ -74,6 +79,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
       _selectedMetric = null;
       _isSettingsOpen = false;
       _isAssetsPanelOpen = false;
+      _isTimelinePanelOpen = false;
       _isLogsPanelOpen = !_isLogsPanelOpen;
     });
   }
@@ -83,7 +89,27 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
       _selectedMetric = null;
       _isSettingsOpen = false;
       _isLogsPanelOpen = false;
+      _isTimelinePanelOpen = false;
       _isAssetsPanelOpen = !_isAssetsPanelOpen;
+    });
+  }
+
+  void _toggleTimelinePanel() {
+    setState(() {
+      _selectedMetric = null;
+      _isSettingsOpen = false;
+      _isLogsPanelOpen = false;
+      _isAssetsPanelOpen = false;
+      _isTimelinePanelOpen = !_isTimelinePanelOpen;
+    });
+  }
+
+  void _onTimelinePanelResize(double dy) {
+    setState(() {
+      _timelinePanelHeight = (_timelinePanelHeight - dy).clamp(
+        180.0,
+        (widget.maxDetailHeight * 0.75).clamp(180.0, 700.0),
+      );
     });
   }
 
@@ -110,6 +136,20 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
     super.initState();
     _loadPersistedSettings();
     _scanAssetFileCount();
+  }
+
+  String _timelineLabel() {
+    final entity = widget.plugin.sceneState.selectedEntity;
+    if (entity == null) return 'no selection';
+    // Avoid hard-typing AnimatedSpriteComponent to not add an engine import
+    // to the library file — just check the component type name.
+    final comps = entity.components;
+    for (final c in comps) {
+      if (c.runtimeType.toString() == 'AnimatedSpriteComponent') {
+        return c.toString().split('clip: ').elementAtOrNull(1)?.split(',').first ?? '—';
+      }
+    }
+    return 'no anim';
   }
 
   Future<void> _scanAssetFileCount() async {
@@ -243,6 +283,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
             _CompactStatusDock._panelHeight +
             (_isLogsPanelOpen ? _logsPanelHeight : 0.0) +
             (_isAssetsPanelOpen ? _assetsPanelHeight : 0.0) +
+            (_isTimelinePanelOpen ? _timelinePanelHeight : 0.0) +
             (floatingPanelHeight > 0 ? floatingPanelHeight + 12.0 : 0.0);
 
         return ValueListenableBuilder<_OverlayUiSettings>(
@@ -374,6 +415,18 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                                         onTap: (_) => _toggleAssetsPanel(),
                                         settings: settings,
                                       ),
+                                      _StatusSeparator(settings: settings),
+                                      _StatusMetricButton(
+                                        metric: _StatusMetricId.timeline,
+                                        anchorKey: _anchorKeyFor(
+                                          _StatusMetricId.timeline,
+                                        ),
+                                        value: _timelineLabel(),
+                                        accent: const Color(0xFF7DE6B1),
+                                        isSelected: _isTimelinePanelOpen,
+                                        onTap: (_) => _toggleTimelinePanel(),
+                                        settings: settings,
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -414,6 +467,19 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                           onResize: _onAssetsPanelResize,
                           onClose: _toggleAssetsPanel,
                           settings: settings,
+                        ),
+                      ),
+                    if (_isTimelinePanelOpen)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: _CompactStatusDock._panelHeight,
+                        child: _DockTimelinePanel(
+                          height: _timelinePanelHeight,
+                          onResize: _onTimelinePanelResize,
+                          onClose: _toggleTimelinePanel,
+                          settings: settings,
+                          plugin: widget.plugin,
                         ),
                       ),
                     if (_selectedMetric != null)

@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:just_debugger/just_debugger.dart';
+import 'package:just_game_engine/just_game_engine.dart' show AnimatedSpriteComponent, AnimationControllerComponent, AnimationEvent, RenderableComponent, Sprite, TransformComponent, TransformKeyframe;
 import 'package:just_storage/just_storage.dart';
 
 import '../panels/entity_inspector_panel.dart';
@@ -24,6 +26,7 @@ part 'overlay_shared_widgets.part.dart';
 part 'overlay_compact_dock.part.dart';
 part 'overlay_dock_logs_panel.part.dart';
 part 'overlay_dock_assets_panel.part.dart';
+part 'overlay_dock_timeline_panel.part.dart';
 part 'overlay_detail_cards.part.dart';
 part 'overlay_right_panel.part.dart';
 part 'overlay_snackbar.part.dart';
@@ -262,7 +265,7 @@ extension on _SettingsThemePreset {
   };
 }
 
-enum _StatusMetricId { fps, entities, memory, logs, assets }
+enum _StatusMetricId { fps, entities, memory, logs, assets, timeline }
 
 extension on _StatusMetricId {
   _StatusDetailSection get section => switch (this) {
@@ -271,6 +274,7 @@ extension on _StatusMetricId {
     _StatusMetricId.memory => _StatusDetailSection.memory,
     _StatusMetricId.logs => _StatusDetailSection.logs,
     _StatusMetricId.assets => _StatusDetailSection.assets,
+    _StatusMetricId.timeline => _StatusDetailSection.timeline,
   };
 
   String get label => switch (this) {
@@ -279,6 +283,7 @@ extension on _StatusMetricId {
     _StatusMetricId.memory => 'Runtime',
     _StatusMetricId.logs => 'Logs',
     _StatusMetricId.assets => 'Assets',
+    _StatusMetricId.timeline => 'Timeline',
   };
 
   IconData get icon => switch (this) {
@@ -287,10 +292,11 @@ extension on _StatusMetricId {
     _StatusMetricId.memory => Icons.memory_rounded,
     _StatusMetricId.logs => Icons.article_outlined,
     _StatusMetricId.assets => Icons.folder_outlined,
+    _StatusMetricId.timeline => Icons.movie_filter_rounded,
   };
 }
 
-enum _StatusDetailSection { performance, ecs, memory, logs, assets }
+enum _StatusDetailSection { performance, ecs, memory, logs, assets, timeline }
 
 extension on _StatusDetailSection {
   String get title => switch (this) {
@@ -299,6 +305,7 @@ extension on _StatusDetailSection {
     _StatusDetailSection.memory => 'Runtime Details',
     _StatusDetailSection.logs => 'Log Details',
     _StatusDetailSection.assets => 'Asset Browser',
+    _StatusDetailSection.timeline => 'Animation Timeline',
   };
 
   IconData get icon => switch (this) {
@@ -307,6 +314,7 @@ extension on _StatusDetailSection {
     _StatusDetailSection.memory => Icons.monitor_heart_rounded,
     _StatusDetailSection.logs => Icons.subject_rounded,
     _StatusDetailSection.assets => Icons.folder_outlined,
+    _StatusDetailSection.timeline => Icons.movie_filter_rounded,
   };
 }
 

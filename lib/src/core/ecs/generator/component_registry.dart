@@ -53,6 +53,8 @@ class EditorComponentField {
     this.enumParser,
     this.valueFormatter,
     this.scrubConfig,
+    this.fileExtensions,
+    this.generateTemplate,
   });
 
   final String name;
@@ -67,6 +69,12 @@ class EditorComponentField {
   final Object? Function(String value)? enumParser;
   final String Function(Object? value)? valueFormatter;
   final NumberScrubConfig? scrubConfig;
+  /// For [EditorFieldKind.assetRef]: restricts the file picker to these extensions
+  /// (without the leading dot, e.g. `['png', 'jpg']`). Defaults to `['png']`.
+  final List<String>? fileExtensions;
+  /// For [EditorFieldKind.assetRef]: when set, shows a generate button that
+  /// calls this callback. Returns the written file path on success, or null.
+  final Future<String?> Function(jge.Component component)? generateTemplate;
 
   bool get isReadOnly => !editable || write == null;
 

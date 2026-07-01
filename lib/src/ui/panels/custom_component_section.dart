@@ -203,6 +203,7 @@ class CustomComponentSection extends StatelessWidget {
           label: field.displayLabel,
           field: field,
           value: value,
+          component: component,
           onChanged: (next) {
             final writer = field.write;
             if (writer == null) return;
@@ -272,12 +273,14 @@ class _EditorFieldControl extends StatelessWidget {
     required this.label,
     required this.field,
     required this.value,
+    required this.component,
     required this.onChanged,
   });
 
   final String label;
   final EditorComponentField field;
   final Object? value;
+  final jge.Component component;
   final ValueChanged<Object?> onChanged;
 
   @override
@@ -369,7 +372,11 @@ class _EditorFieldControl extends StatelessWidget {
         return _AssetRefEditorRow(
           label: label,
           value: value as String? ?? '',
+          extensions: field.fileExtensions ?? const ['png'],
           onChanged: (path) => onChanged(path),
+          onGenerate: field.generateTemplate != null
+              ? () => field.generateTemplate!(component)
+              : null,
         );
       case EditorFieldKind.text:
       case EditorFieldKind.list:
@@ -940,11 +947,16 @@ class _AssetRefEditorRow extends StatefulWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.extensions = const ['png'],
+    this.onGenerate,
   });
 
   final String label;
   final String value;
   final ValueChanged<String> onChanged;
+  final List<String> extensions;
+  /// When non-null, shows a wand button. Returns the generated file path or null.
+  final Future<String?> Function()? onGenerate;
 
   @override
   State<_AssetRefEditorRow> createState() => _AssetRefEditorRowState();
@@ -955,8 +967,9 @@ class _AssetRefEditorRowState extends State<_AssetRefEditorRow>
   late final AnimationController _anim;
   late final Animation<double> _sizeAnim;
   final TextEditingController _searchCtrl = TextEditingController();
-  List<String> _pngPaths = [];
+  List<String> _filePaths = [];
   bool _isExpanded = false;
+  bool _isGenerating = false;
 
   @override
   void initState() {
@@ -966,7 +979,7 @@ class _AssetRefEditorRowState extends State<_AssetRefEditorRow>
       duration: const Duration(milliseconds: 160),
     );
     _sizeAnim = CurvedAnimation(parent: _anim, curve: Curves.easeOut);
-    _scanPngs();
+    _scanFiles();
   }
 
   @override
@@ -976,25 +989,29 @@ class _AssetRefEditorRowState extends State<_AssetRefEditorRow>
     super.dispose();
   }
 
-  Future<void> _scanPngs() async {
+  Future<void> _scanFiles() async {
     final base = Directory.current.path.replaceAll(r'\', '/');
     final assetsDir = Directory('$base/assets');
     if (!await assetsDir.exists()) return;
+    final exts = widget.extensions.map((e) => e.toLowerCase()).toSet();
     final paths = <String>[];
     await for (final entity in assetsDir.list(
       recursive: true,
       followLinks: false,
     )) {
-      if (entity is File && entity.path.toLowerCase().endsWith('.png')) {
-        final relative = entity.path
-            .replaceAll(r'\', '/')
-            .replaceFirst('$base/', '');
-        paths.add(relative);
+      if (entity is File) {
+        final ext = entity.path.split('.').last.toLowerCase();
+        if (exts.contains(ext)) {
+          final relative = entity.path
+              .replaceAll(r'\', '/')
+              .replaceFirst('$base/', '');
+          paths.add(relative);
+        }
       }
     }
     paths.sort();
     if (!mounted) return;
-    setState(() => _pngPaths = paths);
+    setState(() => _filePaths = paths);
   }
 
   void _toggleExpanded() {
@@ -1016,12 +1033,26 @@ class _AssetRefEditorRowState extends State<_AssetRefEditorRow>
     });
   }
 
+  Future<void> _handleGenerate() async {
+    if (_isGenerating || widget.onGenerate == null) return;
+    setState(() => _isGenerating = true);
+    try {
+      final path = await widget.onGenerate!();
+      if (path != null && mounted) {
+        widget.onChanged(path);
+        await _scanFiles();
+      }
+    } finally {
+      if (mounted) setState(() => _isGenerating = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final query = _searchCtrl.text.trim().toLowerCase();
     final filtered = query.isEmpty
-        ? _pngPaths
-        : _pngPaths
+        ? _filePaths
+        : _filePaths
               .where(
                 (p) =>
                     p.split('/').last.toLowerCase().contains(query) ||
@@ -1047,8 +1078,12 @@ class _AssetRefEditorRowState extends State<_AssetRefEditorRow>
             ),
             Expanded(
               child: DragTarget<String>(
-                onWillAcceptWithDetails: (details) =>
-                    details.data.toLowerCase().endsWith('.png'),
+                onWillAcceptWithDetails: (details) {
+                    final ext = details.data.split('.').last.toLowerCase();
+                    return widget.extensions
+                        .map((e) => e.toLowerCase())
+                        .contains(ext);
+                  },
                 onAcceptWithDetails: (details) => _selectPath(details.data),
                 builder: (context, candidateData, rejectedData) {
                   Color borderColor = EditorTheme.border;
@@ -1071,8 +1106,12 @@ class _AssetRefEditorRowState extends State<_AssetRefEditorRow>
                       ),
                       child: Row(
                         children: <Widget>[
-                          const Icon(
-                            Icons.image_outlined,
+                          Icon(
+                            widget.extensions.length == 1 &&
+                                    widget.extensions.first.toLowerCase() ==
+                                        'json'
+                                ? Icons.data_object_rounded
+                                : Icons.image_outlined,
                             size: 12,
                             color: EditorTheme.textMuted,
                           ),
@@ -1080,7 +1119,7 @@ class _AssetRefEditorRowState extends State<_AssetRefEditorRow>
                           Expanded(
                             child: Text(
                               widget.value.isEmpty
-                                  ? 'Select PNG…'
+                                  ? 'Select ${widget.extensions.map((e) => e.toUpperCase()).join('/')}…'
                                   : widget.value,
                               style: TextStyle(
                                 color: widget.value.isEmpty
@@ -1106,6 +1145,33 @@ class _AssetRefEditorRowState extends State<_AssetRefEditorRow>
                 },
               ),
             ),
+            if (widget.onGenerate != null) ...[
+              const SizedBox(width: 4),
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: _isGenerating
+                    ? const Padding(
+                        padding: EdgeInsets.all(5),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: EditorTheme.primaryActive,
+                        ),
+                      )
+                    : Tooltip(
+                        message: 'Generate template JSON',
+                        child: InkWell(
+                          onTap: _handleGenerate,
+                          borderRadius: BorderRadius.circular(4),
+                          child: const Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 14,
+                            color: EditorTheme.primaryMuted,
+                          ),
+                        ),
+                      ),
+              ),
+            ],
           ],
         ),
         SizeTransition(
@@ -1178,8 +1244,8 @@ class _AssetRefEditorRowState extends State<_AssetRefEditorRow>
                       ? Padding(
                           padding: const EdgeInsets.all(12),
                           child: Text(
-                            _pngPaths.isEmpty
-                                ? 'No PNG files found in assets/'
+                            _filePaths.isEmpty
+                                ? 'No ${widget.extensions.join('/').toUpperCase()} files found in assets/'
                                 : 'No matches for "$query"',
                             style: const TextStyle(
                               color: EditorTheme.textMuted,

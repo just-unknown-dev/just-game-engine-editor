@@ -202,9 +202,11 @@ class _StatusDetailCard extends StatelessWidget {
       ),
       _StatusDetailSection.assets => const TextSpan(
         style: TextStyle(fontSize: 9, color: EditorTheme.textMuted),
-        children: <InlineSpan>[
-          TextSpan(text: 'File system browser'),
-        ],
+        children: <InlineSpan>[TextSpan(text: 'File system browser')],
+      ),
+      _StatusDetailSection.timeline => const TextSpan(
+        style: TextStyle(fontSize: 9, color: EditorTheme.textMuted),
+        children: <InlineSpan>[TextSpan(text: 'Animation dope sheet')],
       ),
     };
   }
@@ -228,6 +230,7 @@ class _StatusDetailCard extends StatelessWidget {
         settings: settings,
       ),
       _StatusDetailSection.assets => const SizedBox.shrink(),
+      _StatusDetailSection.timeline => const SizedBox.shrink(),
     };
   }
 }

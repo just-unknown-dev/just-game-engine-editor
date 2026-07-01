@@ -1,3 +1,4 @@
+import 'animation/animation_controller_editor_component.dart';
 import 'animation/animation_state_editor_component.dart';
 import 'audio/audio_source_editor_component.dart';
 import 'audio/audio_stream_editor_component.dart';
@@ -33,6 +34,7 @@ import 'rendering/circle_editor_component.dart';
 import 'rendering/line_editor_component.dart';
 import 'rendering/polygon_editor_component.dart';
 import 'rendering/rectangle_editor_component.dart';
+import 'rendering/animated_sprite_editor_component.dart';
 import 'rendering/sprite_editor_component.dart';
 import 'ui/button_editor_component.dart';
 import 'ui/circular_progress_editor_component.dart';
@@ -44,6 +46,7 @@ import '../generator/component_registry.dart';
 
 void registerAllEditorComponents() {
   CustomComponentRegistry.instance.registerAll([
+    AnimationControllerEditorComponent(),
     AnimationStateEditorComponent(),
     AudioSourceEditorComponent(),
     AudioStreamEditorComponent(),
@@ -80,6 +83,7 @@ void registerAllEditorComponents() {
     LineEditorComponent(),
     PolygonEditorComponent(),
     RectangleEditorComponent(),
+    AnimatedSpriteEditorComponent(),
     SpriteEditorComponent(),
     ButtonEditorComponent(),
     CircularProgressEditorComponent(),
