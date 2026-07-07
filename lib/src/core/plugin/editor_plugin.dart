@@ -102,6 +102,10 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   bool _gridSnappingEnabled = true;
   double _gridSize = 32.0;
 
+  /// [engine.time.timeScale] captured when the editor is opened, restored
+  /// when it's closed again.
+  double? _preEditorTimeScale;
+
   // ── Pointer / drag state ──────────────────────────────────────────────────
 
   GizmoHandle? _activeHandle;
@@ -274,6 +278,23 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   void onUpdate(double dt) {
     _attachDebuggerIfReady();
     if (!_isInitialized || !_isVisible) return;
+    _syncTimeScaleForPreview();
+  }
+
+  /// While the editor is open, [engine.time.timeScale] is held at 0 so the
+  /// game underneath is effectively paused. If the selected entity's
+  /// animation preview (Timeline dock's Play button) is running, the preview
+  /// systems ride on the same scaled deltaTime as gameplay — so timeScale is
+  /// bumped back to 1 for as long as it's playing, and dropped back to 0
+  /// once it stops/pauses.
+  void _syncTimeScaleForPreview() {
+    final entity = sceneState.selectedEntity;
+    final isPreviewPlaying = entity != null &&
+        ((entity.getComponent<AnimatedSpriteComponent>()?.isPlaying ??
+                false) ||
+            (entity.getComponent<AnimationControllerComponent>()?.isPlaying ??
+                false));
+    engine.time.timeScale = isPreviewPlaying ? 1.0 : 0.0;
   }
 
   /// Called by [GameEditorAdapter] via the [onRenderOverlay] chain,
@@ -860,8 +881,12 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     if (_isVisible) {
       _isStatusPanelVisible = true;
       _attachDebuggerIfReady();
+      _preEditorTimeScale = engine.time.timeScale;
+      engine.time.timeScale = 0.0;
     } else {
       _isStatusPanelVisible = false;
+      engine.time.timeScale = _preEditorTimeScale ?? 1.0;
+      _preEditorTimeScale = null;
     }
     if (kDebugMode) {
       debugPrint(

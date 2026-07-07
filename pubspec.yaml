@@ -16,6 +16,7 @@ dependencies:
   just_colours: ^0.1.0
   just_database: ^1.4.2
   just_storage: ^1.2.1
+  path_provider: ^2.1.2
 
 dev_dependencies:
   flutter_test:

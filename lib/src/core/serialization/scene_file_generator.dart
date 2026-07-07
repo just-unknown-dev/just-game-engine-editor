@@ -48,12 +48,38 @@ class SceneFileGenerator {
     await _ensureDir(sceneName);
     final levelFile = File(_levelPath(sceneName));
     final dataFile = File(_dataPath(sceneName));
+    final jsonFile = File(_jsonPath(sceneName));
     await Future.wait([
       if (!levelFile.existsSync())
         levelFile.writeAsString(_buildBlankLevel(sceneName)),
       if (!dataFile.existsSync())
         dataFile.writeAsString(_buildDataTemplate(sceneName)),
+      // Bootstraps the scene camera entity into the editor's live authoring
+      // world immediately — openScene() only spawns entities from this
+      // sidecar, it never executes the generated .level.dart.
+      if (!jsonFile.existsSync())
+        jsonFile.writeAsString(_buildInitialSidecar(sceneName)),
     ]);
+  }
+
+  /// Builds the `.scene.json` sidecar for a brand-new scene: a single
+  /// "MainCamera" entity, matching what [_buildBlankLevel] generates.
+  static String _buildInitialSidecar(String sceneName) {
+    final scene = Scene(name: sceneName);
+    final transform = TransformComponent(position: Vector3(2000, 400, 0));
+    final camera = CameraComponent(bounds: const Rect.fromLTWH(0, 0, 4000, 800));
+    final entityJson = <String, dynamic>{
+      'name': 'MainCamera',
+      'parentName': null,
+      'components': [componentToJson(transform), componentToJson(camera)]
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+    };
+    final data = <String, dynamic>{
+      ...scene.toJson(),
+      'entities': [entityJson],
+    };
+    return const JsonEncoder.withIndent('  ').convert(data);
   }
 
   /// Regenerates `{name}.level.dart` from [entities] currently in the world.
@@ -155,7 +181,13 @@ class ${cls}Level {
   const ${cls}Level._();
 
   static void build(World world) {
-    // No entities yet — create them in the editor.
+    // Scene camera — auto-created for new scenes. CameraTransformSyncSystem
+    // drives the main camera from this entity every frame; its CameraComponent
+    // also defines world bounds for the boundary/death systems.
+    world.createEntityWithComponents([
+      TransformComponent(position: Vector3(2000, 400, 0)),
+      CameraComponent(bounds: Rect.fromLTWH(0, 0, 4000, 800)),
+    ], name: 'MainCamera');
   }
 }
 ''';
@@ -423,6 +455,11 @@ class ${cls}Level {
           : '';
       return 'CameraFollowComponent($en$la)'.replaceAll(RegExp(r', \)$'), ')');
     }
+    if (c is CameraComponent) {
+      final z = c.zoom != 1.0 ? 'zoom: ${_d(c.zoom)}, ' : '';
+      return 'CameraComponent(${z}bounds: Rect.fromLTWH(${_d(c.bounds.left)}, '
+          '${_d(c.bounds.top)}, ${_d(c.bounds.width)}, ${_d(c.bounds.height)}))';
+    }
 
     // Hierarchy
     if (c is InputComponent) return 'InputComponent()';
@@ -591,6 +628,16 @@ class ${cls}Level {
         return CameraFollowComponent(
           enabled: j['enabled'] as bool? ?? true,
           lookaheadDistance: _n(j['lookaheadDistance'] ?? 80.0),
+        );
+      case 'CameraComponent':
+        return CameraComponent(
+          zoom: _n(j['zoom'] ?? 1.0),
+          bounds: Rect.fromLTWH(
+            _n(j['boundsLeft'] ?? 0.0),
+            _n(j['boundsTop'] ?? 0.0),
+            _n(j['boundsWidth'] ?? 4000.0),
+            _n(j['boundsHeight'] ?? 800.0),
+          ),
         );
       case 'InputComponent':
         return InputComponent();
@@ -761,6 +808,16 @@ class ${cls}Level {
         'type': 'CameraFollowComponent',
         'enabled': c.enabled,
         'lookaheadDistance': c.lookaheadDistance,
+      };
+    }
+    if (c is CameraComponent) {
+      return {
+        'type': 'CameraComponent',
+        'zoom': c.zoom,
+        'boundsLeft': c.bounds.left,
+        'boundsTop': c.bounds.top,
+        'boundsWidth': c.bounds.width,
+        'boundsHeight': c.bounds.height,
       };
     }
     if (c is InputComponent) return {'type': 'InputComponent'};

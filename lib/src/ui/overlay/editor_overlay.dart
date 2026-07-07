@@ -93,7 +93,17 @@ class _OverlayUiSettingsWatcherState extends State<_OverlayUiSettingsWatcher> {
 /// If [plugin.isStatusPanelVisible] is true, the compact dock can still be
 /// shown independently. When visible it switches to a split layout: game
 /// canvas on the left, editor panel on the right.
-class JustGameEditorOverlay extends StatelessWidget {
+///
+/// The dock/panel/badge/snackbar "chrome" is projected into the ambient
+/// [Overlay] via [OverlayPortal] rather than painted inline. Apps typically
+/// stack pause/game-over dialogs above this widget (see just_zombies'
+/// GameScreen); painting chrome inline would put it underneath those
+/// dialogs. Routing it through the Overlay makes the editor — a developer
+/// tool, not game UI — always render on top, regardless of sibling order
+/// elsewhere in the app. Only the game canvas itself stays in its normal
+/// tree position, since gameplay must still render beneath the app's own
+/// HUD/dialogs as before.
+class JustGameEditorOverlay extends StatefulWidget {
   const JustGameEditorOverlay({
     super.key,
     required this.plugin,
@@ -104,8 +114,24 @@ class JustGameEditorOverlay extends StatelessWidget {
   final Widget gameChild;
 
   @override
+  State<JustGameEditorOverlay> createState() => _JustGameEditorOverlayState();
+}
+
+class _JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
+  final OverlayPortalController _chromeController = OverlayPortalController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (kDebugMode) _chromeController.show();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (!kDebugMode) return gameChild;
+    if (!kDebugMode) return widget.gameChild;
+
+    final plugin = widget.plugin;
+    final gameChild = widget.gameChild;
 
     return EditorMessenger(
       child: FocusScope(
@@ -113,83 +139,146 @@ class JustGameEditorOverlay extends StatelessWidget {
         child: Focus(
           autofocus: true,
           canRequestFocus: true,
-          child: AnimatedBuilder(
-            animation: plugin,
-            builder: (context, _) {
-              if (!plugin.isVisible) {
-                if (!plugin.isStatusPanelVisible) {
-                  return AbsorbPointer(absorbing: false, child: gameChild);
-                }
+          child: OverlayPortal(
+            controller: _chromeController,
+            overlayChildBuilder: (context) {
+              return AnimatedBuilder(
+                animation: plugin,
+                builder: (context, _) {
+                  if (!plugin.isVisible) {
+                    if (!plugin.isStatusPanelVisible) {
+                      return const SizedBox.shrink();
+                    }
+                    return _CompactChrome(plugin: plugin);
+                  }
 
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    return Stack(
-                      clipBehavior: Clip.hardEdge,
-                      children: <Widget>[
-                        Positioned.fill(
-                          child: AbsorbPointer(
-                            absorbing: false,
-                            child: gameChild,
-                          ),
-                        ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: _CompactStatusDock(
-                            plugin: plugin,
-                            maxDetailWidth: constraints.maxWidth,
-                            maxDetailHeight: constraints.maxHeight,
-                          ),
-                        ),
-                        const Positioned(
-                          bottom: _CompactStatusDock._panelHeight + 8,
-                          right: 8,
-                          child: _EditorSnackBarLayer(),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              }
-
-              return ValueListenableBuilder<_OverlayUiSettings>(
-                valueListenable: _overlayUiSettingsSignal,
-                builder: (context, settings, _) {
-                  return _OverlayUiSettingsWatcher(
-                    plugin: plugin,
-                    settings: settings,
-                    child: Stack(
-                      children: <Widget>[
-                        Positioned.fill(
-                          child: _EditorSplitLayout(
-                            plugin: plugin,
-                            gameChild: gameChild,
-                            settings: settings,
-                          ),
-                        ),
-                        if (settings.showStatusBadge)
-                          Positioned(
-                            top: 16,
-                            left: 16,
-                            child: IgnorePointer(
-                              child: _EditorStatusBadge(settings: settings),
-                            ),
-                          ),
-                        const Positioned(
-                          bottom: _CompactStatusDock._panelHeight + 8,
-                          right: _EditorRightPanel.panelWidth + 8,
-                          child: _EditorSnackBarLayer(),
-                        ),
-                      ],
-                    ),
+                  return ValueListenableBuilder<_OverlayUiSettings>(
+                    valueListenable: _overlayUiSettingsSignal,
+                    builder: (context, settings, _) =>
+                        _FullEditorChrome(plugin: plugin, settings: settings),
                   );
                 },
               );
             },
+            child: AnimatedBuilder(
+              animation: plugin,
+              builder: (context, _) {
+                if (!plugin.isVisible) {
+                  return AbsorbPointer(absorbing: false, child: gameChild);
+                }
+
+                return ValueListenableBuilder<_OverlayUiSettings>(
+                  valueListenable: _overlayUiSettingsSignal,
+                  builder: (context, settings, _) {
+                    return _OverlayUiSettingsWatcher(
+                      plugin: plugin,
+                      settings: settings,
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: _GameCanvasArea(
+                              plugin: plugin,
+                              gameChild: gameChild,
+                            ),
+                          ),
+                          const SizedBox(width: _EditorRightPanel.panelWidth),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Chrome shown when the full editor is closed but the compact status dock
+/// is pinned open. Sized against [MediaQuery]'s screen size since it now
+/// paints in the root [Overlay] rather than inline with [JustGameEditorOverlay],
+/// which — for this package's expected full-bleed usage — matches the size
+/// the dock would have received locally.
+class _CompactChrome extends StatelessWidget {
+  const _CompactChrome({required this.plugin});
+
+  final JustGameEditorPlugin plugin;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    return Stack(
+      children: <Widget>[
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: _CompactStatusDock(
+            plugin: plugin,
+            maxDetailWidth: size.width,
+            maxDetailHeight: size.height,
+          ),
+        ),
+        const Positioned(
+          bottom: _CompactStatusDock._panelHeight + 8,
+          right: 8,
+          child: _EditorSnackBarLayer(),
+        ),
+      ],
+    );
+  }
+}
+
+/// Chrome shown while the full editor is open: right inspector panel, the
+/// compact dock confined to the canvas column, the status badge, and
+/// snackbars. See [_CompactChrome] for the sizing assumption.
+class _FullEditorChrome extends StatelessWidget {
+  const _FullEditorChrome({required this.plugin, required this.settings});
+
+  final JustGameEditorPlugin plugin;
+  final _OverlayUiSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final leftWidth = math.max(0.0, size.width - _EditorRightPanel.panelWidth);
+
+    return Stack(
+      children: <Widget>[
+        Positioned(
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: _EditorRightPanel.panelWidth,
+          child: _EditorRightPanel(plugin: plugin, settings: settings),
+        ),
+        if (plugin.isStatusPanelVisible)
+          Positioned(
+            left: 0,
+            right: _EditorRightPanel.panelWidth,
+            bottom: 0,
+            child: _CompactStatusDock(
+              plugin: plugin,
+              maxDetailWidth: leftWidth,
+              maxDetailHeight: size.height,
+            ),
+          ),
+        if (settings.showStatusBadge)
+          Positioned(
+            top: 16,
+            left: 16,
+            child: IgnorePointer(
+              child: _EditorStatusBadge(settings: settings),
+            ),
+          ),
+        const Positioned(
+          bottom: _CompactStatusDock._panelHeight + 8,
+          right: _EditorRightPanel.panelWidth + 8,
+          child: _EditorSnackBarLayer(),
+        ),
+      ],
     );
   }
 }
@@ -426,68 +515,7 @@ final _OverlaySettingsStore _overlaySettingsStore = _OverlaySettingsStore(
   JustStorage.standard(),
 );
 
-// ── Split layout & canvas ─────────────────────────────────────────────────────
-
-class _EditorSplitLayout extends StatelessWidget {
-  const _EditorSplitLayout({
-    required this.plugin,
-    required this.gameChild,
-    required this.settings,
-  });
-
-  final JustGameEditorPlugin plugin;
-  final Widget gameChild;
-  final _OverlayUiSettings settings;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: _EditorWorkspaceArea(plugin: plugin, gameChild: gameChild),
-        ),
-        SizedBox(
-          width: _EditorRightPanel.panelWidth,
-          child: _EditorRightPanel(plugin: plugin, settings: settings),
-        ),
-      ],
-    );
-  }
-}
-
-class _EditorWorkspaceArea extends StatelessWidget {
-  const _EditorWorkspaceArea({required this.plugin, required this.gameChild});
-
-  final JustGameEditorPlugin plugin;
-  final Widget gameChild;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Stack(
-          clipBehavior: Clip.hardEdge,
-          children: <Widget>[
-            Positioned.fill(
-              child: _GameCanvasArea(plugin: plugin, gameChild: gameChild),
-            ),
-            if (plugin.isStatusPanelVisible)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _CompactStatusDock(
-                  plugin: plugin,
-                  maxDetailWidth: constraints.maxWidth,
-                  maxDetailHeight: constraints.maxHeight,
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
+// ── Canvas ─────────────────────────────────────────────────────────────────
 
 class _GameCanvasArea extends StatefulWidget {
   const _GameCanvasArea({required this.plugin, required this.gameChild});

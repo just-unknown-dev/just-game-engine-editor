@@ -2,6 +2,7 @@ import 'animation/animation_controller_editor_component.dart';
 import 'animation/animation_state_editor_component.dart';
 import 'audio/audio_source_editor_component.dart';
 import 'audio/audio_stream_editor_component.dart';
+import 'camera/camera_editor_component.dart';
 import 'camera/camera_follow_editor_component.dart';
 import 'core/transform_editor_component.dart';
 import 'core/velocity_editor_component.dart';
@@ -50,6 +51,7 @@ void registerAllEditorComponents() {
     AnimationStateEditorComponent(),
     AudioSourceEditorComponent(),
     AudioStreamEditorComponent(),
+    CameraEditorComponent(),
     CameraFollowEditorComponent(),
     TransformEditorComponent(),
     VelocityEditorComponent(),
