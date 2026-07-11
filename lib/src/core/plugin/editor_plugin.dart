@@ -26,7 +26,7 @@ import '../ecs/generator/component_registry.dart';
 abstract interface class EnginePlugin {
   Future<void> onInitialize();
   void onUpdate(double dt);
-  void onRender(Canvas canvas);
+  void onRender(Canvas canvas, Size size);
 }
 
 /// Debug-only runtime editor plugin scaffold.
@@ -318,10 +318,16 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   /// Called by [GameEditorAdapter] via the [onRenderOverlay] chain,
   /// AFTER [engine.world.render].  Applies the camera transform so gizmos
   /// render in world space on top of all ECS entities.
+  ///
+  /// [size] is the actual canvas size [RenderingEngine] just rendered with —
+  /// used here (rather than the separately-tracked [_canvasSize], which is
+  /// only updated via a post-frame callback from pointer-event plumbing and
+  /// can drift/lag a frame behind) so gizmo/marker positions always match
+  /// where entities were actually drawn.
   @override
-  void onRender(Canvas canvas) {
+  void onRender(Canvas canvas, Size size) {
     if (!_isInitialized || !_isVisible) return;
-    if (_canvasSize == Size.zero) return;
+    if (size == Size.zero) return;
 
     final camera = engine.cameraSystem.mainCamera;
 
@@ -329,7 +335,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
       _gizmoPainter.paintInfiniteGrid(
         canvas,
         camera,
-        _canvasSize,
+        size,
         gridSize: _gridSize,
       );
     }
@@ -338,12 +344,12 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
       canvas,
       engine.world.query([TransformComponent, CameraComponent]),
       camera,
-      _canvasSize,
+      size,
     );
 
     final selected = sceneState.selectedEntity;
     if (selected == null || !selected.isActive) return;
-    _gizmoPainter.paintGizmos(canvas, selected, camera, _canvasSize);
+    _gizmoPainter.paintGizmos(canvas, selected, camera, size);
   }
 
   void applyOverlaySettings({

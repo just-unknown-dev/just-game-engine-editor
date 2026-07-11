@@ -95,7 +95,7 @@ class _GameEditorAdapterState extends State<GameEditorAdapter>
       // time always yields null because _GamePainter (which sets it via ??=)
       // hasn't been constructed yet when initState() runs.
       widget.engine.world.render(canvas, size);
-      if (plugin.isVisible) plugin.onRender(canvas);
+      if (plugin.isVisible) plugin.onRender(canvas, size);
     }
 
     _installedOverlayHook = hook;
