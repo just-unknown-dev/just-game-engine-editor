@@ -82,6 +82,75 @@ class SceneFileGenerator {
     return const JsonEncoder.withIndent('  ').convert(data);
   }
 
+  // ── Delete / rename / duplicate ─────────────────────────────────────────
+
+  /// Deletes `lib/game/scenes/{name}/` and everything in it.
+  static Future<void> deleteSceneFiles(String name) async {
+    final dir = Directory(_sceneDir(name));
+    if (await dir.exists()) await dir.delete(recursive: true);
+  }
+
+  /// Renames a scene folder: copies its files to [newName] (rewriting the
+  /// embedded class names and scene-name references), then removes the
+  /// original folder.
+  static Future<void> renameSceneFiles(String oldName, String newName) async {
+    final oldDir = Directory(_sceneDir(oldName));
+    if (!oldDir.existsSync()) {
+      throw StateError('Scene "$oldName" does not exist.');
+    }
+    await _copyAndRewrite(oldName, newName);
+    await oldDir.delete(recursive: true);
+  }
+
+  /// Duplicates a scene folder to [newName] (rewriting the embedded class
+  /// names and scene-name references). The original scene is left untouched.
+  static Future<void> duplicateSceneFiles(
+    String sourceName,
+    String newName,
+  ) async {
+    if (!Directory(_sceneDir(sourceName)).existsSync()) {
+      throw StateError('Scene "$sourceName" does not exist.');
+    }
+    await _copyAndRewrite(sourceName, newName);
+  }
+
+  /// Copies the three scene files from [fromName] to [toName], rewriting
+  /// occurrences of the old scene name / generated class names to the new
+  /// ones. Assumes the auto-generated header/template shape produced by
+  /// [_buildBlankLevel]/[_buildDataTemplate]/[writeJsonSidecar] — hand-edited
+  /// content outside that shape (e.g. entity spawn code) is copied verbatim.
+  static Future<void> _copyAndRewrite(String fromName, String toName) async {
+    await _ensureDir(toName);
+    for (final paths in [
+      (_levelPath(fromName), _levelPath(toName)),
+      (_dataPath(fromName), _dataPath(toName)),
+      (_jsonPath(fromName), _jsonPath(toName)),
+    ]) {
+      final (fromPath, toPath) = paths;
+      final fromFile = File(fromPath);
+      if (!fromFile.existsSync()) continue;
+      final content = await fromFile.readAsString();
+      await File(
+        toPath,
+      ).writeAsString(_rewriteSceneReferences(content, fromName, toName));
+    }
+  }
+
+  static String _rewriteSceneReferences(
+    String content,
+    String fromName,
+    String toName,
+  ) {
+    final fromCls = _toPascalCase(fromName);
+    final toCls = _toPascalCase(toName);
+    return content
+        .replaceAll('${fromCls}Level', '${toCls}Level')
+        .replaceAll('${fromCls}Data', '${toCls}Data')
+        .replaceAll('scenes/$fromName/', 'scenes/$toName/')
+        .replaceAll("'$fromName'", "'$toName'") // .data.dart sceneName const
+        .replaceAll('"$fromName"', '"$toName"'); // .scene.json "name" field
+  }
+
   /// Regenerates `{name}.level.dart` from [entities] currently in the world.
   ///
   /// Call this on every "Save" press so the dart file stays in sync with the

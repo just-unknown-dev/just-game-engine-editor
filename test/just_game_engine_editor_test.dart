@@ -118,23 +118,33 @@ void main() {
       );
     }
 
-    const allowedAddedTypes = <Type>{
-      SimpleMovementSystem,
-      PhysicsBridgeSystem,
-      PhysicsBodyBindingSystem,
-      PhysicsJointBindingSystem,
-      EditorLogCaptureSystem,
+    // Compared by name (not `Type`) because EditorSpriteSystem/
+    // EditorAnimatedSpriteSystem/EditorAnimationControllerSystem aren't
+    // exported from the package's public barrel, so this test file (which
+    // only imports the barrel) has no `Type` literal to reference them with.
+    const allowedAddedTypeNames = <String>{
+      'SimpleMovementSystem',
+      'PhysicsBridgeSystem',
+      'PhysicsBodyBindingSystem',
+      'PhysicsJointBindingSystem',
+      'EditorLogCaptureSystem',
+      'EditorSpriteSystem',
+      'EditorAnimatedSpriteSystem',
+      'EditorAnimationControllerSystem',
     };
 
-    final actuallyAddedTypes = <Type>{};
+    final actuallyAddedTypeNames = <String>{};
     for (final entry in afterCounts.entries) {
       final before = beforeCounts[entry.key] ?? 0;
       if (entry.value > before) {
-        actuallyAddedTypes.add(entry.key);
+        actuallyAddedTypeNames.add(entry.key.toString());
       }
     }
 
-    expect(actuallyAddedTypes.difference(allowedAddedTypes), isEmpty);
+    expect(
+      actuallyAddedTypeNames.difference(allowedAddedTypeNames),
+      isEmpty,
+    );
     expect(engine.world.systems.whereType<SimpleMovementSystem>().length, 1);
     expect(engine.world.systems.whereType<PhysicsBridgeSystem>().length, 1);
     expect(

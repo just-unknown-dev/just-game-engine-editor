@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
@@ -193,6 +194,49 @@ class GizmoPainter {
       ..style = PaintingStyle.fill
       ..color = _colOrigin;
     canvas.drawCircle(screenPos, 3.5, _paint);
+  }
+
+  /// Draws a small camera icon at every camera entity's position, regardless
+  /// of selection, so it's discoverable at a glance while editing.
+  void paintCameraMarkers(
+    Canvas canvas,
+    List<Entity> cameraEntities,
+    Camera camera,
+    Size canvasSize,
+  ) {
+    if (cameraEntities.isEmpty || canvasSize == Size.zero) return;
+    camera.viewportSize = canvasSize;
+    for (final entity in cameraEntities) {
+      final transform = entity.getComponent<TransformComponent>();
+      if (transform == null) continue;
+      final screenPos = camera.worldToScreen(transform.position.toOffset());
+      _paintCameraIcon(canvas, screenPos);
+    }
+  }
+
+  void _paintCameraIcon(Canvas canvas, Offset center) {
+    const iconData = Icons.videocam_rounded;
+    _paint
+      ..style = PaintingStyle.fill
+      ..color = const Color(0xFF40E0D0).withValues(alpha: 0.18);
+    canvas.drawCircle(center, 16, _paint);
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(iconData.codePoint),
+        style: TextStyle(
+          fontSize: 20,
+          fontFamily: iconData.fontFamily,
+          package: iconData.fontPackage,
+          color: const Color(0xFF40E0D0),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    textPainter.paint(
+      canvas,
+      center - Offset(textPainter.width / 2, textPainter.height / 2),
+    );
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

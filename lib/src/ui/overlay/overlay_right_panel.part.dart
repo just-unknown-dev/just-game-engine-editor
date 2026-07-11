@@ -31,6 +31,7 @@ class _EditorRightPanel extends StatelessWidget {
                     Expanded(
                       child: ScenePickerPanel(
                         onSceneSelected: (name) => plugin.openScene(name),
+                        sceneManager: plugin.sceneManager,
                       ),
                     )
                   else ...<Widget>[

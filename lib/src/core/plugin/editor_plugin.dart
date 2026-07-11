@@ -16,6 +16,7 @@ import '../ecs/systems/physics_body_binding_system.dart';
 import '../ecs/systems/physics_joint_binding_system.dart';
 import '../ecs/systems/simple_movement_system.dart';
 import '../serialization/scene_file_generator.dart';
+import '../serialization/scene_manager.dart';
 import '../services/editor_log_service.dart';
 import '../state/editor_scene_state.dart';
 import '../../ui/overlay/gizmo_painter.dart';
@@ -35,6 +36,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     this.componentRegistrar,
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
+    Set<String> protectedSceneNames = const {},
   }) : _toggleKey = toggleKey,
        _statusPanelToggleKey = statusPanelToggleKey,
        debuggerController = engine.createDebuggerController(
@@ -43,10 +45,15 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
        ),
        sceneState = EditorSceneState()
          ..setGridSnapping(enabled: true, gridSize: 32),
+       sceneManager = SceneManager(protectedSceneNames: protectedSceneNames),
        _gizmoPainter = GizmoPainter(),
        _hitTester = GizmoHitTester();
 
   final Engine engine;
+
+  /// Scene lifecycle operations (list/delete/rename/duplicate) for the
+  /// scene picker.
+  final SceneManager sceneManager;
 
   /// Optional callback that registers all game custom components with
   /// [CustomComponentRegistry.instance]. Called automatically during
@@ -138,6 +145,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     VoidCallback? componentRegistrar,
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
+    Set<String> protectedSceneNames = const {},
   }) async {
     if (!kDebugMode) return null;
 
@@ -146,6 +154,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
       componentRegistrar: componentRegistrar,
       toggleKey: toggleKey,
       statusPanelToggleKey: statusPanelToggleKey,
+      protectedSceneNames: protectedSceneNames,
     );
     await plugin.onInitialize();
     return plugin;
@@ -198,6 +207,14 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     )) {
       engine.world.addSystem(EditorAnimationControllerSystem());
     }
+    // A scene's camera entity should only drive the real camera during
+    // actual play — while authoring in the editor there's no manual pan/zoom
+    // to fall back on, so these (added by the app's own system registration,
+    // if present) must not hijack the authoring viewport.
+    engine.world.getSystem<CameraFollowSystem>()?.isAuthoringActive =
+        () => isVisible;
+    engine.world.getSystem<CameraTransformSyncSystem>()?.isAuthoringActive =
+        () => isVisible;
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
     // Register game custom components and wire post-refresh re-registration.
@@ -288,6 +305,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   /// bumped back to 1 for as long as it's playing, and dropped back to 0
   /// once it stops/pauses.
   void _syncTimeScaleForPreview() {
+    if (!engine.isInitialized) return;
     final entity = sceneState.selectedEntity;
     final isPreviewPlaying = entity != null &&
         ((entity.getComponent<AnimatedSpriteComponent>()?.isPlaying ??
@@ -315,6 +333,13 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
         gridSize: _gridSize,
       );
     }
+
+    _gizmoPainter.paintCameraMarkers(
+      canvas,
+      engine.world.query([TransformComponent, CameraComponent]),
+      camera,
+      _canvasSize,
+    );
 
     final selected = sceneState.selectedEntity;
     if (selected == null || !selected.isActive) return;
@@ -881,11 +906,15 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     if (_isVisible) {
       _isStatusPanelVisible = true;
       _attachDebuggerIfReady();
-      _preEditorTimeScale = engine.time.timeScale;
-      engine.time.timeScale = 0.0;
+      if (engine.isInitialized) {
+        _preEditorTimeScale = engine.time.timeScale;
+        engine.time.timeScale = 0.0;
+      }
     } else {
       _isStatusPanelVisible = false;
-      engine.time.timeScale = _preEditorTimeScale ?? 1.0;
+      if (engine.isInitialized) {
+        engine.time.timeScale = _preEditorTimeScale ?? 1.0;
+      }
       _preEditorTimeScale = null;
     }
     if (kDebugMode) {
