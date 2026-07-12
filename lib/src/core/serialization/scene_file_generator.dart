@@ -62,22 +62,35 @@ class SceneFileGenerator {
     ]);
   }
 
-  /// Builds the `.scene.json` sidecar for a brand-new scene: a single
-  /// "MainCamera" entity, matching what [_buildBlankLevel] generates.
+  /// Builds the `.scene.json` sidecar for a brand-new scene: "MainCamera"
+  /// and "PlayerSpawn" entities, matching what [_buildBlankLevel] generates.
   static String _buildInitialSidecar(String sceneName) {
     final scene = Scene(name: sceneName);
-    final transform = TransformComponent(position: Vector3(2000, 400, 0));
+    final cameraTransform = TransformComponent(
+      position: Vector3(2000, 400, 0),
+    );
     final camera = CameraComponent(bounds: const Rect.fromLTWH(0, 0, 4000, 800));
-    final entityJson = <String, dynamic>{
+    final cameraJson = <String, dynamic>{
       'name': 'MainCamera',
       'parentName': null,
-      'components': [componentToJson(transform), componentToJson(camera)]
-          .whereType<Map<String, dynamic>>()
-          .toList(),
+      'components':
+          [componentToJson(cameraTransform), componentToJson(camera)]
+              .whereType<Map<String, dynamic>>()
+              .toList(),
+    };
+    final spawnTransform = TransformComponent(position: Vector3(200, 400, 0));
+    final spawn = SpawnComponent(tag: 'player');
+    final spawnJson = <String, dynamic>{
+      'name': 'PlayerSpawn',
+      'parentName': null,
+      'components':
+          [componentToJson(spawnTransform), componentToJson(spawn)]
+              .whereType<Map<String, dynamic>>()
+              .toList(),
     };
     final data = <String, dynamic>{
       ...scene.toJson(),
-      'entities': [entityJson],
+      'entities': [cameraJson, spawnJson],
     };
     return const JsonEncoder.withIndent('  ').convert(data);
   }
@@ -257,6 +270,13 @@ class ${cls}Level {
       TransformComponent(position: Vector3(2000, 400, 0)),
       CameraComponent(bounds: Rect.fromLTWH(0, 0, 4000, 800)),
     ], name: 'MainCamera');
+
+    // Player spawn point — auto-created for new scenes. The editor's Play
+    // button spawns the app-registered 'player' entity here.
+    world.createEntityWithComponents([
+      TransformComponent(position: Vector3(200, 400, 0)),
+      SpawnComponent(tag: 'player'),
+    ], name: 'PlayerSpawn');
   }
 }
 ''';
@@ -529,6 +549,9 @@ class ${cls}Level {
       return 'CameraComponent(${z}bounds: Rect.fromLTWH(${_d(c.bounds.left)}, '
           '${_d(c.bounds.top)}, ${_d(c.bounds.width)}, ${_d(c.bounds.height)}))';
     }
+    if (c is SpawnComponent) {
+      return "SpawnComponent(tag: '${c.tag}')";
+    }
 
     // Hierarchy
     if (c is InputComponent) return 'InputComponent()';
@@ -708,6 +731,8 @@ class ${cls}Level {
             _n(j['boundsHeight'] ?? 800.0),
           ),
         );
+      case 'SpawnComponent':
+        return SpawnComponent(tag: j['tag'] as String? ?? 'player');
       case 'InputComponent':
         return InputComponent();
       case 'SimpleMovementComponent':
@@ -888,6 +913,9 @@ class ${cls}Level {
         'boundsWidth': c.bounds.width,
         'boundsHeight': c.bounds.height,
       };
+    }
+    if (c is SpawnComponent) {
+      return {'type': 'SpawnComponent', 'tag': c.tag};
     }
     if (c is InputComponent) return {'type': 'InputComponent'};
     if (c is SimpleMovementComponent) {

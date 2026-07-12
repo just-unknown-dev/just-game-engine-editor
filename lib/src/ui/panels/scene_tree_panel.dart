@@ -337,7 +337,9 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
       Rect.fromLTWH(globalPos.dx, globalPos.dy, 0, 0),
       Offset.zero & overlay.size,
     );
-    final isCameraEntity = widget.entity.hasComponent<CameraComponent>();
+    // Only the camera is protected — spawn points (player, zombie, ...) are
+    // ordinary, freely-deletable level design.
+    final isProtected = widget.entity.hasComponent<CameraComponent>();
 
     showMenu<_ContextAction>(
       context: context,
@@ -366,7 +368,7 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
           Icons.delete_outline_rounded,
           'Delete',
           textColor: EditorTheme.error,
-          enabled: !isCameraEntity,
+          enabled: !isProtected,
         ),
       ],
     ).then((action) {

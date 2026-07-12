@@ -273,6 +273,11 @@ class _FullEditorChrome extends StatelessWidget {
               child: _EditorStatusBadge(settings: settings),
             ),
           ),
+        Positioned(
+          top: 16,
+          right: _EditorRightPanel.panelWidth + 16,
+          child: _PlayControlsToolbar(plugin: plugin, settings: settings),
+        ),
         const Positioned(
           bottom: _CompactStatusDock._panelHeight + 8,
           right: _EditorRightPanel.panelWidth + 8,

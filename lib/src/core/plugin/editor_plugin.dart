@@ -29,11 +29,15 @@ abstract interface class EnginePlugin {
   void onRender(Canvas canvas, Size size);
 }
 
+/// Play/Pause/Stop state for the editor's in-scene play-test feature.
+enum EditorPlayState { stopped, playing, paused }
+
 /// Debug-only runtime editor plugin scaffold.
 class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   JustGameEditorPlugin({
     required this.engine,
     this.componentRegistrar,
+    this.spawnRegistry = const {},
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
     Set<String> protectedSceneNames = const {},
@@ -60,6 +64,14 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   /// [onInitialize] and again on [reassemble] (hot-reload) and after a
   /// successful component codegen refresh.
   final VoidCallback? componentRegistrar;
+
+  /// Maps a [SpawnComponent.tag] to a function that creates the entity for
+  /// it. The editor's Play button calls this for every [SpawnComponent]
+  /// entity in the world (once per play session) — the app owns what
+  /// actually gets created (a player, a zombie, ...), the editor just knows
+  /// where and when to ask for it.
+  final Map<String, Entity Function(World world, Entity spawnPoint)>
+  spawnRegistry;
 
   // ── Static project-component registration ──────────────────────────────────
 
@@ -113,6 +125,19 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   /// when it's closed again.
   double? _preEditorTimeScale;
 
+  // ── Play / Pause / Stop (editor-only play-test) ───────────────────────────
+
+  EditorPlayState _playState = EditorPlayState.stopped;
+  final List<EntityId> _spawnedRuntimeEntityIds = [];
+
+  EditorPlayState get playState => _playState;
+
+  /// True whenever the editor should behave as "authoring" (camera-entity
+  /// sync, transform→physics-body pushes, and the Timeline preview's
+  /// timeScale bump all pause/suppress) rather than "simulating" — i.e. the
+  /// editor is open and no play-test is in progress.
+  bool get _isAuthoring => _isVisible && _playState == EditorPlayState.stopped;
+
   // ── Pointer / drag state ──────────────────────────────────────────────────
 
   GizmoHandle? _activeHandle;
@@ -143,6 +168,8 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   static Future<JustGameEditorPlugin?> register({
     required Engine engine,
     VoidCallback? componentRegistrar,
+    Map<String, Entity Function(World world, Entity spawnPoint)>
+    spawnRegistry = const {},
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
     Set<String> protectedSceneNames = const {},
@@ -152,6 +179,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     final plugin = JustGameEditorPlugin(
       engine: engine,
       componentRegistrar: componentRegistrar,
+      spawnRegistry: spawnRegistry,
       toggleKey: toggleKey,
       statusPanelToggleKey: statusPanelToggleKey,
       protectedSceneNames: protectedSceneNames,
@@ -178,7 +206,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
         PhysicsBodyBindingSystem(
           engine.physics,
           sceneState: sceneState,
-          isAuthoringActive: () => isVisible,
+          isAuthoringActive: () => _isAuthoring,
         ),
       );
     }
@@ -208,13 +236,15 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
       engine.world.addSystem(EditorAnimationControllerSystem());
     }
     // A scene's camera entity should only drive the real camera during
-    // actual play — while authoring in the editor there's no manual pan/zoom
-    // to fall back on, so these (added by the app's own system registration,
-    // if present) must not hijack the authoring viewport.
+    // actual play — while authoring (editor open, Play not pressed) there's
+    // no manual pan/zoom to fall back on, so these (added by the app's own
+    // system registration, if present) must not hijack the authoring
+    // viewport. Pressing Play un-suppresses them so the test camera follows
+    // the player properly.
     engine.world.getSystem<CameraFollowSystem>()?.isAuthoringActive =
-        () => isVisible;
+        () => _isAuthoring;
     engine.world.getSystem<CameraTransformSyncSystem>()?.isAuthoringActive =
-        () => isVisible;
+        () => _isAuthoring;
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
     // Register game custom components and wire post-refresh re-registration.
@@ -298,14 +328,17 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     _syncTimeScaleForPreview();
   }
 
-  /// While the editor is open, [engine.time.timeScale] is held at 0 so the
-  /// game underneath is effectively paused. If the selected entity's
-  /// animation preview (Timeline dock's Play button) is running, the preview
-  /// systems ride on the same scaled deltaTime as gameplay — so timeScale is
-  /// bumped back to 1 for as long as it's playing, and dropped back to 0
-  /// once it stops/pauses.
+  /// While the editor is open and authoring (Play not pressed),
+  /// [engine.time.timeScale] is held at 0 so the game underneath is
+  /// effectively paused. If the selected entity's animation preview
+  /// (Timeline dock's Play button) is running, the preview systems ride on
+  /// the same scaled deltaTime as gameplay — so timeScale is bumped back to
+  /// 1 for as long as it's playing, and dropped back to 0 once it
+  /// stops/pauses. Deliberately skipped outside pure authoring — [play]/
+  /// [pause]/[stop] own timeScale once a play-test session has started.
   void _syncTimeScaleForPreview() {
     if (!engine.isInitialized) return;
+    if (_playState != EditorPlayState.stopped) return;
     final entity = sceneState.selectedEntity;
     final isPreviewPlaying = entity != null &&
         ((entity.getComponent<AnimatedSpriteComponent>()?.isPlaying ??
@@ -343,6 +376,13 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     _gizmoPainter.paintCameraMarkers(
       canvas,
       engine.world.query([TransformComponent, CameraComponent]),
+      camera,
+      size,
+    );
+
+    _gizmoPainter.paintSpawnMarkers(
+      canvas,
+      engine.world.query([TransformComponent, SpawnComponent]),
       camera,
       size,
     );
@@ -883,6 +923,72 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     );
   }
 
+  // ── Play / Pause / Stop ────────────────────────────────────────────────────
+  //
+  // Editor-only play-test: never runs in a release build (this whole plugin
+  // is debug-gated), and has no effect on the shipped game's own startNewRun
+  // flow — it operates directly on the scene already live in the editor.
+
+  /// Starts (or resumes) simulating the currently open scene.
+  ///
+  /// The first call in a session (from [EditorPlayState.stopped]) spawns one
+  /// entity per [SpawnComponent] found in the world via [spawnRegistry],
+  /// tracking what it created so [stop] can clean up precisely — the spawn
+  /// point entities themselves are never touched, same as the camera entity.
+  /// Calling this again while already playing/paused just resumes time.
+  void play() {
+    if (!_isInitialized || !engine.isInitialized) return;
+
+    if (_playState == EditorPlayState.stopped) {
+      for (final spawnPoint in engine.world.query([SpawnComponent])) {
+        final tag = spawnPoint.getComponent<SpawnComponent>()!.tag;
+        final spawner = spawnRegistry[tag];
+        if (spawner == null) continue;
+        final spawned = spawner(engine.world, spawnPoint);
+        _spawnedRuntimeEntityIds.add(spawned.id);
+      }
+      logService.log(
+        'Play: spawned ${_spawnedRuntimeEntityIds.length} entities.',
+        source: 'editor',
+        category: 'play',
+      );
+    }
+
+    _playState = EditorPlayState.playing;
+    engine.time.timeScale = 1.0;
+    notifyListeners();
+  }
+
+  /// Freezes simulation without destroying anything — [play] resumes
+  /// exactly where this left off.
+  void pause() {
+    if (_playState != EditorPlayState.playing) return;
+    _playState = EditorPlayState.paused;
+    engine.time.timeScale = 0.0;
+    notifyListeners();
+  }
+
+  /// Destroys every entity [play] spawned this session and returns to pure
+  /// authoring — the next [play] call starts completely fresh.
+  void stop() {
+    if (_playState == EditorPlayState.stopped) return;
+
+    for (final id in _spawnedRuntimeEntityIds) {
+      final entity = engine.world.getEntity(id);
+      if (entity != null) engine.world.destroyEntity(entity);
+    }
+    logService.log(
+      'Stop: destroyed ${_spawnedRuntimeEntityIds.length} entities.',
+      source: 'editor',
+      category: 'play',
+    );
+    _spawnedRuntimeEntityIds.clear();
+
+    _playState = EditorPlayState.stopped;
+    engine.time.timeScale = 0.0;
+    notifyListeners();
+  }
+
   // ── Visibility ────────────────────────────────────────────────────────────
 
   void toggleVisibility() => setVisible(!_isVisible);
@@ -918,6 +1024,9 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
       }
     } else {
       _isStatusPanelVisible = false;
+      // Closing the editor mid-play-test would otherwise leave play-spawned
+      // entities and a stale play state behind.
+      if (_playState != EditorPlayState.stopped) stop();
       if (engine.isInitialized) {
         engine.time.timeScale = _preEditorTimeScale ?? 1.0;
       }

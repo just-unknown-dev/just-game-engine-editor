@@ -9,6 +9,7 @@ import 'core/velocity_editor_component.dart';
 import 'effects/effect_editor_component.dart';
 import 'gameplay/health_editor_component.dart';
 import 'gameplay/lifetime_editor_component.dart';
+import 'gameplay/spawn_editor_component.dart';
 import 'gameplay/tag_editor_component.dart';
 import 'hierarchy/children_editor_component.dart';
 import 'hierarchy/parent_editor_component.dart';
@@ -58,6 +59,7 @@ void registerAllEditorComponents() {
     EffectEditorComponent(),
     HealthEditorComponent(),
     LifetimeEditorComponent(),
+    SpawnEditorComponent(),
     TagEditorComponent(),
     ChildrenEditorComponent(),
     ParentEditorComponent(),
