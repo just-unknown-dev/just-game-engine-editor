@@ -554,6 +554,7 @@ class _GameCanvasAreaState extends State<_GameCanvasArea> {
           onPointerDown: widget.plugin.onPointerDown,
           onPointerMove: widget.plugin.onPointerMove,
           onPointerUp: widget.plugin.onPointerUp,
+          onPointerSignal: widget.plugin.onPointerScroll,
           child: AbsorbPointer(absorbing: true, child: widget.gameChild),
         );
       },

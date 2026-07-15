@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:just_debugger/just_debugger.dart';
@@ -145,6 +146,9 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
 
   // Size of the game canvas area (updated each frame from the Listener widget)
   Size _canvasSize = Size.zero;
+
+  // Middle-mouse-drag camera pan, mirroring Blender/Unity/Godot conventions.
+  bool _isPanningCamera = false;
 
   // ── Focus nodes ───────────────────────────────────────────────────────────
 
@@ -418,6 +422,16 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     if (!_isInitialized || !_isVisible) return;
     if (_canvasSize == Size.zero) return;
 
+    // Middle-mouse-drag pans the camera — only while pure-authoring (Play
+    // not pressed): once a scene has a camera entity, CameraTransformSyncSystem
+    // re-asserts mainCamera's position from it every frame during Play, which
+    // would fight a manual pan immediately.
+    if ((event.buttons & kMiddleMouseButton) != 0 && _isAuthoring) {
+      _isPanningCamera = true;
+      _activeHandle = null;
+      return;
+    }
+
     final camera = engine.cameraSystem.mainCamera;
     camera.viewportSize = _canvasSize;
 
@@ -464,6 +478,15 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
 
   void onPointerMove(PointerMoveEvent event) {
     if (!_isInitialized || !_isVisible) return;
+
+    if (_isPanningCamera) {
+      final camera = engine.cameraSystem.mainCamera;
+      // Drag right/down should move the view (and thus the world under the
+      // cursor) right/down, i.e. the camera moves the opposite way.
+      camera.moveBy(-event.delta / camera.zoom);
+      return;
+    }
+
     if (_activeHandle == null || _activeHandle == GizmoHandle.none) return;
 
     final entity = sceneState.selectedEntity;
@@ -573,6 +596,23 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   void onPointerUp(PointerUpEvent event) {
     _activeHandle = null;
     _dragStartScreen = null;
+    _isPanningCamera = false;
+  }
+
+  /// Mouse-wheel zoom, centered on the cursor so the point under it stays
+  /// fixed on screen. Same authoring-only gate as [onPointerDown]'s pan.
+  void onPointerScroll(PointerSignalEvent event) {
+    if (!_isInitialized || !_isVisible || !_isAuthoring) return;
+    if (event is! PointerScrollEvent) return;
+    if (_canvasSize == Size.zero) return;
+
+    final camera = engine.cameraSystem.mainCamera;
+    camera.viewportSize = _canvasSize;
+
+    final worldPoint = camera.screenToWorld(event.localPosition);
+    // Scrolling up (negative dy) zooms in.
+    final factor = math.exp(-event.scrollDelta.dy * 0.0015);
+    camera.zoomToPoint(worldPoint, camera.zoom * factor);
   }
 
   // ── Scene management helpers ──────────────────────────────────────────────
