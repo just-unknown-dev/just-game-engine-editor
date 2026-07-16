@@ -1,240 +1,5 @@
 part of 'editor_overlay.dart';
 
-class _StatusDetailCard extends StatelessWidget {
-  const _StatusDetailCard({
-    required this.controller,
-    required this.section,
-    required this.onClose,
-    required this.maxHeight,
-    required this.settings,
-  });
-
-  final JustDebuggerController controller;
-  final _StatusDetailSection section;
-  final VoidCallback onClose;
-  final double maxHeight;
-  final _OverlayUiSettings settings;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[
-        controller,
-        EditorLogService.instance,
-      ]),
-      builder: (context, _) {
-        return Material(
-          color: Colors.transparent,
-          child: Container(
-            constraints: BoxConstraints(maxHeight: maxHeight.clamp(180, 320)),
-            decoration: BoxDecoration(
-              color: const Color(0xF41B1B1B),
-              borderRadius: BorderRadius.circular(settings.cornerRadius),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
-              boxShadow: const <BoxShadow>[
-                BoxShadow(
-                  color: Color(0x66000000),
-                  blurRadius: 18,
-                  offset: Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: EditorTheme.primary.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          section.icon,
-                          size: 12,
-                          color: EditorTheme.primaryBright,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              section.title,
-                              style: TextStyle(
-                                fontSize: 12 * settings.effectiveTextScale,
-                                fontWeight: FontWeight.w500,
-                                color: EditorTheme.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            Text.rich(_detailSubtitle(section, controller)),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: onClose,
-                        icon: const Icon(Icons.close_rounded),
-                        color: EditorTheme.textSecondary,
-                        iconSize: 16,
-                        splashRadius: 16,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _buildDetailContent(controller),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  TextSpan _detailSubtitle(
-    _StatusDetailSection section,
-    JustDebuggerController controller,
-  ) {
-    final logs = EditorLogService.instance.entries;
-    final runtimeWarningThreshold = switch (settings.warningSeverity) {
-      _WarningSeverityMode.lenient => 3,
-      _WarningSeverityMode.balanced => 1,
-      _WarningSeverityMode.strict => 1,
-    };
-    final runtimeWarningCount = controller.health.messages.length;
-    final runtimeWarn = runtimeWarningCount >= runtimeWarningThreshold;
-    final runtimeHealth = runtimeWarn
-        ? '$runtimeWarningCount alerts'
-        : 'Healthy';
-    final hasNoSystems = controller.snapshot.systemCount == 0;
-    final inactiveCount =
-        controller.snapshot.entityCount - controller.snapshot.activeEntityCount;
-    final inactiveRatio = controller.snapshot.entityCount <= 0
-        ? 0.0
-        : inactiveCount / controller.snapshot.entityCount;
-    final inactiveThreshold = switch (settings.warningSeverity) {
-      _WarningSeverityMode.lenient => 0.5,
-      _WarningSeverityMode.balanced => 0.2,
-      _WarningSeverityMode.strict => 0.05,
-    };
-    final hasInactive = inactiveRatio >= inactiveThreshold;
-    final ecsWarning = hasNoSystems && settings.ecsWarnOnNoSystems
-        ? 'No systems'
-        : hasInactive && settings.ecsWarnOnInactive
-        ? 'Inactive entities'
-        : 'Healthy';
-    final ecsColor =
-        (hasNoSystems && settings.ecsWarnOnNoSystems) ||
-            (hasInactive && settings.ecsWarnOnInactive)
-        ? EditorTheme.warning
-        : const Color(0xFF6DE0A7);
-    final performanceStatus = controller.performance.isOverBudget
-        ? 'Over budget'
-        : 'Within frame budget';
-    final statusColor = controller.performance.isOverBudget
-        ? EditorTheme.warning
-        : const Color(0xFF6DE0A7);
-    final healthColor = runtimeWarn
-        ? EditorTheme.warning
-        : const Color(0xFF6DE0A7);
-    return switch (section) {
-      _StatusDetailSection.performance => TextSpan(
-        style: const TextStyle(fontSize: 9, color: EditorTheme.textMuted),
-        children: <InlineSpan>[
-          TextSpan(text: 'Frame ${controller.performance.frameNumber} • '),
-          TextSpan(
-            text: '${controller.performance.currentFps} FPS',
-            style: const TextStyle(color: EditorTheme.textPrimary),
-          ),
-          const TextSpan(text: ' • '),
-          TextSpan(
-            text: performanceStatus,
-            style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-      _StatusDetailSection.ecs => TextSpan(
-        style: const TextStyle(fontSize: 9, color: EditorTheme.textMuted),
-        children: <InlineSpan>[
-          TextSpan(text: '${controller.snapshot.entityCount} entities'),
-          const TextSpan(text: ' • '),
-          TextSpan(
-            text: '${controller.snapshot.systemCount} systems',
-            style: const TextStyle(color: EditorTheme.textPrimary),
-          ),
-          const TextSpan(text: ' • '),
-          TextSpan(
-            text: ecsWarning,
-            style: TextStyle(color: ecsColor, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-      _StatusDetailSection.memory => TextSpan(
-        style: const TextStyle(fontSize: 9, color: EditorTheme.textMuted),
-        children: <InlineSpan>[
-          TextSpan(
-            text: '${_formatBytes(controller.memory.rssBytes)} RSS',
-            style: const TextStyle(color: EditorTheme.textPrimary),
-          ),
-          const TextSpan(text: ' • '),
-          TextSpan(
-            text: runtimeHealth,
-            style: TextStyle(color: healthColor, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-      _StatusDetailSection.logs => TextSpan(
-        style: const TextStyle(fontSize: 9, color: EditorTheme.textMuted),
-        children: <InlineSpan>[
-          TextSpan(text: '${logs.length} captured events • latest '),
-          TextSpan(
-            text: logs.isEmpty ? '--' : logs.last.timeLabel,
-            style: const TextStyle(color: EditorTheme.textPrimary),
-          ),
-        ],
-      ),
-      _StatusDetailSection.assets => const TextSpan(
-        style: TextStyle(fontSize: 9, color: EditorTheme.textMuted),
-        children: <InlineSpan>[TextSpan(text: 'File system browser')],
-      ),
-      _StatusDetailSection.timeline => const TextSpan(
-        style: TextStyle(fontSize: 9, color: EditorTheme.textMuted),
-        children: <InlineSpan>[TextSpan(text: 'Animation dope sheet')],
-      ),
-    };
-  }
-
-  Widget _buildDetailContent(JustDebuggerController controller) {
-    return switch (section) {
-      _StatusDetailSection.performance => _PerformanceDetailContent(
-        controller: controller,
-        settings: settings,
-      ),
-      _StatusDetailSection.ecs => _EcsDetailContent(
-        controller: controller,
-        settings: settings,
-      ),
-      _StatusDetailSection.memory => _RuntimeDetailContent(
-        controller: controller,
-        settings: settings,
-      ),
-      _StatusDetailSection.logs => _LogsDetailContent(
-        controller: controller,
-        settings: settings,
-      ),
-      _StatusDetailSection.assets => const SizedBox.shrink(),
-      _StatusDetailSection.timeline => const SizedBox.shrink(),
-    };
-  }
-}
-
 class _DetailSectionCard extends StatefulWidget {
   const _DetailSectionCard({
     required this.sectionId,
@@ -331,6 +96,195 @@ class _DetailSectionCardState extends State<_DetailSectionCard> {
   }
 }
 
+enum _PerformanceTab { performance, runtime }
+
+class _DockPerformancePanel extends StatefulWidget {
+  const _DockPerformancePanel({
+    required this.controller,
+    required this.height,
+    required this.onResize,
+    required this.onClose,
+    required this.settings,
+  });
+
+  final JustDebuggerController controller;
+  final double height;
+  final ValueChanged<double> onResize;
+  final VoidCallback onClose;
+  final _OverlayUiSettings settings;
+
+  @override
+  State<_DockPerformancePanel> createState() => _DockPerformancePanelState();
+}
+
+class _DockPerformancePanelState extends State<_DockPerformancePanel> {
+  _PerformanceTab _tab = _PerformanceTab.performance;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: widget.controller,
+      builder: (context, _) {
+        return SizedBox(
+          height: widget.height,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xF41B1B1B),
+                border: Border(
+                  left: BorderSide(color: Colors.white.withValues(alpha: 0.04)),
+                  right: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.04),
+                  ),
+                ),
+                boxShadow: const <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x55000000),
+                    blurRadius: 12,
+                    offset: Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: <Widget>[
+                  _PanelResizeHandle(onDrag: widget.onResize),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 2, 4, 2),
+                    child: Row(
+                      children: <Widget>[
+                        Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: widget.settings.themeColor.withValues(
+                              alpha: 0.1,
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(
+                            Icons.bolt_rounded,
+                            size: 11,
+                            color: widget.settings.themeColor,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Performance',
+                          style: TextStyle(
+                            fontSize: 11 * widget.settings.effectiveTextScale,
+                            fontWeight: FontWeight.w600,
+                            color: EditorTheme.textPrimary,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: widget.onClose,
+                          icon: const Icon(Icons.close_rounded),
+                          color: EditorTheme.textSecondary,
+                          iconSize: 14,
+                          splashRadius: 14,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 28,
+                            minHeight: 28,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildTabStrip(),
+                  Divider(
+                    height: 1,
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(10),
+                      child: _tab == _PerformanceTab.performance
+                          ? _PerformanceDetailContent(
+                              controller: widget.controller,
+                              settings: widget.settings,
+                            )
+                          : _RuntimeDetailContent(
+                              controller: widget.controller,
+                              settings: widget.settings,
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTabStrip() {
+    return Container(
+      height: 28,
+      color: const Color(0xFF141414),
+      child: Row(
+        children: [
+          _buildTab(
+            _PerformanceTab.performance,
+            Icons.bolt_rounded,
+            'Performance',
+          ),
+          _buildTab(
+            _PerformanceTab.runtime,
+            Icons.monitor_heart_rounded,
+            'Runtime',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTab(_PerformanceTab tab, IconData icon, String label) {
+    final isActive = _tab == tab;
+    return GestureDetector(
+      onTap: () => setState(() => _tab = tab),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isActive ? EditorTheme.primaryMuted : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 11,
+              color: isActive
+                  ? EditorTheme.primaryMuted
+                  : EditorTheme.textMuted,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                color: isActive
+                    ? EditorTheme.textPrimary
+                    : EditorTheme.textMuted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _PerformanceDetailContent extends StatelessWidget {
   const _PerformanceDetailContent({
     required this.controller,
@@ -413,6 +367,117 @@ class _PerformanceDetailContent extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _DockEcsPanel extends StatelessWidget {
+  const _DockEcsPanel({
+    required this.controller,
+    required this.height,
+    required this.onResize,
+    required this.onClose,
+    required this.settings,
+  });
+
+  final JustDebuggerController controller;
+  final double height;
+  final ValueChanged<double> onResize;
+  final VoidCallback onClose;
+  final _OverlayUiSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        return SizedBox(
+          height: height,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xF41B1B1B),
+                border: Border(
+                  left: BorderSide(color: Colors.white.withValues(alpha: 0.04)),
+                  right: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.04),
+                  ),
+                ),
+                boxShadow: const <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x55000000),
+                    blurRadius: 12,
+                    offset: Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: <Widget>[
+                  _PanelResizeHandle(onDrag: onResize),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 2, 4, 2),
+                    child: Row(
+                      children: <Widget>[
+                        Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF7DE6B1,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Icon(
+                            Icons.hub_rounded,
+                            size: 11,
+                            color: Color(0xFF7DE6B1),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'ECS',
+                          style: TextStyle(
+                            fontSize: 11 * settings.effectiveTextScale,
+                            fontWeight: FontWeight.w600,
+                            color: EditorTheme.textPrimary,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: onClose,
+                          icon: const Icon(Icons.close_rounded),
+                          color: EditorTheme.textSecondary,
+                          iconSize: 14,
+                          splashRadius: 14,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 28,
+                            minHeight: 28,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Divider(
+                    height: 1,
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(10),
+                      child: _EcsDetailContent(
+                        controller: controller,
+                        settings: settings,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

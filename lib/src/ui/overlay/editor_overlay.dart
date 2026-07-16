@@ -359,22 +359,12 @@ extension on _SettingsThemePreset {
   };
 }
 
-enum _StatusMetricId { fps, entities, memory, logs, assets, timeline }
+enum _StatusMetricId { fps, entities, logs, assets, timeline }
 
 extension on _StatusMetricId {
-  _StatusDetailSection get section => switch (this) {
-    _StatusMetricId.fps => _StatusDetailSection.performance,
-    _StatusMetricId.entities => _StatusDetailSection.ecs,
-    _StatusMetricId.memory => _StatusDetailSection.memory,
-    _StatusMetricId.logs => _StatusDetailSection.logs,
-    _StatusMetricId.assets => _StatusDetailSection.assets,
-    _StatusMetricId.timeline => _StatusDetailSection.timeline,
-  };
-
   String get label => switch (this) {
     _StatusMetricId.fps => 'FPS',
     _StatusMetricId.entities => 'Entities',
-    _StatusMetricId.memory => 'Runtime',
     _StatusMetricId.logs => 'Logs',
     _StatusMetricId.assets => 'Assets',
     _StatusMetricId.timeline => 'Timeline',
@@ -383,32 +373,9 @@ extension on _StatusMetricId {
   IconData get icon => switch (this) {
     _StatusMetricId.fps => Icons.speed_rounded,
     _StatusMetricId.entities => Icons.blur_linear_rounded,
-    _StatusMetricId.memory => Icons.memory_rounded,
     _StatusMetricId.logs => Icons.article_outlined,
     _StatusMetricId.assets => Icons.folder_outlined,
     _StatusMetricId.timeline => Icons.movie_filter_rounded,
-  };
-}
-
-enum _StatusDetailSection { performance, ecs, memory, logs, assets, timeline }
-
-extension on _StatusDetailSection {
-  String get title => switch (this) {
-    _StatusDetailSection.performance => 'Performance Details',
-    _StatusDetailSection.ecs => 'ECS Details',
-    _StatusDetailSection.memory => 'Runtime Details',
-    _StatusDetailSection.logs => 'Log Details',
-    _StatusDetailSection.assets => 'Asset Browser',
-    _StatusDetailSection.timeline => 'Animation Timeline',
-  };
-
-  IconData get icon => switch (this) {
-    _StatusDetailSection.performance => Icons.bolt_rounded,
-    _StatusDetailSection.ecs => Icons.hub_rounded,
-    _StatusDetailSection.memory => Icons.monitor_heart_rounded,
-    _StatusDetailSection.logs => Icons.subject_rounded,
-    _StatusDetailSection.assets => Icons.folder_outlined,
-    _StatusDetailSection.timeline => Icons.movie_filter_rounded,
   };
 }
 

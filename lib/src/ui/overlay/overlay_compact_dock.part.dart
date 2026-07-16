@@ -12,18 +12,14 @@ class _CompactStatusDock extends StatefulWidget {
   final double maxDetailHeight;
 
   static const double _panelHeight = 56;
-  static const double _detailWidth = 350;
 
   @override
   State<_CompactStatusDock> createState() => _CompactStatusDockState();
 }
 
 class _CompactStatusDockState extends State<_CompactStatusDock> {
-  _StatusMetricId? _selectedMetric;
   final GlobalKey _stackKey = GlobalKey();
   final GlobalKey _settingsAnchorKey = GlobalKey();
-  final Map<_StatusMetricId, GlobalKey> _anchorKeys =
-      <_StatusMetricId, GlobalKey>{};
   int _lastMetricSampleMs = 0;
   _DockMetricsSnapshot? _displayMetrics;
   bool _isSettingsOpen = false;
@@ -34,30 +30,10 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
   int _assetFileCount = 0;
   bool _isTimelinePanelOpen = false;
   double _timelinePanelHeight = 300.0;
-
-  GlobalKey _anchorKeyFor(_StatusMetricId metric) {
-    return _anchorKeys.putIfAbsent(metric, GlobalKey.new);
-  }
-
-  void _selectMetric(_StatusMetricId metric) {
-    setState(() {
-      _isSettingsOpen = false;
-      _isLogsPanelOpen = false;
-      _isAssetsPanelOpen = false;
-      _isTimelinePanelOpen = false;
-      _selectedMetric = _selectedMetric == metric ? null : metric;
-    });
-  }
-
-  void _clearSelection() {
-    setState(() {
-      _selectedMetric = null;
-      _isSettingsOpen = false;
-      _isLogsPanelOpen = false;
-      _isAssetsPanelOpen = false;
-      _isTimelinePanelOpen = false;
-    });
-  }
+  bool _isPerformancePanelOpen = false;
+  double _performancePanelHeight = 280.0;
+  bool _isEcsPanelOpen = false;
+  double _ecsPanelHeight = 280.0;
 
   void _updateSettings(_OverlayUiSettings settings) {
     _overlayUiSettingsSignal.value = settings;
@@ -66,41 +42,67 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
 
   void _toggleSettings() {
     setState(() {
-      _selectedMetric = null;
       _isLogsPanelOpen = false;
       _isAssetsPanelOpen = false;
       _isTimelinePanelOpen = false;
+      _isPerformancePanelOpen = false;
+      _isEcsPanelOpen = false;
       _isSettingsOpen = !_isSettingsOpen;
     });
   }
 
   void _toggleLogsPanel() {
     setState(() {
-      _selectedMetric = null;
       _isSettingsOpen = false;
       _isAssetsPanelOpen = false;
       _isTimelinePanelOpen = false;
+      _isPerformancePanelOpen = false;
+      _isEcsPanelOpen = false;
       _isLogsPanelOpen = !_isLogsPanelOpen;
     });
   }
 
   void _toggleAssetsPanel() {
     setState(() {
-      _selectedMetric = null;
       _isSettingsOpen = false;
       _isLogsPanelOpen = false;
       _isTimelinePanelOpen = false;
+      _isPerformancePanelOpen = false;
+      _isEcsPanelOpen = false;
       _isAssetsPanelOpen = !_isAssetsPanelOpen;
     });
   }
 
   void _toggleTimelinePanel() {
     setState(() {
-      _selectedMetric = null;
       _isSettingsOpen = false;
       _isLogsPanelOpen = false;
       _isAssetsPanelOpen = false;
+      _isPerformancePanelOpen = false;
+      _isEcsPanelOpen = false;
       _isTimelinePanelOpen = !_isTimelinePanelOpen;
+    });
+  }
+
+  void _togglePerformancePanel() {
+    setState(() {
+      _isSettingsOpen = false;
+      _isLogsPanelOpen = false;
+      _isAssetsPanelOpen = false;
+      _isTimelinePanelOpen = false;
+      _isEcsPanelOpen = false;
+      _isPerformancePanelOpen = !_isPerformancePanelOpen;
+    });
+  }
+
+  void _toggleEcsPanel() {
+    setState(() {
+      _isSettingsOpen = false;
+      _isLogsPanelOpen = false;
+      _isAssetsPanelOpen = false;
+      _isTimelinePanelOpen = false;
+      _isPerformancePanelOpen = false;
+      _isEcsPanelOpen = !_isEcsPanelOpen;
     });
   }
 
@@ -109,6 +111,24 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
       _timelinePanelHeight = (_timelinePanelHeight - dy).clamp(
         180.0,
         (widget.maxDetailHeight * 0.75).clamp(180.0, 700.0),
+      );
+    });
+  }
+
+  void _onPerformancePanelResize(double dy) {
+    setState(() {
+      _performancePanelHeight = (_performancePanelHeight - dy).clamp(
+        120.0,
+        (widget.maxDetailHeight * 0.75).clamp(120.0, 600.0),
+      );
+    });
+  }
+
+  void _onEcsPanelResize(double dy) {
+    setState(() {
+      _ecsPanelHeight = (_ecsPanelHeight - dy).clamp(
+        120.0,
+        (widget.maxDetailHeight * 0.75).clamp(120.0, 600.0),
       );
     });
   }
@@ -197,14 +217,6 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
     }
   }
 
-  double _detailWidth() {
-    final availableWidth = widget.maxDetailWidth - 24;
-    if (availableWidth <= 0) {
-      return 0;
-    }
-    return math.min(_CompactStatusDock._detailWidth, availableWidth);
-  }
-
   double _detailLeftForKey(GlobalKey anchorKey, double detailWidth) {
     final stackContext = _stackKey.currentContext;
     final anchorContext = anchorKey.currentContext;
@@ -228,10 +240,6 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
     final minLeft = 12.0;
     final maxLeft = math.max(minLeft, widget.maxDetailWidth - detailWidth - 12);
     return (anchorCenter.dx - detailWidth / 2).clamp(minLeft, maxLeft);
-  }
-
-  double _detailLeftFor(_StatusMetricId metric, double detailWidth) {
-    return _detailLeftForKey(_anchorKeyFor(metric), detailWidth);
   }
 
   @override
@@ -260,9 +268,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
             : (_displayMetrics ?? liveMetrics);
         final snapshot = sampledMetrics.snapshot;
         final performance = sampledMetrics.performance;
-        final memory = sampledMetrics.memory;
         final logs = EditorLogService.instance.entries;
-        final health = sampledMetrics.health;
 
         final warningCount = logs
             .where((entry) => entry.level == DebuggerLogLevel.warning)
@@ -272,18 +278,17 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
             .length;
         final detailMaxHeight =
             widget.maxDetailHeight - _CompactStatusDock._panelHeight - 40;
-        final detailHeight = detailMaxHeight.clamp(180.0, 320.0).toDouble();
         final settingsPanelHeight = detailMaxHeight
             .clamp(260.0, 460.0)
             .toDouble();
-        final floatingPanelHeight = _isSettingsOpen
-            ? settingsPanelHeight
-            : (_selectedMetric != null ? detailHeight : 0.0);
+        final floatingPanelHeight = _isSettingsOpen ? settingsPanelHeight : 0.0;
         final dockHeight =
             _CompactStatusDock._panelHeight +
             (_isLogsPanelOpen ? _logsPanelHeight : 0.0) +
             (_isAssetsPanelOpen ? _assetsPanelHeight : 0.0) +
             (_isTimelinePanelOpen ? _timelinePanelHeight : 0.0) +
+            (_isPerformancePanelOpen ? _performancePanelHeight : 0.0) +
+            (_isEcsPanelOpen ? _ecsPanelHeight : 0.0) +
             (floatingPanelHeight > 0 ? floatingPanelHeight + 12.0 : 0.0);
 
         return ValueListenableBuilder<_OverlayUiSettings>(
@@ -347,54 +352,25 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                                     children: <Widget>[
                                       _StatusMetricButton(
                                         metric: _StatusMetricId.fps,
-                                        anchorKey: _anchorKeyFor(
-                                          _StatusMetricId.fps,
-                                        ),
                                         value:
                                             '${performance.currentFps} fps • ${performance.lastUpdateMs.toStringAsFixed(1)} ms',
                                         accent: settings.themeColor,
-                                        isSelected:
-                                            _selectedMetric ==
-                                            _StatusMetricId.fps,
-                                        onTap: _selectMetric,
+                                        isSelected: _isPerformancePanelOpen,
+                                        onTap: (_) => _togglePerformancePanel(),
                                         settings: settings,
                                       ),
                                       _StatusSeparator(settings: settings),
                                       _StatusMetricButton(
                                         metric: _StatusMetricId.entities,
-                                        anchorKey: _anchorKeyFor(
-                                          _StatusMetricId.entities,
-                                        ),
                                         value: '${snapshot.entityCount}',
                                         accent: const Color(0xFF7DE6B1),
-                                        isSelected:
-                                            _selectedMetric ==
-                                            _StatusMetricId.entities,
-                                        onTap: _selectMetric,
-                                        settings: settings,
-                                      ),
-                                      _StatusSeparator(settings: settings),
-                                      _StatusMetricButton(
-                                        metric: _StatusMetricId.memory,
-                                        anchorKey: _anchorKeyFor(
-                                          _StatusMetricId.memory,
-                                        ),
-                                        value: _formatBytes(memory.rssBytes),
-                                        accent: health.hasWarnings
-                                            ? EditorTheme.warning
-                                            : const Color(0xFFFFC86B),
-                                        isSelected:
-                                            _selectedMetric ==
-                                            _StatusMetricId.memory,
-                                        onTap: _selectMetric,
+                                        isSelected: _isEcsPanelOpen,
+                                        onTap: (_) => _toggleEcsPanel(),
                                         settings: settings,
                                       ),
                                       _StatusSeparator(settings: settings),
                                       _StatusMetricButton(
                                         metric: _StatusMetricId.logs,
-                                        anchorKey: _anchorKeyFor(
-                                          _StatusMetricId.logs,
-                                        ),
                                         value: errorCount > 0
                                             ? '${logs.length} total • $errorCount err'
                                             : '${logs.length} total • $warningCount warn',
@@ -406,9 +382,6 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                                       _StatusSeparator(settings: settings),
                                       _StatusMetricButton(
                                         metric: _StatusMetricId.assets,
-                                        anchorKey: _anchorKeyFor(
-                                          _StatusMetricId.assets,
-                                        ),
                                         value: '$_assetFileCount files',
                                         accent: const Color(0xFF7DD8E0),
                                         isSelected: _isAssetsPanelOpen,
@@ -418,9 +391,6 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                                       _StatusSeparator(settings: settings),
                                       _StatusMetricButton(
                                         metric: _StatusMetricId.timeline,
-                                        anchorKey: _anchorKeyFor(
-                                          _StatusMetricId.timeline,
-                                        ),
                                         value: _timelineLabel(),
                                         accent: const Color(0xFF7DE6B1),
                                         isSelected: _isTimelinePanelOpen,
@@ -482,19 +452,30 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                           plugin: widget.plugin,
                         ),
                       ),
-                    if (_selectedMetric != null)
+                    if (_isPerformancePanelOpen)
                       Positioned(
-                        left: _detailLeftFor(_selectedMetric!, _detailWidth()),
-                        bottom: _CompactStatusDock._panelHeight + 12,
-                        child: SizedBox(
-                          width: _detailWidth(),
-                          child: _StatusDetailCard(
-                            controller: controller,
-                            section: _selectedMetric!.section,
-                            onClose: _clearSelection,
-                            maxHeight: detailMaxHeight,
-                            settings: settings,
-                          ),
+                        left: 0,
+                        right: 0,
+                        bottom: _CompactStatusDock._panelHeight,
+                        child: _DockPerformancePanel(
+                          controller: controller,
+                          height: _performancePanelHeight,
+                          onResize: _onPerformancePanelResize,
+                          onClose: _togglePerformancePanel,
+                          settings: settings,
+                        ),
+                      ),
+                    if (_isEcsPanelOpen)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: _CompactStatusDock._panelHeight,
+                        child: _DockEcsPanel(
+                          controller: controller,
+                          height: _ecsPanelHeight,
+                          onResize: _onEcsPanelResize,
+                          onClose: _toggleEcsPanel,
+                          settings: settings,
                         ),
                       ),
                     if (_isSettingsOpen)
@@ -605,7 +586,6 @@ class _MinimizedSnackChip extends StatelessWidget {
 class _StatusMetricButton extends StatelessWidget {
   const _StatusMetricButton({
     required this.metric,
-    required this.anchorKey,
     required this.value,
     required this.accent,
     required this.isSelected,
@@ -614,7 +594,6 @@ class _StatusMetricButton extends StatelessWidget {
   });
 
   final _StatusMetricId metric;
-  final GlobalKey anchorKey;
   final String value;
   final Color accent;
   final bool isSelected;
@@ -624,7 +603,6 @@ class _StatusMetricButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      key: anchorKey,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Material(
         color: Colors.transparent,
