@@ -520,7 +520,8 @@ class ${cls}Level {
           'isSensor: ${c.isSensor}, '
           'categoryBits: ${c.categoryBits}, '
           'maskBits: ${c.maskBits}, '
-          'groupIndex: ${c.groupIndex})';
+          'groupIndex: ${c.groupIndex}'
+          '${c.showDebugOutline ? '' : ', showDebugOutline: false'})';
     }
     if (c is DistanceJointComponent) {
       return "// TODO: DistanceJointComponent(target: '${c.targetEntityName}')";
@@ -715,6 +716,7 @@ class ${cls}Level {
           categoryBits: j['categoryBits'] as int? ?? 0x0001,
           maskBits: j['maskBits'] as int? ?? 0xFFFF,
           groupIndex: j['groupIndex'] as int? ?? 0,
+          showDebugOutline: j['showDebugOutline'] as bool? ?? true,
         );
       case 'CameraFollowComponent':
         return CameraFollowComponent(
@@ -895,6 +897,7 @@ class ${cls}Level {
         'categoryBits': c.categoryBits,
         'maskBits': c.maskBits,
         'groupIndex': c.groupIndex,
+        'showDebugOutline': c.showDebugOutline,
       };
     }
     if (c is CameraFollowComponent) {

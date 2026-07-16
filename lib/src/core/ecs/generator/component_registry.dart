@@ -34,6 +34,7 @@ enum EditorFieldKind {
   vector3,
   color,
   offset,
+  offsetList,
   shapePaintStyle,
   unknown,
 }
@@ -46,6 +47,7 @@ class EditorComponentField {
     required this.read,
     this.label,
     this.visible = true,
+    this.visibleWhen,
     this.editable = true,
     this.includeInJson = true,
     this.write,
@@ -61,6 +63,11 @@ class EditorComponentField {
   final String? label;
   final EditorFieldKind kind;
   final bool visible;
+  /// When set, the field is only shown/read/written by the inspector when
+  /// this returns true for the current component state (e.g. a shape-specific
+  /// dimension field that only applies to one selected shape kind).
+  /// Evaluated in addition to [visible].
+  final bool Function(jge.Component component)? visibleWhen;
   final bool editable;
   final bool includeInJson;
   final Object? Function(jge.Component component) read;
@@ -236,6 +243,13 @@ class CustomComponentRegistry {
           return <String, dynamic>{'dx': value.dx, 'dy': value.dy};
         }
         return value;
+      case EditorFieldKind.offsetList:
+        if (value is List<Offset>) {
+          return value
+              .map((o) => <String, dynamic>{'dx': o.dx, 'dy': o.dy})
+              .toList();
+        }
+        return value;
       case EditorFieldKind.vector2:
         if (value is jge.Vector2) {
           return <String, dynamic>{'x': value.x, 'y': value.y};
@@ -300,6 +314,14 @@ class CustomComponentRegistry {
       case EditorFieldKind.offset:
         if (value is Map) {
           return Offset(_toDouble(value['dx']), _toDouble(value['dy']));
+        }
+        return value;
+      case EditorFieldKind.offsetList:
+        if (value is List) {
+          return value
+              .whereType<Map>()
+              .map((m) => Offset(_toDouble(m['dx']), _toDouble(m['dy'])))
+              .toList();
         }
         return value;
       case EditorFieldKind.vector2:
