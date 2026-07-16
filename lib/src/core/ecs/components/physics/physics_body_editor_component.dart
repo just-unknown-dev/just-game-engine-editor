@@ -102,9 +102,7 @@ class PhysicsBodyEditorComponent extends EditorComponent {
                 name: 'shapeKind',
                 label: 'Shape',
                 kind: EditorFieldKind.enumeration,
-                enumValues: PhysicsShapeKind.values
-                    .map((k) => k.name)
-                    .toList(),
+                enumValues: PhysicsShapeKind.values.map((k) => k.name).toList(),
                 enumParser: (s) => PhysicsShapeKind.values.byName(s),
                 read: (c) => _kindOf(_asBody(c).shape),
                 write: (c, v) {
@@ -180,10 +178,7 @@ class PhysicsBodyEditorComponent extends EditorComponent {
                   final body = _asBody(c);
                   final s = body.shape;
                   if (s is RectangleShape) {
-                    body.shape = RectangleShape(
-                      s.width,
-                      (v as num).toDouble(),
-                    );
+                    body.shape = RectangleShape(s.width, (v as num).toDouble());
                   }
                 },
               ),
@@ -373,11 +368,7 @@ class PhysicsBodyEditorComponent extends EditorComponent {
                   final s = body.shape;
                   final t = (v as num).toDouble();
                   if (s is SegmentShape) {
-                    body.shape = SegmentShape(
-                      s.point1,
-                      s.point2,
-                      thickness: t,
-                    );
+                    body.shape = SegmentShape(s.point1, s.point2, thickness: t);
                   } else if (s is ChainShape) {
                     body.shape = ChainShape(
                       List<Offset>.from(s.vertices),
@@ -468,8 +459,7 @@ class PhysicsBodyEditorComponent extends EditorComponent {
                   min: 0.0,
                 ),
                 read: (c) => _asBody(c).restitution,
-                write: (c, v) =>
-                    _asBody(c).restitution = (v as num).toDouble(),
+                write: (c, v) => _asBody(c).restitution = (v as num).toDouble(),
               ),
             ],
           ),
@@ -480,57 +470,25 @@ class PhysicsBodyEditorComponent extends EditorComponent {
                 name: 'categoryBits',
                 label: 'Category',
                 kind: EditorFieldKind.integer,
-                scrubConfig: const NumberScrubConfig(
-                  step: 1.0,
-                  integer: true,
-                ),
+                scrubConfig: const NumberScrubConfig(step: 1.0, integer: true),
                 read: (c) => _asBody(c).categoryBits,
-                write: (c, v) =>
-                    _asBody(c).categoryBits = (v as num).toInt(),
+                write: (c, v) => _asBody(c).categoryBits = (v as num).toInt(),
               ),
               EditorComponentField(
                 name: 'maskBits',
                 label: 'Mask Bits',
                 kind: EditorFieldKind.integer,
-                scrubConfig: const NumberScrubConfig(
-                  step: 1.0,
-                  integer: true,
-                ),
+                scrubConfig: const NumberScrubConfig(step: 1.0, integer: true),
                 read: (c) => _asBody(c).maskBits,
                 write: (c, v) => _asBody(c).maskBits = (v as num).toInt(),
-              ),
-              EditorComponentField(
-                name: 'collisionMask',
-                label: 'Coll. Mask',
-                kind: EditorFieldKind.integer,
-                scrubConfig: const NumberScrubConfig(
-                  step: 1.0,
-                  integer: true,
-                ),
-                read: (c) => _asBody(c).collisionMask,
-                write: (c, v) =>
-                    _asBody(c).collisionMask = (v as num).toInt(),
               ),
               EditorComponentField(
                 name: 'groupIndex',
                 label: 'Group Index',
                 kind: EditorFieldKind.integer,
-                scrubConfig: const NumberScrubConfig(
-                  step: 1.0,
-                  integer: true,
-                ),
+                scrubConfig: const NumberScrubConfig(step: 1.0, integer: true),
                 read: (c) => _asBody(c).groupIndex,
                 write: (c, v) => _asBody(c).groupIndex = (v as num).toInt(),
-              ),
-              EditorComponentField(
-                name: 'layer',
-                kind: EditorFieldKind.integer,
-                scrubConfig: const NumberScrubConfig(
-                  step: 1.0,
-                  integer: true,
-                ),
-                read: (c) => _asBody(c).layer,
-                write: (c, v) => _asBody(c).layer = (v as num).toInt(),
               ),
             ],
           ),
@@ -542,8 +500,7 @@ class PhysicsBodyEditorComponent extends EditorComponent {
                 label: 'Show Outline',
                 kind: EditorFieldKind.boolean,
                 read: (c) => _asBody(c).showDebugOutline,
-                write: (c, v) =>
-                    _asBody(c).showDebugOutline = v as bool,
+                write: (c, v) => _asBody(c).showDebugOutline = v as bool,
               ),
             ],
           ),
