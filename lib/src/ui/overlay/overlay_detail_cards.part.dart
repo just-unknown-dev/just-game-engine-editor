@@ -96,7 +96,7 @@ class _DetailSectionCardState extends State<_DetailSectionCard> {
   }
 }
 
-enum _PerformanceTab { performance, runtime }
+enum _PerformanceTab { performance, runtime, profiling }
 
 class _DockPerformancePanel extends StatefulWidget {
   const _DockPerformancePanel({
@@ -201,15 +201,20 @@ class _DockPerformancePanelState extends State<_DockPerformancePanel> {
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(10),
-                      child: _tab == _PerformanceTab.performance
-                          ? _PerformanceDetailContent(
-                              controller: widget.controller,
-                              settings: widget.settings,
-                            )
-                          : _RuntimeDetailContent(
-                              controller: widget.controller,
-                              settings: widget.settings,
-                            ),
+                      child: switch (_tab) {
+                        _PerformanceTab.performance => _PerformanceDetailContent(
+                          controller: widget.controller,
+                          settings: widget.settings,
+                        ),
+                        _PerformanceTab.runtime => _RuntimeDetailContent(
+                          controller: widget.controller,
+                          settings: widget.settings,
+                        ),
+                        _PerformanceTab.profiling => _ProfilingDetailContent(
+                          controller: widget.controller,
+                          settings: widget.settings,
+                        ),
+                      },
                     ),
                   ),
                 ],
@@ -236,6 +241,11 @@ class _DockPerformancePanelState extends State<_DockPerformancePanel> {
             _PerformanceTab.runtime,
             Icons.monitor_heart_rounded,
             'Runtime',
+          ),
+          _buildTab(
+            _PerformanceTab.profiling,
+            Icons.insights_rounded,
+            'Profiling',
           ),
         ],
       ),
@@ -746,4 +756,413 @@ class _RuntimeDetailContent extends StatelessWidget {
       ],
     );
   }
+}
+
+class _ProfilingDetailContent extends StatelessWidget {
+  const _ProfilingDetailContent({
+    required this.controller,
+    required this.settings,
+  });
+
+  final JustDebuggerController controller;
+  final _OverlayUiSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    final performance = controller.performance;
+    final memory = controller.memory;
+    final samples = List<_PerfHistorySample>.unmodifiable(_perfHistory);
+    final fpsValues = samples.map((s) => s.fps).toList(growable: false);
+    final minFps = fpsValues.isEmpty ? 0 : fpsValues.reduce(math.min);
+    final maxFps = fpsValues.isEmpty ? 0 : fpsValues.reduce(math.max);
+    final avgFps = fpsValues.isEmpty
+        ? 0
+        : (fpsValues.reduce((a, b) => a + b) / fpsValues.length).round();
+    final cpuValues = samples
+        .map((s) => s.cpuUsagePercent)
+        .toList(growable: false);
+    final rssValues = samples
+        .map((s) => s.rssBytes.toDouble())
+        .toList(growable: false);
+
+    final allTimings = performance.systemTimesMs.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final maxSystemMs = allTimings.isEmpty ? 0.0 : allTimings.first.value;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _DetailSectionCard(
+          sectionId: 'profiling_fps_history',
+          title: 'FPS History',
+          settings: settings,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Wrap(
+                spacing: 5,
+                runSpacing: 5,
+                children: <Widget>[
+                  _DetailStatTile(label: 'Min', value: '$minFps', settings: settings),
+                  _DetailStatTile(label: 'Avg', value: '$avgFps', settings: settings),
+                  _DetailStatTile(label: 'Max', value: '$maxFps', settings: settings),
+                  _DetailStatTile(
+                    label: 'Samples',
+                    value: '${samples.length}',
+                    settings: settings,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 80,
+                width: double.infinity,
+                child: CustomPaint(
+                  painter: _HistoryLineChartPainter(
+                    values: fpsValues.map((v) => v.toDouble()).toList(
+                      growable: false,
+                    ),
+                    color: settings.themeColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        _DetailSectionCard(
+          sectionId: 'profiling_cpu_usage',
+          title: 'CPU Usage',
+          settings: settings,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Wrap(
+                spacing: 5,
+                runSpacing: 5,
+                children: <Widget>[
+                  _DetailStatTile(
+                    label: 'Current',
+                    value: samples.isEmpty
+                        ? '--'
+                        : '${samples.last.cpuUsagePercent.toStringAsFixed(0)}%',
+                    settings: settings,
+                  ),
+                  _DetailStatTile(
+                    label: 'Min',
+                    value: cpuValues.isEmpty
+                        ? '--'
+                        : '${cpuValues.reduce(math.min).toStringAsFixed(0)}%',
+                    settings: settings,
+                  ),
+                  _DetailStatTile(
+                    label: 'Avg',
+                    value: cpuValues.isEmpty
+                        ? '--'
+                        : '${(cpuValues.reduce((a, b) => a + b) / cpuValues.length).toStringAsFixed(0)}%',
+                    settings: settings,
+                  ),
+                  _DetailStatTile(
+                    label: 'Max',
+                    value: cpuValues.isEmpty
+                        ? '--'
+                        : '${cpuValues.reduce(math.max).toStringAsFixed(0)}%',
+                    settings: settings,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 80,
+                width: double.infinity,
+                child: CustomPaint(
+                  painter: _HistoryLineChartPainter(
+                    values: cpuValues,
+                    color: const Color(0xFFFFC86B),
+                    referenceValue: 100.0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        _DetailSectionCard(
+          sectionId: 'profiling_memory_usage',
+          title: 'Memory Usage',
+          settings: settings,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Wrap(
+                spacing: 5,
+                runSpacing: 5,
+                children: <Widget>[
+                  _DetailStatTile(
+                    label: 'Current',
+                    value: samples.isEmpty
+                        ? '--'
+                        : _formatBytes(samples.last.rssBytes),
+                    settings: settings,
+                  ),
+                  _DetailStatTile(
+                    label: 'Min',
+                    value: rssValues.isEmpty
+                        ? '--'
+                        : _formatBytes(rssValues.reduce(math.min).round()),
+                    settings: settings,
+                  ),
+                  _DetailStatTile(
+                    label: 'Avg',
+                    value: rssValues.isEmpty
+                        ? '--'
+                        : _formatBytes(
+                            (rssValues.reduce((a, b) => a + b) /
+                                    rssValues.length)
+                                .round(),
+                          ),
+                    settings: settings,
+                  ),
+                  _DetailStatTile(
+                    label: 'Max',
+                    value: rssValues.isEmpty
+                        ? '--'
+                        : _formatBytes(rssValues.reduce(math.max).round()),
+                    settings: settings,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 80,
+                width: double.infinity,
+                child: CustomPaint(
+                  painter: _HistoryLineChartPainter(
+                    values: rssValues,
+                    color: const Color(0xFF7DD8E0),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        _DetailSectionCard(
+          sectionId: 'profiling_all_systems',
+          title: 'All System Timings',
+          settings: settings,
+          child: allTimings.isEmpty
+              ? const Text(
+                  'No system timing data reported.',
+                  style: TextStyle(fontSize: 10, color: EditorTheme.textSecondary),
+                )
+              : Column(
+                  children: allTimings.map((entry) {
+                    final ratio = maxSystemMs <= 0
+                        ? 0.0
+                        : (entry.value / maxSystemMs).clamp(0.0, 1.0);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Text(
+                                  entry.key,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: EditorTheme.textSecondary,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '${entry.value.toStringAsFixed(2)} ms',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: EditorTheme.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(2),
+                            child: LinearProgressIndicator(
+                              value: ratio,
+                              minHeight: 4,
+                              backgroundColor: Colors.white.withValues(alpha: 0.06),
+                              valueColor: AlwaysStoppedAnimation(settings.themeColor),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(growable: false),
+                ),
+        ),
+        const SizedBox(height: 8),
+        _DetailSectionCard(
+          sectionId: 'profiling_system_memory',
+          title: 'System Memory',
+          settings: settings,
+          child: memory.hasSystemMemoryStats
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Wrap(
+                      spacing: 5,
+                      runSpacing: 5,
+                      children: <Widget>[
+                        _DetailStatTile(
+                          label: 'Total',
+                          value: _formatBytes(memory.totalPhysicalMemoryBytes),
+                          settings: settings,
+                        ),
+                        _DetailStatTile(
+                          label: 'Free',
+                          value: _formatBytes(memory.freePhysicalMemoryBytes),
+                          settings: settings,
+                        ),
+                        _DetailStatTile(
+                          label: 'Used',
+                          value: _formatBytes(memory.usedPhysicalMemoryBytes),
+                          settings: settings,
+                        ),
+                        _DetailStatTile(
+                          label: 'Available',
+                          value:
+                              '${(memory.availabilityRatio * 100).toStringAsFixed(1)}%',
+                          settings: settings,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: (1 - memory.availabilityRatio).clamp(0.0, 1.0),
+                        minHeight: 6,
+                        backgroundColor: Colors.white.withValues(alpha: 0.06),
+                        valueColor: AlwaysStoppedAnimation(
+                          memory.availabilityRatio < 0.15
+                              ? EditorTheme.warning
+                              : const Color(0xFFFFC86B),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : const Text(
+                  'System-wide memory stats are not available on this platform.',
+                  style: TextStyle(fontSize: 10, color: EditorTheme.textSecondary),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Generic rolling line/area chart used by every history graph in the
+/// Profiling tab (FPS, CPU load proxy, RSS). [referenceValue], if set, draws
+/// a dashed-style horizontal marker (e.g. the 100% budget line for CPU).
+class _HistoryLineChartPainter extends CustomPainter {
+  const _HistoryLineChartPainter({
+    required this.values,
+    required this.color,
+    this.referenceValue,
+  });
+
+  final List<double> values;
+  final Color color;
+  final double? referenceValue;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2) {
+      _drawEmptyState(canvas, size);
+      return;
+    }
+
+    final maxValue = values.reduce(math.max);
+    final minValue = values.reduce(math.min);
+    final effectiveMax = referenceValue != null
+        ? math.max(maxValue, referenceValue!)
+        : maxValue;
+    final range = (effectiveMax - minValue).clamp(1.0, double.infinity);
+    final top = effectiveMax + range * 0.15;
+    final bottom = (minValue - range * 0.15).clamp(0.0, double.infinity);
+    final span = (top - bottom).clamp(1.0, double.infinity);
+
+    double xFor(int i) => size.width * i / (values.length - 1);
+    double yFor(double v) =>
+        size.height - ((v - bottom) / span) * size.height;
+
+    final gridPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.06)
+      ..strokeWidth = 1;
+    for (int i = 1; i < 3; i++) {
+      final y = size.height * i / 3;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    if (referenceValue != null) {
+      final refY = yFor(referenceValue!);
+      canvas.drawLine(
+        Offset(0, refY),
+        Offset(size.width, refY),
+        Paint()
+          ..color = EditorTheme.warning.withValues(alpha: 0.4)
+          ..strokeWidth = 1,
+      );
+    }
+
+    final linePath = Path();
+    final fillPath = Path();
+    for (int i = 0; i < values.length; i++) {
+      final x = xFor(i);
+      final y = yFor(values[i]);
+      if (i == 0) {
+        linePath.moveTo(x, y);
+        fillPath.moveTo(x, size.height);
+        fillPath.lineTo(x, y);
+      } else {
+        linePath.lineTo(x, y);
+        fillPath.lineTo(x, y);
+      }
+    }
+    fillPath.lineTo(xFor(values.length - 1), size.height);
+    fillPath.close();
+
+    canvas.drawPath(fillPath, Paint()..color = color.withValues(alpha: 0.12));
+    canvas.drawPath(
+      linePath,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+  }
+
+  void _drawEmptyState(Canvas canvas, Size size) {
+    final tp = TextPainter(
+      text: const TextSpan(
+        text: 'Collecting samples…',
+        style: TextStyle(fontSize: 10, color: EditorTheme.textMuted),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(
+      canvas,
+      Offset((size.width - tp.width) / 2, (size.height - tp.height) / 2),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_HistoryLineChartPainter old) =>
+      old.values != values ||
+      old.color != color ||
+      old.referenceValue != referenceValue;
 }

@@ -487,6 +487,60 @@ final _OverlaySettingsStore _overlaySettingsStore = _OverlaySettingsStore(
   JustStorage.standard(),
 );
 
+// ── Global performance history (persists across panel open/close) ────────────
+
+class _PerfHistorySample {
+  const _PerfHistorySample({
+    required this.frameNumber,
+    required this.fps,
+    required this.frameMs,
+    required this.budgetRemainingMs,
+    required this.rssBytes,
+  });
+
+  final int frameNumber;
+  final int fps;
+  final double frameMs;
+  final double budgetRemainingMs;
+  final int rssBytes;
+
+  /// Frame time as a percentage of the engine's fixed frame budget — used as
+  /// a CPU-load proxy since no real OS-level CPU% is tracked anywhere in the
+  /// engine/debugger. Can exceed 100 when the frame is over budget.
+  double get cpuUsagePercent {
+    final totalBudgetMs = frameMs + budgetRemainingMs;
+    if (totalBudgetMs <= 0) return 0;
+    return (frameMs / totalBudgetMs) * 100;
+  }
+}
+
+const int _perfHistoryCapacity = 180;
+final List<_PerfHistorySample> _perfHistory = <_PerfHistorySample>[];
+
+/// Appends a sample to the session-level performance history, skipping
+/// duplicates when the underlying frame hasn't advanced (e.g. game paused).
+void _recordPerfSample(
+  PerformanceDebuggerSnapshot performance,
+  MemoryDebuggerSnapshot memory,
+) {
+  if (_perfHistory.isNotEmpty &&
+      _perfHistory.last.frameNumber == performance.frameNumber) {
+    return;
+  }
+  _perfHistory.add(
+    _PerfHistorySample(
+      frameNumber: performance.frameNumber,
+      fps: performance.currentFps,
+      frameMs: performance.lastUpdateMs,
+      budgetRemainingMs: performance.budgetRemainingMs,
+      rssBytes: memory.rssBytes,
+    ),
+  );
+  if (_perfHistory.length > _perfHistoryCapacity) {
+    _perfHistory.removeAt(0);
+  }
+}
+
 // ── Canvas ─────────────────────────────────────────────────────────────────
 
 class _GameCanvasArea extends StatefulWidget {

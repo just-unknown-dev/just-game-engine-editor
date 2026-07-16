@@ -261,6 +261,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
         if (shouldSample) {
           _lastMetricSampleMs = nowMs;
           _displayMetrics = liveMetrics;
+          _recordPerfSample(liveMetrics.performance, liveMetrics.memory);
         }
 
         final sampledMetrics = shouldSample
