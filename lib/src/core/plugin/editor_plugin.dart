@@ -39,6 +39,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     required this.engine,
     this.componentRegistrar,
     this.spawnRegistry = const {},
+    this.bindPhysicsBodies = true,
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
     Set<String> protectedSceneNames = const {},
@@ -73,6 +74,17 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   /// where and when to ask for it.
   final Map<String, Entity Function(World world, Entity spawnPoint)>
   spawnRegistry;
+
+  /// Whether to enable gizmo-drag-to-move authoring for physics bodies
+  /// (registers [PhysicsBodyBindingSystem]/[PhysicsJointBindingSystem]).
+  ///
+  /// [PhysicsSystem] (core engine) always owns physics-body lifecycle and
+  /// [Engine.physics] stepping when it's present in the game's `World` —
+  /// this flag doesn't affect that. It only gates the thin authoring
+  /// override that makes a selected/dragged body feel immediate (zeroing
+  /// residual velocity, waking the body) and joint authoring. Safe to leave
+  /// at its default in any game.
+  final bool bindPhysicsBodies;
 
   // ── Static project-component registration ──────────────────────────────────
 
@@ -172,8 +184,9 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   static Future<JustGameEditorPlugin?> register({
     required Engine engine,
     VoidCallback? componentRegistrar,
-    Map<String, Entity Function(World world, Entity spawnPoint)>
-    spawnRegistry = const {},
+    Map<String, Entity Function(World world, Entity spawnPoint)> spawnRegistry =
+        const {},
+    bool bindPhysicsBodies = true,
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
     Set<String> protectedSceneNames = const {},
@@ -184,6 +197,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
       engine: engine,
       componentRegistrar: componentRegistrar,
       spawnRegistry: spawnRegistry,
+      bindPhysicsBodies: bindPhysicsBodies,
       toggleKey: toggleKey,
       statusPanelToggleKey: statusPanelToggleKey,
       protectedSceneNames: protectedSceneNames,
@@ -200,33 +214,32 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     if (!engine.world.systems.any((system) => system is SimpleMovementSystem)) {
       engine.world.addSystem(SimpleMovementSystem(engine.input));
     }
-    if (!engine.world.systems.any((system) => system is PhysicsBridgeSystem)) {
-      engine.world.addSystem(PhysicsBridgeSystem());
-    }
-    if (!engine.world.systems.any(
-      (system) => system is PhysicsBodyBindingSystem,
-    )) {
-      engine.world.addSystem(
-        PhysicsBodyBindingSystem(
-          engine.physics,
-          sceneState: sceneState,
-          isAuthoringActive: () => _isAuthoring,
-        ),
-      );
-    }
-    if (!engine.world.systems.any(
-      (system) => system is PhysicsJointBindingSystem,
-    )) {
-      engine.world.addSystem(PhysicsJointBindingSystem(engine.physics));
+    if (bindPhysicsBodies) {
+      // No PhysicsBridgeSystem here — PhysicsSystem (core engine) now owns
+      // syncing PhysicsBody results back to TransformComponent itself, for
+      // every PhysicsBodyComponent entity, not just editor-authored ones.
+      if (!engine.world.systems.any(
+        (system) => system is PhysicsBodyBindingSystem,
+      )) {
+        engine.world.addSystem(
+          PhysicsBodyBindingSystem(
+            sceneState: sceneState,
+            isAuthoringActive: () => _isAuthoring,
+          ),
+        );
+      }
+      if (!engine.world.systems.any(
+        (system) => system is PhysicsJointBindingSystem,
+      )) {
+        engine.world.addSystem(PhysicsJointBindingSystem(engine.physics));
+      }
     }
     if (!engine.world.systems.any(
       (system) => system is EditorLogCaptureSystem,
     )) {
       engine.world.addSystem(EditorLogCaptureSystem(logService));
     }
-    if (!engine.world.systems.any(
-      (system) => system is EditorSpriteSystem,
-    )) {
+    if (!engine.world.systems.any((system) => system is EditorSpriteSystem)) {
       engine.world.addSystem(EditorSpriteSystem());
     }
     if (!engine.world.systems.any(
@@ -245,10 +258,12 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     // system registration, if present) must not hijack the authoring
     // viewport. Pressing Play un-suppresses them so the test camera follows
     // the player properly.
-    engine.world.getSystem<CameraFollowSystem>()?.isAuthoringActive =
-        () => _isAuthoring;
-    engine.world.getSystem<CameraTransformSyncSystem>()?.isAuthoringActive =
-        () => _isAuthoring;
+    engine.world.getSystem<CameraFollowSystem>()?.isAuthoringActive = () =>
+        _isAuthoring;
+    engine.world
+        .getSystem<CameraTransformSyncSystem>()
+        ?.isAuthoringActive = () =>
+        _isAuthoring;
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
     // Register game custom components and wire post-refresh re-registration.
@@ -344,9 +359,9 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     if (!engine.isInitialized) return;
     if (_playState != EditorPlayState.stopped) return;
     final entity = sceneState.selectedEntity;
-    final isPreviewPlaying = entity != null &&
-        ((entity.getComponent<AnimatedSpriteComponent>()?.isPlaying ??
-                false) ||
+    final isPreviewPlaying =
+        entity != null &&
+        ((entity.getComponent<AnimatedSpriteComponent>()?.isPlaying ?? false) ||
             (entity.getComponent<AnimationControllerComponent>()?.isPlaying ??
                 false));
     engine.time.timeScale = isPreviewPlaying ? 1.0 : 0.0;

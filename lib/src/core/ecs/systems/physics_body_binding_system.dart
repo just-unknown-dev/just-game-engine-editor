@@ -2,120 +2,49 @@ import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../state/editor_scene_state.dart';
 
-/// Ensures editor [PhysicsBodyComponent] entities have runtime subsystem
-/// [PhysicsBody] instances via [PhysicsBodyRefComponent].
+/// Live gizmo-drag authoring override for physics bodies.
+///
+/// Body lifecycle (creation, property sync, stepping, and syncing results
+/// back to [TransformComponent]) is entirely owned by the core
+/// [PhysicsSystem] now — this system's only remaining job is making a
+/// selected/dragged entity feel immediate: it zeroes residual
+/// velocity/angular-velocity and wakes the body while the entity is being
+/// authored, so momentum from gameplay/simulation doesn't fight the drag.
+///
+/// The actual position push happens for free: [EditorSceneState]'s
+/// translate/rotate/scale operations mutate [TransformComponent] directly,
+/// and [PhysicsSystem] already pushes `TransformComponent -> PhysicsBody`
+/// unconditionally at the start of every step (that's how spawns/teleports
+/// take effect) — dragging is just another such write.
 class PhysicsBodyBindingSystem extends System {
-  PhysicsBodyBindingSystem(
-    this.physics, {
-    this.sceneState,
-    this.isAuthoringActive,
-  });
+  PhysicsBodyBindingSystem({this.sceneState, this.isAuthoringActive});
 
-  final PhysicsEngine physics;
   final EditorSceneState? sceneState;
 
-  /// Optional gate to limit transform->body authoring pushes.
+  /// Optional gate to limit the drag override below.
   final bool Function()? isAuthoringActive;
 
-  final Map<int, PhysicsBody> _entityBodyMap = <int, PhysicsBody>{};
+  // Runs after PhysicsSystem (priority 90) in the same frame, so every
+  // dragged entity's PhysicsBodyRefComponent already exists by the time
+  // this reads it.
+  @override
+  int get priority => SystemPriorities.physics - 3;
 
   @override
-  int get priority => SystemPriorities.physics;
-
-  @override
-  List<Type> get requiredComponents => [
-    TransformComponent,
-    PhysicsBodyComponent,
-  ];
+  List<Type> get requiredComponents => [PhysicsBodyRefComponent];
 
   @override
   void update(double deltaTime) {
-    final activeIds = <int>{};
-
     forEach((entity) {
-      if (!entity.isActive) return;
-      activeIds.add(entity.id);
-
-      final transform = entity.getComponent<TransformComponent>()!;
-      final comp = entity.getComponent<PhysicsBodyComponent>()!;
-      var ref = entity.getComponent<PhysicsBodyRefComponent>();
-      var body = _entityBodyMap[entity.id];
-
-      if (body == null || ref == null) {
-        body = PhysicsBody(
-          position: Vector2(transform.position.x, transform.position.y),
-          shape: comp.shape,
-          mass: comp.isStatic ? 0.0 : comp.mass,
-          restitution: comp.restitution,
-          drag: comp.drag,
-          useGravity: !comp.isStatic,
-          isSensor: comp.isSensor,
-          categoryBits: comp.categoryBits,
-          maskBits: comp.maskBits,
-          groupIndex: comp.groupIndex,
-        );
-
-        final vel = entity.getComponent<VelocityComponent>();
-        if (vel != null) {
-          body.velocity.setValues(vel.velocity.x, vel.velocity.y);
-        }
-
-        physics.addBody(body);
-        _entityBodyMap[entity.id] = body;
-
-        if (ref == null) {
-          entity.addComponent(PhysicsBodyRefComponent(body));
-        }
-      } else {
-        _syncBodyFromComponent(body, comp);
-      }
-
-      // During live editor manipulation, selected entities should feel
-      // immediate under gizmo/text edits, so push Transform -> PhysicsBody.
-      if (_shouldPushTransformToBody(entity)) {
-        body.position.setValues(transform.position.x, transform.position.y);
-        body.angle = transform.rotation;
-        body.velocity.setZero();
-        body.angularVelocity = 0.0;
-        body.isAwake = true;
-      }
+      if (!_shouldOverrideBody(entity)) return;
+      final body = entity.getComponent<PhysicsBodyRefComponent>()!.body;
+      body.velocity.setZero();
+      body.angularVelocity = 0.0;
+      body.isAwake = true;
     });
-
-    final staleIds = _entityBodyMap.keys
-        .where((entityId) => !activeIds.contains(entityId))
-        .toList();
-
-    for (final entityId in staleIds) {
-      final body = _entityBodyMap.remove(entityId);
-      if (body != null) {
-        physics.removeBody(body);
-      }
-      final entity = world.getEntity(entityId);
-      entity?.removeComponent<PhysicsBodyRefComponent>();
-    }
   }
 
-  @override
-  void onRemovedFromWorld() {
-    for (final body in _entityBodyMap.values) {
-      physics.removeBody(body);
-    }
-    _entityBodyMap.clear();
-  }
-
-  void _syncBodyFromComponent(PhysicsBody body, PhysicsBodyComponent comp) {
-    body.shape = comp.shape;
-    body.mass = comp.isStatic ? 0.0 : comp.mass;
-    body.restitution = comp.restitution;
-    body.drag = comp.drag;
-    body.useGravity = !comp.isStatic;
-    body.isSensor = comp.isSensor;
-    body.categoryBits = comp.categoryBits;
-    body.maskBits = comp.maskBits;
-    body.groupIndex = comp.groupIndex;
-  }
-
-  bool _shouldPushTransformToBody(Entity entity) {
+  bool _shouldOverrideBody(Entity entity) {
     final active = isAuthoringActive?.call() ?? true;
     if (!active) return false;
     final scene = sceneState;
