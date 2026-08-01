@@ -25,7 +25,7 @@ class _ExampleApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
-        body: GameEditorAdapter(
+        body: JustGameEngineEditor(
           engine: engine,
           plugin: plugin,
           showFPS: true,

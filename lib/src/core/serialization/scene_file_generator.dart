@@ -393,8 +393,6 @@ class ${cls}Level {
           'restitution: ${_d(c.restitution)}, '
           'drag: ${_d(c.drag)}, '
           'isStatic: ${c.isStatic}, '
-          'layer: ${c.layer}, '
-          'collisionMask: ${c.collisionMask}, '
           'isOneWay: ${c.isOneWay}, '
           'isSensor: ${c.isSensor}, '
           'categoryBits: ${c.categoryBits}, '
@@ -579,8 +577,6 @@ class ${cls}Level {
           restitution: _n(j['restitution'] ?? 0.8),
           drag: _n(j['drag'] ?? 0.98),
           isStatic: j['isStatic'] as bool? ?? false,
-          layer: j['layer'] as int? ?? 1,
-          collisionMask: j['collisionMask'] as int? ?? -1,
           isOneWay: j['isOneWay'] as bool? ?? false,
           isSensor: j['isSensor'] as bool? ?? false,
           categoryBits: j['categoryBits'] as int? ?? 0x0001,
@@ -747,8 +743,6 @@ class ${cls}Level {
         'restitution': c.restitution,
         'drag': c.drag,
         'isStatic': c.isStatic,
-        'layer': c.layer,
-        'collisionMask': c.collisionMask,
         'isOneWay': c.isOneWay,
         'isSensor': c.isSensor,
         'categoryBits': c.categoryBits,

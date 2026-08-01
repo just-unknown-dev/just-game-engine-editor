@@ -101,15 +101,6 @@ class PhysicsBodyRectEditorComponent extends EditorComponent {
                 (c as PhysicsBodyComponent).maskBits = (v as num).toInt(),
           ),
           EditorComponentField(
-            name: 'collisionMask',
-            label: 'Coll. Mask',
-            kind: EditorFieldKind.integer,
-            scrubConfig: const NumberScrubConfig(step: 1.0, integer: true),
-            read: (c) => (c as PhysicsBodyComponent).collisionMask,
-            write: (c, v) =>
-                (c as PhysicsBodyComponent).collisionMask = (v as num).toInt(),
-          ),
-          EditorComponentField(
             name: 'groupIndex',
             label: 'Group Index',
             kind: EditorFieldKind.integer,
@@ -117,15 +108,6 @@ class PhysicsBodyRectEditorComponent extends EditorComponent {
             read: (c) => (c as PhysicsBodyComponent).groupIndex,
             write: (c, v) =>
                 (c as PhysicsBodyComponent).groupIndex = (v as num).toInt(),
-          ),
-          EditorComponentField(
-            name: 'layer',
-            label: 'Layer',
-            kind: EditorFieldKind.integer,
-            scrubConfig: const NumberScrubConfig(step: 1.0, integer: true),
-            read: (c) => (c as PhysicsBodyComponent).layer,
-            write: (c, v) =>
-                (c as PhysicsBodyComponent).layer = (v as num).toInt(),
           ),
         ]),
       ],

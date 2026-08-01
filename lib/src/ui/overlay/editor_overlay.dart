@@ -111,7 +111,15 @@ class JustGameEditorOverlay extends StatelessWidget {
       child: FocusScope(
         node: plugin.gameFocusScopeNode,
         child: Focus(
-          autofocus: true,
+          // Not autofocus: this wrapper has no onKeyEvent of its own, and
+          // claiming focus here at mount races (and wins over) gameChild's
+          // own internal autofocus Focus node — silently swallowing all
+          // keyboard input into a no-op handler with no way to recover it
+          // short of clicking directly on the game canvas. Editor <-> game
+          // focus routing on F1 is already handled explicitly via
+          // editorFocusNode/gameFocusScopeNode.requestFocus() in
+          // JustGameEditorPlugin._onHardwareKey, so this wrapper doesn't
+          // need to grab focus itself — leave it to gameChild by default.
           canRequestFocus: true,
           child: AnimatedBuilder(
             animation: plugin,

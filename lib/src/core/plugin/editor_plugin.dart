@@ -33,6 +33,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   JustGameEditorPlugin({
     required this.engine,
     this.componentRegistrar,
+    this.bindPhysicsBodies = true,
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
   }) : _toggleKey = toggleKey,
@@ -53,6 +54,17 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   /// [onInitialize] and again on [reassemble] (hot-reload) and after a
   /// successful component codegen refresh.
   final VoidCallback? componentRegistrar;
+
+  /// Whether to enable gizmo-drag-to-move authoring for physics bodies
+  /// (registers [PhysicsBodyBindingSystem]/[PhysicsJointBindingSystem]).
+  ///
+  /// [PhysicsSystem] (core engine) always owns physics-body lifecycle and
+  /// [Engine.physics] stepping when it's present in the game's `World` —
+  /// this flag doesn't affect that. It only gates the thin authoring
+  /// override that makes a selected/dragged body feel immediate (zeroing
+  /// residual velocity, waking the body) and joint authoring. Safe to leave
+  /// at its default in any game.
+  final bool bindPhysicsBodies;
 
   // ── Static project-component registration ──────────────────────────────────
 
@@ -132,6 +144,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   static Future<JustGameEditorPlugin?> register({
     required Engine engine,
     VoidCallback? componentRegistrar,
+    bool bindPhysicsBodies = true,
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
   }) async {
@@ -140,6 +153,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     final plugin = JustGameEditorPlugin(
       engine: engine,
       componentRegistrar: componentRegistrar,
+      bindPhysicsBodies: bindPhysicsBodies,
       toggleKey: toggleKey,
       statusPanelToggleKey: statusPanelToggleKey,
     );
@@ -155,24 +169,25 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     if (!engine.world.systems.any((system) => system is SimpleMovementSystem)) {
       engine.world.addSystem(SimpleMovementSystem(engine.input));
     }
-    if (!engine.world.systems.any((system) => system is PhysicsBridgeSystem)) {
-      engine.world.addSystem(PhysicsBridgeSystem());
-    }
-    if (!engine.world.systems.any(
-      (system) => system is PhysicsBodyBindingSystem,
-    )) {
-      engine.world.addSystem(
-        PhysicsBodyBindingSystem(
-          engine.physics,
-          sceneState: sceneState,
-          isAuthoringActive: () => isVisible,
-        ),
-      );
-    }
-    if (!engine.world.systems.any(
-      (system) => system is PhysicsJointBindingSystem,
-    )) {
-      engine.world.addSystem(PhysicsJointBindingSystem(engine.physics));
+    if (bindPhysicsBodies) {
+      // No PhysicsBridgeSystem here — PhysicsSystem (core engine) now owns
+      // syncing PhysicsBody results back to TransformComponent itself, for
+      // every PhysicsBodyComponent entity, not just editor-authored ones.
+      if (!engine.world.systems.any(
+        (system) => system is PhysicsBodyBindingSystem,
+      )) {
+        engine.world.addSystem(
+          PhysicsBodyBindingSystem(
+            sceneState: sceneState,
+            isAuthoringActive: () => isVisible,
+          ),
+        );
+      }
+      if (!engine.world.systems.any(
+        (system) => system is PhysicsJointBindingSystem,
+      )) {
+        engine.world.addSystem(PhysicsJointBindingSystem(engine.physics));
+      }
     }
     if (!engine.world.systems.any(
       (system) => system is EditorLogCaptureSystem,

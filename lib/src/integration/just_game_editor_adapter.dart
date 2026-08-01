@@ -19,11 +19,12 @@ import '../ui/overlay/editor_overlay.dart';
 ///
 /// When [plugin] is null (release builds) the widget degrades to a plain
 /// [GameWidget] with zero overhead.
-class GameEditorAdapter extends StatefulWidget {
-  const GameEditorAdapter({
+class JustGameEngineEditor extends StatefulWidget {
+  const JustGameEngineEditor({
     super.key,
     required this.engine,
     required this.plugin,
+    this.overlay,
     this.showFPS = true,
     this.showDebug = false,
     this.showTerminal = false,
@@ -31,15 +32,16 @@ class GameEditorAdapter extends StatefulWidget {
 
   final Engine engine;
   final JustGameEditorPlugin? plugin;
+  final Widget? overlay;
   final bool showFPS;
   final bool showDebug;
   final bool showTerminal;
 
   @override
-  State<GameEditorAdapter> createState() => _GameEditorAdapterState();
+  State<JustGameEngineEditor> createState() => _JustGameEngineEditorState();
 }
 
-class _GameEditorAdapterState extends State<GameEditorAdapter>
+class _JustGameEngineEditorState extends State<JustGameEngineEditor>
     with SingleTickerProviderStateMixin {
   late final Ticker _editorTicker;
   Duration _prevElapsed = Duration.zero;
@@ -70,7 +72,7 @@ class _GameEditorAdapterState extends State<GameEditorAdapter>
   }
 
   @override
-  void didUpdateWidget(GameEditorAdapter old) {
+  void didUpdateWidget(JustGameEngineEditor old) {
     super.didUpdateWidget(old);
     if (!kDebugMode) return;
 
@@ -122,6 +124,7 @@ class _GameEditorAdapterState extends State<GameEditorAdapter>
   Widget build(BuildContext context) {
     final gameWidget = GameWidget(
       engine: widget.engine,
+      overlay: widget.overlay,
       showFPS: widget.showFPS,
       showDebug: widget.showDebug,
       showTerminal: widget.showTerminal,
