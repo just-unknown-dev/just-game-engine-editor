@@ -37,7 +37,7 @@ import 'rendering/rectangle_editor_component.dart';
 import 'rendering/animated_sprite_editor_component.dart';
 import 'rendering/sprite_editor_component.dart';
 import 'ui/button_editor_component.dart';
-import 'ui/circular_progress_editor_component.dart';
+import 'ui/elliptical_progress_editor_component.dart';
 import 'ui/linear_progress_editor_component.dart';
 import 'ui/text_editor_component.dart';
 import 'ui/ui_catalog_editor_component.dart';
@@ -86,7 +86,7 @@ void registerAllEditorComponents() {
     AnimatedSpriteEditorComponent(),
     SpriteEditorComponent(),
     ButtonEditorComponent(),
-    CircularProgressEditorComponent(),
+    EllipticalProgressEditorComponent(),
     LinearProgressEditorComponent(),
     TextEditorComponent(),
     UICatalogEditorComponent(),

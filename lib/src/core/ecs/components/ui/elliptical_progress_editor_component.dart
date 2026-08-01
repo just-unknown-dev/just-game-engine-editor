@@ -1,0 +1,61 @@
+﻿import 'package:flutter/material.dart';
+import 'package:just_game_engine/just_game_engine.dart';
+
+import '../../generator/component_registry.dart';
+
+class EllipticalProgressEditorComponent extends EditorComponent {
+  EllipticalProgressEditorComponent()
+    : super(
+        id: 'elliptical_progress_d287c579',
+        name: 'Elliptical Progress',
+        type: 'EllipticalProgressComponent',
+        group: 'UI',
+        description: 'Radial progress indicator.',
+        allowMultiple: false,
+        deletable: true,
+        componentType: ComponentType.core,
+        icon: Icons.donut_large,
+        accentColor: const Color(0xFF5C6BC0),
+        factory: () => EllipticalProgressComponent(radius: 30),
+        fields: const [],
+        fieldGroups: [
+          EditorFieldGroup(
+            name: 'Size',
+            fields: [
+              EditorComponentField(
+                name: 'radius',
+                label: 'Radius',
+                kind: EditorFieldKind.decimal,
+                editable: false,
+                scrubConfig: const NumberScrubConfig(
+                  step: 0.5,
+                  fractionDigits: 1,
+                  min: 0.0,
+                ),
+                read: (c) => (c as EllipticalProgressComponent).size.width / 2,
+              ),
+            ],
+          ),
+          EditorFieldGroup(
+            name: 'Value',
+            fields: [
+              EditorComponentField(
+                name: 'progressValue',
+                label: 'Progress',
+                kind: EditorFieldKind.decimal,
+                scrubConfig: const NumberScrubConfig(
+                  step: 0.02,
+                  fractionDigits: 2,
+                  min: 0.0,
+                  max: 1.0,
+                ),
+                read: (c) => (c as EllipticalProgressComponent).progress,
+                write: (c, v) => (c as EllipticalProgressComponent).setProgress(
+                  (v as num).toDouble(),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+}
