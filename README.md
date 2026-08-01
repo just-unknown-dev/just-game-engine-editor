@@ -25,9 +25,12 @@ A developer-only runtime level editor overlay for [`just_game_engine`](../just_g
 ## Install
 
 Add as a `dev_dependency` so tree-shaking strips it from production builds:
+Add as a `dev_dependency` so tree-shaking strips it from production builds:
 
 ```yaml
 dev_dependencies:
+  just_game_engine_editor:
+    path: packages/just_game_engine_editor
   just_game_engine_editor:
     path: packages/just_game_engine_editor
 ```
