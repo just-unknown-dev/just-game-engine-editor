@@ -588,8 +588,8 @@ class ${cls}Level {
       return 'LinearProgressComponent('
           'size: Size(${_d(c.size.width)}, ${_d(c.size.height)}))';
     }
-    if (c is CircularProgressComponent) {
-      return 'CircularProgressComponent(radius: ${_d(c.radius)})';
+    if (c is EllipticalProgressComponent) {
+      return 'EllipticalProgressComponent(radius: ${_d(c.radius)}, radiusY: ${_d(c.radiusY)})';
     }
     if (c is UIComponent) {
       return 'UIComponent(size: Size(${_d(c.size.width)}, ${_d(c.size.height)}))';
