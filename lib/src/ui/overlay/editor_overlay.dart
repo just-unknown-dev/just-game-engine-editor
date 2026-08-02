@@ -181,16 +181,21 @@ class _JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
                     return _OverlayUiSettingsWatcher(
                       plugin: plugin,
                       settings: settings,
-                      child: Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: _GameCanvasArea(
-                              plugin: plugin,
-                              gameChild: gameChild,
-                            ),
-                          ),
-                          const SizedBox(width: _EditorRightPanel.panelWidth),
-                        ],
+                      child: ValueListenableBuilder<double>(
+                        valueListenable: _rightPanelWidthSignal,
+                        builder: (context, rightPanelWidth, _) {
+                          return Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: _GameCanvasArea(
+                                  plugin: plugin,
+                                  gameChild: gameChild,
+                                ),
+                              ),
+                              SizedBox(width: rightPanelWidth),
+                            ],
+                          );
+                        },
                       ),
                     );
                   },
@@ -251,47 +256,53 @@ class _FullEditorChrome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final leftWidth = math.max(0.0, size.width - _EditorRightPanel.panelWidth);
 
-    return Stack(
-      children: <Widget>[
-        Positioned(
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: _EditorRightPanel.panelWidth,
-          child: _EditorRightPanel(plugin: plugin, settings: settings),
-        ),
-        if (plugin.isStatusPanelVisible)
-          Positioned(
-            left: 0,
-            right: _EditorRightPanel.panelWidth,
-            bottom: 0,
-            child: _CompactStatusDock(
-              plugin: plugin,
-              maxDetailWidth: leftWidth,
-              maxDetailHeight: size.height,
+    return ValueListenableBuilder<double>(
+      valueListenable: _rightPanelWidthSignal,
+      builder: (context, panelWidth, _) {
+        final leftWidth = math.max(0.0, size.width - panelWidth);
+
+        return Stack(
+          children: <Widget>[
+            Positioned(
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: panelWidth,
+              child: _EditorRightPanel(plugin: plugin, settings: settings),
             ),
-          ),
-        if (settings.showStatusBadge)
-          Positioned(
-            top: 16,
-            left: 16,
-            child: IgnorePointer(
-              child: _EditorStatusBadge(settings: settings),
+            if (plugin.isStatusPanelVisible)
+              Positioned(
+                left: 0,
+                right: panelWidth,
+                bottom: 0,
+                child: _CompactStatusDock(
+                  plugin: plugin,
+                  maxDetailWidth: leftWidth,
+                  maxDetailHeight: size.height,
+                ),
+              ),
+            if (settings.showStatusBadge)
+              Positioned(
+                top: 16,
+                left: 16,
+                child: IgnorePointer(
+                  child: _EditorStatusBadge(settings: settings),
+                ),
+              ),
+            Positioned(
+              top: 16,
+              right: panelWidth + 16,
+              child: _PlayControlsToolbar(plugin: plugin, settings: settings),
             ),
-          ),
-        Positioned(
-          top: 16,
-          right: _EditorRightPanel.panelWidth + 16,
-          child: _PlayControlsToolbar(plugin: plugin, settings: settings),
-        ),
-        const Positioned(
-          bottom: _CompactStatusDock._panelHeight + 8,
-          right: _EditorRightPanel.panelWidth + 8,
-          child: _EditorSnackBarLayer(),
-        ),
-      ],
+            Positioned(
+              bottom: _CompactStatusDock._panelHeight + 8,
+              right: panelWidth + 8,
+              child: const _EditorSnackBarLayer(),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -493,6 +504,19 @@ Future<void>? _overlayUiSettingsLoadFuture;
 
 final _OverlaySettingsStore _overlaySettingsStore = _OverlaySettingsStore(
   JustStorage.standard(),
+);
+
+// ── Global right-panel width ──────────────────────────────────────────────────
+
+/// Live width of the right inspector panel, dragged via the handle on its
+/// left edge (see [_EditorRightPanel]). A global signal (like
+/// [_overlayUiSettingsSignal]) because [_JustGameEditorOverlayState] (which
+/// reserves this much canvas space) and [_FullEditorChrome] (which positions
+/// the panel and everything anchored to its edge) are parallel widgets, not
+/// parent/child — a plain State field on either wouldn't reach the other.
+/// Not persisted, matching the bottom dock panels' heights.
+final ValueNotifier<double> _rightPanelWidthSignal = ValueNotifier<double>(
+  _EditorRightPanel.defaultPanelWidth,
 );
 
 // ── Global performance history (persists across panel open/close) ────────────
