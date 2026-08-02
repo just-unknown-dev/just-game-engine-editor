@@ -93,7 +93,17 @@ class _OverlayUiSettingsWatcherState extends State<_OverlayUiSettingsWatcher> {
 /// If [plugin.isStatusPanelVisible] is true, the compact dock can still be
 /// shown independently. When visible it switches to a split layout: game
 /// canvas on the left, editor panel on the right.
-class JustGameEditorOverlay extends StatelessWidget {
+///
+/// The dock/panel/badge/snackbar "chrome" is projected into the ambient
+/// [Overlay] via [OverlayPortal] rather than painted inline. Apps typically
+/// stack pause/game-over dialogs above this widget (see just_zombies'
+/// GameScreen); painting chrome inline would put it underneath those
+/// dialogs. Routing it through the Overlay makes the editor — a developer
+/// tool, not game UI — always render on top, regardless of sibling order
+/// elsewhere in the app. Only the game canvas itself stays in its normal
+/// tree position, since gameplay must still render beneath the app's own
+/// HUD/dialogs as before.
+class JustGameEditorOverlay extends StatefulWidget {
   const JustGameEditorOverlay({
     super.key,
     required this.plugin,
@@ -104,8 +114,24 @@ class JustGameEditorOverlay extends StatelessWidget {
   final Widget gameChild;
 
   @override
+  State<JustGameEditorOverlay> createState() => _JustGameEditorOverlayState();
+}
+
+class _JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
+  final OverlayPortalController _chromeController = OverlayPortalController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (kDebugMode) _chromeController.show();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (!kDebugMode) return gameChild;
+    if (!kDebugMode) return widget.gameChild;
+
+    final plugin = widget.plugin;
+    final gameChild = widget.gameChild;
 
     return EditorMessenger(
       child: FocusScope(
@@ -113,83 +139,151 @@ class JustGameEditorOverlay extends StatelessWidget {
         child: Focus(
           autofocus: true,
           canRequestFocus: true,
-          child: AnimatedBuilder(
-            animation: plugin,
-            builder: (context, _) {
-              if (!plugin.isVisible) {
-                if (!plugin.isStatusPanelVisible) {
-                  return AbsorbPointer(absorbing: false, child: gameChild);
-                }
+          child: OverlayPortal(
+            controller: _chromeController,
+            overlayChildBuilder: (context) {
+              return AnimatedBuilder(
+                animation: plugin,
+                builder: (context, _) {
+                  if (!plugin.isVisible) {
+                    if (!plugin.isStatusPanelVisible) {
+                      return const SizedBox.shrink();
+                    }
+                    return _CompactChrome(plugin: plugin);
+                  }
 
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    return Stack(
-                      clipBehavior: Clip.hardEdge,
-                      children: <Widget>[
-                        Positioned.fill(
-                          child: AbsorbPointer(
-                            absorbing: false,
-                            child: gameChild,
-                          ),
-                        ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: _CompactStatusDock(
-                            plugin: plugin,
-                            maxDetailWidth: constraints.maxWidth,
-                            maxDetailHeight: constraints.maxHeight,
-                          ),
-                        ),
-                        const Positioned(
-                          bottom: _CompactStatusDock._panelHeight + 8,
-                          right: 8,
-                          child: _EditorSnackBarLayer(),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              }
-
-              return ValueListenableBuilder<_OverlayUiSettings>(
-                valueListenable: _overlayUiSettingsSignal,
-                builder: (context, settings, _) {
-                  return _OverlayUiSettingsWatcher(
-                    plugin: plugin,
-                    settings: settings,
-                    child: Stack(
-                      children: <Widget>[
-                        Positioned.fill(
-                          child: _EditorSplitLayout(
-                            plugin: plugin,
-                            gameChild: gameChild,
-                            settings: settings,
-                          ),
-                        ),
-                        if (settings.showStatusBadge)
-                          Positioned(
-                            top: 16,
-                            left: 16,
-                            child: IgnorePointer(
-                              child: _EditorStatusBadge(settings: settings),
-                            ),
-                          ),
-                        const Positioned(
-                          bottom: _CompactStatusDock._panelHeight + 8,
-                          right: _EditorRightPanel.panelWidth + 8,
-                          child: _EditorSnackBarLayer(),
-                        ),
-                      ],
-                    ),
+                  return ValueListenableBuilder<_OverlayUiSettings>(
+                    valueListenable: _overlayUiSettingsSignal,
+                    builder: (context, settings, _) =>
+                        _FullEditorChrome(plugin: plugin, settings: settings),
                   );
                 },
               );
             },
+            child: AnimatedBuilder(
+              animation: plugin,
+              builder: (context, _) {
+                if (!plugin.isVisible) {
+                  return AbsorbPointer(absorbing: false, child: gameChild);
+                }
+
+                return ValueListenableBuilder<_OverlayUiSettings>(
+                  valueListenable: _overlayUiSettingsSignal,
+                  builder: (context, settings, _) {
+                    return _OverlayUiSettingsWatcher(
+                      plugin: plugin,
+                      settings: settings,
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: _GameCanvasArea(
+                              plugin: plugin,
+                              gameChild: gameChild,
+                            ),
+                          ),
+                          const SizedBox(width: _EditorRightPanel.panelWidth),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Chrome shown when the full editor is closed but the compact status dock
+/// is pinned open. Sized against [MediaQuery]'s screen size since it now
+/// paints in the root [Overlay] rather than inline with [JustGameEditorOverlay],
+/// which — for this package's expected full-bleed usage — matches the size
+/// the dock would have received locally.
+class _CompactChrome extends StatelessWidget {
+  const _CompactChrome({required this.plugin});
+
+  final JustGameEditorPlugin plugin;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    return Stack(
+      children: <Widget>[
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: _CompactStatusDock(
+            plugin: plugin,
+            maxDetailWidth: size.width,
+            maxDetailHeight: size.height,
+          ),
+        ),
+        const Positioned(
+          bottom: _CompactStatusDock._panelHeight + 8,
+          right: 8,
+          child: _EditorSnackBarLayer(),
+        ),
+      ],
+    );
+  }
+}
+
+/// Chrome shown while the full editor is open: right inspector panel, the
+/// compact dock confined to the canvas column, the status badge, and
+/// snackbars. See [_CompactChrome] for the sizing assumption.
+class _FullEditorChrome extends StatelessWidget {
+  const _FullEditorChrome({required this.plugin, required this.settings});
+
+  final JustGameEditorPlugin plugin;
+  final _OverlayUiSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final leftWidth = math.max(0.0, size.width - _EditorRightPanel.panelWidth);
+
+    return Stack(
+      children: <Widget>[
+        Positioned(
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: _EditorRightPanel.panelWidth,
+          child: _EditorRightPanel(plugin: plugin, settings: settings),
+        ),
+        if (plugin.isStatusPanelVisible)
+          Positioned(
+            left: 0,
+            right: _EditorRightPanel.panelWidth,
+            bottom: 0,
+            child: _CompactStatusDock(
+              plugin: plugin,
+              maxDetailWidth: leftWidth,
+              maxDetailHeight: size.height,
+            ),
+          ),
+        if (settings.showStatusBadge)
+          Positioned(
+            top: 16,
+            left: 16,
+            child: IgnorePointer(
+              child: _EditorStatusBadge(settings: settings),
+            ),
+          ),
+        Positioned(
+          top: 16,
+          right: _EditorRightPanel.panelWidth + 16,
+          child: _PlayControlsToolbar(plugin: plugin, settings: settings),
+        ),
+        const Positioned(
+          bottom: _CompactStatusDock._panelHeight + 8,
+          right: _EditorRightPanel.panelWidth + 8,
+          child: _EditorSnackBarLayer(),
+        ),
+      ],
     );
   }
 }
@@ -265,22 +359,12 @@ extension on _SettingsThemePreset {
   };
 }
 
-enum _StatusMetricId { fps, entities, memory, logs, assets, timeline }
+enum _StatusMetricId { fps, entities, logs, assets, timeline }
 
 extension on _StatusMetricId {
-  _StatusDetailSection get section => switch (this) {
-    _StatusMetricId.fps => _StatusDetailSection.performance,
-    _StatusMetricId.entities => _StatusDetailSection.ecs,
-    _StatusMetricId.memory => _StatusDetailSection.memory,
-    _StatusMetricId.logs => _StatusDetailSection.logs,
-    _StatusMetricId.assets => _StatusDetailSection.assets,
-    _StatusMetricId.timeline => _StatusDetailSection.timeline,
-  };
-
   String get label => switch (this) {
     _StatusMetricId.fps => 'FPS',
     _StatusMetricId.entities => 'Entities',
-    _StatusMetricId.memory => 'Runtime',
     _StatusMetricId.logs => 'Logs',
     _StatusMetricId.assets => 'Assets',
     _StatusMetricId.timeline => 'Timeline',
@@ -289,32 +373,9 @@ extension on _StatusMetricId {
   IconData get icon => switch (this) {
     _StatusMetricId.fps => Icons.speed_rounded,
     _StatusMetricId.entities => Icons.blur_linear_rounded,
-    _StatusMetricId.memory => Icons.memory_rounded,
     _StatusMetricId.logs => Icons.article_outlined,
     _StatusMetricId.assets => Icons.folder_outlined,
     _StatusMetricId.timeline => Icons.movie_filter_rounded,
-  };
-}
-
-enum _StatusDetailSection { performance, ecs, memory, logs, assets, timeline }
-
-extension on _StatusDetailSection {
-  String get title => switch (this) {
-    _StatusDetailSection.performance => 'Performance Details',
-    _StatusDetailSection.ecs => 'ECS Details',
-    _StatusDetailSection.memory => 'Runtime Details',
-    _StatusDetailSection.logs => 'Log Details',
-    _StatusDetailSection.assets => 'Asset Browser',
-    _StatusDetailSection.timeline => 'Animation Timeline',
-  };
-
-  IconData get icon => switch (this) {
-    _StatusDetailSection.performance => Icons.bolt_rounded,
-    _StatusDetailSection.ecs => Icons.hub_rounded,
-    _StatusDetailSection.memory => Icons.monitor_heart_rounded,
-    _StatusDetailSection.logs => Icons.subject_rounded,
-    _StatusDetailSection.assets => Icons.folder_outlined,
-    _StatusDetailSection.timeline => Icons.movie_filter_rounded,
   };
 }
 
@@ -426,68 +487,61 @@ final _OverlaySettingsStore _overlaySettingsStore = _OverlaySettingsStore(
   JustStorage.standard(),
 );
 
-// ── Split layout & canvas ─────────────────────────────────────────────────────
+// ── Global performance history (persists across panel open/close) ────────────
 
-class _EditorSplitLayout extends StatelessWidget {
-  const _EditorSplitLayout({
-    required this.plugin,
-    required this.gameChild,
-    required this.settings,
+class _PerfHistorySample {
+  const _PerfHistorySample({
+    required this.frameNumber,
+    required this.fps,
+    required this.frameMs,
+    required this.budgetRemainingMs,
+    required this.rssBytes,
   });
 
-  final JustGameEditorPlugin plugin;
-  final Widget gameChild;
-  final _OverlayUiSettings settings;
+  final int frameNumber;
+  final int fps;
+  final double frameMs;
+  final double budgetRemainingMs;
+  final int rssBytes;
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: _EditorWorkspaceArea(plugin: plugin, gameChild: gameChild),
-        ),
-        SizedBox(
-          width: _EditorRightPanel.panelWidth,
-          child: _EditorRightPanel(plugin: plugin, settings: settings),
-        ),
-      ],
-    );
+  /// Frame time as a percentage of the engine's fixed frame budget — used as
+  /// a CPU-load proxy since no real OS-level CPU% is tracked anywhere in the
+  /// engine/debugger. Can exceed 100 when the frame is over budget.
+  double get cpuUsagePercent {
+    final totalBudgetMs = frameMs + budgetRemainingMs;
+    if (totalBudgetMs <= 0) return 0;
+    return (frameMs / totalBudgetMs) * 100;
   }
 }
 
-class _EditorWorkspaceArea extends StatelessWidget {
-  const _EditorWorkspaceArea({required this.plugin, required this.gameChild});
+const int _perfHistoryCapacity = 180;
+final List<_PerfHistorySample> _perfHistory = <_PerfHistorySample>[];
 
-  final JustGameEditorPlugin plugin;
-  final Widget gameChild;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Stack(
-          clipBehavior: Clip.hardEdge,
-          children: <Widget>[
-            Positioned.fill(
-              child: _GameCanvasArea(plugin: plugin, gameChild: gameChild),
-            ),
-            if (plugin.isStatusPanelVisible)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _CompactStatusDock(
-                  plugin: plugin,
-                  maxDetailWidth: constraints.maxWidth,
-                  maxDetailHeight: constraints.maxHeight,
-                ),
-              ),
-          ],
-        );
-      },
-    );
+/// Appends a sample to the session-level performance history, skipping
+/// duplicates when the underlying frame hasn't advanced (e.g. game paused).
+void _recordPerfSample(
+  PerformanceDebuggerSnapshot performance,
+  MemoryDebuggerSnapshot memory,
+) {
+  if (_perfHistory.isNotEmpty &&
+      _perfHistory.last.frameNumber == performance.frameNumber) {
+    return;
+  }
+  _perfHistory.add(
+    _PerfHistorySample(
+      frameNumber: performance.frameNumber,
+      fps: performance.currentFps,
+      frameMs: performance.lastUpdateMs,
+      budgetRemainingMs: performance.budgetRemainingMs,
+      rssBytes: memory.rssBytes,
+    ),
+  );
+  if (_perfHistory.length > _perfHistoryCapacity) {
+    _perfHistory.removeAt(0);
   }
 }
+
+// ── Canvas ─────────────────────────────────────────────────────────────────
 
 class _GameCanvasArea extends StatefulWidget {
   const _GameCanvasArea({required this.plugin, required this.gameChild});
@@ -521,6 +575,7 @@ class _GameCanvasAreaState extends State<_GameCanvasArea> {
           onPointerDown: widget.plugin.onPointerDown,
           onPointerMove: widget.plugin.onPointerMove,
           onPointerUp: widget.plugin.onPointerUp,
+          onPointerSignal: widget.plugin.onPointerScroll,
           child: AbsorbPointer(absorbing: true, child: widget.gameChild),
         );
       },

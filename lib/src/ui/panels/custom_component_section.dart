@@ -138,7 +138,7 @@ class CustomComponentSection extends StatelessWidget {
                   ..._buildGroupedFields(descriptor.fieldGroups!)
                 else
                   ..._buildFlatFields(
-                    descriptor.fields.where((f) => f.visible).toList(),
+                    descriptor.fields.where(_isShown).toList(),
                   ),
               ],
             ),
@@ -148,9 +148,17 @@ class CustomComponentSection extends StatelessWidget {
     );
   }
 
+  /// True when [f] should be shown for the current [component] state —
+  /// combines the static [EditorComponentField.visible] flag with the
+  /// dynamic [EditorComponentField.visibleWhen] predicate (e.g. a
+  /// shape-specific dimension field that only applies to the currently
+  /// selected shape kind).
+  bool _isShown(EditorComponentField f) =>
+      f.visible && (f.visibleWhen?.call(component) ?? true);
+
   List<Widget> _buildGroupedFields(List<EditorFieldGroup> groups) {
     final visibleGroups = groups
-        .where((g) => g.fields.any((f) => f.visible))
+        .where((g) => g.fields.any(_isShown))
         .toList();
 
     if (visibleGroups.isEmpty) {
@@ -165,7 +173,7 @@ class CustomComponentSection extends StatelessWidget {
     final widgets = <Widget>[];
     for (var i = 0; i < visibleGroups.length; i++) {
       final group = visibleGroups[i];
-      final visibleFields = group.fields.where((f) => f.visible).toList();
+      final visibleFields = group.fields.where(_isShown).toList();
       if (i > 0) widgets.add(const SizedBox(height: 6));
       widgets.add(
         Padding(
@@ -378,6 +386,13 @@ class _EditorFieldControl extends StatelessWidget {
               ? () => field.generateTemplate!(component)
               : null,
         );
+      case EditorFieldKind.offsetList:
+        final points = value;
+        return _OffsetListEditorRow(
+          label: label,
+          points: points is List<Offset> ? points : const <Offset>[],
+          onChanged: (next) => onChanged(next),
+        );
       case EditorFieldKind.text:
       case EditorFieldKind.list:
       case EditorFieldKind.map:
@@ -423,6 +438,11 @@ class _EditorFieldControl extends StatelessWidget {
         return value.toString();
       case EditorFieldKind.offset:
         if (value is Offset) return '${value.dx}, ${value.dy}';
+        return value.toString();
+      case EditorFieldKind.offsetList:
+        if (value is List<Offset>) {
+          return value.map((o) => '(${o.dx}, ${o.dy})').join(', ');
+        }
         return value.toString();
       case EditorFieldKind.color:
         if (value is Color) {
@@ -506,7 +526,9 @@ class _EditorFieldControl extends StatelessWidget {
       case EditorFieldKind.shapePaintStyle:
       case EditorFieldKind.boolean:
       case EditorFieldKind.enumeration:
+      case EditorFieldKind.offsetList:
       case EditorFieldKind.unknown:
+        // offsetList never reaches this fallback — it has a dedicated widget.
         return previous;
     }
   }
@@ -936,6 +958,196 @@ class _DropdownEditorRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Vertex list row (Polygon / RoundedPolygon / Chain) ────────────────────────
+
+class _OffsetListEditorRow extends StatefulWidget {
+  const _OffsetListEditorRow({
+    required this.label,
+    required this.points,
+    required this.onChanged,
+  });
+
+  final String label;
+  final List<Offset> points;
+  final ValueChanged<List<Offset>> onChanged;
+
+  @override
+  State<_OffsetListEditorRow> createState() => _OffsetListEditorRowState();
+}
+
+class _OffsetListEditorRowState extends State<_OffsetListEditorRow> {
+  late List<Offset> _points;
+
+  @override
+  void initState() {
+    super.initState();
+    _points = List<Offset>.from(widget.points);
+  }
+
+  @override
+  void didUpdateWidget(_OffsetListEditorRow old) {
+    super.didUpdateWidget(old);
+    if (!_sameOffsets(old.points, widget.points)) {
+      _points = List<Offset>.from(widget.points);
+    }
+  }
+
+  static bool _sameOffsets(List<Offset> a, List<Offset> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  void _commit() => widget.onChanged(List<Offset>.from(_points));
+
+  void _setX(int index, double x) {
+    setState(() => _points[index] = Offset(x, _points[index].dy));
+    _commit();
+  }
+
+  void _setY(int index, double y) {
+    setState(() => _points[index] = Offset(_points[index].dx, y));
+    _commit();
+  }
+
+  void _remove(int index) {
+    setState(() => _points.removeAt(index));
+    _commit();
+  }
+
+  void _add() {
+    final last = _points.isNotEmpty ? _points.last : Offset.zero;
+    setState(() => _points.add(last + const Offset(20, 0)));
+    _commit();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 96,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              widget.label,
+              style: const TextStyle(
+                color: EditorTheme.textMuted,
+                fontSize: 10,
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < _points.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _MiniNumberField(
+                          value: _points[i].dx,
+                          onSubmitted: (v) => _setX(i, v),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: _MiniNumberField(
+                          value: _points[i].dy,
+                          onSubmitted: (v) => _setY(i, v),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      GestureDetector(
+                        onTap: () => _remove(i),
+                        child: const Icon(
+                          Icons.close,
+                          size: 14,
+                          color: EditorTheme.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              InkWell(
+                onTap: _add,
+                borderRadius: BorderRadius.circular(4),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.add_rounded,
+                        size: 13,
+                        color: EditorTheme.primaryMuted,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        'Add point',
+                        style: TextStyle(
+                          color: EditorTheme.primaryMuted,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MiniNumberField extends StatelessWidget {
+  const _MiniNumberField({required this.value, required this.onSubmitted});
+
+  final double value;
+  final ValueChanged<double> onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      key: ValueKey(value),
+      initialValue: value.toStringAsFixed(1),
+      style: const TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
+      onFieldSubmitted: (text) {
+        final parsed = double.tryParse(text.trim());
+        if (parsed != null) onSubmitted(parsed);
+      },
+      decoration: InputDecoration(
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 6,
+          vertical: 6,
+        ),
+        filled: true,
+        fillColor: EditorTheme.inputBg,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: const BorderSide(color: EditorTheme.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: const BorderSide(color: EditorTheme.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: const BorderSide(color: EditorTheme.primaryActive),
+        ),
+      ),
     );
   }
 }

@@ -61,6 +61,115 @@ class _EditorStatusBadge extends StatelessWidget {
   }
 }
 
+/// Play/Pause/Stop controls for the editor's in-scene play-test feature.
+/// Editor-only — never affects the shipped game's own gameplay loop.
+class _PlayControlsToolbar extends StatelessWidget {
+  const _PlayControlsToolbar({required this.plugin, required this.settings});
+
+  final JustGameEditorPlugin plugin;
+  final _OverlayUiSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: plugin,
+      builder: (context, _) {
+        final state = plugin.playState;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: EditorTheme.statusBadgeBg,
+            borderRadius: BorderRadius.circular(settings.cornerRadius + 6),
+            border: Border.all(color: settings.themeColor, width: 1),
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: 6 * settings.compactness,
+              vertical: 4 * settings.compactness,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                _PlayControlButton(
+                  icon: Icons.play_arrow_rounded,
+                  tooltip: 'Play',
+                  color: const Color(0xFF7DE6B1),
+                  isActive: state == EditorPlayState.playing,
+                  onTap: plugin.play,
+                  settings: settings,
+                ),
+                _PlayControlButton(
+                  icon: Icons.pause_rounded,
+                  tooltip: 'Pause',
+                  color: EditorTheme.warning,
+                  isActive: state == EditorPlayState.paused,
+                  onTap: state == EditorPlayState.playing ? plugin.pause : null,
+                  settings: settings,
+                ),
+                _PlayControlButton(
+                  icon: Icons.stop_rounded,
+                  tooltip: 'Stop',
+                  color: EditorTheme.error,
+                  isActive: false,
+                  onTap: state == EditorPlayState.stopped ? null : plugin.stop,
+                  settings: settings,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PlayControlButton extends StatelessWidget {
+  const _PlayControlButton({
+    required this.icon,
+    required this.tooltip,
+    required this.color,
+    required this.isActive,
+    required this.onTap,
+    required this.settings,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final Color color;
+  final bool isActive;
+  final VoidCallback? onTap;
+  final _OverlayUiSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    final iconColor = !enabled
+        ? EditorTheme.textMuted.withValues(alpha: 0.4)
+        : (isActive ? color : EditorTheme.textBright);
+
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: isActive
+              ? BoxDecoration(
+                  color: color.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(6),
+                )
+              : null,
+          child: Icon(
+            icon,
+            size: 16 * settings.effectiveTextScale,
+            color: iconColor,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _Badge extends StatelessWidget {
   const _Badge({
     required this.label,

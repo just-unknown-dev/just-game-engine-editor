@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
@@ -193,6 +194,111 @@ class GizmoPainter {
       ..style = PaintingStyle.fill
       ..color = _colOrigin;
     canvas.drawCircle(screenPos, 3.5, _paint);
+  }
+
+  /// Draws a small camera icon at every camera entity's position, regardless
+  /// of selection, so it's discoverable at a glance while editing.
+  void paintCameraMarkers(
+    Canvas canvas,
+    List<Entity> cameraEntities,
+    Camera camera,
+    Size canvasSize,
+  ) {
+    if (cameraEntities.isEmpty || canvasSize == Size.zero) return;
+    camera.viewportSize = canvasSize;
+    for (final entity in cameraEntities) {
+      final transform = entity.getComponent<TransformComponent>();
+      if (transform == null) continue;
+      final screenPos = camera.worldToScreen(transform.position.toOffset());
+      _paintCameraIcon(canvas, screenPos);
+    }
+  }
+
+  void _paintCameraIcon(Canvas canvas, Offset center) {
+    const iconData = Icons.videocam_rounded;
+    _paint
+      ..style = PaintingStyle.fill
+      ..color = const Color(0xFF40E0D0).withValues(alpha: 0.18);
+    canvas.drawCircle(center, 16, _paint);
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(iconData.codePoint),
+        style: TextStyle(
+          fontSize: 20,
+          fontFamily: iconData.fontFamily,
+          package: iconData.fontPackage,
+          color: const Color(0xFF40E0D0),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    textPainter.paint(
+      canvas,
+      center - Offset(textPainter.width / 2, textPainter.height / 2),
+    );
+  }
+
+  /// Draws a small icon + tag label at every spawn point entity's position,
+  /// regardless of selection, so spawn points (player, zombie, ...) are
+  /// discoverable at a glance while editing.
+  void paintSpawnMarkers(
+    Canvas canvas,
+    List<Entity> spawnPoints,
+    Camera camera,
+    Size canvasSize,
+  ) {
+    if (spawnPoints.isEmpty || canvasSize == Size.zero) return;
+    camera.viewportSize = canvasSize;
+    for (final entity in spawnPoints) {
+      final transform = entity.getComponent<TransformComponent>();
+      final spawn = entity.getComponent<SpawnComponent>();
+      if (transform == null || spawn == null) continue;
+      final screenPos = camera.worldToScreen(transform.position.toOffset());
+      _paintSpawnIcon(canvas, screenPos, spawn.tag);
+    }
+  }
+
+  void _paintSpawnIcon(Canvas canvas, Offset center, String tag) {
+    const iconData = Icons.person_pin_circle_rounded;
+    const accent = Color(0xFFFFB74D);
+    _paint
+      ..style = PaintingStyle.fill
+      ..color = accent.withValues(alpha: 0.18);
+    canvas.drawCircle(center, 16, _paint);
+
+    final iconPainter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(iconData.codePoint),
+        style: TextStyle(
+          fontSize: 20,
+          fontFamily: iconData.fontFamily,
+          package: iconData.fontPackage,
+          color: accent,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    iconPainter.paint(
+      canvas,
+      center - Offset(iconPainter.width / 2, iconPainter.height / 2),
+    );
+
+    final labelPainter = TextPainter(
+      text: TextSpan(
+        text: tag,
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: accent,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    labelPainter.paint(
+      canvas,
+      Offset(center.dx - labelPainter.width / 2, center.dy + 18),
+    );
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

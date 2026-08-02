@@ -48,12 +48,120 @@ class SceneFileGenerator {
     await _ensureDir(sceneName);
     final levelFile = File(_levelPath(sceneName));
     final dataFile = File(_dataPath(sceneName));
+    final jsonFile = File(_jsonPath(sceneName));
     await Future.wait([
       if (!levelFile.existsSync())
         levelFile.writeAsString(_buildBlankLevel(sceneName)),
       if (!dataFile.existsSync())
         dataFile.writeAsString(_buildDataTemplate(sceneName)),
+      // Bootstraps the scene camera entity into the editor's live authoring
+      // world immediately — openScene() only spawns entities from this
+      // sidecar, it never executes the generated .level.dart.
+      if (!jsonFile.existsSync())
+        jsonFile.writeAsString(_buildInitialSidecar(sceneName)),
     ]);
+  }
+
+  /// Builds the `.scene.json` sidecar for a brand-new scene: "MainCamera"
+  /// and "PlayerSpawn" entities, matching what [_buildBlankLevel] generates.
+  static String _buildInitialSidecar(String sceneName) {
+    final scene = Scene(name: sceneName);
+    final cameraTransform = TransformComponent(
+      position: Vector3(2000, 400, 0),
+    );
+    final camera = CameraComponent(bounds: const Rect.fromLTWH(0, 0, 4000, 800));
+    final cameraJson = <String, dynamic>{
+      'name': 'MainCamera',
+      'parentName': null,
+      'components':
+          [componentToJson(cameraTransform), componentToJson(camera)]
+              .whereType<Map<String, dynamic>>()
+              .toList(),
+    };
+    final spawnTransform = TransformComponent(position: Vector3(200, 400, 0));
+    final spawn = SpawnComponent(tag: 'player');
+    final spawnJson = <String, dynamic>{
+      'name': 'PlayerSpawn',
+      'parentName': null,
+      'components':
+          [componentToJson(spawnTransform), componentToJson(spawn)]
+              .whereType<Map<String, dynamic>>()
+              .toList(),
+    };
+    final data = <String, dynamic>{
+      ...scene.toJson(),
+      'entities': [cameraJson, spawnJson],
+    };
+    return const JsonEncoder.withIndent('  ').convert(data);
+  }
+
+  // ── Delete / rename / duplicate ─────────────────────────────────────────
+
+  /// Deletes `lib/game/scenes/{name}/` and everything in it.
+  static Future<void> deleteSceneFiles(String name) async {
+    final dir = Directory(_sceneDir(name));
+    if (await dir.exists()) await dir.delete(recursive: true);
+  }
+
+  /// Renames a scene folder: copies its files to [newName] (rewriting the
+  /// embedded class names and scene-name references), then removes the
+  /// original folder.
+  static Future<void> renameSceneFiles(String oldName, String newName) async {
+    final oldDir = Directory(_sceneDir(oldName));
+    if (!oldDir.existsSync()) {
+      throw StateError('Scene "$oldName" does not exist.');
+    }
+    await _copyAndRewrite(oldName, newName);
+    await oldDir.delete(recursive: true);
+  }
+
+  /// Duplicates a scene folder to [newName] (rewriting the embedded class
+  /// names and scene-name references). The original scene is left untouched.
+  static Future<void> duplicateSceneFiles(
+    String sourceName,
+    String newName,
+  ) async {
+    if (!Directory(_sceneDir(sourceName)).existsSync()) {
+      throw StateError('Scene "$sourceName" does not exist.');
+    }
+    await _copyAndRewrite(sourceName, newName);
+  }
+
+  /// Copies the three scene files from [fromName] to [toName], rewriting
+  /// occurrences of the old scene name / generated class names to the new
+  /// ones. Assumes the auto-generated header/template shape produced by
+  /// [_buildBlankLevel]/[_buildDataTemplate]/[writeJsonSidecar] — hand-edited
+  /// content outside that shape (e.g. entity spawn code) is copied verbatim.
+  static Future<void> _copyAndRewrite(String fromName, String toName) async {
+    await _ensureDir(toName);
+    for (final paths in [
+      (_levelPath(fromName), _levelPath(toName)),
+      (_dataPath(fromName), _dataPath(toName)),
+      (_jsonPath(fromName), _jsonPath(toName)),
+    ]) {
+      final (fromPath, toPath) = paths;
+      final fromFile = File(fromPath);
+      if (!fromFile.existsSync()) continue;
+      final content = await fromFile.readAsString();
+      await File(
+        toPath,
+      ).writeAsString(_rewriteSceneReferences(content, fromName, toName));
+    }
+  }
+
+  static String _rewriteSceneReferences(
+    String content,
+    String fromName,
+    String toName,
+  ) {
+    final fromCls = _toPascalCase(fromName);
+    final toCls = _toPascalCase(toName);
+    return content
+        .replaceAll('${fromCls}Level', '${toCls}Level')
+        .replaceAll('${fromCls}Data', '${toCls}Data')
+        .replaceAll('scenes/$fromName/', 'scenes/$toName/')
+        .replaceAll("'$fromName'", "'$toName'") // .data.dart sceneName const
+        .replaceAll('"$fromName"', '"$toName"'); // .scene.json "name" field
   }
 
   /// Regenerates `{name}.level.dart` from [entities] currently in the world.
@@ -155,7 +263,20 @@ class ${cls}Level {
   const ${cls}Level._();
 
   static void build(World world) {
-    // No entities yet — create them in the editor.
+    // Scene camera — auto-created for new scenes. CameraTransformSyncSystem
+    // drives the main camera from this entity every frame; its CameraComponent
+    // also defines world bounds for the boundary/death systems.
+    world.createEntityWithComponents([
+      TransformComponent(position: Vector3(2000, 400, 0)),
+      CameraComponent(bounds: Rect.fromLTWH(0, 0, 4000, 800)),
+    ], name: 'MainCamera');
+
+    // Player spawn point — auto-created for new scenes. The editor's Play
+    // button spawns the app-registered 'player' entity here.
+    world.createEntityWithComponents([
+      TransformComponent(position: Vector3(200, 400, 0)),
+      SpawnComponent(tag: 'player'),
+    ], name: 'PlayerSpawn');
   }
 }
 ''';
@@ -399,7 +520,8 @@ class ${cls}Level {
           'isSensor: ${c.isSensor}, '
           'categoryBits: ${c.categoryBits}, '
           'maskBits: ${c.maskBits}, '
-          'groupIndex: ${c.groupIndex})';
+          'groupIndex: ${c.groupIndex}'
+          '${c.showDebugOutline ? '' : ', showDebugOutline: false'})';
     }
     if (c is DistanceJointComponent) {
       return "// TODO: DistanceJointComponent(target: '${c.targetEntityName}')";
@@ -422,6 +544,14 @@ class ${cls}Level {
           ? 'lookaheadDistance: ${_d(c.lookaheadDistance)}, '
           : '';
       return 'CameraFollowComponent($en$la)'.replaceAll(RegExp(r', \)$'), ')');
+    }
+    if (c is CameraComponent) {
+      final z = c.zoom != 1.0 ? 'zoom: ${_d(c.zoom)}, ' : '';
+      return 'CameraComponent(${z}bounds: Rect.fromLTWH(${_d(c.bounds.left)}, '
+          '${_d(c.bounds.top)}, ${_d(c.bounds.width)}, ${_d(c.bounds.height)}))';
+    }
+    if (c is SpawnComponent) {
+      return "SpawnComponent(tag: '${c.tag}')";
     }
 
     // Hierarchy
@@ -586,12 +716,25 @@ class ${cls}Level {
           categoryBits: j['categoryBits'] as int? ?? 0x0001,
           maskBits: j['maskBits'] as int? ?? 0xFFFF,
           groupIndex: j['groupIndex'] as int? ?? 0,
+          showDebugOutline: j['showDebugOutline'] as bool? ?? true,
         );
       case 'CameraFollowComponent':
         return CameraFollowComponent(
           enabled: j['enabled'] as bool? ?? true,
           lookaheadDistance: _n(j['lookaheadDistance'] ?? 80.0),
         );
+      case 'CameraComponent':
+        return CameraComponent(
+          zoom: _n(j['zoom'] ?? 1.0),
+          bounds: Rect.fromLTWH(
+            _n(j['boundsLeft'] ?? 0.0),
+            _n(j['boundsTop'] ?? 0.0),
+            _n(j['boundsWidth'] ?? 4000.0),
+            _n(j['boundsHeight'] ?? 800.0),
+          ),
+        );
+      case 'SpawnComponent':
+        return SpawnComponent(tag: j['tag'] as String? ?? 'player');
       case 'InputComponent':
         return InputComponent();
       case 'SimpleMovementComponent':
@@ -754,6 +897,7 @@ class ${cls}Level {
         'categoryBits': c.categoryBits,
         'maskBits': c.maskBits,
         'groupIndex': c.groupIndex,
+        'showDebugOutline': c.showDebugOutline,
       };
     }
     if (c is CameraFollowComponent) {
@@ -762,6 +906,19 @@ class ${cls}Level {
         'enabled': c.enabled,
         'lookaheadDistance': c.lookaheadDistance,
       };
+    }
+    if (c is CameraComponent) {
+      return {
+        'type': 'CameraComponent',
+        'zoom': c.zoom,
+        'boundsLeft': c.bounds.left,
+        'boundsTop': c.bounds.top,
+        'boundsWidth': c.bounds.width,
+        'boundsHeight': c.bounds.height,
+      };
+    }
+    if (c is SpawnComponent) {
+      return {'type': 'SpawnComponent', 'tag': c.tag};
     }
     if (c is InputComponent) return {'type': 'InputComponent'};
     if (c is SimpleMovementComponent) {

@@ -2,6 +2,11 @@
 
 A developer-only runtime level editor overlay for [`just_game_engine`](../just_game_engine/). Designed for JIT/debug workflows — hot reload, live ECS state edits, and scene authoring — with zero runtime cost in production builds.
 
+## 📚 Documentation
+
+- **[Quick Start Guide](QUICKSTART.md)** — install the package, wrap your game widget, and register custom components
+- **[Architecture](ARCHITECTURE.md)** — package layout and how the core/UI/integration layers fit together
+
 ---
 
 ## Features
@@ -27,65 +32,7 @@ dev_dependencies:
     path: packages/just_game_engine_editor
 ```
 
----
-
-## Quick Start
-
-### 1. Register the plugin and wrap your game widget
-
-```dart
-import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_game_engine_editor/just_game_engine_editor.dart';
-
-// Inside your widget build / initState:
-final plugin = await JustGameEditorPlugin.register(engine: engine);
-
-Widget gameView = GameWidget(engine: engine);
-if (plugin != null) {
-  gameView = JustGameEditorOverlay(plugin: plugin, gameChild: gameView);
-}
-
-return gameView;
-```
-
-`JustGameEditorPlugin.register()` returns `null` outside debug mode — production builds keep the plain `GameWidget` with no editor overhead.
-
-### 2. Use the adapter shortcut (recommended)
-
-`GameEditorAdapter` handles plugin creation, vsync ticking, and render overlay chaining automatically:
-
-```dart
-import 'package:just_game_engine_editor/just_game_engine_editor.dart';
-
-// Replace GameWidget with GameEditorAdapter during development:
-return GameEditorAdapter(engine: engine);
-```
-
-Switch back to `GameWidget` for release or ship with `GameEditorAdapter` — it degrades to zero overhead in non-debug builds either way.
-
-### 3. Register custom components
-
-Call `registerProjectComponents` once (before the plugin initialises) so the inspector can generate UI for your game-specific components:
-
-```dart
-JustGameEditorPlugin.registerProjectComponents((registry) {
-  registry.register<MyHealthComponent>(
-    name: 'Health',
-    category: 'Gameplay',
-    factory: () => MyHealthComponent(),
-    descriptors: [
-      IntFieldDescriptor('maxHp', getter: (c) => c.maxHp, setter: (c, v) => c.maxHp = v),
-      BoolFieldDescriptor('invincible', getter: (c) => c.invincible, setter: (c, v) => c.invincible = v),
-    ],
-  );
-});
-```
-
-This registration survives hot-reload; new descriptors appear in the inspector without restarting the app.
-
-### 4. Open the editor
-
-Press **F1** at runtime to toggle the editor overlay. The game viewport shifts left; the right panel shows the scene tree, inspector, and scene picker.
+See the [Quick Start Guide](QUICKSTART.md) for wiring up the plugin, the `GameEditorAdapter` shortcut, and registering custom components. Press **F1** at runtime to toggle the editor overlay.
 
 ---
 
@@ -126,105 +73,7 @@ The `.scene.json` sidecar rehydrates the entity hierarchy and editor-only state;
 
 ## Architecture
 
-```
-just_game_engine_editor/
-└── lib/src/
-    ├── core/
-    │   ├── plugin/          ← JustGameEditorPlugin (main orchestrator)
-    │   ├── state/           ← EditorSceneState (scene graph ↔ ECS bridge)
-    │   ├── serialization/   ← SceneFileGenerator, EcsLevelMapper, EditorSerializationService
-    │   ├── services/        ← EditorLogService, ColorHistoryService
-    │   └── ecs/
-    │       ├── components/  ← 60 editor component descriptors (by category)
-    │       ├── systems/     ← editor-specific ECS systems
-    │       └── registry/    ← ComponentRegistry (descriptor lookup)
-    ├── ui/
-    │   ├── overlay/         ← JustGameEditorOverlay + 11 .part.dart UI sections
-    │   ├── panels/          ← EntityInspectorPanel, SceneTreePanel, ScenePickerPanel
-    │   ├── dialogs/         ← AddComponentPickerDialog, CreateSceneOverlay
-    │   ├── widgets/         ← ScrubableNumberField and shared widgets
-    │   └── theme/           ← EditorTheme (colour palette)
-    ├── integration/         ← GameEditorAdapter (drop-in GameWidget replacement)
-    └── debugger/            ← EngineDebugger bridge
-```
-
-### Core Layer
-
-#### `JustGameEditorPlugin`
-The central orchestrator (`lib/src/core/plugin/editor_plugin.dart`). Implements `EnginePlugin` and wires together all editor subsystems.
-
-**Lifecycle:**
-- `register(engine)` — debug-gated factory; returns `null` in release builds
-- `onInitialize()` — registers ECS systems, attaches debugger, loads component registry
-- `onUpdate(dt)` — ticks editor state each frame
-- `onRender(canvas)` — draws gizmos and grid overlay
-- `reassemble()` — refreshes component descriptors on hot-reload
-
-**Entity operations:** `createEntity`, `deleteEntity`, `createGroup`, `reparentEntity`, `copyEntity`, `pasteEntity`
-
-**Scene operations:** `openScene(name)`, `saveScene()`
-
-**Gizmo interaction:** `onPointerDown`, `onPointerMove`, `onPointerUp` — handles translate/rotate/scale handle hit-testing and dragging
-
-#### `EditorSceneState`
-Keeps the authoring scene graph in sync with the live ECS world (`lib/src/core/state/editor_scene_state.dart`). Both `JustGameEditorPlugin` and the UI listen to it as a `ChangeNotifier`.
-
-- **Selection:** `selectEntity`, `toggleMultiSelect`, `selectRange`, `clearSelection`
-- **Transform sync:** `applyTranslation`, `applyRotation`, `applyScale` → mutate ECS, then `syncEntityNode` pulls state back into the scene graph
-- **Dirty tracking:** `markDirty` / `markClean` — drives the unsaved-changes indicator
-- **Grid snapping:** configurable grid size with automatic position/scale quantization
-
-#### `ComponentRegistry`
-Maps component types to `ComponentDescriptor` instances (`lib/src/core/ecs/registry/component_registry.dart`). The inspector queries it to generate property-editor UI dynamically — no codegen required.
-
-Built-in descriptors cover all engine components: transform, physics bodies/joints, sprite, animated sprite, audio, camera follow, input, effects, health, lifetime, tags, and more.
-
-#### `EditorSerializationService`
-Runs serialization in a `compute()` isolate so large scenes don't jank the main thread. Delegates file I/O to `SceneFileGenerator`.
-
-### UI Layer
-
-#### `JustGameEditorOverlay`
-Top-level Flutter widget that wraps the game canvas (`lib/src/ui/overlay/editor_overlay.dart`). Implemented as a single class split across 11 `.part.dart` files:
-
-| Part file | Responsibility |
-|-----------|----------------|
-| `overlay_settings_store` | Persisted overlay settings (panel sizes, snap, grid) |
-| `overlay_compact_dock` | Minimised status dock shown when editor is hidden |
-| `overlay_dock_metrics` | FPS, entity count, memory metrics panel |
-| `overlay_dock_logs_panel` | Runtime log viewer with filtering |
-| `overlay_dock_assets_panel` | Asset browser |
-| `overlay_dock_timeline_panel` | Animation/keyframe timeline |
-| `overlay_right_panel` | Right sidebar host (inspector / scene tree / scene picker) |
-| `overlay_detail_cards` | Entity detail cards |
-| `overlay_settings_dialog` | Editor settings UI |
-| `overlay_shared_widgets` | Shared decorators and utilities |
-| `overlay_snackbar` | Toast notification layer |
-
-#### `GizmoPainter`
-`CustomPainter` that draws translate/rotate/scale handles on the canvas (`lib/src/ui/overlay/gizmo_painter.dart`). `JustGameEditorPlugin` owns the handle geometry; `GizmoPainter` only handles rendering.
-
-#### `ScrubableNumberField`
-Number input that supports mouse-drag scrubbing in addition to keyboard entry (`lib/src/ui/widgets/scrubbable_number_field.dart`). Used throughout the inspector for numeric component fields.
-
-### Integration Layer
-
-#### `GameEditorAdapter`
-Drop-in replacement for `GameWidget` during development (`lib/src/integration/game_editor_adapter.dart`). Internally creates the plugin, drives `onUpdate` via a `Ticker`, and pipes `onRender` into the rendering engine's overlay hook. In non-debug builds it becomes a plain `GameWidget` at compile time.
-
-### ECS Systems (editor-only)
-
-| System | Purpose |
-|--------|---------|
-| `PhysicsBodyBindingSystem` | Syncs physics body state while editor is open |
-| `PhysicsJointBindingSystem` | Syncs physics joint state |
-| `SimpleMovementSystem` | WASD/controller movement for `SimpleMovementComponent` |
-| `EditorLogCaptureSystem` | Captures ECS system logs into `EditorLogService` |
-| `EditorSpriteSystem` | Sprite rendering inside the editor viewport |
-| `EditorAnimatedSpriteSystem` | Animated sprite support in the editor |
-| `EditorAnimationControllerSystem` | Animation controller state handling |
-
-These systems are only registered when the editor plugin is active and are never present in production builds.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full package layout — the `EditorComponent`/`CustomComponentRegistry` descriptor model, the `JustGameEditorOverlay` UI layer, `GameEditorAdapter` integration, and the editor-only ECS systems.
 
 ---
 
