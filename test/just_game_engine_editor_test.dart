@@ -138,10 +138,7 @@ void main() {
       }
     }
 
-    expect(
-      actuallyAddedTypeNames.difference(allowedAddedTypeNames),
-      isEmpty,
-    );
+    expect(actuallyAddedTypeNames.difference(allowedAddedTypeNames), isEmpty);
     expect(engine.world.systems.whereType<SimpleMovementSystem>().length, 1);
     expect(
       engine.world.systems.whereType<PhysicsBodyBindingSystem>().length,

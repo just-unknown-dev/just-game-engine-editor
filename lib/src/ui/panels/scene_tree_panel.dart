@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart';
-import '../theme/editor_theme.dart';
+import '../../core/constants/editor_constants.dart';
 import '../../core/state/editor_scene_state.dart';
 
 /// Scrollable, hierarchical list of all ECS entities with a [TransformComponent].

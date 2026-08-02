@@ -4,15 +4,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../constants/editor_constants.dart';
 import 'editor_log_entry.dart';
 import 'editor_log_storage.dart';
-
-/// Maximum file size in bytes before the log is rotated (~5 MB).
-@visibleForTesting
-const int kMaxFileSizeBytes = 5 * 1024 * 1024;
-
-/// Number of backup files to keep alongside the primary log.
-const int _kMaxBackupFiles = 2;
 
 class _IoEditorLogStorage implements EditorLogStorage {
   _IoEditorLogStorage() : _fileFuture = _resolveFile();
@@ -89,7 +83,7 @@ class _IoEditorLogStorage implements EditorLogStorage {
       await file.writeAsString('', encoding: utf8, flush: true);
     }
     // Also remove any backup files so the cleared state is clean.
-    for (var i = 1; i <= _kMaxBackupFiles; i++) {
+    for (var i = 1; i <= EditorLogConstants.maxBackupFiles; i++) {
       final backup = File('${file.path}.$i.bak');
       if (await backup.exists()) {
         await backup.delete();
@@ -104,27 +98,29 @@ class _IoEditorLogStorage implements EditorLogStorage {
     }
   }
 
-  /// Rotates the primary log file when it exceeds [_kMaxFileSizeBytes].
+  /// Rotates the primary log file when it exceeds
+  /// [EditorLogConstants.maxFileSizeBytes].
   ///
   /// Rotation shifts existing backups one level (`*.1.bak` → `*.2.bak`, …),
-  /// evicting the oldest when the backup count exceeds [_kMaxBackupFiles],
-  /// then renames the primary file to `*.1.bak`.
+  /// evicting the oldest when the backup count exceeds
+  /// [EditorLogConstants.maxBackupFiles], then renames the primary file to
+  /// `*.1.bak`.
   Future<void> _rotateIfNeeded(File file) async {
     if (!await file.exists()) {
       return;
     }
     final size = await file.length();
-    if (size < kMaxFileSizeBytes) {
+    if (size < EditorLogConstants.maxFileSizeBytes) {
       return;
     }
 
     // Shift existing backups: *.N.bak → *.(N+1).bak, dropping the oldest.
-    for (var i = _kMaxBackupFiles; i >= 1; i--) {
+    for (var i = EditorLogConstants.maxBackupFiles; i >= 1; i--) {
       final src = File('${file.path}.$i.bak');
       if (!await src.exists()) {
         continue;
       }
-      if (i == _kMaxBackupFiles) {
+      if (i == EditorLogConstants.maxBackupFiles) {
         await src.delete();
       } else {
         await src.rename('${file.path}.${i + 1}.bak');

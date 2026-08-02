@@ -66,27 +66,27 @@ class SceneFileGenerator {
   /// and "PlayerSpawn" entities, matching what [_buildBlankLevel] generates.
   static String _buildInitialSidecar(String sceneName) {
     final scene = Scene(name: sceneName);
-    final cameraTransform = TransformComponent(
-      position: Vector3(2000, 400, 0),
+    final cameraTransform = TransformComponent(position: Vector3(2000, 400, 0));
+    final camera = CameraComponent(
+      bounds: const Rect.fromLTWH(0, 0, 4000, 800),
     );
-    final camera = CameraComponent(bounds: const Rect.fromLTWH(0, 0, 4000, 800));
     final cameraJson = <String, dynamic>{
       'name': 'MainCamera',
       'parentName': null,
-      'components':
-          [componentToJson(cameraTransform), componentToJson(camera)]
-              .whereType<Map<String, dynamic>>()
-              .toList(),
+      'components': [
+        componentToJson(cameraTransform),
+        componentToJson(camera),
+      ].whereType<Map<String, dynamic>>().toList(),
     };
     final spawnTransform = TransformComponent(position: Vector3(200, 400, 0));
     final spawn = SpawnComponent(tag: 'player');
     final spawnJson = <String, dynamic>{
       'name': 'PlayerSpawn',
       'parentName': null,
-      'components':
-          [componentToJson(spawnTransform), componentToJson(spawn)]
-              .whereType<Map<String, dynamic>>()
-              .toList(),
+      'components': [
+        componentToJson(spawnTransform),
+        componentToJson(spawn),
+      ].whereType<Map<String, dynamic>>().toList(),
     };
     final data = <String, dynamic>{
       ...scene.toJson(),

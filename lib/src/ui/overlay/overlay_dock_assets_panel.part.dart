@@ -83,8 +83,7 @@ class _DockAssetsPanelState extends State<_DockAssetsPanel> {
     final files = <_AssetNode>[];
 
     for (final entity in entities) {
-      final entityName =
-          entity.path.split('/').last.split(r'\').last;
+      final entityName = entity.path.split('/').last.split(r'\').last;
       if (entity is Directory) {
         dirs.add(
           _AssetNode(
@@ -106,12 +105,8 @@ class _DockAssetsPanelState extends State<_DockAssetsPanel> {
       }
     }
 
-    dirs.sort(
-      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-    );
-    files.sort(
-      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-    );
+    dirs.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    files.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     return _AssetNode(
       path: dirPath,
@@ -140,11 +135,14 @@ class _DockAssetsPanelState extends State<_DockAssetsPanel> {
   }
 
   IconData _fileIcon(String name) {
-    final ext =
-        name.contains('.') ? name.split('.').last.toLowerCase() : '';
+    final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
     return switch (ext) {
-      'png' || 'jpg' || 'jpeg' || 'webp' || 'gif' || 'svg' =>
-        Icons.image_outlined,
+      'png' ||
+      'jpg' ||
+      'jpeg' ||
+      'webp' ||
+      'gif' ||
+      'svg' => Icons.image_outlined,
       'mp3' || 'ogg' || 'wav' || 'aac' => Icons.audiotrack_rounded,
       'glsl' || 'frag' || 'vert' => Icons.lens_blur_rounded,
       'tmx' || 'tsx' => Icons.map_outlined,
@@ -164,9 +162,7 @@ class _DockAssetsPanelState extends State<_DockAssetsPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           _buildRowTile(
-            icon: isExpanded
-                ? Icons.folder_open_rounded
-                : Icons.folder_rounded,
+            icon: isExpanded ? Icons.folder_open_rounded : Icons.folder_rounded,
             iconColor: const Color(0xFFFFC86B),
             label: node.name,
             depth: depth,
@@ -192,8 +188,7 @@ class _DockAssetsPanelState extends State<_DockAssetsPanel> {
           ),
           if (isExpanded) ...<Widget>[
             ...children.map((child) => _buildNodeRow(child, depth + 1)),
-            if (children.isEmpty)
-              _buildEmptyRow(depth + 1),
+            if (children.isEmpty) _buildEmptyRow(depth + 1),
           ],
         ],
       );
@@ -218,9 +213,7 @@ class _DockAssetsPanelState extends State<_DockAssetsPanel> {
           decoration: BoxDecoration(
             color: const Color(0xFF1B1B1B),
             borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.15),
-            ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
             boxShadow: const <BoxShadow>[
               BoxShadow(
                 color: Color(0x55000000),
@@ -268,9 +261,7 @@ class _DockAssetsPanelState extends State<_DockAssetsPanel> {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          color: isSelected
-              ? EditorTheme.selectionBg
-              : Colors.transparent,
+          color: isSelected ? EditorTheme.selectionBg : Colors.transparent,
           padding: EdgeInsets.only(
             left: 10.0 + depth * 14.0,
             right: 8,
@@ -341,13 +332,16 @@ class _DockAssetsPanelState extends State<_DockAssetsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final assetsExists = _assetRoot != null &&
+    final assetsExists =
+        _assetRoot != null &&
         (_assetRoot!.children.isNotEmpty ||
             Directory('${Directory.current.path}/assets').existsSync());
-    final scenesExists = _scenesRoot != null &&
+    final scenesExists =
+        _scenesRoot != null &&
         (_scenesRoot!.children.isNotEmpty ||
-            Directory('${Directory.current.path}/lib/game/scenes')
-                .existsSync());
+            Directory(
+              '${Directory.current.path}/lib/game/scenes',
+            ).existsSync());
 
     return SizedBox(
       height: widget.height,

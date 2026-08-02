@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/editor_theme.dart';
+import '../../core/constants/editor_constants.dart';
 
 /// Shows a destructive-action confirmation dialog for deleting [sceneName].
 /// Returns `true` if the user confirmed.
@@ -80,8 +80,7 @@ class _SceneNamePromptDialog extends StatefulWidget {
   final String? Function(String) validate;
 
   @override
-  State<_SceneNamePromptDialog> createState() =>
-      _SceneNamePromptDialogState();
+  State<_SceneNamePromptDialog> createState() => _SceneNamePromptDialogState();
 }
 
 class _SceneNamePromptDialogState extends State<_SceneNamePromptDialog> {

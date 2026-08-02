@@ -22,21 +22,6 @@ class ComponentEntry {
   final Component Function() factory;
 }
 
-/// Groups used to categorise the component list in the picker.
-const List<String> kComponentGroups = [
-  'Core',
-  'Rendering',
-  'Physics',
-  'Gameplay',
-  'Input',
-  'Camera',
-  'Audio',
-  'Animation',
-  'Hierarchy',
-  'Effects',
-  'UI',
-];
-
 bool _registered = false;
 
 /// Returns all available component entries for the picker, derived from

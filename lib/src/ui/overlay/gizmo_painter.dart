@@ -5,6 +5,8 @@ import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
+import '../../core/constants/editor_constants.dart';
+
 /// Gizmo handle identifier returned by [GizmoHitTester.hitTest].
 enum GizmoHandle {
   none,
@@ -39,27 +41,28 @@ class GizmoHitResult {
 /// [JustGameEditorPlugin.onRender] is in screen space (parallax / background
 /// layer, before the camera transform).
 class GizmoPainter {
-  static const double _arrowLength = 52.0;
-  static const double _arrowHeadLength = 12.0;
-  static const double _arrowHeadWidth = 7.0;
-  static const double _rotRadius = 60.0;
-  static const double _rotSweep = math.pi * 0.75;
-  static const double _scaleHandle = 7.0;
-  static const double _dotRadius = 5.0;
-  static const double _moveHandleRadius = 8.0;
+  static const double _arrowLength = GizmoConstants.arrowLength;
+  static const double _arrowHeadLength = GizmoConstants.arrowHeadLength;
+  static const double _arrowHeadWidth = GizmoConstants.arrowHeadWidth;
+  static const double _rotRadius = GizmoConstants.rotRadius;
+  static const double _rotSweep = GizmoConstants.rotSweep;
+  static const double _scaleHandle = GizmoConstants.scaleHandle;
+  static const double _dotRadius = GizmoConstants.dotRadius;
+  static const double _moveHandleRadius = GizmoConstants.moveHandleRadius;
   // Axis-scale square: sits on the arrow shaft before the arrowhead
-  static const double _axisSquareOffset = 30.0;
-  static const double _axisSquareHalf = 5.0;
-  static const double _minGridScreenSpacing = 14.0;
+  static const double _axisSquareOffset = GizmoConstants.axisSquareOffset;
+  static const double _axisSquareHalf = GizmoConstants.axisSquareHalf;
+  static const double _minGridScreenSpacing =
+      GizmoConstants.minGridScreenSpacing;
 
   // Colours
-  static const Color _colX = Color(0xFFE54B4B);
-  static const Color _colY = Color(0xFF4BCC73);
-  static const Color _colRot = Color(0xFFFFD660);
-  static const Color _colScale = Color(0xFFCCCCCC);
-  static const Color _colSel = Color(0xFF40E0D0);
-  static const Color _colOrigin = Color(0xFFFFFFFF);
-  static const Color _colMove = Color(0xFF40E0D0);
+  static const Color _colX = GizmoConstants.colX;
+  static const Color _colY = GizmoConstants.colY;
+  static const Color _colRot = GizmoConstants.colRot;
+  static const Color _colScale = GizmoConstants.colScale;
+  static const Color _colSel = GizmoConstants.colSel;
+  static const Color _colOrigin = GizmoConstants.colOrigin;
+  static const Color _colMove = GizmoConstants.colMove;
 
   final Paint _paint = Paint()..isAntiAlias = true;
 
@@ -428,7 +431,7 @@ class _ScreenBounds {
   final List<Offset> corners;
 }
 
-const Size _defaultSelectionSize = Size(32, 32);
+const Size _defaultSelectionSize = GizmoConstants.defaultSelectionSize;
 
 _ScreenBounds _computeScreenBounds(
   Entity entity,
@@ -652,15 +655,15 @@ bool _pointInOrientedRect(Offset point, _ScreenBounds bounds) {
 
 /// Hit-tests pointer events against gizmo handles and entity bodies.
 class GizmoHitTester {
-  static const double _arrowLength = 52.0;
-  static const double _arrowTipRadius = 14.0;
-  static const double _rotRadius = 60.0;
-  static const double _rotDotRadius = 10.0;
-  static const double _scaleHandle = 7.0;
-  static const double _rotSweep = math.pi * 0.75;
-  static const double _axisSquareOffset = 30.0;
-  static const double _axisSquareHitRadius = 9.0;
-  static const double _moveHandleHitRadius = 11.0;
+  static const double _arrowLength = GizmoConstants.arrowLength;
+  static const double _arrowTipRadius = GizmoConstants.arrowTipRadius;
+  static const double _rotRadius = GizmoConstants.rotRadius;
+  static const double _rotDotRadius = GizmoConstants.rotDotRadius;
+  static const double _scaleHandle = GizmoConstants.scaleHandle;
+  static const double _rotSweep = GizmoConstants.rotSweep;
+  static const double _axisSquareOffset = GizmoConstants.axisSquareOffset;
+  static const double _axisSquareHitRadius = GizmoConstants.axisSquareHitRadius;
+  static const double _moveHandleHitRadius = GizmoConstants.moveHandleHitRadius;
 
   /// Returns the [GizmoHitResult] for [screenPos].
   ///

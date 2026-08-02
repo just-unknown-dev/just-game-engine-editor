@@ -34,7 +34,8 @@ class CameraEditorComponent extends EditorComponent {
               min: 0.05,
             ),
             read: (c) => (c as CameraComponent).zoom,
-            write: (c, v) => (c as CameraComponent).zoom = (v as num).toDouble(),
+            write: (c, v) =>
+                (c as CameraComponent).zoom = (v as num).toDouble(),
           ),
           EditorComponentField(
             name: 'boundsLeft',

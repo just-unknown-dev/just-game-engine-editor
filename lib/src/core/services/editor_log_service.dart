@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:just_debugger/just_debugger.dart';
 
+import '../constants/editor_constants.dart';
 import 'editor_log_entry.dart';
 import 'editor_log_storage.dart';
 
@@ -18,8 +19,6 @@ class EditorLogService extends ChangeNotifier {
   @visibleForTesting
   factory EditorLogService.withStorage(EditorLogStorage storage) =>
       EditorLogService._(storage: storage);
-
-  static const int _maxEntries = 1000;
 
   final EditorLogStorage _storage;
   final List<EditorLogEntry> _entries = <EditorLogEntry>[];
@@ -187,8 +186,8 @@ class EditorLogService extends ChangeNotifier {
     );
 
     _entries.add(entry);
-    if (_entries.length > _maxEntries) {
-      _entries.removeRange(0, _entries.length - _maxEntries);
+    if (_entries.length > EditorLogConstants.maxEntries) {
+      _entries.removeRange(0, _entries.length - EditorLogConstants.maxEntries);
     }
 
     if (!_storageWriteFailed) {
@@ -361,11 +360,11 @@ class EditorLogService extends ChangeNotifier {
       }
     }
 
-    if (merged.length <= _maxEntries) {
+    if (merged.length <= EditorLogConstants.maxEntries) {
       return merged;
     }
 
-    return merged.sublist(merged.length - _maxEntries);
+    return merged.sublist(merged.length - EditorLogConstants.maxEntries);
   }
 
   String _entryFingerprint(EditorLogEntry entry) {

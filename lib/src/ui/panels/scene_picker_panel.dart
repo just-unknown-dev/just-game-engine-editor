@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/editor_theme.dart';
+import '../../core/constants/editor_constants.dart';
 
 import '../dialogs/create_scene_overlay.dart';
 import '../dialogs/scene_actions_dialogs.dart';
@@ -61,10 +61,8 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
       title: 'Rename "$name"',
       actionLabel: 'Rename',
       initialValue: name,
-      validate: (value) => widget.sceneManager.validateName(
-        value,
-        ignoring: name,
-      ),
+      validate: (value) =>
+          widget.sceneManager.validateName(value, ignoring: name),
     );
     if (newName == null || !mounted) return;
     try {
@@ -189,10 +187,8 @@ class _ListView extends StatelessWidget {
           ),
         ),
         const Divider(height: 1, color: EditorTheme.border),
-        if (actionError != null) _ActionErrorBanner(
-          message: actionError!,
-          onDismiss: onDismissError,
-        ),
+        if (actionError != null)
+          _ActionErrorBanner(message: actionError!, onDismiss: onDismissError),
         // Body
         Expanded(
           child: scenes.isEmpty
@@ -367,7 +363,8 @@ class _SceneRow extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.only(right: 4),
                 child: Tooltip(
-                  message: 'Used by the shipped game — cannot be renamed or '
+                  message:
+                      'Used by the shipped game — cannot be renamed or '
                       'deleted',
                   child: Icon(
                     Icons.shield_outlined,

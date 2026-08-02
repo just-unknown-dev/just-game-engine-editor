@@ -440,8 +440,10 @@ class PhysicsBodyEditorComponent extends EditorComponent {
                   min: 0.01,
                 ),
                 read: (c) => _asBody(c).mass,
-                write: (c, v) =>
-                    _asBody(c).mass = (v as num).toDouble().clamp(0.01, double.infinity),
+                write: (c, v) => _asBody(c).mass = (v as num).toDouble().clamp(
+                  0.01,
+                  double.infinity,
+                ),
               ),
               EditorComponentField(
                 name: 'drag',

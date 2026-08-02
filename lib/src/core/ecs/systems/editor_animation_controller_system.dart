@@ -142,8 +142,7 @@ class EditorAnimationControllerSystem extends System {
     }
 
     final span = next.time - prev.time;
-    final localT =
-        span > 0 ? ((t - prev.time) / span).clamp(0.0, 1.0) : 1.0;
+    final localT = span > 0 ? ((t - prev.time) / span).clamp(0.0, 1.0) : 1.0;
     final easedT = prev.easing.apply(localT);
     _applyValues(transform, prev, easedT, next);
   }
@@ -167,15 +166,19 @@ class EditorAnimationControllerSystem extends System {
     final newSX = lerp(from.scaleX, to.scaleX, transform.scale.x);
     final newSY = lerp(from.scaleY, to.scaleY, transform.scale.y);
 
-    if (from.posX != null || to.posX != null ||
-        from.posY != null || to.posY != null) {
+    if (from.posX != null ||
+        to.posX != null ||
+        from.posY != null ||
+        to.posY != null) {
       transform.position = Vector3(newX, newY, transform.position.z);
     }
     if (from.rotation != null || to.rotation != null) {
       transform.rotation = newRot;
     }
-    if (from.scaleX != null || to.scaleX != null ||
-        from.scaleY != null || to.scaleY != null) {
+    if (from.scaleX != null ||
+        to.scaleX != null ||
+        from.scaleY != null ||
+        to.scaleY != null) {
       transform.scale = Vector3(newSX, newSY, transform.scale.z);
     }
   }

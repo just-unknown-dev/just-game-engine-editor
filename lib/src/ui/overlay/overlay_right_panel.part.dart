@@ -3,10 +3,6 @@ part of 'editor_overlay.dart';
 class _EditorRightPanel extends StatelessWidget {
   const _EditorRightPanel({required this.plugin, required this.settings});
 
-  static const double defaultPanelWidth = 360;
-  static const double minPanelWidth = 280;
-  static const double maxPanelWidth = 640;
-
   final JustGameEditorPlugin plugin;
   final _OverlayUiSettings settings;
 
@@ -15,8 +11,8 @@ class _EditorRightPanel extends StatelessWidget {
     // grows the panel — mirrors _onWidthResize's counterparts for the
     // bottom-anchored dock panels, which grow on drag-up (negative dy).
     _rightPanelWidthSignal.value = (_rightPanelWidthSignal.value - dx).clamp(
-      minPanelWidth,
-      maxPanelWidth,
+      OverlayLayout.rightPanelMinWidth,
+      OverlayLayout.rightPanelMaxWidth,
     );
   }
 
@@ -163,9 +159,7 @@ class _ResizableSceneTreeSectionState
                 onReparentEntity: widget.plugin.reparentEntity,
               ),
             ),
-            _PanelResizeHandle(
-              onDrag: (dy) => _onResize(dy, maxHeight),
-            ),
+            _PanelResizeHandle(onDrag: (dy) => _onResize(dy, maxHeight)),
           ],
         );
       },

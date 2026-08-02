@@ -54,12 +54,12 @@ class _DockTimelinePanel extends StatefulWidget {
 
 class _DockTimelinePanelState extends State<_DockTimelinePanel>
     with SingleTickerProviderStateMixin {
-  static const double _labelW = 68.0;
-  static const double _rulerH = 22.0;
-  static const double _frameTrackH = 36.0;
-  static const double _trackH = 26.0;
-  static const double _eventTrackH = 26.0;
-  static const double _pxPerSecDefault = 120.0;
+  static const double _labelW = TimelinePanelLayout.labelWidth;
+  static const double _rulerH = TimelinePanelLayout.rulerHeight;
+  static const double _frameTrackH = TimelinePanelLayout.frameTrackHeight;
+  static const double _trackH = TimelinePanelLayout.trackHeight;
+  static const double _eventTrackH = TimelinePanelLayout.eventTrackHeight;
+  static const double _pxPerSecDefault = TimelinePanelLayout.defaultPxPerSecond;
 
   final ScrollController _hscroll = ScrollController();
   double _scrollOffset = 0.0;
@@ -171,8 +171,7 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
   double _timeToX(double t) => t * _pxPerSec;
   double _xToTime(double x) => (x + _scrollOffset) / _pxPerSec;
 
-  double _contentWidth() =>
-      (_timeToX(_duration + 2.0)).clamp(400.0, 4000.0);
+  double _contentWidth() => (_timeToX(_duration + 2.0)).clamp(400.0, 4000.0);
 
   // ── Event helpers ────────────────────────────────────────────────────────
 
@@ -271,9 +270,10 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
       asc.elapsed = time.clamp(0.0, dur > 0 ? dur : double.infinity);
       if (clip != null && clip.frames.isNotEmpty) {
         final fps = clip.fps ?? asc.defaultFps;
-        asc.frameIndex = (asc.elapsed * fps)
-            .floor()
-            .clamp(0, clip.frames.length - 1);
+        asc.frameIndex = (asc.elapsed * fps).floor().clamp(
+          0,
+          clip.frames.length - 1,
+        );
       }
     } else {
       final acc = _acc;
@@ -328,7 +328,8 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
       easing: kf.easing,
     );
 
-    final hasAny = updated.posX != null ||
+    final hasAny =
+        updated.posX != null ||
         updated.posY != null ||
         updated.rotation != null ||
         updated.scaleX != null ||
@@ -350,8 +351,10 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
     final realIdx = indices[sel.index];
 
     final dt = dx / _pxPerSec;
-    final newTime =
-        (acc.keyframes[realIdx].time + dt).clamp(0.0, double.infinity);
+    final newTime = (acc.keyframes[realIdx].time + dt).clamp(
+      0.0,
+      double.infinity,
+    );
     acc.moveKeyframe(realIdx, newTime);
 
     final newIndices = _kfIndicesForTrack(sel.track);
@@ -359,8 +362,12 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
       (k) => (k.time - newTime).abs() < 0.001,
     );
     final newSelIdx = newIndices.indexOf(newRealIdx);
-    setState(() =>
-        _selectedKf = (track: sel.track, index: newSelIdx < 0 ? sel.index : newSelIdx));
+    setState(
+      () => _selectedKf = (
+        track: sel.track,
+        index: newSelIdx < 0 ? sel.index : newSelIdx,
+      ),
+    );
   }
 
   // ── Event add / move / delete ────────────────────────────────────────────
@@ -388,7 +395,10 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
           cursorColor: EditorTheme.primaryMuted,
           decoration: InputDecoration(
             hintText: 'event_name',
-            hintStyle: const TextStyle(color: EditorTheme.textMuted, fontSize: 12),
+            hintStyle: const TextStyle(
+              color: EditorTheme.textMuted,
+              fontSize: 12,
+            ),
             enabledBorder: const UnderlineInputBorder(
               borderSide: BorderSide(color: EditorTheme.textMuted),
             ),
@@ -488,9 +498,7 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
               if (_hasAny) _buildTransport(),
               if (_hasAny)
                 Divider(height: 1, color: Colors.white.withValues(alpha: 0.06)),
-              Expanded(
-                child: !_hasAny ? _buildEmpty() : _buildDopeSheet(),
-              ),
+              Expanded(child: !_hasAny ? _buildEmpty() : _buildDopeSheet()),
             ],
           ),
         ),
@@ -534,7 +542,9 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
             style: const TextStyle(fontSize: 10, color: EditorTheme.textMuted),
           ),
           const Spacer(),
-          if (_mode == _TimelineMode.sprite && _asc != null && _asc!.clips.isNotEmpty)
+          if (_mode == _TimelineMode.sprite &&
+              _asc != null &&
+              _asc!.clips.isNotEmpty)
             _buildClipDropdown(_asc!),
           IconButton(
             onPressed: widget.onClose,
@@ -556,7 +566,11 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
       color: const Color(0xFF141414),
       child: Row(
         children: [
-          _buildModeTab(_TimelineMode.sprite, Icons.movie_filter_rounded, 'Sprite'),
+          _buildModeTab(
+            _TimelineMode.sprite,
+            Icons.movie_filter_rounded,
+            'Sprite',
+          ),
           _buildModeTab(_TimelineMode.entity, Icons.timeline_rounded, 'Entity'),
         ],
       ),
@@ -588,7 +602,9 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
             Icon(
               icon,
               size: 11,
-              color: isActive ? EditorTheme.primaryMuted : EditorTheme.textMuted,
+              color: isActive
+                  ? EditorTheme.primaryMuted
+                  : EditorTheme.textMuted,
             ),
             const SizedBox(width: 4),
             Text(
@@ -596,7 +612,9 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                color: isActive ? EditorTheme.textPrimary : EditorTheme.textMuted,
+                color: isActive
+                    ? EditorTheme.textPrimary
+                    : EditorTheme.textMuted,
               ),
             ),
           ],
@@ -608,7 +626,10 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
   Widget _buildClipDropdown(AnimatedSpriteComponent asc) {
     return DropdownButton<String>(
       value: asc.clips.containsKey(asc.activeClip) ? asc.activeClip : null,
-      hint: const Text('clip', style: TextStyle(fontSize: 10, color: EditorTheme.textMuted)),
+      hint: const Text(
+        'clip',
+        style: TextStyle(fontSize: 10, color: EditorTheme.textMuted),
+      ),
       style: const TextStyle(fontSize: 10, color: EditorTheme.textPrimary),
       dropdownColor: const Color(0xFF1E1E1E),
       underline: const SizedBox.shrink(),
@@ -616,7 +637,9 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
       items: asc.clips.keys
           .map((k) => DropdownMenuItem(value: k, child: Text(k)))
           .toList(),
-      onChanged: (v) { if (v != null) _switchClip(v); },
+      onChanged: (v) {
+        if (v != null) _switchClip(v);
+      },
     );
   }
 
@@ -649,11 +672,7 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
             onTap: isPlaying ? _pause : _play,
             tooltip: isPlaying ? 'Pause' : 'Play',
           ),
-          _TLIconBtn(
-            icon: Icons.stop_rounded,
-            onTap: _stop,
-            tooltip: 'Stop',
-          ),
+          _TLIconBtn(icon: Icons.stop_rounded, onTap: _stop, tooltip: 'Stop'),
           _TLIconBtn(
             icon: Icons.repeat_rounded,
             accent: loop ? const Color(0xFF7DE6B1) : null,
@@ -664,22 +683,32 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
           if (fps != null)
             Text(
               '${fps.toStringAsFixed(1)} fps',
-              style: const TextStyle(fontSize: 10, color: EditorTheme.textMuted),
+              style: const TextStyle(
+                fontSize: 10,
+                color: EditorTheme.textMuted,
+              ),
             )
           else
             Text(
               '${_duration.toStringAsFixed(2)} s',
-              style: const TextStyle(fontSize: 10, color: EditorTheme.textMuted),
+              style: const TextStyle(
+                fontSize: 10,
+                color: EditorTheme.textMuted,
+              ),
             ),
           const Spacer(),
           _TLIconBtn(
             icon: Icons.zoom_out_rounded,
-            onTap: () => setState(() => _pxPerSec = (_pxPerSec / 1.5).clamp(30.0, 600.0)),
+            onTap: () => setState(
+              () => _pxPerSec = (_pxPerSec / 1.5).clamp(30.0, 600.0),
+            ),
             tooltip: 'Zoom out',
           ),
           _TLIconBtn(
             icon: Icons.zoom_in_rounded,
-            onTap: () => setState(() => _pxPerSec = (_pxPerSec * 1.5).clamp(30.0, 600.0)),
+            onTap: () => setState(
+              () => _pxPerSec = (_pxPerSec * 1.5).clamp(30.0, 600.0),
+            ),
             tooltip: 'Zoom in',
           ),
           if (hasKfSel) ...[
@@ -863,10 +892,18 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
           ),
         ),
         if (_mode == _TimelineMode.sprite)
-          _TrackLabel(label: 'Frames', height: _frameTrackH, color: EditorTheme.textMuted),
+          _TrackLabel(
+            label: 'Frames',
+            height: _frameTrackH,
+            color: EditorTheme.textMuted,
+          ),
         if (_mode == _TimelineMode.entity)
           for (final track in _TLTrack.values)
-            _TrackLabel(label: track.label, height: _trackH, color: track.accent),
+            _TrackLabel(
+              label: track.label,
+              height: _trackH,
+              color: track.accent,
+            ),
         _TrackLabel(
           label: 'Events',
           height: _eventTrackH,
@@ -901,10 +938,16 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
               }),
               onHorizontalDragUpdate: (d) {
                 final sel = (track: track, index: i);
-                setState(() { _selectedKf = sel; _selectedEv = null; });
+                setState(() {
+                  _selectedKf = sel;
+                  _selectedEv = null;
+                });
                 _moveKf(sel, d.delta.dx);
               },
-              child: _KfDiamond(color: isSel ? Colors.white : track.accent, size: 12),
+              child: _KfDiamond(
+                color: isSel ? Colors.white : track.accent,
+                size: 12,
+              ),
             ),
           );
         }(),
@@ -932,7 +975,10 @@ class _DockTimelinePanelState extends State<_DockTimelinePanel>
                 _selectedEv = isSel ? null : (index: i);
               }),
               onHorizontalDragUpdate: (d) {
-                setState(() { _selectedEv = (index: i); _selectedKf = null; });
+                setState(() {
+                  _selectedEv = (index: i);
+                  _selectedKf = null;
+                });
                 _moveEv((index: i), d.delta.dx);
               },
               child: Row(
@@ -1076,11 +1122,7 @@ class _TimelineGridPainter extends CustomPainter {
           ..strokeWidth = 1;
         for (int f = 0; f < clip.frames.length; f++) {
           final x = f * frameDur * pxPerSec;
-          canvas.drawLine(
-            Offset(x, rulerH - 5),
-            Offset(x, rulerH),
-            tickPaint,
-          );
+          canvas.drawLine(Offset(x, rulerH - 5), Offset(x, rulerH), tickPaint);
         }
       }
     }

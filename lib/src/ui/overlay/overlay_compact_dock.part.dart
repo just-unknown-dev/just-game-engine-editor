@@ -11,8 +11,6 @@ class _CompactStatusDock extends StatefulWidget {
   final double maxDetailWidth;
   final double maxDetailHeight;
 
-  static const double _panelHeight = 56;
-
   @override
   State<_CompactStatusDock> createState() => _CompactStatusDockState();
 }
@@ -166,7 +164,13 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
     final comps = entity.components;
     for (final c in comps) {
       if (c.runtimeType.toString() == 'AnimatedSpriteComponent') {
-        return c.toString().split('clip: ').elementAtOrNull(1)?.split(',').first ?? '—';
+        return c
+                .toString()
+                .split('clip: ')
+                .elementAtOrNull(1)
+                ?.split(',')
+                .first ??
+            '—';
       }
     }
     return 'no anim';
@@ -278,13 +282,13 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
             .where((entry) => entry.level == DebuggerLogLevel.error)
             .length;
         final detailMaxHeight =
-            widget.maxDetailHeight - _CompactStatusDock._panelHeight - 40;
+            widget.maxDetailHeight - OverlayLayout.compactDockPanelHeight - 40;
         final settingsPanelHeight = detailMaxHeight
             .clamp(260.0, 460.0)
             .toDouble();
         final floatingPanelHeight = _isSettingsOpen ? settingsPanelHeight : 0.0;
         final dockHeight =
-            _CompactStatusDock._panelHeight +
+            OverlayLayout.compactDockPanelHeight +
             (_isLogsPanelOpen ? _logsPanelHeight : 0.0) +
             (_isAssetsPanelOpen ? _assetsPanelHeight : 0.0) +
             (_isTimelinePanelOpen ? _timelinePanelHeight : 0.0) +
@@ -313,7 +317,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                       right: 0,
                       bottom: 0,
                       child: Container(
-                        height: _CompactStatusDock._panelHeight,
+                        height: OverlayLayout.compactDockPanelHeight,
                         decoration: BoxDecoration(
                           color: const Color(0xFF111111),
                           borderRadius: BorderRadius.circular(0),
@@ -419,7 +423,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                       Positioned(
                         left: 0,
                         right: 0,
-                        bottom: _CompactStatusDock._panelHeight,
+                        bottom: OverlayLayout.compactDockPanelHeight,
                         child: _DockLogsPanel(
                           controller: controller,
                           height: _logsPanelHeight,
@@ -432,7 +436,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                       Positioned(
                         left: 0,
                         right: 0,
-                        bottom: _CompactStatusDock._panelHeight,
+                        bottom: OverlayLayout.compactDockPanelHeight,
                         child: _DockAssetsPanel(
                           height: _assetsPanelHeight,
                           onResize: _onAssetsPanelResize,
@@ -444,7 +448,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                       Positioned(
                         left: 0,
                         right: 0,
-                        bottom: _CompactStatusDock._panelHeight,
+                        bottom: OverlayLayout.compactDockPanelHeight,
                         child: _DockTimelinePanel(
                           height: _timelinePanelHeight,
                           onResize: _onTimelinePanelResize,
@@ -457,7 +461,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                       Positioned(
                         left: 0,
                         right: 0,
-                        bottom: _CompactStatusDock._panelHeight,
+                        bottom: OverlayLayout.compactDockPanelHeight,
                         child: _DockPerformancePanel(
                           controller: controller,
                           height: _performancePanelHeight,
@@ -470,7 +474,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                       Positioned(
                         left: 0,
                         right: 0,
-                        bottom: _CompactStatusDock._panelHeight,
+                        bottom: OverlayLayout.compactDockPanelHeight,
                         child: _DockEcsPanel(
                           controller: controller,
                           height: _ecsPanelHeight,
@@ -488,7 +492,7 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                             math.max(280, widget.maxDetailWidth - 24),
                           ),
                         ),
-                        bottom: _CompactStatusDock._panelHeight + 12,
+                        bottom: OverlayLayout.compactDockPanelHeight + 12,
                         child: SizedBox(
                           width: math.min(
                             420,

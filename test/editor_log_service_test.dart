@@ -5,7 +5,9 @@ import 'package:just_game_engine_editor/src/core/services/editor_log_entry.dart'
 import 'package:just_game_engine_editor/src/core/services/editor_log_service.dart';
 import 'package:just_game_engine_editor/src/core/services/editor_log_storage.dart';
 import 'package:just_game_engine_editor/src/core/services/editor_log_storage_io.dart'
-    show kMaxFileSizeBytes, createEditorLogStorageForPath;
+    show createEditorLogStorageForPath;
+import 'package:just_game_engine_editor/src/core/constants/editor_constants.dart'
+    show EditorLogConstants;
 
 void main() {
   test('runWithCapture records plain print output once', () async {
@@ -69,7 +71,10 @@ void main() {
 
       // Pre-fill the file so it is above the rotation threshold.
       final primary = File(primaryPath);
-      final filler = List.filled(kMaxFileSizeBytes, 0x41); // 'A' * threshold
+      final filler = List.filled(
+        EditorLogConstants.maxFileSizeBytes,
+        0x41,
+      ); // 'A' * threshold
       await primary.writeAsBytes(filler);
 
       final entry = EditorLogEntry(
@@ -84,7 +89,7 @@ void main() {
       // The primary file should now be small (only the new entry).
       final primarySize = await primary.length();
       expect(
-        primarySize < kMaxFileSizeBytes,
+        primarySize < EditorLogConstants.maxFileSizeBytes,
         isTrue,
         reason: 'Primary file should have been rotated',
       );
@@ -98,7 +103,7 @@ void main() {
       );
       final backupSize = await backup.length();
       expect(
-        backupSize >= kMaxFileSizeBytes,
+        backupSize >= EditorLogConstants.maxFileSizeBytes,
         isTrue,
         reason: 'Backup should contain the original oversized data',
       );

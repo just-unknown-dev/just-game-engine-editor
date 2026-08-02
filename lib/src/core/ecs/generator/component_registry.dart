@@ -65,6 +65,7 @@ class EditorComponentField {
   final String? label;
   final EditorFieldKind kind;
   final bool visible;
+
   /// When set, the field is only shown/read/written by the inspector when
   /// this returns true for the current component state (e.g. a shape-specific
   /// dimension field that only applies to one selected shape kind).
@@ -78,9 +79,11 @@ class EditorComponentField {
   final Object? Function(String value)? enumParser;
   final String Function(Object? value)? valueFormatter;
   final NumberScrubConfig? scrubConfig;
+
   /// For [EditorFieldKind.assetRef]: restricts the file picker to these extensions
   /// (without the leading dot, e.g. `['png', 'jpg']`). Defaults to `['png']`.
   final List<String>? fileExtensions;
+
   /// For [EditorFieldKind.assetRef]: when set, shows a generate button that
   /// calls this callback. Returns the written file path on success, or null.
   final Future<String?> Function(jge.Component component)? generateTemplate;

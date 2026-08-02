@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' hide Animation;
 
-import '../theme/editor_theme.dart';
+import '../../core/constants/editor_constants.dart';
 import '../../core/ecs/registry/component_registry.dart';
 import '../../core/state/editor_scene_state.dart';
 

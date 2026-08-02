@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/editor_theme.dart';
+import '../../core/constants/editor_constants.dart';
 
 import '../../core/serialization/scene_file_generator.dart';
 import '../../core/serialization/scene_name_validator.dart';

@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -8,7 +8,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../core/ecs/generator/component_registry.dart';
 import '../../core/state/editor_scene_state.dart';
-import '../theme/editor_theme.dart';
+import '../../core/constants/editor_constants.dart';
 import '../widgets/scrubbable_number_field.dart';
 
 List<Widget> buildCustomComponentSections({
@@ -157,9 +157,7 @@ class CustomComponentSection extends StatelessWidget {
       f.visible && (f.visibleWhen?.call(component) ?? true);
 
   List<Widget> _buildGroupedFields(List<EditorFieldGroup> groups) {
-    final visibleGroups = groups
-        .where((g) => g.fields.any(_isShown))
-        .toList();
+    final visibleGroups = groups.where((g) => g.fields.any(_isShown)).toList();
 
     if (visibleGroups.isEmpty) {
       return [
@@ -1129,10 +1127,7 @@ class _MiniNumberField extends StatelessWidget {
       },
       decoration: InputDecoration(
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 6,
-          vertical: 6,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
         filled: true,
         fillColor: EditorTheme.inputBg,
         border: OutlineInputBorder(
@@ -1167,6 +1162,7 @@ class _AssetRefEditorRow extends StatefulWidget {
   final String value;
   final ValueChanged<String> onChanged;
   final List<String> extensions;
+
   /// When non-null, shows a wand button. Returns the generated file path or null.
   final Future<String?> Function()? onGenerate;
 
@@ -1291,11 +1287,11 @@ class _AssetRefEditorRowState extends State<_AssetRefEditorRow>
             Expanded(
               child: DragTarget<String>(
                 onWillAcceptWithDetails: (details) {
-                    final ext = details.data.split('.').last.toLowerCase();
-                    return widget.extensions
-                        .map((e) => e.toLowerCase())
-                        .contains(ext);
-                  },
+                  final ext = details.data.split('.').last.toLowerCase();
+                  return widget.extensions
+                      .map((e) => e.toLowerCase())
+                      .contains(ext);
+                },
                 onAcceptWithDetails: (details) => _selectPath(details.data),
                 builder: (context, candidateData, rejectedData) {
                   Color borderColor = EditorTheme.border;

@@ -202,10 +202,11 @@ class _DockPerformancePanelState extends State<_DockPerformancePanel> {
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(10),
                       child: switch (_tab) {
-                        _PerformanceTab.performance => _PerformanceDetailContent(
-                          controller: widget.controller,
-                          settings: widget.settings,
-                        ),
+                        _PerformanceTab.performance =>
+                          _PerformanceDetailContent(
+                            controller: widget.controller,
+                            settings: widget.settings,
+                          ),
                         _PerformanceTab.runtime => _RuntimeDetailContent(
                           controller: widget.controller,
                           settings: widget.settings,
@@ -803,9 +804,21 @@ class _ProfilingDetailContent extends StatelessWidget {
                 spacing: 5,
                 runSpacing: 5,
                 children: <Widget>[
-                  _DetailStatTile(label: 'Min', value: '$minFps', settings: settings),
-                  _DetailStatTile(label: 'Avg', value: '$avgFps', settings: settings),
-                  _DetailStatTile(label: 'Max', value: '$maxFps', settings: settings),
+                  _DetailStatTile(
+                    label: 'Min',
+                    value: '$minFps',
+                    settings: settings,
+                  ),
+                  _DetailStatTile(
+                    label: 'Avg',
+                    value: '$avgFps',
+                    settings: settings,
+                  ),
+                  _DetailStatTile(
+                    label: 'Max',
+                    value: '$maxFps',
+                    settings: settings,
+                  ),
                   _DetailStatTile(
                     label: 'Samples',
                     value: '${samples.length}',
@@ -819,9 +832,9 @@ class _ProfilingDetailContent extends StatelessWidget {
                 width: double.infinity,
                 child: CustomPaint(
                   painter: _HistoryLineChartPainter(
-                    values: fpsValues.map((v) => v.toDouble()).toList(
-                      growable: false,
-                    ),
+                    values: fpsValues
+                        .map((v) => v.toDouble())
+                        .toList(growable: false),
                     color: settings.themeColor,
                   ),
                 ),
@@ -954,53 +967,62 @@ class _ProfilingDetailContent extends StatelessWidget {
           child: allTimings.isEmpty
               ? const Text(
                   'No system timing data reported.',
-                  style: TextStyle(fontSize: 10, color: EditorTheme.textSecondary),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: EditorTheme.textSecondary,
+                  ),
                 )
               : Column(
-                  children: allTimings.map((entry) {
-                    final ratio = maxSystemMs <= 0
-                        ? 0.0
-                        : (entry.value / maxSystemMs).clamp(0.0, 1.0);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
+                  children: allTimings
+                      .map((entry) {
+                        final ratio = maxSystemMs <= 0
+                            ? 0.0
+                            : (entry.value / maxSystemMs).clamp(0.0, 1.0);
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              Expanded(
-                                child: Text(
-                                  entry.key,
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: EditorTheme.textSecondary,
+                              Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: Text(
+                                      entry.key,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: EditorTheme.textSecondary,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  Text(
+                                    '${entry.value.toStringAsFixed(2)} ms',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: EditorTheme.textPrimary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              Text(
-                                '${entry.value.toStringAsFixed(2)} ms',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  color: EditorTheme.textPrimary,
-                                  fontWeight: FontWeight.w600,
+                              const SizedBox(height: 3),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(2),
+                                child: LinearProgressIndicator(
+                                  value: ratio,
+                                  minHeight: 4,
+                                  backgroundColor: Colors.white.withValues(
+                                    alpha: 0.06,
+                                  ),
+                                  valueColor: AlwaysStoppedAnimation(
+                                    settings.themeColor,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 3),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(2),
-                            child: LinearProgressIndicator(
-                              value: ratio,
-                              minHeight: 4,
-                              backgroundColor: Colors.white.withValues(alpha: 0.06),
-                              valueColor: AlwaysStoppedAnimation(settings.themeColor),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(growable: false),
+                        );
+                      })
+                      .toList(growable: false),
                 ),
         ),
         const SizedBox(height: 8),
@@ -1057,7 +1079,10 @@ class _ProfilingDetailContent extends StatelessWidget {
                 )
               : const Text(
                   'System-wide memory stats are not available on this platform.',
-                  style: TextStyle(fontSize: 10, color: EditorTheme.textSecondary),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: EditorTheme.textSecondary,
+                  ),
                 ),
         ),
       ],
@@ -1097,8 +1122,7 @@ class _HistoryLineChartPainter extends CustomPainter {
     final span = (top - bottom).clamp(1.0, double.infinity);
 
     double xFor(int i) => size.width * i / (values.length - 1);
-    double yFor(double v) =>
-        size.height - ((v - bottom) / span) * size.height;
+    double yFor(double v) => size.height - ((v - bottom) / span) * size.height;
 
     final gridPaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.06)

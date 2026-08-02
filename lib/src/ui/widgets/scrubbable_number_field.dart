@@ -2,10 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../core/ecs/generator/component_registry.dart' show NumberScrubConfig;
-import '../theme/editor_theme.dart';
+import '../../core/ecs/generator/component_registry.dart'
+    show NumberScrubConfig;
+import '../../core/constants/editor_constants.dart';
 
-export '../../core/ecs/generator/component_registry.dart' show NumberScrubConfig;
+export '../../core/ecs/generator/component_registry.dart'
+    show NumberScrubConfig;
 
 class ScrubbableNumberField extends StatefulWidget {
   const ScrubbableNumberField({

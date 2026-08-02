@@ -88,10 +88,7 @@ void main() {
 
       expect(
         SceneFileGenerator.listSceneNames(),
-        allOf(
-          contains('__test_scene_d__'),
-          contains('__test_scene_d_copy__'),
-        ),
+        allOf(contains('__test_scene_d__'), contains('__test_scene_d_copy__')),
       );
 
       final copyLevel = await File(
@@ -124,20 +121,23 @@ void main() {
       );
     });
 
-    test('renameScene/duplicateScene refuse an invalid or taken name', () async {
-      await SceneFileGenerator.writeInitialFiles('__test_scene_h__');
-      await SceneFileGenerator.writeInitialFiles('__test_scene_i__');
-      final manager = SceneManager();
+    test(
+      'renameScene/duplicateScene refuse an invalid or taken name',
+      () async {
+        await SceneFileGenerator.writeInitialFiles('__test_scene_h__');
+        await SceneFileGenerator.writeInitialFiles('__test_scene_i__');
+        final manager = SceneManager();
 
-      expect(
-        () => manager.renameScene('__test_scene_h__', '__test_scene_i__'),
-        throwsA(isA<SceneManagerException>()),
-      );
-      expect(
-        () => manager.duplicateScene('__test_scene_h__', 'not a valid name'),
-        throwsA(isA<SceneManagerException>()),
-      );
-    });
+        expect(
+          () => manager.renameScene('__test_scene_h__', '__test_scene_i__'),
+          throwsA(isA<SceneManagerException>()),
+        );
+        expect(
+          () => manager.duplicateScene('__test_scene_h__', 'not a valid name'),
+          throwsA(isA<SceneManagerException>()),
+        );
+      },
+    );
 
     test('renameScene allows renaming a scene to its own current name '
         'validation to exclude itself', () async {
@@ -146,7 +146,10 @@ void main() {
 
       // Renaming "j" -> "j" would normally collide with itself in the
       // existing-names check; validateName(ignoring: oldName) should permit it.
-      expect(manager.validateName('__test_scene_j__', ignoring: '__test_scene_j__'), isNull);
+      expect(
+        manager.validateName('__test_scene_j__', ignoring: '__test_scene_j__'),
+        isNull,
+      );
     });
 
     test('listScenes and isProtected reflect configuration', () async {

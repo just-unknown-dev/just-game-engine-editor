@@ -3,7 +3,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 
 import '../dialogs/add_component_picker.dart';
 import 'custom_component_section.dart';
-import '../theme/editor_theme.dart';
+import '../../core/constants/editor_constants.dart';
 import '../../core/state/editor_scene_state.dart';
 
 /// Inspector panel that shows and edits components on the selected entity.

@@ -8,13 +8,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:just_debugger/just_debugger.dart';
-import 'package:just_game_engine/just_game_engine.dart' show AnimatedSpriteComponent, AnimationControllerComponent, AnimationEvent, RenderableComponent, Sprite, TransformComponent, TransformKeyframe;
+import 'package:just_game_engine/just_game_engine.dart'
+    show
+        AnimatedSpriteComponent,
+        AnimationControllerComponent,
+        AnimationEvent,
+        RenderableComponent,
+        Sprite,
+        TransformComponent,
+        TransformKeyframe;
 import 'package:just_storage/just_storage.dart';
 
 import '../panels/entity_inspector_panel.dart';
 import '../panels/scene_picker_panel.dart';
 import '../panels/scene_tree_panel.dart';
-import '../theme/editor_theme.dart';
+import '../../core/constants/editor_constants.dart';
 import '../../core/services/editor_log_service.dart';
 import '../../core/services/editor_log_entry.dart';
 import '../../core/plugin/editor_plugin.dart';
@@ -187,9 +195,19 @@ class _JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
                           return Row(
                             children: <Widget>[
                               Expanded(
-                                child: _GameCanvasArea(
-                                  plugin: plugin,
-                                  gameChild: gameChild,
+                                child: Column(
+                                  children: [
+                                    Expanded(
+                                      child: _GameCanvasArea(
+                                        plugin: plugin,
+                                        gameChild: gameChild,
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      height:
+                                          OverlayLayout.compactDockPanelHeight,
+                                    ),
+                                  ],
                                 ),
                               ),
                               SizedBox(width: rightPanelWidth),
@@ -235,7 +253,7 @@ class _CompactChrome extends StatelessWidget {
           ),
         ),
         const Positioned(
-          bottom: _CompactStatusDock._panelHeight + 8,
+          bottom: OverlayLayout.compactDockPanelHeight + 8,
           right: 8,
           child: _EditorSnackBarLayer(),
         ),
@@ -296,7 +314,7 @@ class _FullEditorChrome extends StatelessWidget {
               child: _PlayControlsToolbar(plugin: plugin, settings: settings),
             ),
             Positioned(
-              bottom: _CompactStatusDock._panelHeight + 8,
+              bottom: OverlayLayout.compactDockPanelHeight + 8,
               right: panelWidth + 8,
               child: const _EditorSnackBarLayer(),
             ),
@@ -516,7 +534,7 @@ final _OverlaySettingsStore _overlaySettingsStore = _OverlaySettingsStore(
 /// parent/child — a plain State field on either wouldn't reach the other.
 /// Not persisted, matching the bottom dock panels' heights.
 final ValueNotifier<double> _rightPanelWidthSignal = ValueNotifier<double>(
-  _EditorRightPanel.defaultPanelWidth,
+  OverlayLayout.rightPanelDefaultWidth,
 );
 
 // ── Global performance history (persists across panel open/close) ────────────
@@ -546,7 +564,6 @@ class _PerfHistorySample {
   }
 }
 
-const int _perfHistoryCapacity = 180;
 final List<_PerfHistorySample> _perfHistory = <_PerfHistorySample>[];
 
 /// Appends a sample to the session-level performance history, skipping
@@ -568,7 +585,7 @@ void _recordPerfSample(
       rssBytes: memory.rssBytes,
     ),
   );
-  if (_perfHistory.length > _perfHistoryCapacity) {
+  if (_perfHistory.length > OverlayLayout.perfHistoryCapacity) {
     _perfHistory.removeAt(0);
   }
 }

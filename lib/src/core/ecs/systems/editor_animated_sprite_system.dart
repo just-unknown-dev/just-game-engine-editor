@@ -185,9 +185,10 @@ class EditorAnimatedSpriteSystem extends System {
       asc.elapsed = asc.elapsed % clipDuration;
     }
 
-    asc.frameIndex = (asc.elapsed / frameDuration)
-        .floor()
-        .clamp(0, clip.frames.length - 1);
+    asc.frameIndex = (asc.elapsed / frameDuration).floor().clamp(
+      0,
+      clip.frames.length - 1,
+    );
   }
 
   // ── Source rect sync ─────────────────────────────────────────────────────
@@ -221,8 +222,7 @@ class EditorAnimatedSpriteSystem extends System {
     if (asc.blendingToClip != null) {
       final nextClip = asc.clips[asc.blendingToClip!];
       if (nextClip != null && nextClip.keyframes.isNotEmpty) {
-        final blendT =
-            (asc.blendElapsed / asc.blendDuration).clamp(0.0, 1.0);
+        final blendT = (asc.blendElapsed / asc.blendDuration).clamp(0.0, 1.0);
         _blendToward(transform, nextClip.keyframes.first, blendT);
       }
     }
@@ -256,8 +256,7 @@ class EditorAnimatedSpriteSystem extends System {
     }
 
     final span = next.time - prev.time;
-    final localT =
-        span > 0 ? ((t - prev.time) / span).clamp(0.0, 1.0) : 1.0;
+    final localT = span > 0 ? ((t - prev.time) / span).clamp(0.0, 1.0) : 1.0;
     final easedT = prev.easing.apply(localT);
     _applyValues(transform, prev, easedT, next);
   }
@@ -282,8 +281,10 @@ class EditorAnimatedSpriteSystem extends System {
     if (from.rotation != null || to.rotation != null) {
       transform.rotation = newRot;
     }
-    if (from.scaleX != null || to.scaleX != null ||
-        from.scaleY != null || to.scaleY != null) {
+    if (from.scaleX != null ||
+        to.scaleX != null ||
+        from.scaleY != null ||
+        to.scaleY != null) {
       transform.scale = Vector3(newSX, newSY, transform.scale.z);
     }
   }
@@ -294,8 +295,7 @@ class EditorAnimatedSpriteSystem extends System {
     double t,
   ) {
     if (target.rotation != null) {
-      transform.rotation +=
-          (target.rotation! - transform.rotation) * t;
+      transform.rotation += (target.rotation! - transform.rotation) * t;
     }
     if (target.scaleX != null) {
       transform.scale = Vector3(
