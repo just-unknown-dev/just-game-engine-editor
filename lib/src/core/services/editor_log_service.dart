@@ -34,6 +34,12 @@ class EditorLogService extends ChangeNotifier {
   bool _zoneCaptureInstalled = false;
   bool _keepGlobalCaptureInstalled = false;
   bool _loadedPersistedEntries = false;
+  // Set on the first storage write failure (e.g. read-only/full disk) so we
+  // stop retrying for the rest of the session. Without this, a failing
+  // appendEntry() would otherwise get reported right back through log() ->
+  // appendEntry() on every call, spiralling into an ever-growing chain of
+  // "failed to persist log" entries that themselves fail to persist.
+  bool _storageWriteFailed = false;
 
   // Deferred notification state — prevents "Build scheduled during frame" when
   // log() is called during Flutter's transient/persistent callback phases
@@ -185,7 +191,20 @@ class EditorLogService extends ChangeNotifier {
       _entries.removeRange(0, _entries.length - _maxEntries);
     }
 
-    unawaited(_storage.appendEntry(entry));
+    if (!_storageWriteFailed) {
+      unawaited(
+        _storage.appendEntry(entry).catchError((Object error, StackTrace _) {
+          // Flip the flag before logging the notice below — its own log()
+          // call must see _storageWriteFailed already true so it doesn't
+          // attempt (and fail) another appendEntry itself.
+          _storageWriteFailed = true;
+          debugPrint(
+            '[EditorLogService] Disabling log persistence after a write '
+            'failure: $error',
+          );
+        }),
+      );
+    }
 
     _scheduleNotify(() {
       if (mirrorToDebugger) {

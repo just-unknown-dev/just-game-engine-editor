@@ -126,6 +126,12 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   final GizmoPainter _gizmoPainter;
   final GizmoHitTester _hitTester;
 
+  // Guards openScene()/saveScene() against re-entrancy: without it, a
+  // double-click in the scene picker (or Ctrl+S fired again before a prior
+  // save's file writes complete) can interleave two scene-file writes, or
+  // let a save-in-flight's markClean() land against a scene opened after it
+  // started.
+  bool _isSceneIOBusy = false;
   bool _isInitialized = false;
   bool _isVisible = false;
   bool _isStatusPanelVisible = false;
@@ -225,6 +231,7 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
           PhysicsBodyBindingSystem(
             sceneState: sceneState,
             isAuthoringActive: () => _isAuthoring,
+            isDraggingActive: () => _activeHandle != null,
           ),
         );
       }
@@ -608,7 +615,16 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
     }
   }
 
-  void onPointerUp(PointerUpEvent event) {
+  void onPointerUp(PointerUpEvent event) => _resetPointerDragState();
+
+  /// A gesture the OS/Flutter interrupts (window loses focus mid-drag, the
+  /// gesture arena is stolen by another widget, a second touch cancels the
+  /// first) is delivered as [PointerCancelEvent], not [PointerUpEvent] — if
+  /// this weren't wired up too, [_activeHandle]/[_isPanningCamera] would get
+  /// stuck "on" and silently hijack the next unrelated pointer gesture.
+  void onPointerCancel(PointerCancelEvent event) => _resetPointerDragState();
+
+  void _resetPointerDragState() {
     _activeHandle = null;
     _dragStartScreen = null;
     _isPanningCamera = false;
@@ -632,6 +648,30 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
 
   // ── Scene management helpers ──────────────────────────────────────────────
 
+  /// Generates a `prefix_N` name that doesn't collide with any currently
+  /// live entity.
+  ///
+  /// Using the live entity count as `N` (the old approach) collides as soon
+  /// as an entity is deleted and a new one created afterwards — e.g. delete
+  /// `entity_1` out of `entity_0`/`entity_1`/`entity_2` and the next create
+  /// (count now 2) is named `entity_2`, duplicating the survivor. Duplicate
+  /// names silently corrupt [openScene]'s name-keyed parent/child relinking
+  /// on the next scene load.
+  String _uniqueEntityName(String prefix) {
+    final existingNames = engine.world
+        .query([TransformComponent])
+        .map((e) => e.name)
+        .whereType<String>()
+        .toSet();
+    var index = existingNames.length;
+    var candidate = '${prefix}_$index';
+    while (existingNames.contains(candidate)) {
+      index++;
+      candidate = '${prefix}_$index';
+    }
+    return candidate;
+  }
+
   /// Creates a new entity at the camera centre, adds a visible
   /// [RectangleComponent] so it immediately appears on canvas, selects it,
   /// and registers it in the authoring scene graph.
@@ -640,11 +680,10 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
 
     final camera = engine.cameraSystem.mainCamera;
     final spawnPos = camera.position;
-    final index = engine.world.query([TransformComponent]).length;
 
     final entity = engine.world.createEntityWithComponents([
       TransformComponent(position: Vector3.fromOffset(spawnPos)),
-    ], name: 'entity_$index');
+    ], name: _uniqueEntityName('entity'));
 
     sceneState.registerEntity(entity);
     sceneState.selectEntity(entity);
@@ -691,12 +730,11 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
 
     final camera = engine.cameraSystem.mainCamera;
     final spawnPos = camera.position;
-    final index = engine.world.query([TransformComponent]).length;
 
     final groupEntity = engine.world.createEntityWithComponents([
       TransformComponent(position: Vector3.fromOffset(spawnPos)),
       ChildrenComponent(),
-    ], name: 'group_$index');
+    ], name: _uniqueEntityName('group'));
 
     sceneState.registerEntity(groupEntity);
 
@@ -839,10 +877,9 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
       components.insert(0, TransformComponent(position: pastePos));
     }
 
-    final index = engine.world.query([TransformComponent]).length;
     final entity = engine.world.createEntityWithComponents(
       components,
-      name: 'entity_$index',
+      name: _uniqueEntityName('entity'),
     );
 
     sceneState.registerEntity(entity);
@@ -866,6 +903,16 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   /// to create new scenes; that overlay writes the stub files before calling
   /// this method.
   Future<void> openScene(String sceneName) async {
+    if (_isSceneIOBusy) return;
+    _isSceneIOBusy = true;
+    try {
+      await _openScene(sceneName);
+    } finally {
+      _isSceneIOBusy = false;
+    }
+  }
+
+  Future<void> _openScene(String sceneName) async {
     // Destroy any entities left over from a previously open scene.
     for (final e
         in engine.world
@@ -957,6 +1004,16 @@ class JustGameEditorPlugin extends ChangeNotifier implements EnginePlugin {
   /// 1. Regenerates `{name}.level.dart` from all live ECS entities.
   /// 2. Writes the `.scene.json` editor sidecar.
   Future<void> saveScene() async {
+    if (_isSceneIOBusy) return;
+    _isSceneIOBusy = true;
+    try {
+      await _saveScene();
+    } finally {
+      _isSceneIOBusy = false;
+    }
+  }
+
+  Future<void> _saveScene() async {
     final scene = sceneState.activeScene;
     if (scene == null) return;
 

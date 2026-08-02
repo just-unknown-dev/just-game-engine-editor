@@ -62,6 +62,10 @@ class EditorSnackBarController extends ChangeNotifier {
   EditorSnackBarEntry? _current;
   final _steps = <EditorSnackBarStep>[];
   StreamSubscription<EditorSnackBarStep>? _sub;
+  // Tracks the pending auto-dismiss Timer (started via Future.delayed
+  // previously) so dispose() can cancel it — otherwise it fires `minimize()`
+  // on this controller after it's been disposed, throwing.
+  Timer? _autoDismissTimer;
   bool _progressDone = false;
   bool _isMinimized = false;
 
@@ -76,6 +80,8 @@ class EditorSnackBarController extends ChangeNotifier {
       // Discard the minimized entry; show the new one immediately.
       _sub?.cancel();
       _sub = null;
+      _autoDismissTimer?.cancel();
+      _autoDismissTimer = null;
       _current = null;
       _steps.clear();
       _progressDone = false;
@@ -93,6 +99,8 @@ class EditorSnackBarController extends ChangeNotifier {
     if (_queue.isNotEmpty) {
       _sub?.cancel();
       _sub = null;
+      _autoDismissTimer?.cancel();
+      _autoDismissTimer = null;
       _steps.clear();
       _progressDone = false;
       _isMinimized = false;
@@ -114,11 +122,15 @@ class EditorSnackBarController extends ChangeNotifier {
   void dismiss() {
     _sub?.cancel();
     _sub = null;
+    _autoDismissTimer?.cancel();
+    _autoDismissTimer = null;
     _isMinimized = false;
     _dequeue();
   }
 
   void _dequeue() {
+    _autoDismissTimer?.cancel();
+    _autoDismissTimer = null;
     if (_queue.isEmpty) {
       _current = null;
       _steps.clear();
@@ -142,17 +154,17 @@ class EditorSnackBarController extends ChangeNotifier {
         onDone: () {
           _progressDone = true;
           notifyListeners();
-          Future.delayed(const Duration(seconds: 2), minimize);
+          _autoDismissTimer = Timer(const Duration(seconds: 2), minimize);
         },
         onError: (Object err) {
           _steps.add(EditorSnackBarStep(message: 'Error: $err', isError: true));
           _progressDone = true;
           notifyListeners();
-          Future.delayed(const Duration(seconds: 3), minimize);
+          _autoDismissTimer = Timer(const Duration(seconds: 3), minimize);
         },
       );
     } else {
-      Future.delayed(_current!.duration, minimize);
+      _autoDismissTimer = Timer(_current!.duration, minimize);
     }
     notifyListeners();
   }
@@ -160,6 +172,7 @@ class EditorSnackBarController extends ChangeNotifier {
   @override
   void dispose() {
     _sub?.cancel();
+    _autoDismissTimer?.cancel();
     super.dispose();
   }
 }

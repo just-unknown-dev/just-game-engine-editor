@@ -17,12 +17,22 @@ import '../../state/editor_scene_state.dart';
 /// unconditionally at the start of every step (that's how spawns/teleports
 /// take effect) — dragging is just another such write.
 class PhysicsBodyBindingSystem extends System {
-  PhysicsBodyBindingSystem({this.sceneState, this.isAuthoringActive});
+  PhysicsBodyBindingSystem({
+    this.sceneState,
+    this.isAuthoringActive,
+    this.isDraggingActive,
+  });
 
   final EditorSceneState? sceneState;
 
   /// Optional gate to limit the drag override below.
   final bool Function()? isAuthoringActive;
+
+  /// Reports whether a gizmo drag is actually in progress right now. Without
+  /// this, [_shouldOverrideBody] would fire for any merely-selected entity —
+  /// zeroing its velocity every frame just for being inspected, freezing it
+  /// mid-fall/roll for as long as it stays selected.
+  final bool Function()? isDraggingActive;
 
   // Runs after PhysicsSystem (priority 90) in the same frame, so every
   // dragged entity's PhysicsBodyRefComponent already exists by the time
@@ -47,6 +57,8 @@ class PhysicsBodyBindingSystem extends System {
   bool _shouldOverrideBody(Entity entity) {
     final active = isAuthoringActive?.call() ?? true;
     if (!active) return false;
+    final dragging = isDraggingActive?.call() ?? false;
+    if (!dragging) return false;
     final scene = sceneState;
     if (scene == null) return false;
     if (scene.isInMultiSelection(entity.id)) return true;

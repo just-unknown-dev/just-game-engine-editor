@@ -137,7 +137,6 @@ class SceneFileGenerator {
     for (final paths in [
       (_levelPath(fromName), _levelPath(toName)),
       (_dataPath(fromName), _dataPath(toName)),
-      (_jsonPath(fromName), _jsonPath(toName)),
     ]) {
       final (fromPath, toPath) = paths;
       final fromFile = File(fromPath);
@@ -147,8 +146,16 @@ class SceneFileGenerator {
         toPath,
       ).writeAsString(_rewriteSceneReferences(content, fromName, toName));
     }
+    await _copyJsonSidecar(_jsonPath(fromName), _jsonPath(toName), toName);
   }
 
+  /// Rewrites the known auto-generated template positions in a `.level.dart`/
+  /// `.data.dart` file — the class name and the header comment / `sceneName`
+  /// const line — WITHOUT touching arbitrary occurrences of [fromName]
+  /// elsewhere in the file. A blind whole-file `replaceAll("'$fromName'", …)`
+  /// would also rewrite unrelated entity data that happens to contain the
+  /// old scene name, e.g. `TagComponent('$fromName')` or an asset path like
+  /// `'assets/$fromName/bg.png'`.
   static String _rewriteSceneReferences(
     String content,
     String fromName,
@@ -159,9 +166,38 @@ class SceneFileGenerator {
     return content
         .replaceAll('${fromCls}Level', '${toCls}Level')
         .replaceAll('${fromCls}Data', '${toCls}Data')
-        .replaceAll('scenes/$fromName/', 'scenes/$toName/')
-        .replaceAll("'$fromName'", "'$toName'") // .data.dart sceneName const
-        .replaceAll('"$fromName"', '"$toName"'); // .scene.json "name" field
+        .replaceAll(
+          '// Scene folder: lib/game/scenes/$fromName/',
+          '// Scene folder: lib/game/scenes/$toName/',
+        )
+        .replaceAll(
+          "static const String sceneName = '$fromName';",
+          "static const String sceneName = '$toName';",
+        );
+  }
+
+  /// Copies the `.scene.json` sidecar, updating only the top-level `name`
+  /// field via a real JSON parse/re-encode — never a string replace — so
+  /// entity data containing the old scene name as a substring (a tag, an
+  /// asset path, ...) is never touched.
+  static Future<void> _copyJsonSidecar(
+    String fromPath,
+    String toPath,
+    String toName,
+  ) async {
+    final fromFile = File(fromPath);
+    if (!fromFile.existsSync()) return;
+    final raw = await fromFile.readAsString();
+    try {
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      data['name'] = toName;
+      await File(
+        toPath,
+      ).writeAsString(const JsonEncoder.withIndent('  ').convert(data));
+    } catch (_) {
+      // Not valid JSON — preserve the content as-is rather than lose it.
+      await File(toPath).writeAsString(raw);
+    }
   }
 
   /// Regenerates `{name}.level.dart` from [entities] currently in the world.
@@ -315,6 +351,9 @@ class ${cls}Data {
 import 'package:flutter/material.dart';
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
+// Joint components (DistanceJointComponent, WeldJointComponent, ...) are
+// editor-package types with no equivalent in just_game_engine itself.
+import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 // ignore_for_file: unused_import
 
@@ -522,16 +561,44 @@ class ${cls}Level {
           '${c.showDebugOutline ? '' : ', showDebugOutline: false'})';
     }
     if (c is DistanceJointComponent) {
-      return "// TODO: DistanceJointComponent(target: '${c.targetEntityName}')";
+      return "DistanceJointComponent("
+          "targetEntityName: '${c.targetEntityName}', "
+          'localAnchorA: Offset(${_d(c.localAnchorA.dx)}, ${_d(c.localAnchorA.dy)}), '
+          'localAnchorB: Offset(${_d(c.localAnchorB.dx)}, ${_d(c.localAnchorB.dy)}), '
+          'length: ${_d(c.length)}, '
+          'stiffness: ${_d(c.stiffness)}, '
+          'damping: ${_d(c.damping)}, '
+          'collideConnected: ${c.collideConnected})';
     }
     if (c is WeldJointComponent) {
-      return "// TODO: WeldJointComponent(target: '${c.targetEntityName}')";
+      return "WeldJointComponent("
+          "targetEntityName: '${c.targetEntityName}', "
+          'localAnchorA: Offset(${_d(c.localAnchorA.dx)}, ${_d(c.localAnchorA.dy)}), '
+          'localAnchorB: Offset(${_d(c.localAnchorB.dx)}, ${_d(c.localAnchorB.dy)}), '
+          'collideConnected: ${c.collideConnected})';
     }
     if (c is PrismaticJointComponent) {
-      return "// TODO: PrismaticJointComponent(target: '${c.targetEntityName}')";
+      return "PrismaticJointComponent("
+          "targetEntityName: '${c.targetEntityName}', "
+          'axis: Offset(${_d(c.axis.dx)}, ${_d(c.axis.dy)}), '
+          'enableLimit: ${c.enableLimit}, '
+          'lowerTranslation: ${_d(c.lowerTranslation)}, '
+          'upperTranslation: ${_d(c.upperTranslation)}, '
+          'enableMotor: ${c.enableMotor}, '
+          'motorSpeed: ${_d(c.motorSpeed)}, '
+          'maxMotorForce: ${_d(c.maxMotorForce)}, '
+          'collideConnected: ${c.collideConnected})';
     }
     if (c is WheelJointComponent) {
-      return "// TODO: WheelJointComponent(target: '${c.targetEntityName}')";
+      return "WheelJointComponent("
+          "targetEntityName: '${c.targetEntityName}', "
+          'suspensionAxis: Offset(${_d(c.suspensionAxis.dx)}, ${_d(c.suspensionAxis.dy)}), '
+          'stiffness: ${_d(c.stiffness)}, '
+          'damping: ${_d(c.damping)}, '
+          'enableMotor: ${c.enableMotor}, '
+          'motorSpeed: ${_d(c.motorSpeed)}, '
+          'maxMotorTorque: ${_d(c.maxMotorTorque)}, '
+          'collideConnected: ${c.collideConnected})';
     }
 
     // Input / Camera

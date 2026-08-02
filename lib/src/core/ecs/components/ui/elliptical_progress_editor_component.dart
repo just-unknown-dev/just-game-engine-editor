@@ -26,13 +26,17 @@ class EllipticalProgressEditorComponent extends EditorComponent {
                 name: 'radius',
                 label: 'Radius',
                 kind: EditorFieldKind.decimal,
-                editable: false,
                 scrubConfig: const NumberScrubConfig(
                   step: 0.5,
                   fractionDigits: 1,
                   min: 0.0,
                 ),
                 read: (c) => (c as EllipticalProgressComponent).size.width / 2,
+                write: (c, v) {
+                  final progress = c as EllipticalProgressComponent;
+                  final newRadius = (v as num).toDouble();
+                  progress.size = Size(newRadius * 2, progress.size.height);
+                },
               ),
             ],
           ),

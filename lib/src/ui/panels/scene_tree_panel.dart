@@ -285,6 +285,11 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
   bool _isEditing = false;
   late TextEditingController _nameCtrl;
   final FocusNode _nameFocus = FocusNode();
+  // Backs the rename row's KeyboardListener (Escape-to-cancel). Must be a
+  // stable field, not created inline in build() — a fresh FocusNode() on
+  // every rebuild while renaming is a leak (each one registers with
+  // FocusManager and the previous one is discarded without being disposed).
+  final FocusNode _escapeKeyFocus = FocusNode();
   bool _isDragOver = false;
 
   @override
@@ -299,6 +304,7 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
     _nameCtrl.dispose();
     _nameFocus.removeListener(_onFocusChange);
     _nameFocus.dispose();
+    _escapeKeyFocus.dispose();
     super.dispose();
   }
 
@@ -480,7 +486,7 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
               Expanded(
                 child: _isEditing
                     ? KeyboardListener(
-                        focusNode: FocusNode(),
+                        focusNode: _escapeKeyFocus,
                         onKeyEvent: (event) {
                           if (event is KeyDownEvent &&
                               event.logicalKey == LogicalKeyboardKey.escape) {

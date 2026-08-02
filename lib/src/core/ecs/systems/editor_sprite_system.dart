@@ -18,6 +18,14 @@ class EditorSpriteSystem extends System {
 
   @override
   void update(double deltaTime) {
+    final live = entities.toSet();
+    // Neither map is ever visited again for a destroyed entity (forEach only
+    // walks currently-matching entities), so without this prune both grow
+    // for the lifetime of the process across a long edit session of
+    // repeatedly placing/deleting sprite entities.
+    _trackedPaths.removeWhere((entity, _) => !live.contains(entity));
+    _loading.removeWhere((entity) => !live.contains(entity));
+
     forEach((entity) {
       final sc = entity.getComponent<SpriteComponent>()!;
       final path = sc.spritePath.trim();

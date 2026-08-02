@@ -10,7 +10,7 @@ export 'src/core/serialization/ecs_level_mapper.dart';
 export 'src/ui/overlay/editor_overlay.dart'
     show
         JustGameEditorOverlay,
-        EditorSnackBarHost,
+        EditorMessenger,
         EditorSnackBarController,
         EditorSnackBarEntry,
         EditorSnackBarStep,

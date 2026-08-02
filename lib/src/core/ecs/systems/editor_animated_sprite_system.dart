@@ -31,6 +31,16 @@ class EditorAnimatedSpriteSystem extends System {
 
   @override
   void update(double deltaTime) {
+    // Neither map/set is ever revisited for a destroyed entity (forEach only
+    // walks currently-matching entities), so without this prune all four
+    // grow for the lifetime of the process across a long edit session of
+    // repeatedly placing/deleting animated-sprite entities.
+    final live = entities.toSet();
+    _loadedSpritePaths.removeWhere((entity, _) => !live.contains(entity));
+    _loadedJsonPaths.removeWhere((entity, _) => !live.contains(entity));
+    _loadingSprite.removeWhere((entity) => !live.contains(entity));
+    _loadingJson.removeWhere((entity) => !live.contains(entity));
+
     forEach((entity) {
       final asc = entity.getComponent<AnimatedSpriteComponent>()!;
 

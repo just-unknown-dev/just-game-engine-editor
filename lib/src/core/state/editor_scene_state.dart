@@ -14,6 +14,9 @@ class EditorSceneState extends ChangeNotifier {
   final Map<EntityId, SceneNode> _entityNodeMap = {};
 
   final Set<EntityId> _multiSelectedIds = {};
+  // Mirrors _multiSelectedIds so toggleMultiSelect can promote a new primary
+  // Entity object (not just an id) when the current primary is deselected.
+  final Map<EntityId, Entity> _multiSelectedEntities = {};
   bool _gridSnappingEnabled = true;
   double _gridSize = 32.0;
 
@@ -48,6 +51,7 @@ class EditorSceneState extends ChangeNotifier {
     _selectedEntity = null;
     _selectedNode = null;
     _multiSelectedIds.clear();
+    _multiSelectedEntities.clear();
     _isDirty = false;
     notifyListeners();
   }
@@ -59,6 +63,7 @@ class EditorSceneState extends ChangeNotifier {
     _selectedEntity = null;
     _selectedNode = null;
     _multiSelectedIds.clear();
+    _multiSelectedEntities.clear();
     _isDirty = false;
     notifyListeners();
   }
@@ -72,6 +77,9 @@ class EditorSceneState extends ChangeNotifier {
     _multiSelectedIds
       ..clear()
       ..add(entity.id);
+    _multiSelectedEntities
+      ..clear()
+      ..[entity.id] = entity;
     notifyListeners();
   }
 
@@ -88,20 +96,24 @@ class EditorSceneState extends ChangeNotifier {
 
     if (_multiSelectedIds.contains(entity.id)) {
       _multiSelectedIds.remove(entity.id);
+      _multiSelectedEntities.remove(entity.id);
       if (_multiSelectedIds.isEmpty) {
         _selectedEntity = null;
         _selectedNode = null;
       } else if (_selectedEntity?.id == entity.id) {
-        // Primary was removed — promote the first remaining ID as primary.
-        // We can't look up the entity object here, so we just clear primary.
-        // The next notifyListeners will re-derive from the set in the UI.
-        _selectedEntity = null;
-        _selectedNode = null;
+        // Primary was removed — promote another remaining id as primary.
+        final nextId = _multiSelectedIds.first;
+        _selectedEntity = _multiSelectedEntities[nextId];
+        _selectedNode = _entityNodeMap[nextId];
       }
     } else {
       // Add current primary to the set if it was a single-select before.
-      if (_selectedEntity != null) _multiSelectedIds.add(_selectedEntity!.id);
+      if (_selectedEntity != null) {
+        _multiSelectedIds.add(_selectedEntity!.id);
+        _multiSelectedEntities[_selectedEntity!.id] = _selectedEntity!;
+      }
       _multiSelectedIds.add(entity.id);
+      _multiSelectedEntities[entity.id] = entity;
       _selectedEntity = entity;
       _selectedNode = _entityNodeMap[entity.id];
     }
@@ -112,7 +124,11 @@ class EditorSceneState extends ChangeNotifier {
   void clearMultiSelection() {
     if (!hasMultiSelection) return;
     _multiSelectedIds.clear();
-    if (_selectedEntity != null) _multiSelectedIds.add(_selectedEntity!.id);
+    _multiSelectedEntities.clear();
+    if (_selectedEntity != null) {
+      _multiSelectedIds.add(_selectedEntity!.id);
+      _multiSelectedEntities[_selectedEntity!.id] = _selectedEntity!;
+    }
     notifyListeners();
   }
 
@@ -122,6 +138,9 @@ class EditorSceneState extends ChangeNotifier {
     _multiSelectedIds
       ..clear()
       ..addAll(entities.map((e) => e.id));
+    _multiSelectedEntities
+      ..clear()
+      ..addEntries(entities.map((e) => MapEntry(e.id, e)));
     _selectedEntity = anchor;
     _selectedNode = _entityNodeMap[anchor.id];
     notifyListeners();
@@ -132,6 +151,7 @@ class EditorSceneState extends ChangeNotifier {
     _selectedEntity = null;
     _selectedNode = null;
     _multiSelectedIds.clear();
+    _multiSelectedEntities.clear();
     notifyListeners();
   }
 
@@ -209,11 +229,16 @@ class EditorSceneState extends ChangeNotifier {
   }
 
   /// Scale [entity] by a multiplicative [factor] on both axes.
+  ///
+  /// Clamped to [0.01, 50.0] — without this, a corner-scale gizmo drag that
+  /// passes exactly through the entity's pivot yields `factor == 0`, which
+  /// would permanently zero the scale (0 * anything stays 0 on every
+  /// subsequent drag).
   void applyScale(Entity entity, double factor) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
-    transform.scale.x *= factor;
-    transform.scale.y *= factor;
+    transform.scale.x = (transform.scale.x * factor).clamp(0.01, 50.0);
+    transform.scale.y = (transform.scale.y * factor).clamp(0.01, 50.0);
     if (_gridSnappingEnabled) {
       transform.scale.x = _snapScale(transform.scale.x);
       transform.scale.y = _snapScale(transform.scale.y);
@@ -365,6 +390,7 @@ class EditorSceneState extends ChangeNotifier {
     final node = _entityNodeMap.remove(id);
     if (node != null) _activeScene?.removeNode(node);
     _multiSelectedIds.remove(id);
+    _multiSelectedEntities.remove(id);
     if (_selectedEntity?.id == id) {
       _selectedEntity = null;
       _selectedNode = null;

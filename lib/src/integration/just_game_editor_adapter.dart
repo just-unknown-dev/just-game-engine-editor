@@ -57,18 +57,30 @@ class _JustGameEngineEditorState extends State<JustGameEngineEditor>
   void initState() {
     super.initState();
 
-    if (!kDebugMode || widget.plugin == null) {
-      _editorTicker = createTicker((_) {});
-      return;
-    }
-
-    _installGizmoHook();
-
+    // Always read widget.plugin *inside* the callback (not a value captured
+    // at creation time): a Ticker's callback closure can't be swapped after
+    // createTicker(), so if this were built once from whatever widget.plugin
+    // is right now, a plugin assigned later (e.g. via an async
+    // `await JustGameEditorPlugin.register(...)` that starts as null) would
+    // never actually get its onUpdate called for the rest of the session.
     _editorTicker = createTicker((elapsed) {
-      final dt = (elapsed - _prevElapsed).inMicroseconds / 1e6;
+      final plugin = widget.plugin;
+      if (!kDebugMode || plugin == null) return;
+      final elapsedSeconds = elapsed.inMicroseconds / 1e6;
+      final prevSeconds = _prevElapsed.inMicroseconds / 1e6;
+      // Ticker.start() resets `elapsed` back to zero on every restart (e.g.
+      // toggling editor visibility stops/starts this ticker), so guard
+      // against a stale, larger _prevElapsed producing a negative dt.
+      final dt = elapsedSeconds >= prevSeconds
+          ? elapsedSeconds - prevSeconds
+          : 0.0;
       _prevElapsed = elapsed;
-      widget.plugin!.onUpdate(dt);
+      plugin.onUpdate(dt);
     });
+
+    if (kDebugMode && widget.plugin != null) {
+      _installGizmoHook();
+    }
   }
 
   @override

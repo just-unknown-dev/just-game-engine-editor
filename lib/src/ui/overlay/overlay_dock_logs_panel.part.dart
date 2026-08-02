@@ -57,99 +57,13 @@ class _DockLogsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextEditingController _searchCtrl = TextEditingController();
-    final Set<DebuggerLogLevel> _enabledLevels = <DebuggerLogLevel>{
-      DebuggerLogLevel.info,
-      DebuggerLogLevel.warning,
-      DebuggerLogLevel.error,
-    };
-    // null means "all sources enabled" (before any source is explicitly excluded)
-    Set<String>? _enabledSources;
-    bool _collapseDuplicates = true;
-
-    Set<String> _resolvedSources(Set<String> knownSources) {
-      if (_enabledSources == null) {
-        _enabledSources = Set<String>.from(knownSources);
-      } else {
-        // Auto-enable any source that appeared since last build.
-        for (final src in knownSources) {
-          _enabledSources!.add(src);
-        }
-      }
-      return _enabledSources!;
-    }
-
-    List<_CollapsedLogEntry> _collapseEntries(List<EditorLogEntry> logs) {
-      final collapsed = <_CollapsedLogEntry>[];
-      for (final entry in logs) {
-        if (collapsed.isEmpty) {
-          collapsed.add(_CollapsedLogEntry(entry: entry, count: 1));
-          if (collapsed.length >= settings.logLineClamp) {
-            break;
-          }
-          continue;
-        }
-
-        final last = collapsed.last;
-        final isDuplicate =
-            last.entry.message == entry.message &&
-            last.entry.source == entry.source &&
-            last.entry.category == entry.category &&
-            last.entry.level == entry.level;
-        if (isDuplicate) {
-          collapsed[collapsed.length - 1] = _CollapsedLogEntry(
-            entry: last.entry,
-            count: last.count + 1,
-          );
-        } else {
-          collapsed.add(_CollapsedLogEntry(entry: entry, count: 1));
-          if (collapsed.length >= settings.logLineClamp) {
-            break;
-          }
-        }
-      }
-      return collapsed;
-    }
-
+    // Filtering/search/collapsing is owned by the child _LogsDetailContent
+    // (a StatefulWidget, so its controllers/filter state survive rebuilds);
+    // this level only needs the raw entries for the header stat counts.
     return ListenableBuilder(
       listenable: EditorLogService.instance,
       builder: (context, _) {
         final allLogs = EditorLogService.instance.entries;
-
-        // Collect the ordered, distinct source list for filter chips.
-        final knownSources = <String>{};
-        for (final entry in allLogs) {
-          knownSources.add(entry.source);
-        }
-        final enabledSources = _resolvedSources(knownSources);
-
-        final orderedLogs = settings.logsAutoScroll
-            ? allLogs.reversed.toList(growable: false)
-            : allLogs.toList(growable: false);
-        final query = _searchCtrl.text.trim().toLowerCase();
-        final filtered = orderedLogs
-            .where((entry) {
-              if (!_enabledLevels.contains(entry.level)) {
-                return false;
-              }
-              if (!enabledSources.contains(entry.source)) {
-                return false;
-              }
-              if (query.isEmpty) {
-                return true;
-              }
-              return entry.message.toLowerCase().contains(query) ||
-                  entry.source.toLowerCase().contains(query) ||
-                  entry.category.toLowerCase().contains(query) ||
-                  (entry.details?.toLowerCase().contains(query) ?? false);
-            })
-            .toList(growable: false);
-        final displayLogs = _collapseDuplicates
-            ? _collapseEntries(filtered)
-            : filtered
-                  .take(settings.logLineClamp)
-                  .map((entry) => _CollapsedLogEntry(entry: entry, count: 1))
-                  .toList(growable: false);
 
         final infoCount = allLogs
             .where((entry) => entry.level == DebuggerLogLevel.info)

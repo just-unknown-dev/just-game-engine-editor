@@ -22,9 +22,16 @@ class LifetimeEditorComponent extends EditorComponent {
           name: 'duration',
           label: 'Duration (s)',
           kind: EditorFieldKind.decimal,
-          editable: false,
           scrubConfig: const NumberScrubConfig(step: 0.1, fractionDigits: 2, min: 0.0),
           read: (c) => (c as LifetimeComponent).initialLifetime,
+          write: (c, v) {
+            final lifetime = c as LifetimeComponent;
+            final next = (v as num).toDouble();
+            lifetime.initialLifetime = next;
+            // Authoring-time edit — restart the countdown from the new
+            // duration rather than leaving timeRemaining stale.
+            lifetime.timeRemaining = next;
+          },
         ),
       ],
       );

@@ -23,9 +23,10 @@ class AudioStreamEditorComponent extends EditorComponent {
           EditorComponentField(
             name: 'streamPath',
             label: 'Path',
-            kind: EditorFieldKind.text,
-            editable: false,
+            kind: EditorFieldKind.assetRef,
+            fileExtensions: const ['mp3', 'wav', 'ogg'],
             read: (c) => (c as AudioStreamComponent).path,
+            write: (c, v) => (c as AudioStreamComponent).path = v as String,
           ),
         ]),
         EditorFieldGroup(name: 'Playback', fields: [

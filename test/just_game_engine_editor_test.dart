@@ -49,7 +49,6 @@ void main() {
     int countSystem<T>() => engine.world.systems.whereType<T>().length;
 
     expect(countSystem<SimpleMovementSystem>(), 1);
-    expect(countSystem<PhysicsBridgeSystem>(), 1);
     expect(countSystem<PhysicsBodyBindingSystem>(), 1);
     expect(countSystem<PhysicsJointBindingSystem>(), 1);
     expect(countSystem<EditorLogCaptureSystem>(), 1);
@@ -77,7 +76,6 @@ void main() {
     int countSystem<T>() => engine.world.systems.whereType<T>().length;
 
     expect(countSystem<SimpleMovementSystem>(), 1);
-    expect(countSystem<PhysicsBridgeSystem>(), 1);
     expect(countSystem<PhysicsBodyBindingSystem>(), 1);
     expect(countSystem<PhysicsJointBindingSystem>(), 1);
     expect(countSystem<EditorLogCaptureSystem>(), 1);
@@ -124,7 +122,6 @@ void main() {
     // only imports the barrel) has no `Type` literal to reference them with.
     const allowedAddedTypeNames = <String>{
       'SimpleMovementSystem',
-      'PhysicsBridgeSystem',
       'PhysicsBodyBindingSystem',
       'PhysicsJointBindingSystem',
       'EditorLogCaptureSystem',
@@ -146,7 +143,6 @@ void main() {
       isEmpty,
     );
     expect(engine.world.systems.whereType<SimpleMovementSystem>().length, 1);
-    expect(engine.world.systems.whereType<PhysicsBridgeSystem>().length, 1);
     expect(
       engine.world.systems.whereType<PhysicsBodyBindingSystem>().length,
       1,

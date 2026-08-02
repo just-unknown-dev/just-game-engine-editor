@@ -430,13 +430,18 @@ class PhysicsBodyEditorComponent extends EditorComponent {
                 name: 'massValue',
                 label: 'Mass',
                 kind: EditorFieldKind.decimal,
+                // min is intentionally > 0: a dynamic body's inverse mass
+                // (1/mass) is used directly by the impulse solver, so a mass
+                // of exactly 0 (or negative, from a hand-edited scene file)
+                // produces a divide-by-zero/NaN cascade in physics stepping.
                 scrubConfig: const NumberScrubConfig(
                   step: 0.1,
                   fractionDigits: 2,
-                  min: 0.0,
+                  min: 0.01,
                 ),
                 read: (c) => _asBody(c).mass,
-                write: (c, v) => _asBody(c).mass = (v as num).toDouble(),
+                write: (c, v) =>
+                    _asBody(c).mass = (v as num).toDouble().clamp(0.01, double.infinity),
               ),
               EditorComponentField(
                 name: 'drag',

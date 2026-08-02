@@ -22,8 +22,8 @@ class TagEditorComponent extends EditorComponent {
           name: 'tagValue',
           label: 'Tag',
           kind: EditorFieldKind.text,
-          editable: false,
           read: (c) => (c as TagComponent).tag,
+          write: (c, v) => (c as TagComponent).tag = v as String,
         ),
       ],
       );

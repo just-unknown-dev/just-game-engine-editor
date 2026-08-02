@@ -32,6 +32,13 @@ class EditorAnimationControllerSystem extends System {
 
   @override
   void update(double deltaTime) {
+    // _firedEvents is never revisited for a destroyed entity (forEach only
+    // walks currently-matching entities), so without this prune it grows for
+    // the lifetime of the process across a long edit session of repeatedly
+    // placing/deleting animation-controller entities.
+    final live = entities.toSet();
+    _firedEvents.removeWhere((entity, _) => !live.contains(entity));
+
     forEach((entity) {
       final acc = entity.getComponent<AnimationControllerComponent>()!;
 
@@ -63,7 +70,8 @@ class EditorAnimationControllerSystem extends System {
     if (acc.elapsed >= acc.duration) {
       if (acc.loop) {
         acc.elapsed = acc.elapsed % acc.duration;
-        _firedEvents.remove(null); // reset fired set handled per-entity below
+        // Fired-events reset on loop-wrap is handled per-entity in
+        // _fireEvents (it clears `fired` when elapsed wraps).
       } else {
         acc.elapsed = acc.duration;
         acc.isPlaying = false;

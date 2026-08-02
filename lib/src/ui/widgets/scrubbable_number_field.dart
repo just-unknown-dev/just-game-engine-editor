@@ -90,6 +90,19 @@ class _ScrubbableNumberFieldState extends State<ScrubbableNumberField> {
     });
   }
 
+  /// Clamps whatever the user typed to [NumberScrubConfig.min]/[max] before
+  /// notifying [onCommit] — drag-scrubbing already clamps via [_onDragUpdate],
+  /// but typing a value directly and pressing Enter/Tab used to bypass that
+  /// entirely and commit an out-of-range value straight to the component.
+  void _commit() {
+    final clamped = _clampValue(_parseCurrentValue());
+    final text = _formatValue(clamped);
+    if (widget.controller.text != text) {
+      widget.controller.text = text;
+    }
+    widget.onCommit();
+  }
+
   @override
   Widget build(BuildContext context) {
     final highlight = _isDragging || _isHovering;
@@ -156,8 +169,8 @@ class _ScrubbableNumberFieldState extends State<ScrubbableNumberField> {
               signed: true,
               decimal: true,
             ),
-            onSubmitted: (_) => widget.onCommit(),
-            onEditingComplete: widget.onCommit,
+            onSubmitted: (_) => _commit(),
+            onEditingComplete: _commit,
           ),
         ),
       ],

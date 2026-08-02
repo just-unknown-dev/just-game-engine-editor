@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
@@ -344,10 +346,22 @@ class CustomComponentRegistry {
         }
         return value;
       case EditorFieldKind.integer:
-        if (value is num) return value.toInt();
+        if (value is num) {
+          final scrub = field.scrubConfig;
+          var v = value.toInt();
+          if (scrub?.min != null) v = math.max(v, scrub!.min!.ceil());
+          if (scrub?.max != null) v = math.min(v, scrub!.max!.floor());
+          return v;
+        }
         return value;
       case EditorFieldKind.decimal:
-        if (value is num) return value.toDouble();
+        if (value is num) {
+          final scrub = field.scrubConfig;
+          var v = value.toDouble();
+          if (scrub?.min != null) v = math.max(v, scrub!.min!);
+          if (scrub?.max != null) v = math.min(v, scrub!.max!);
+          return v;
+        }
         return value;
       case EditorFieldKind.shapePaintStyle:
         if (value is Map) {

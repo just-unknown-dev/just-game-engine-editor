@@ -23,9 +23,11 @@ class AudioSourceEditorComponent extends EditorComponent {
           EditorComponentField(
             name: 'path',
             label: 'Path',
-            kind: EditorFieldKind.text,
-            editable: false,
+            kind: EditorFieldKind.assetRef,
+            fileExtensions: const ['mp3', 'wav', 'ogg'],
             read: (c) => (c as AudioSourceComponent).clipPath,
+            write: (c, v) =>
+                (c as AudioSourceComponent).clipPath = v as String,
           ),
         ]),
         EditorFieldGroup(name: 'Playback', fields: [
