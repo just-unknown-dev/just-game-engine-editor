@@ -17,12 +17,18 @@ import 'package:just_game_engine/just_game_engine.dart'
         Sprite,
         TransformComponent,
         TransformKeyframe;
+import 'package:just_inputs/just_inputs.dart';
 import 'package:just_storage/just_storage.dart';
 
+import '../dialogs/binding_conflicts_dialog.dart';
+import '../dialogs/confirm_delete_dialog.dart';
+import '../dialogs/new_action_dialog.dart';
+import '../dialogs/scene_actions_dialogs.dart';
 import '../panels/entity_inspector_panel.dart';
 import '../panels/scene_picker_panel.dart';
 import '../panels/scene_tree_panel.dart';
 import '../../core/constants/editor_constants.dart';
+import '../../core/serialization/input_bindings_file_generator.dart';
 import '../../core/services/editor_log_service.dart';
 import '../../core/services/editor_log_entry.dart';
 import '../../core/plugin/editor_plugin.dart';
@@ -38,6 +44,8 @@ part 'overlay_dock_timeline_panel.part.dart';
 part 'overlay_detail_cards.part.dart';
 part 'overlay_right_panel.part.dart';
 part 'overlay_snackbar.part.dart';
+part 'overlay_input_setup_panel.part.dart';
+part 'overlay_input_setup_properties.part.dart';
 
 // ─ Frame-safe overlay settings watcher ────────────────────────────────────
 
@@ -257,6 +265,17 @@ class _CompactChrome extends StatelessWidget {
           right: 8,
           child: _EditorSnackBarLayer(),
         ),
+        Positioned.fill(
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _inputSetupOpenSignal,
+            builder: (context, open, _) => open
+                ? _InputSetupOverlay(
+                    plugin: plugin,
+                    onClose: () => _inputSetupOpenSignal.value = false,
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ),
       ],
     );
   }
@@ -317,6 +336,17 @@ class _FullEditorChrome extends StatelessWidget {
               bottom: OverlayLayout.compactDockPanelHeight + 8,
               right: panelWidth + 8,
               child: const _EditorSnackBarLayer(),
+            ),
+            Positioned.fill(
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _inputSetupOpenSignal,
+                builder: (context, open, _) => open
+                    ? _InputSetupOverlay(
+                        plugin: plugin,
+                        onClose: () => _inputSetupOpenSignal.value = false,
+                      )
+                    : const SizedBox.shrink(),
+              ),
             ),
           ],
         );
@@ -536,6 +566,15 @@ final _OverlaySettingsStore _overlaySettingsStore = _OverlaySettingsStore(
 final ValueNotifier<double> _rightPanelWidthSignal = ValueNotifier<double>(
   OverlayLayout.rightPanelDefaultWidth,
 );
+
+// ── Global Input Setup panel visibility ───────────────────────────────────────
+
+/// Whether the centered Input Setup panel is open — a global signal (like
+/// [_rightPanelWidthSignal]) because the toggle button lives inside
+/// [_CompactStatusDock] while the panel itself renders as a top-level sibling
+/// in [_CompactChrome]/[_FullEditorChrome]'s `Stack`, not a parent/child of
+/// the button.
+final ValueNotifier<bool> _inputSetupOpenSignal = ValueNotifier<bool>(false);
 
 // ── Global performance history (persists across panel open/close) ────────────
 

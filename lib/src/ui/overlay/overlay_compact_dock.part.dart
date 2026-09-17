@@ -408,6 +408,11 @@ class _CompactStatusDockState extends State<_CompactStatusDock> {
                               ),
                               const _MinimizedSnackChip(),
                               const SizedBox(width: 8),
+                              _InputSetupButton(
+                                settings: settings,
+                                onPressed: () => _inputSetupOpenSignal.value =
+                                    !_inputSetupOpenSignal.value,
+                              ),
                               _EditorSettingsButton(
                                 anchorKey: _settingsAnchorKey,
                                 settings: settings,

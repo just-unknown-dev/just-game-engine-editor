@@ -23,6 +23,7 @@ export 'src/ui/panels/custom_component_section.dart';
 export 'src/integration/just_game_editor_adapter.dart';
 export 'src/ui/overlay/gizmo_painter.dart';
 export 'src/core/serialization/scene_file_generator.dart';
+export 'src/core/serialization/input_bindings_file_generator.dart';
 export 'src/core/serialization/scene_name_validator.dart';
 export 'src/core/services/editor_log_service.dart';
 export 'src/ui/panels/scene_picker_panel.dart';
