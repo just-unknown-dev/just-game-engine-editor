@@ -1,0 +1,414 @@
+import 'package:flutter/widgets.dart';
+import 'package:just_di/just_di.dart';
+import 'package:just_game_engine/just_game_engine.dart';
+import 'package:just_storage/just_storage.dart';
+import 'package:just_signals/just_signals.dart';
+
+import '../../extension/editor_module.dart';
+import '../../ui/level_designer/state/built_in_prefabs.dart';
+import '../../ui/level_designer/state/layer_preset.dart';
+import '../../ui/level_designer/state/prefab_registry.dart';
+import '../../ui/inspector/built_in_extras.dart';
+import '../../ui/inspector/built_in_field_editors.dart';
+import '../../ui/inspector/component_extras.dart';
+import '../../ui/inspector/field_editor.dart';
+import '../../ui/level_designer/commands/built_in_bindings.dart';
+import '../../ui/level_designer/commands/built_in_commands.dart';
+import '../../ui/level_designer/commands/designer_command.dart';
+import '../../extension/designer_contributions.dart';
+import '../../extension/editor_contributions.dart';
+import '../../ui/overlay/chrome_state.dart';
+import '../../ui/overlay/docks/dock_controller.dart';
+import '../../ui/overlay/settings/overlay_settings_store.dart';
+import '../prefs/editor_prefs.dart';
+import '../theme/theme_controller.dart';
+import '../../ui/level_designer/grid/grid_topology.dart';
+import '../../ui/level_designer/grid/square_grid.dart';
+import '../../ui/level_designer/state/designer_config.dart';
+import '../../ui/level_designer/state/selection_handle_layout.dart';
+import '../serialization/scene_codec.dart';
+import '../serialization/scene_store.dart';
+import '../services/editor_log_service.dart';
+import '../state/editor_scene_state.dart';
+
+/// Everything one editor owns: its registries, services and state, in a
+/// `just_di` container that is disposed with it.
+///
+/// There are no process-wide registries. Two scopes in one process — two
+/// tests, or two editors side by side — share nothing except the engine's
+/// component definitions, which the *game* registers at boot and which the
+/// scope reads by default.
+///
+/// ```dart
+/// final scope = EditorScope(engine: engine, modules: [PlatformerModule()]);
+/// ```
+///
+/// A test that needs no engine passes a bare [world] instead.
+class EditorScope {
+  EditorScope({
+    Engine? engine,
+    World? world,
+    List<EditorModule> modules = const [],
+    ComponentDefinitionRegistry? definitions,
+    DiContainer? parent,
+    EditorLogService? log,
+    String? scenesRoot,
+    DesignerConfig config = const DesignerConfig(),
+    OverlaySettingsStore? settingsStore,
+    SelectionHandleLayout handles = const SelectionHandleLayout(),
+    bool isDebug = true,
+  }) : assert(engine != null || world != null, 'Pass an engine or a world'),
+       engine = engine,
+       _world = world,
+       container = DiContainer(parent: parent),
+       _isDebug = isDebug {
+    final defs = definitions ?? ComponentDefinitionRegistry.instance;
+    registerCoreCodecs(defs);
+    if (engine != null) container.registerSingleton<Engine>(engine);
+    container
+      ..registerSingleton<ComponentDefinitionRegistry>(defs)
+      ..registerSingleton<DesignerConfig>(config)
+      ..registerSingleton<SelectionHandleLayout>(handles)
+      ..registerLazySingleton<CommandRegistry>(CommandRegistry.new)
+      ..registerLazySingleton<EditorPrefs>(
+        () => EditorPrefs(
+          store: settingsStore ?? OverlaySettingsStore(JustStorage.standard()),
+        ),
+        dispose: (p) => p.dispose(),
+      )
+      ..registerLazySingleton<ThemeController>(
+        ThemeController.new,
+        dispose: (t) => t.dispose(),
+      )
+      ..registerLazySingleton<DockController>(
+        DockController.new,
+        dispose: (d) => d.dispose(),
+      )
+      ..registerLazySingleton<EditorChromeState>(
+        EditorChromeState.new,
+        dispose: (c) => c.dispose(),
+      )
+      ..registerLazySingleton<SceneCodec>(() => SceneCodec(defs))
+      ..registerLazySingleton<FieldEditorRegistry>(FieldEditorRegistry.new)
+      ..registerLazySingleton<ComponentExtrasRegistry>(
+        ComponentExtrasRegistry.new,
+      )
+      ..registerLazySingleton<PrefabRegistry>(PrefabRegistry.new)
+      ..registerLazySingleton<LayerPresetRegistry>(LayerPresetRegistry.new)
+      ..registerLazySingleton<ModuleRegistry>(
+        ModuleRegistry.new,
+        dispose: (m) => m.disposeAll(),
+      )
+      ..registerLazySingleton<EditorLogService>(
+        () => log ?? EditorLogService(),
+        dispose: (l) => l.dispose(),
+      )
+      ..registerLazySingleton<SceneStore>(
+        () => SceneStore(root: scenesRoot, codec: codec),
+      )
+      ..registerLazySingleton<EditorSceneState>(
+        () => EditorSceneState()..setGridSnapping(enabled: true, gridSize: 32),
+        dispose: (s) => s.dispose(),
+      );
+    this.modules.registerAll(modules);
+    reload();
+  }
+
+  /// The container behind the typed accessors, for anything a module wants
+  /// to register alongside.
+  final DiContainer container;
+
+  final bool _isDebug;
+
+  /// The engine being edited, or null for a scope over a bare [world].
+  final Engine? engine;
+
+  final World? _world;
+
+  /// The world being edited.
+  ///
+  /// Read lazily: an engine's world does not exist until it initialises, and
+  /// the plugin is built before that.
+  World get world => _world ?? engine!.world;
+
+  /// Resolves a service by type. Prefer the typed accessors on hot paths.
+  T get<T extends Object>() => container.get<T>();
+
+  /// Component definitions: what can be saved, sized and drawn.
+  ComponentDefinitionRegistry get definitions =>
+      container.get<ComponentDefinitionRegistry>();
+
+  /// Encodes and decodes components through [definitions].
+  SceneCodec get codec => container.get<SceneCodec>();
+
+  /// Fixed designer choices: grid sizes, brush sizes, bookmark slots.
+  DesignerConfig get config => container.get<DesignerConfig>();
+
+  /// Designer commands and the keys bound to them.
+  CommandRegistry get commands => container.get<CommandRegistry>();
+
+  /// Where the selection handles sit; what a replacement select tool must
+  /// also describe.
+  SelectionHandleLayout get handleLayout =>
+      container.get<SelectionHandleLayout>();
+
+  GridTopology _grid = const SquareGrid();
+
+  /// The shape of the designer's cells. Square unless a module says otherwise;
+  /// the last module to contribute one wins.
+  GridTopology get grid => _grid;
+
+  /// Persisted overlay settings, built-in and module-declared.
+  EditorPrefs get prefs => container.get<EditorPrefs>();
+
+  /// Transient overlay chrome state: panel widths, open dialogs.
+  EditorChromeState get chrome => container.get<EditorChromeState>();
+
+  /// The current theme and the presets to pick from.
+  ThemeController get theme => container.get<ThemeController>();
+
+  /// Which dock is open and how tall each one is.
+  DockController get dockController => container.get<DockController>();
+
+  final List<PrefabCategory> _prefabCategories = [];
+  final List<StatusBarControl> _statusControls = [];
+  final List<SidePanelSection> _designerPanels = [];
+  final List<SettingsSection> _settingsSections = [];
+  final List<DockDefinition> _docks = [];
+  final List<ToolbarButton> _toolbarButtons = [];
+  final List<SceneTreeAction> _sceneTreeActions = [];
+  final List<SceneTreeRowDecoration> _rowDecorations = [];
+  final List<EntityProtectionRule> _protectionRules = [];
+  final List<InspectorSection> _inspectorSections = [];
+
+  /// Palette groups, built-in first, then each module's in order.
+  List<PrefabCategory> get prefabCategories =>
+      List.unmodifiable(_prefabCategories);
+
+  /// Module controls appended to the designer status bar, by order.
+  List<StatusBarControl> get statusControls =>
+      List.unmodifiable(_statusControls);
+
+  /// Module sections appended to the designer side panel, by order.
+  List<SidePanelSection> get designerPanels =>
+      List.unmodifiable(_designerPanels);
+
+  /// Module sections in the settings dialog, by order.
+  List<SettingsSection> get settingsSections =>
+      List.unmodifiable(_settingsSections);
+
+  /// Module docks appended after the built-in ones, by order.
+  List<DockDefinition> get docks => List.unmodifiable(_docks);
+
+  /// Module buttons appended after the built-in toolbar, by order.
+  List<ToolbarButton> get toolbarButtons => List.unmodifiable(_toolbarButtons);
+
+  /// Module entries in the scene tree's context menu, by order.
+  List<SceneTreeAction> get sceneTreeActions =>
+      List.unmodifiable(_sceneTreeActions);
+
+  /// Module widgets drawn on every scene tree row, by order.
+  List<SceneTreeRowDecoration> get rowDecorations =>
+      List.unmodifiable(_rowDecorations);
+
+  /// Module rules that keep an entity from being deleted or renamed.
+  List<EntityProtectionRule> get protectionRules =>
+      List.unmodifiable(_protectionRules);
+
+  /// Module sections appended after the inspector's component sections.
+  List<InspectorSection> get inspectorSections =>
+      List.unmodifiable(_inspectorSections);
+
+  /// The level designer in use: a module id, or null for the built-in
+  /// one. Changed through [selectDesigner].
+  final Signal<String?> activeDesigner = Signal(
+    null,
+    debugLabel: 'activeDesigner',
+  );
+
+  /// The modules that bring a level designer of their own, in registration
+  /// order: what the designer's switch lists after the built-in one.
+  List<EditorModule> get designers => [
+    for (final module in modules.all)
+      if (module.providesLevelDesigner) module,
+  ];
+
+  /// The modules whose designer contributions are live: the chosen
+  /// designer's, or none for the built-in one.
+  List<EditorModule> get designerModules {
+    final id = activeDesigner.value;
+    return id == null ? const [] : [?modules.byId(id)];
+  }
+
+  /// Switches the Level Designer to [id]'s module, or to the built-in one
+  /// for null or an unknown id. Prefabs, layers, grid, palette categories,
+  /// status controls and side-panel sections follow at once; an open
+  /// session reloads its tools, overlays and module state.
+  void selectDesigner(String? id) {
+    final next = id != null && modules.byId(id) != null ? id : null;
+    if (activeDesigner.value == next) return;
+    // Rebuilt before anyone hears about it, so a listener sees the new
+    // palette and grid rather than the old ones.
+    activeDesigner.setSilent(next);
+    _rebuildDesigner();
+    activeDesigner.dispatchNotifications();
+  }
+
+  /// Where the palette group called [label] sorts; one nobody declared
+  /// sorts after every declared one.
+  int prefabCategoryOrder(String label) {
+    for (final c in _prefabCategories) {
+      if (c.label == label) return c.order;
+    }
+    return 1 << 20;
+  }
+
+  /// Whether any module protects [entity].
+  bool isProtected(Entity entity) =>
+      _protectionRules.any((r) => r.isProtected(entity));
+
+  /// Which control edits which field type.
+  FieldEditorRegistry get fieldEditors => container.get<FieldEditorRegistry>();
+
+  /// Editor-only additions to how components are inspected.
+  ComponentExtrasRegistry get extras =>
+      container.get<ComponentExtrasRegistry>();
+
+  /// What the inspector shows [component] through, or null when it has no
+  /// definition and so cannot be saved either.
+  ComponentDefinition? definitionForInspector(Component component) =>
+      definitions.definitionFor(component);
+
+  /// Prefabs the draw and paint tools can place.
+  PrefabRegistry get prefabs => container.get<PrefabRegistry>();
+
+  /// Named draw-order layers.
+  LayerPresetRegistry get layers => container.get<LayerPresetRegistry>();
+
+  /// The modules registered with this editor.
+  ModuleRegistry get modules => container.get<ModuleRegistry>();
+
+  /// Editor log.
+  EditorLogService get log => container.get<EditorLogService>();
+
+  /// Scene files on disk.
+  SceneStore get scenes => container.get<SceneStore>();
+
+  /// Selection, scene graph and grid state.
+  EditorSceneState get sceneState => container.get<EditorSceneState>();
+
+  /// Rebuilds every scope-level registry from scratch: built-ins, then each
+  /// module's contributions in registration order. Idempotent, so it is safe
+  /// on every hot reload — and nothing a module stopped contributing survives.
+  void reload() {
+    fieldEditors.clear();
+    fieldEditors.registerAll(BuiltInFieldEditors.all);
+    extras.clear();
+    extras.registerAll(BuiltInExtras.all);
+    commands.clear();
+    commands.registerAll(BuiltInCommands.all);
+    commands.bindAll(BuiltInBindings.of(config));
+    for (final l in [
+      _settingsSections,
+      _docks,
+      _toolbarButtons,
+      _sceneTreeActions,
+      _rowDecorations,
+      _protectionRules,
+      _inspectorSections,
+    ]) {
+      l.clear();
+    }
+    final context = EditorModuleContext(scope: this, isDebug: _isDebug);
+    for (final module in modules.all) {
+      fieldEditors.registerAll(module.fieldEditors, override: true);
+      extras.registerAll(module.componentExtras);
+      commands.registerAll(module.commands, override: true);
+      commands.bindAll(module.keyBindings);
+      _settingsSections.addAll(module.settingsSections);
+      _docks.addAll(module.docks);
+      _toolbarButtons.addAll(module.toolbarButtons);
+      _sceneTreeActions.addAll(module.sceneTreeActions);
+      _rowDecorations.addAll(module.rowDecorations);
+      if (module.protectionRule case final rule?) _protectionRules.add(rule);
+      _inspectorSections.addAll(module.inspectorSections);
+      module.themePresets.forEach(theme.register);
+      module.onRegister(context);
+    }
+    _settingsSections.sort((a, b) => a.order.compareTo(b.order));
+    _docks.sort((a, b) => a.order.compareTo(b.order));
+    _toolbarButtons.sort((a, b) => a.order.compareTo(b.order));
+    _sceneTreeActions.sort((a, b) => a.order.compareTo(b.order));
+    _rowDecorations.sort((a, b) => a.order.compareTo(b.order));
+    _inspectorSections.sort((a, b) => a.order.compareTo(b.order));
+    // A designer whose module went away falls back to the built-in one.
+    final active = activeDesigner.value;
+    if (active != null && modules.byId(active) == null) {
+      activeDesigner.setSilent(null);
+    }
+    _rebuildDesigner();
+    if (active != activeDesigner.value) activeDesigner.dispatchNotifications();
+  }
+
+  /// Rebuilds what the Level Designer shows from the built-ins and the
+  /// chosen designer's module; the other designers wait to be chosen.
+  void _rebuildDesigner() {
+    _prefabCategories
+      ..clear()
+      ..addAll(BuiltInPrefabs.categories);
+    _statusControls.clear();
+    _designerPanels.clear();
+    _grid = const SquareGrid();
+    prefabs.clear();
+    BuiltInPrefabs.registerAll(prefabs);
+    layers.clear();
+    layers.registerAll(LayerPresetRegistry.builtIn);
+    for (final module in designerModules) {
+      _prefabCategories.addAll(module.prefabCategories);
+      _statusControls.addAll(module.statusControls);
+      _designerPanels.addAll(module.designerPanels);
+      _grid = module.gridTopology ?? _grid;
+      prefabs.registerAll(module.prefabs);
+      layers.registerAll(module.layers);
+    }
+    _statusControls.sort((a, b) => a.order.compareTo(b.order));
+    _designerPanels.sort((a, b) => a.order.compareTo(b.order));
+  }
+
+  /// Opens a child container for per-session services (a designer session's
+  /// history, tools, snap providers). Closed by the caller.
+  DiScope openSession({String? debugLabel}) =>
+      container.createScope(debugLabel: debugLabel);
+
+  /// Disposes every service this scope owns, in reverse registration order.
+  void dispose() {
+    activeDesigner.dispose();
+    container.close();
+  }
+}
+
+/// Makes an [EditorScope] available to a widget subtree.
+class EditorScopeProvider extends InheritedWidget {
+  const EditorScopeProvider({
+    super.key,
+    required this.scope,
+    required super.child,
+  });
+
+  final EditorScope scope;
+
+  /// The nearest scope above [context].
+  static EditorScope of(BuildContext context) {
+    final provider = context
+        .dependOnInheritedWidgetOfExactType<EditorScopeProvider>();
+    assert(provider != null, 'No EditorScopeProvider above this widget');
+    return provider!.scope;
+  }
+
+  /// The nearest scope above [context], or null.
+  static EditorScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<EditorScopeProvider>()?.scope;
+
+  @override
+  bool updateShouldNotify(EditorScopeProvider old) => old.scope != scope;
+}

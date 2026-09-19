@@ -1,7 +1,6 @@
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../generator/component_registry.dart';
-import '../components/editor_components_registrant.dart';
+import '../../scope/editor_scope.dart';
 
 /// A single entry in the component picker catalogue.
 class ComponentEntry {
@@ -11,6 +10,7 @@ class ComponentEntry {
     required this.description,
     required this.factory,
     this.componentTypeName,
+    this.allowMultiple = false,
   });
 
   final String name;
@@ -18,29 +18,23 @@ class ComponentEntry {
   final String description;
   final String? componentTypeName;
 
+  /// Whether an entity may carry more than one.
+  final bool allowMultiple;
+
   /// Produces a new component instance with sensible editor defaults.
   final Component Function() factory;
 }
 
-bool _registered = false;
-
-/// Returns all available component entries for the picker, derived from
-/// the pre-built descriptor registry.
-List<ComponentEntry> getComponentRegistryEntries() {
-  if (!_registered) {
-    registerAllEditorComponents();
-    _registered = true;
-  }
-
-  return CustomComponentRegistry.instance.descriptors
-      .map(
-        (d) => ComponentEntry(
-          name: d.name,
-          group: d.group ?? 'Core',
-          description: d.description ?? '',
-          factory: d.factory,
-          componentTypeName: d.type,
-        ),
-      )
-      .toList();
-}
+/// Every component the picker can add: each runtime definition the scope
+/// knows.
+List<ComponentEntry> getComponentRegistryEntries(EditorScope scope) => [
+  for (final d in scope.definitions.definitions)
+    ComponentEntry(
+      name: d.hints.name ?? d.type,
+      group: d.hints.group ?? 'Core',
+      description: d.hints.description ?? '',
+      factory: d.create,
+      componentTypeName: d.type,
+      allowMultiple: d.hints.allowMultiple,
+    ),
+];

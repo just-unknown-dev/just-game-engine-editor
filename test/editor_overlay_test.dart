@@ -81,4 +81,38 @@ void main() {
     plugin.dispose();
     Engine.resetInstance();
   });
+
+  testWidgets('no status badge, and the play controls sit bottom-left', (
+    tester,
+  ) async {
+    Engine.resetInstance();
+    final plugin = JustGameEditorPlugin(engine: Engine());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: JustGameEditorOverlay(
+            plugin: plugin,
+            gameChild: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+    if (!kDebugMode) {
+      plugin.dispose();
+      Engine.resetInstance();
+      return;
+    }
+
+    plugin.toggleVisibility();
+    await tester.pumpAndSettle();
+
+    expect(find.text('EDITOR: OPEN'), findsNothing);
+    final screen = tester.getSize(find.byType(JustGameEditorOverlay));
+    final play = tester.getCenter(find.byTooltip('Play'));
+    expect(play.dx, lessThan(screen.width / 4), reason: 'left');
+    expect(play.dy, greaterThan(screen.height / 2), reason: 'bottom');
+
+    plugin.dispose();
+    Engine.resetInstance();
+  });
 }

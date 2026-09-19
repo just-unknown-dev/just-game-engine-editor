@@ -2,12 +2,26 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../core/ecs/generator/component_registry.dart'
-    show NumberScrubConfig;
 import '../../core/constants/editor_constants.dart';
 
-export '../../core/ecs/generator/component_registry.dart'
-    show NumberScrubConfig;
+/// Drag-to-scrub configuration for numeric inspector fields.
+class NumberScrubConfig {
+  const NumberScrubConfig({
+    this.step = 1.0,
+    this.pixelsPerStep = 12.0,
+    this.fractionDigits = 2,
+    this.min,
+    this.max,
+    this.integer = false,
+  });
+
+  final double step;
+  final double pixelsPerStep;
+  final int fractionDigits;
+  final double? min;
+  final double? max;
+  final bool integer;
+}
 
 class ScrubbableNumberField extends StatefulWidget {
   const ScrubbableNumberField({

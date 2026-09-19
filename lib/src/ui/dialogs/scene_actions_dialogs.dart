@@ -20,8 +20,8 @@ Future<bool> confirmDeleteScene(BuildContext context, String sceneName) async {
         ),
       ),
       content: Text(
-        'This permanently deletes "$sceneName" and its files '
-        '(.level.dart, .data.dart, .scene.json). This cannot be undone.',
+        'This permanently deletes "$sceneName" '
+        '(assets/scenes/$sceneName.scene.json). This cannot be undone.',
         style: const TextStyle(color: EditorTheme.textSecondary, fontSize: 12),
       ),
       actions: [

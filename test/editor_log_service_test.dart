@@ -19,7 +19,7 @@ void main() {
       print('captured plain print');
     });
 
-    final matches = service.entries
+    final matches = service.entries.value
         .where(
           (entry) =>
               entry.message == 'captured plain print' &&
@@ -47,13 +47,13 @@ void main() {
       controller: JustDebuggerController(overlayVisible: false),
     );
 
-    final matches = service.entries
+    final matches = service.entries.value
         .where((entry) => entry.message == 'boot log before session')
         .toList();
 
     expect(matches, hasLength(1));
     expect(
-      service.entries.any(
+      service.entries.value.any(
         (entry) => entry.message == 'Editor log capture session started.',
       ),
       isTrue,

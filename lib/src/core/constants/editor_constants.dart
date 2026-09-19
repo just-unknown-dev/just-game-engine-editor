@@ -2,6 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../theme/editor_theme_data.dart';
+import '../theme/theme_controller.dart';
+
 /// Single source of truth for editor-wide constants — colors, layout
 /// dimensions, persisted-setting keys, and other shared values.
 ///
@@ -11,6 +14,12 @@ import 'package:flutter/material.dart';
 // ── Theme ────────────────────────────────────────────────────────────────────
 
 abstract final class EditorTheme {
+  /// The palette in force at [context]: a module's preset, the accent the
+  /// user picked, or these constants when nothing has changed them. New code
+  /// reads colours here; the constants below are the classic palette.
+  static EditorThemeData of(BuildContext context) =>
+      EditorThemeScope.of(context);
+
   // ── Accent ───────────────────────────────────────────────────────────────
   static const Color primary = Color(0xFFF5746F);
   static const Color primaryBright = Color(0xFFFF9C98);
@@ -119,7 +128,6 @@ abstract final class OverlaySettingsPrefKeys {
   static const String prefCornerRadius = 'editor.overlay.cornerRadius';
   static const String prefThemePreset = 'editor.overlay.themePreset';
   static const String prefCompactness = 'editor.overlay.compactness';
-  static const String prefShowStatusBadge = 'editor.overlay.showStatusBadge';
   static const String prefAnimationSpeed = 'editor.overlay.animationSpeed';
   static const String prefEcsWarnOnInactive =
       'editor.overlay.ecsWarnOnInactive';
@@ -161,6 +169,12 @@ abstract final class ColorHistoryConstants {
 // ── Component picker ──────────────────────────────────────────────────────────
 
 /// Groups used to categorise the component list in the picker.
+/// Preferred ordering for the Add Component picker's sections.
+///
+/// This is an *ordering hint*, not a whitelist. Anything a descriptor declares
+/// that is not listed here still appears, after these. It used to be a hard
+/// filter, which meant a project's own component group was invisible in the
+/// picker — including via search, since filtering ran before the check.
 const List<String> kComponentGroups = [
   'Core',
   'Rendering',

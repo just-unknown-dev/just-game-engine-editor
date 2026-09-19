@@ -1,4 +1,4 @@
-import 'scene_file_generator.dart';
+import 'scene_store.dart';
 import 'scene_name_validator.dart';
 
 /// Thrown by [SceneManager] operations that are refused (invalid name,
@@ -13,7 +13,7 @@ class SceneManagerException implements Exception {
 }
 
 /// Single entry point for scene lifecycle operations (list/delete/rename/
-/// duplicate), replacing ad-hoc calls to [SceneFileGenerator]/
+/// duplicate), replacing ad-hoc calls to [SceneStore]/
 /// [SceneNameValidator] scattered across the UI.
 ///
 /// [protectedSceneNames] are scenes wired directly into the shipped app
@@ -21,21 +21,24 @@ class SceneManagerException implements Exception {
 /// registry that tracks this automatically, so it must be configured
 /// explicitly (see `JustGameEditorPlugin.register(protectedSceneNames: ...)`).
 class SceneManager {
-  SceneManager({this.protectedSceneNames = const {}});
+  SceneManager({required this.store, this.protectedSceneNames = const {}});
+
+  /// The scene files this manages.
+  final SceneStore store;
 
   final Set<String> protectedSceneNames;
 
-  /// All scene folder names under `lib/game/scenes/`, sorted.
-  List<String> listScenes() => SceneFileGenerator.listSceneNames()..sort();
+  /// Every scene in `assets/scenes/`, sorted by name.
+  List<String> listScenes() => store.listSceneNames()..sort();
 
   bool isProtected(String name) => protectedSceneNames.contains(name);
 
   /// Validates a candidate scene name, excluding [ignoring] (the scene's own
   /// current name, when renaming/duplicating) from the existing-name check.
   String? validateName(String name, {String? ignoring}) {
-    final existing = SceneNameValidator.existingSceneNames()
-        .where((n) => n != ignoring)
-        .toList();
+    final existing = SceneNameValidator.existingSceneNames(
+      store,
+    ).where((n) => n != ignoring).toList();
     return SceneNameValidator.validate(name, existingNames: existing);
   }
 
@@ -48,7 +51,7 @@ class SceneManager {
         'and cannot be deleted.',
       );
     }
-    await SceneFileGenerator.deleteSceneFiles(name);
+    await store.deleteSceneFiles(name);
   }
 
   /// Renames [oldName] to [newName]. Throws [SceneManagerException] if
@@ -62,7 +65,7 @@ class SceneManager {
     }
     final error = validateName(newName, ignoring: oldName);
     if (error != null) throw SceneManagerException(error);
-    await SceneFileGenerator.renameSceneFiles(oldName, newName);
+    await store.renameSceneFiles(oldName, newName);
   }
 
   /// Copies [sourceName] to a new scene [newName], leaving [sourceName]
@@ -70,6 +73,6 @@ class SceneManager {
   Future<void> duplicateScene(String sourceName, String newName) async {
     final error = validateName(newName, ignoring: sourceName);
     if (error != null) throw SceneManagerException(error);
-    await SceneFileGenerator.duplicateSceneFiles(sourceName, newName);
+    await store.duplicateSceneFiles(sourceName, newName);
   }
 }

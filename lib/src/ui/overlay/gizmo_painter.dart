@@ -6,6 +6,7 @@ import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../core/constants/editor_constants.dart';
+import '../level_designer/grid/square_grid.dart';
 
 /// Gizmo handle identifier returned by [GizmoHitTester.hitTest].
 enum GizmoHandle {
@@ -41,6 +42,10 @@ class GizmoHitResult {
 /// [JustGameEditorPlugin.onRender] is in screen space (parallax / background
 /// layer, before the camera transform).
 class GizmoPainter {
+  /// The unscaled size the gizmo draws [component] at, or null. Through the
+  /// extent on its definition first, so it is the marquee's answer too.
+  static Size? sizeOf(Component component) => _sizeFromComponent(component);
+
   static const double _arrowLength = GizmoConstants.arrowLength;
   static const double _arrowHeadLength = GizmoConstants.arrowHeadLength;
   static const double _arrowHeadWidth = GizmoConstants.arrowHeadWidth;
@@ -52,8 +57,6 @@ class GizmoPainter {
   // Axis-scale square: sits on the arrow shaft before the arrowhead
   static const double _axisSquareOffset = GizmoConstants.axisSquareOffset;
   static const double _axisSquareHalf = GizmoConstants.axisSquareHalf;
-  static const double _minGridScreenSpacing =
-      GizmoConstants.minGridScreenSpacing;
 
   // Colours
   static const Color _colX = GizmoConstants.colX;
@@ -66,64 +69,19 @@ class GizmoPainter {
 
   final Paint _paint = Paint()..isAntiAlias = true;
 
+  /// The square grid. The plugin draws whichever topology the scope has;
+  /// this stays for callers that only ever wanted squares.
   void paintInfiniteGrid(
     Canvas canvas,
     Camera camera,
     Size canvasSize, {
     required double gridSize,
-  }) {
-    if (gridSize <= 0 || canvasSize == Size.zero) return;
-
-    camera.viewportSize = canvasSize;
-    final topLeftWorld = camera.screenToWorld(Offset.zero);
-    final bottomRightWorld = camera.screenToWorld(
-      Offset(canvasSize.width, canvasSize.height),
-    );
-
-    final minX = math.min(topLeftWorld.dx, bottomRightWorld.dx);
-    final maxX = math.max(topLeftWorld.dx, bottomRightWorld.dx);
-    final minY = math.min(topLeftWorld.dy, bottomRightWorld.dy);
-    final maxY = math.max(topLeftWorld.dy, bottomRightWorld.dy);
-
-    final baseSpacing = gridSize * camera.zoom.abs();
-    if (!baseSpacing.isFinite || baseSpacing <= 0) return;
-
-    final multiplier = math.max(
-      1,
-      (_minGridScreenSpacing / baseSpacing).ceil(),
-    );
-    final step = gridSize * multiplier;
-    final majorEvery = 5;
-
-    final minorColor = const Color(0xFFFFFFFF).withValues(alpha: 0.07);
-    final majorColor = const Color(0xFFFFFFFF).withValues(alpha: 0.14);
-
-    final firstX = (minX / step).floor() * step;
-    var indexX = 0;
-    for (double x = firstX; x <= maxX + step; x += step) {
-      final sx = camera.worldToScreen(Offset(x, 0)).dx;
-      final isMajor = indexX % majorEvery == 0;
-      _paint
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = isMajor ? 1.2 : 0.8
-        ..color = isMajor ? majorColor : minorColor;
-      canvas.drawLine(Offset(sx, 0), Offset(sx, canvasSize.height), _paint);
-      indexX++;
-    }
-
-    final firstY = (minY / step).floor() * step;
-    var indexY = 0;
-    for (double y = firstY; y <= maxY + step; y += step) {
-      final sy = camera.worldToScreen(Offset(0, y)).dy;
-      final isMajor = indexY % majorEvery == 0;
-      _paint
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = isMajor ? 1.2 : 0.8
-        ..color = isMajor ? majorColor : minorColor;
-      canvas.drawLine(Offset(0, sy), Offset(canvasSize.width, sy), _paint);
-      indexY++;
-    }
-  }
+  }) => const SquareGrid().paintGrid(
+    canvas,
+    camera,
+    canvasSize,
+    cellSize: gridSize,
+  );
 
   /// Paints gizmos for [entity] using [camera] to convert positions.
   ///
@@ -484,6 +442,14 @@ Size _largestComponentSize(Entity entity) {
 }
 
 Size? _sizeFromComponent(Component component) {
+  // The extent on the definition first: the same answer the marquee and
+  // the resize handles use. The branches below remain for anything that
+  // has no definition at all.
+  final extent = ComponentDefinitionRegistry.instance
+      .definitionFor(component)
+      ?.extent;
+  if (extent != null) return extent.sizeOf(component);
+
   if (component is RectangleComponent) {
     final inset = component.strokeWidth * 2;
     return Size(component.width + inset, component.height + inset);

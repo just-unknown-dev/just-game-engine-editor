@@ -7,7 +7,7 @@ import 'package:just_inputs/just_inputs.dart';
 /// [dart:io] — the game's single canonical source of input bindings
 /// (bundled as an asset for the app's own runtime load; this class is only
 /// for the editor's dev-time write/read path), analogous to how
-/// [SceneFileGenerator] persists `.scene.json` files.
+/// `SceneStore` persists `.scene.json` files.
 ///
 /// Only usable on native desktop targets in debug mode.
 class InputBindingsFileGenerator {

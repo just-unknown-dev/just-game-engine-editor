@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/editor_constants.dart';
 
-import '../../core/serialization/scene_file_generator.dart';
+import '../../core/serialization/scene_store.dart';
 import '../../core/serialization/scene_name_validator.dart';
 
 /// Full-panel overlay shown when the editor is open but no scene is loaded.
 ///
 /// Presents a name input field with inline validation and a "Create Scene"
 /// button.  On success it:
-/// 1. Writes `lib/game/scenes/{name}.dart` via [SceneFileGenerator].
+/// 1. Writes `assets/scenes/{name}.scene.json` via [SceneStore].
 /// 2. Calls [onSceneCreated] with the validated name.
 class CreateSceneOverlay extends StatefulWidget {
-  const CreateSceneOverlay({super.key, required this.onSceneCreated});
+  const CreateSceneOverlay({
+    super.key,
+    required this.onSceneCreated,
+    required this.store,
+  });
+
+  /// Where the new scene is written.
+  final SceneStore store;
 
   /// Called with the new scene name after the files have been written.
   final Future<void> Function(String sceneName) onSceneCreated;
@@ -30,7 +37,7 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
   @override
   void initState() {
     super.initState();
-    _existingNames = SceneNameValidator.existingSceneNames();
+    _existingNames = SceneNameValidator.existingSceneNames(widget.store);
   }
 
   @override
@@ -60,7 +67,7 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
 
     setState(() => _isCreating = true);
     try {
-      await SceneFileGenerator.writeInitialFiles(name);
+      await widget.store.writeInitialFiles(name);
       await widget.onSceneCreated(name);
     } catch (e) {
       if (mounted) {
@@ -197,10 +204,8 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Files created:\n'
-            'lib/game/scenes/{name}/{name}.level.dart\n'
-            'lib/game/scenes/{name}/{name}.data.dart\n'
-            'lib/game/scenes/{name}/{name}.scene.json',
+            'Creates assets/scenes/{name}.scene.json and adds it to\n'
+            'assets/scenes/scenes.json. It ships with the game as it is.',
             style: TextStyle(
               color: EditorTheme.primaryMuted,
               fontSize: 11,

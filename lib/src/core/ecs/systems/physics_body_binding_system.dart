@@ -62,7 +62,7 @@ class PhysicsBodyBindingSystem extends System {
     final scene = sceneState;
     if (scene == null) return false;
     if (scene.isInMultiSelection(entity.id)) return true;
-    final selected = scene.selectedEntity;
+    final selected = scene.selectedEntity.value;
     return selected != null && selected.id == entity.id;
   }
 }

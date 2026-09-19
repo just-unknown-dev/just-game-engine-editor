@@ -7,11 +7,11 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('plugin defaults to hidden editor state', () {
+  test('plugin is hidden until initialized', () {
     Engine.resetInstance();
     final plugin = JustGameEditorPlugin(engine: Engine());
 
-    expect(plugin.isVisible, isFalse);
+    expect(plugin.isVisible.value, isFalse);
 
     plugin.dispose();
     Engine.resetInstance();
@@ -22,10 +22,49 @@ void main() {
     final plugin = JustGameEditorPlugin(engine: Engine());
 
     plugin.toggleVisibility();
-    expect(plugin.isVisible, isTrue);
+    expect(plugin.isVisible.value, isTrue);
 
     plugin.toggleVisibility();
-    expect(plugin.isVisible, isFalse);
+    expect(plugin.isVisible.value, isFalse);
+
+    plugin.dispose();
+    Engine.resetInstance();
+  });
+
+  test('initializing opens the editor and its status panel', () async {
+    Engine.resetInstance();
+    final engine = Engine();
+    await engine.initialize();
+    final plugin = JustGameEditorPlugin(engine: engine);
+    if (!kDebugMode) {
+      plugin.dispose();
+      Engine.resetInstance();
+      return;
+    }
+
+    await plugin.onInitialize();
+    expect(plugin.isVisible.value, isTrue, reason: 'F1 state');
+    expect(plugin.isStatusPanelVisible.value, isTrue, reason: 'F2 state');
+    expect(engine.time.timeScale, 0, reason: 'authoring pauses the game');
+
+    plugin.dispose();
+    Engine.resetInstance();
+  });
+
+  test('startVisible: false leaves it closed until F1', () async {
+    Engine.resetInstance();
+    final engine = Engine();
+    await engine.initialize();
+    final plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
+    if (!kDebugMode) {
+      plugin.dispose();
+      Engine.resetInstance();
+      return;
+    }
+
+    await plugin.onInitialize();
+    expect(plugin.isVisible.value, isFalse);
+    expect(plugin.isStatusPanelVisible.value, isFalse);
 
     plugin.dispose();
     Engine.resetInstance();
@@ -154,7 +193,7 @@ void main() {
     Engine.resetInstance();
   });
 
-  test('registered descriptors match factory runtime type', () async {
+  test('what a definition creates resolves back to that definition', () async {
     Engine.resetInstance();
     final engine = Engine();
     await engine.initialize();
@@ -168,16 +207,15 @@ void main() {
 
     await plugin.onInitialize();
 
-    final descriptors = CustomComponentRegistry.instance.descriptors;
-    expect(descriptors, isNotEmpty);
+    final definitions = plugin.scope.definitions.definitions;
+    expect(definitions, isNotEmpty);
 
-    for (final descriptor in descriptors) {
-      final instance = descriptor.factory();
+    for (final definition in definitions) {
+      final instance = definition.create();
       expect(
-        instance.runtimeType.toString(),
-        descriptor.type,
-        reason:
-            'Descriptor "${descriptor.name}" factory type and declared type must match.',
+        plugin.scope.definitions.definitionFor(instance),
+        same(definition),
+        reason: 'What "${definition.type}" creates must resolve back to it.',
       );
     }
 

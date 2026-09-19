@@ -4,10 +4,11 @@ import '../../core/constants/editor_constants.dart';
 import '../dialogs/create_scene_overlay.dart';
 import '../dialogs/scene_actions_dialogs.dart';
 import '../../core/serialization/scene_manager.dart';
+import '../../core/serialization/scene_store.dart';
 
 /// Shown in the right panel when no scene is currently open.
 ///
-/// - Lists all scene folders found in `lib/game/scenes/`.
+/// - Lists every scene in `assets/scenes/`.
 /// - Tapping a scene row calls [onSceneSelected].
 /// - The `+` icon button in the header switches to the inline create form.
 /// - The create form has a back arrow that returns to the list.
@@ -107,7 +108,11 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
   @override
   Widget build(BuildContext context) {
     if (_showCreate) {
-      return _CreateView(onBack: _backToList, onSceneCreated: _onSceneCreated);
+      return _CreateView(
+        onBack: _backToList,
+        onSceneCreated: _onSceneCreated,
+        store: widget.sceneManager.store,
+      );
     }
     return _ListView(
       scenes: _scenes,
@@ -450,7 +455,14 @@ class _SceneRow extends StatelessWidget {
 // ── Create view ───────────────────────────────────────────────────────────────
 
 class _CreateView extends StatelessWidget {
-  const _CreateView({required this.onBack, required this.onSceneCreated});
+  const _CreateView({
+    required this.onBack,
+    required this.onSceneCreated,
+    required this.store,
+  });
+
+  /// Where a new scene is written.
+  final SceneStore store;
 
   final VoidCallback onBack;
   final Future<void> Function(String) onSceneCreated;
@@ -486,7 +498,12 @@ class _CreateView extends StatelessWidget {
           ),
         ),
         const Divider(height: 1, color: EditorTheme.border),
-        Expanded(child: CreateSceneOverlay(onSceneCreated: onSceneCreated)),
+        Expanded(
+          child: CreateSceneOverlay(
+            onSceneCreated: onSceneCreated,
+            store: store,
+          ),
+        ),
       ],
     );
   }

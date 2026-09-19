@@ -20,7 +20,11 @@ Future<bool> confirmSaveWithBindingConflicts(
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: const [
-          Icon(Icons.warning_amber_rounded, color: EditorTheme.warning, size: 16),
+          Icon(
+            Icons.warning_amber_rounded,
+            color: EditorTheme.warning,
+            size: 16,
+          ),
           SizedBox(width: 8),
           Text(
             'Conflicting Bindings',

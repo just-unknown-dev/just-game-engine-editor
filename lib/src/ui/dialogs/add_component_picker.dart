@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' hide Animation;
 
 import '../../core/constants/editor_constants.dart';
+import '../../core/scope/editor_scope.dart';
 import '../../core/ecs/registry/component_registry.dart';
 import '../../core/state/editor_scene_state.dart';
 
@@ -15,9 +16,13 @@ class AddComponentPicker extends StatefulWidget {
     super.key,
     required this.entity,
     required this.sceneState,
+    required this.scope,
   });
 
   final Entity entity;
+
+  /// What can be added: the scope's definitions.
+  final EditorScope scope;
   final EditorSceneState sceneState;
 
   @override
@@ -72,7 +77,7 @@ class _AddComponentPickerState extends State<AddComponentPicker>
       widget.entity.components.map((c) => c.runtimeType.toString()).toSet();
 
   List<ComponentEntry> get _filtered {
-    final allEntries = getComponentRegistryEntries();
+    final allEntries = getComponentRegistryEntries(widget.scope);
     if (_query.isEmpty) return allEntries;
     return allEntries
         .where(
@@ -188,9 +193,14 @@ class _PickerList extends StatelessWidget {
     for (final entry in filtered) {
       grouped.putIfAbsent(entry.group, () => []).add(entry);
     }
-    final orderedGroups = kComponentGroups
-        .where((g) => grouped.containsKey(g))
-        .toList();
+    // kComponentGroups orders the sections it names; anything else follows,
+    // alphabetically. Treating it as a whitelist — which it used to be — made
+    // a project's own component group invisible here, search included.
+    final known = kComponentGroups.where(grouped.containsKey);
+    final extra =
+        grouped.keys.where((g) => !kComponentGroups.contains(g)).toList()
+          ..sort();
+    final orderedGroups = [...known, ...extra];
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -298,7 +308,9 @@ class _PickerList extends StatelessWidget {
       if (localIndex < entries.length) {
         final entry = entries[localIndex];
         final typeKey = entry.componentTypeName ?? entry.name;
-        final alreadyAdded = existingTypes.contains(typeKey);
+        // A type that allows several copies is never "already added".
+        final alreadyAdded =
+            !entry.allowMultiple && existingTypes.contains(typeKey);
         return _ComponentRow(
           entry: entry,
           alreadyAdded: alreadyAdded,

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart';
+import 'package:just_signals/just_signals.dart';
 import '../../core/constants/editor_constants.dart';
+import '../../core/scope/editor_scope.dart';
 import '../../core/state/editor_scene_state.dart';
+import '../../extension/editor_contributions.dart';
 
 /// Scrollable, hierarchical list of all ECS entities with a [TransformComponent].
 ///
@@ -21,10 +24,20 @@ class SceneTreePanel extends StatefulWidget {
     required this.onCopyEntity,
     required this.onPasteEntity,
     required this.onReparentEntity,
+    this.viewToggles,
+    this.scope,
   });
 
   final EditorSceneState sceneState;
   final World world;
+
+  /// Per-entity hide and lock, when the Level Designer is open. Null leaves
+  /// the rows as they always were.
+  final EntityViewToggles? viewToggles;
+
+  /// The editor, for module actions, decorations and protection rules.
+  /// Null keeps the tree exactly as it was.
+  final EditorScope? scope;
   final VoidCallback onCreateEntity;
   final VoidCallback onCreateGroup;
 
@@ -42,6 +55,24 @@ class SceneTreePanel extends StatefulWidget {
 class _SceneTreePanelState extends State<SceneTreePanel> {
   final Set<EntityId> _expandedIds = {};
   EntityId? _anchorId;
+  final TextEditingController _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  /// Whether [entity] matches the search: by name, or by the type of any of
+  /// its components, so "hazard" finds every hazard whatever it is called.
+  bool _matches(Entity entity) {
+    final q = _query.toLowerCase();
+    if ((entity.name ?? '').toLowerCase().contains(q)) return true;
+    return entity.components.any(
+      (c) => c.runtimeType.toString().toLowerCase().contains(q),
+    );
+  }
 
   void _toggleExpanded(EntityId id) {
     setState(() {
@@ -127,10 +158,64 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+          child: SizedBox(
+            height: 26,
+            child: TextField(
+              controller: _search,
+              onChanged: (value) => setState(() => _query = value.trim()),
+              style: const TextStyle(
+                color: EditorTheme.textPrimary,
+                fontSize: 11,
+              ),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Search name or component',
+                hintStyle: const TextStyle(
+                  color: EditorTheme.primaryMuted,
+                  fontSize: 11,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search,
+                  size: 14,
+                  color: EditorTheme.primaryMuted,
+                ),
+                prefixIconConstraints: const BoxConstraints(minWidth: 26),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : InkWell(
+                        onTap: () => setState(() {
+                          _search.clear();
+                          _query = '';
+                        }),
+                        child: const Icon(
+                          Icons.close,
+                          size: 14,
+                          color: EditorTheme.primaryMuted,
+                        ),
+                      ),
+                suffixIconConstraints: const BoxConstraints(minWidth: 26),
+                contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                filled: true,
+                fillColor: EditorTheme.inputBg,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(4),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+        ),
         // ── Tree list ──────────────────────────────────────────────────────
         Expanded(
-          child: ListenableBuilder(
-            listenable: widget.sceneState,
+          child: SignalConsumer(
+            signals: [
+              widget.sceneState.activeScene,
+              widget.sceneState.selectedEntity,
+              widget.sceneState.multiSelectedIds,
+              widget.sceneState.revision,
+            ],
             builder: (context, _) {
               final allEntities = widget.world
                   .query([TransformComponent])
@@ -173,8 +258,28 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
 
               final visibleEntities = <Entity>[];
               final rows = <Widget>[];
-              for (final root in roots) {
-                _buildSubtree(root, 0, childrenMap, rows, visibleEntities);
+              if (_query.isNotEmpty) {
+                // A flat list of matches: a match inside a collapsed group
+                // should not be hidden by the group being collapsed.
+                for (final entity in allEntities.where(_matches)) {
+                  _buildSubtree(entity, 0, const {}, rows, visibleEntities);
+                }
+                if (rows.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      'Nothing matches "$_query".',
+                      style: const TextStyle(
+                        color: EditorTheme.primaryMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  );
+                }
+              } else {
+                for (final root in roots) {
+                  _buildSubtree(root, 0, childrenMap, rows, visibleEntities);
+                }
               }
 
               return ListView(
@@ -199,7 +304,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     final children = childrenMap[entity.id] ?? [];
     final hasChildren = children.isNotEmpty;
     final isExpanded = _expandedIds.contains(entity.id);
-    final isSelected = widget.sceneState.selectedEntity?.id == entity.id;
+    final isSelected = widget.sceneState.selectedEntity.value?.id == entity.id;
     final isMultiSelected = widget.sceneState.isInMultiSelection(entity.id);
 
     rows.add(
@@ -224,6 +329,8 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         onPaste: widget.onPasteEntity,
         onCreateGroupFrom: () => widget.onCreateGroupFrom(entity),
         onReparent: widget.onReparentEntity,
+        viewToggles: widget.viewToggles,
+        scope: widget.scope,
       ),
     );
 
@@ -258,9 +365,16 @@ class _EntityTreeRow extends StatefulWidget {
     required this.onPaste,
     required this.onCreateGroupFrom,
     required this.onReparent,
+    this.viewToggles,
+    this.scope,
   });
 
   final Entity entity;
+  final EntityViewToggles? viewToggles;
+
+  /// The editor, for module actions, decorations and protection rules.
+  /// Null keeps the tree exactly as it was.
+  final EditorScope? scope;
   final int depth;
   final bool hasChildren;
   final bool isExpanded;
@@ -345,9 +459,13 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
     );
     // Only the camera is protected — spawn points (player, zombie, ...) are
     // ordinary, freely-deletable level design.
-    final isProtected = widget.entity.hasComponent<CameraComponent>();
+    final scope = widget.scope;
+    final isProtected =
+        widget.entity.hasComponent<CameraComponent>() ||
+        (scope?.isProtected(widget.entity) ?? false);
+    final extra = scope?.sceneTreeActions ?? const <SceneTreeAction>[];
 
-    showMenu<_ContextAction>(
+    showMenu<Object>(
       context: context,
       position: relRect,
       color: EditorTheme.menuBg,
@@ -376,6 +494,14 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
           textColor: EditorTheme.error,
           enabled: !isProtected,
         ),
+        if (extra.isNotEmpty) const PopupMenuDivider(height: 1),
+        for (final a in extra)
+          _menuItem(
+            a,
+            a.icon ?? Icons.extension_rounded,
+            a.label,
+            enabled: a.isEnabled?.call(widget.entity, scope!) ?? true,
+          ),
       ],
     ).then((action) {
       if (!mounted) return;
@@ -388,20 +514,22 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
           widget.onCreateGroupFrom();
         case _ContextAction.delete:
           widget.onDelete();
-        case null:
+        case SceneTreeAction a:
+          a.run(widget.entity, scope!);
+        default:
           break;
       }
     });
   }
 
-  PopupMenuItem<_ContextAction> _menuItem(
-    _ContextAction value,
+  PopupMenuItem<Object> _menuItem(
+    Object value,
     IconData icon,
     String label, {
     bool enabled = true,
     Color textColor = EditorTheme.textSecondary,
   }) {
-    return PopupMenuItem<_ContextAction>(
+    return PopupMenuItem<Object>(
       value: value,
       enabled: enabled,
       height: 36,
@@ -423,6 +551,41 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
         ],
       ),
     );
+  }
+
+  List<Widget> _viewToggleButtons(EntityViewToggles toggles) {
+    final hidden = toggles.isHidden(widget.entity);
+    final locked = toggles.isLocked(widget.entity);
+    Widget button(IconData icon, bool active, String tip, VoidCallback onTap) =>
+        Tooltip(
+          message: tip,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Icon(
+                icon,
+                size: 13,
+                color: active ? EditorTheme.primary : EditorTheme.primaryMuted,
+              ),
+            ),
+          ),
+        );
+    return [
+      const SizedBox(width: 4),
+      button(
+        hidden ? Icons.visibility_off : Icons.visibility,
+        hidden,
+        hidden ? 'Show (editor only)' : 'Hide (editor only)',
+        () => toggles.onToggleHidden(widget.entity),
+      ),
+      button(
+        locked ? Icons.lock : Icons.lock_open,
+        locked,
+        locked ? 'Unlock' : 'Lock against picking',
+        () => toggles.onToggleLocked(widget.entity),
+      ),
+    ];
   }
 
   @override
@@ -552,6 +715,11 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
                     fontSize: 10,
                   ),
                 ),
+              if (!_isEditing && widget.viewToggles != null)
+                ..._viewToggleButtons(widget.viewToggles!),
+              if (!_isEditing)
+                for (final d in widget.scope?.rowDecorations ?? const [])
+                  ?d.build(context, widget.entity),
             ],
           ),
         ),
@@ -614,4 +782,27 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
       _ => Icons.category_rounded,
     };
   }
+}
+
+/// Per-entity hide and lock for the scene tree, supplied by the Level
+/// Designer while it is open. Viewing aids only: neither changes the entity.
+class EntityViewToggles {
+  const EntityViewToggles({
+    required this.isHidden,
+    required this.isLocked,
+    required this.onToggleHidden,
+    required this.onToggleLocked,
+  });
+
+  /// Whether the entity is hidden in the viewport.
+  final bool Function(Entity entity) isHidden;
+
+  /// Whether the entity is locked against picking.
+  final bool Function(Entity entity) isLocked;
+
+  /// Flips the entity's hidden state.
+  final void Function(Entity entity) onToggleHidden;
+
+  /// Flips the entity's locked state.
+  final void Function(Entity entity) onToggleLocked;
 }

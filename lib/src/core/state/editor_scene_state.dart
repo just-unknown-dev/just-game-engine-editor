@@ -1,86 +1,131 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
+import 'package:just_signals/just_signals.dart';
 
 /// Bridges the authoring scene graph ([Scene]/[SceneNode]) with the live ECS
 /// world ([Entity]/[TransformComponent]).
 ///
 /// All mutations go through this class so both representations stay in sync.
-class EditorSceneState extends ChangeNotifier {
-  Scene? _activeScene;
-  Entity? _selectedEntity;
-  SceneNode? _selectedNode;
-  bool _isDirty = false;
+///
+/// Every piece of state is a [Signal]. A panel watches the ones it reads and
+/// rebuilds for nothing else: the inspector follows [selectedEntity], the save
+/// button follows [isDirty], the scene picker follows [activeScene]. What no
+/// signal of its own captures — a transform edit, a rename, a component added
+/// or removed — bumps [revision].
+class EditorSceneState {
+  /// The scene being edited, or null between scenes.
+  final Signal<Scene?> activeScene = Signal(null, debugLabel: 'activeScene');
+
+  /// The primary selection.
+  final Signal<Entity?> selectedEntity = Signal(
+    null,
+    debugLabel: 'selectedEntity',
+  );
+
+  /// The authoring node of [selectedEntity].
+  final Signal<SceneNode?> selectedNode = Signal(
+    null,
+    debugLabel: 'selectedNode',
+  );
+
+  /// Whether there are unsaved changes.
+  final Signal<bool> isDirty = Signal(false, debugLabel: 'isDirty');
+
+  /// Every entity id in the selection, the primary included.
+  ///
+  /// Always a fresh unmodifiable set: a signal compares by identity, so a set
+  /// mutated in place would change without anyone hearing about it.
+  final Signal<Set<EntityId>> multiSelectedIds = Signal(
+    const {},
+    debugLabel: 'multiSelectedIds',
+  );
+
+  /// Whether transform edits snap to the grid.
+  final Signal<bool> gridSnappingEnabled = Signal(
+    true,
+    debugLabel: 'gridSnappingEnabled',
+  );
+
+  /// The grid cell size, in world units.
+  final Signal<double> gridSize = Signal(32.0, debugLabel: 'gridSize');
+
+  /// Components copied for paste, as JSON; null when nothing was copied.
+  final Signal<List<Map<String, dynamic>>?> clipboard = Signal(
+    null,
+    debugLabel: 'clipboard',
+  );
+
+  /// Bumped by [refresh] and by every edit that changes entities without
+  /// changing any other signal. Watch it to redraw a view of the world.
+  final Signal<int> revision = Signal(0, debugLabel: 'sceneRevision');
+
   final Map<EntityId, SceneNode> _entityNodeMap = {};
 
-  final Set<EntityId> _multiSelectedIds = {};
-  // Mirrors _multiSelectedIds so toggleMultiSelect can promote a new primary
+  // Mirrors multiSelectedIds so toggleMultiSelect can promote a new primary
   // Entity object (not just an id) when the current primary is deselected.
   final Map<EntityId, Entity> _multiSelectedEntities = {};
-  bool _gridSnappingEnabled = true;
-  double _gridSize = 32.0;
 
-  // ── Getters ──────────────────────────────────────────────────────────────
+  // ── Derived reads ────────────────────────────────────────────────────────
 
-  Scene? get activeScene => _activeScene;
-  Entity? get selectedEntity => _selectedEntity;
-  SceneNode? get selectedNode => _selectedNode;
-  bool get isDirty => _isDirty;
-  bool get hasScene => _activeScene != null;
+  bool get hasScene => activeScene.value != null;
+
   Map<EntityId, SceneNode> get entityNodeMap =>
       Map.unmodifiable(_entityNodeMap);
 
-  /// All entity IDs in the multi-selection (includes the primary selected entity).
-  Set<EntityId> get multiSelectedIds => Set.unmodifiable(_multiSelectedIds);
-
   /// `true` when two or more entities are selected simultaneously.
-  bool get hasMultiSelection => _multiSelectedIds.length > 1;
-  bool get gridSnappingEnabled => _gridSnappingEnabled;
-  double get gridSize => _gridSize;
+  bool get hasMultiSelection => multiSelectedIds.value.length > 1;
 
-  bool isInMultiSelection(EntityId id) => _multiSelectedIds.contains(id);
+  bool isInMultiSelection(EntityId id) => multiSelectedIds.value.contains(id);
+
+  bool get hasClipboard => clipboard.value != null;
+
+  void _setMultiSelection(Iterable<EntityId> ids) =>
+      multiSelectedIds.value = Set.unmodifiable(ids);
 
   // ── Scene lifecycle ──────────────────────────────────────────────────────
 
   /// Open [scene] and link entity IDs to scene nodes via [entityNodeMap].
   void openScene(Scene scene, Map<EntityId, SceneNode> entityNodeMap) {
-    _activeScene = scene;
-    _entityNodeMap
-      ..clear()
-      ..addAll(entityNodeMap);
-    _selectedEntity = null;
-    _selectedNode = null;
-    _multiSelectedIds.clear();
-    _multiSelectedEntities.clear();
-    _isDirty = false;
-    notifyListeners();
+    batch(() {
+      activeScene.value = scene;
+      _entityNodeMap
+        ..clear()
+        ..addAll(entityNodeMap);
+      selectedEntity.value = null;
+      selectedNode.value = null;
+      _multiSelectedEntities.clear();
+      _setMultiSelection(const []);
+      isDirty.value = false;
+      refresh();
+    });
   }
 
   /// Close the active scene and clear all editor state.
   void closeScene() {
-    _activeScene = null;
-    _entityNodeMap.clear();
-    _selectedEntity = null;
-    _selectedNode = null;
-    _multiSelectedIds.clear();
-    _multiSelectedEntities.clear();
-    _isDirty = false;
-    notifyListeners();
+    batch(() {
+      activeScene.value = null;
+      _entityNodeMap.clear();
+      selectedEntity.value = null;
+      selectedNode.value = null;
+      _multiSelectedEntities.clear();
+      _setMultiSelection(const []);
+      isDirty.value = false;
+      refresh();
+    });
   }
 
   // ── Selection ────────────────────────────────────────────────────────────
 
   void selectEntity(Entity entity) {
-    if (_selectedEntity?.id == entity.id && !hasMultiSelection) return;
-    _selectedEntity = entity;
-    _selectedNode = _entityNodeMap[entity.id];
-    _multiSelectedIds
-      ..clear()
-      ..add(entity.id);
-    _multiSelectedEntities
-      ..clear()
-      ..[entity.id] = entity;
-    notifyListeners();
+    if (selectedEntity.value?.id == entity.id && !hasMultiSelection) return;
+    batch(() {
+      selectedEntity.value = entity;
+      selectedNode.value = _entityNodeMap[entity.id];
+      _multiSelectedEntities
+        ..clear()
+        ..[entity.id] = entity;
+      _setMultiSelection([entity.id]);
+    });
   }
 
   /// Toggles [entity] in/out of the multi-selection (Shift+click behaviour).
@@ -88,92 +133,84 @@ class EditorSceneState extends ChangeNotifier {
   /// If nothing is selected, falls back to normal single selection.
   /// Removing the primary entity makes the next remaining entity the primary.
   void toggleMultiSelect(Entity entity) {
-    if (_multiSelectedIds.isEmpty) {
+    final ids = {...multiSelectedIds.value};
+    if (ids.isEmpty) {
       // Nothing selected yet — behave like a normal single select.
       selectEntity(entity);
       return;
     }
 
-    if (_multiSelectedIds.contains(entity.id)) {
-      _multiSelectedIds.remove(entity.id);
-      _multiSelectedEntities.remove(entity.id);
-      if (_multiSelectedIds.isEmpty) {
-        _selectedEntity = null;
-        _selectedNode = null;
-      } else if (_selectedEntity?.id == entity.id) {
-        // Primary was removed — promote another remaining id as primary.
-        final nextId = _multiSelectedIds.first;
-        _selectedEntity = _multiSelectedEntities[nextId];
-        _selectedNode = _entityNodeMap[nextId];
+    batch(() {
+      if (ids.contains(entity.id)) {
+        ids.remove(entity.id);
+        _multiSelectedEntities.remove(entity.id);
+        if (ids.isEmpty) {
+          selectedEntity.value = null;
+          selectedNode.value = null;
+        } else if (selectedEntity.value?.id == entity.id) {
+          // Primary was removed — promote another remaining id as primary.
+          final nextId = ids.first;
+          selectedEntity.value = _multiSelectedEntities[nextId];
+          selectedNode.value = _entityNodeMap[nextId];
+        }
+      } else {
+        // Add current primary to the set if it was a single-select before.
+        final primary = selectedEntity.value;
+        if (primary != null) {
+          ids.add(primary.id);
+          _multiSelectedEntities[primary.id] = primary;
+        }
+        ids.add(entity.id);
+        _multiSelectedEntities[entity.id] = entity;
+        selectedEntity.value = entity;
+        selectedNode.value = _entityNodeMap[entity.id];
       }
-    } else {
-      // Add current primary to the set if it was a single-select before.
-      if (_selectedEntity != null) {
-        _multiSelectedIds.add(_selectedEntity!.id);
-        _multiSelectedEntities[_selectedEntity!.id] = _selectedEntity!;
-      }
-      _multiSelectedIds.add(entity.id);
-      _multiSelectedEntities[entity.id] = entity;
-      _selectedEntity = entity;
-      _selectedNode = _entityNodeMap[entity.id];
-    }
-    notifyListeners();
+      _setMultiSelection(ids);
+    });
   }
 
   /// Clears all multi-selection, keeping a single primary selection if present.
   void clearMultiSelection() {
     if (!hasMultiSelection) return;
-    _multiSelectedIds.clear();
+    final primary = selectedEntity.value;
     _multiSelectedEntities.clear();
-    if (_selectedEntity != null) {
-      _multiSelectedIds.add(_selectedEntity!.id);
-      _multiSelectedEntities[_selectedEntity!.id] = _selectedEntity!;
-    }
-    notifyListeners();
+    if (primary != null) _multiSelectedEntities[primary.id] = primary;
+    _setMultiSelection([?primary?.id]);
   }
 
   /// Selects [entities] as a contiguous range, keeping [anchor] as primary.
   void selectRange(List<Entity> entities, {required Entity anchor}) {
     if (entities.isEmpty) return;
-    _multiSelectedIds
-      ..clear()
-      ..addAll(entities.map((e) => e.id));
-    _multiSelectedEntities
-      ..clear()
-      ..addEntries(entities.map((e) => MapEntry(e.id, e)));
-    _selectedEntity = anchor;
-    _selectedNode = _entityNodeMap[anchor.id];
-    notifyListeners();
+    batch(() {
+      _multiSelectedEntities
+        ..clear()
+        ..addEntries(entities.map((e) => MapEntry(e.id, e)));
+      selectedEntity.value = anchor;
+      selectedNode.value = _entityNodeMap[anchor.id];
+      _setMultiSelection(entities.map((e) => e.id));
+    });
   }
 
   void clearSelection() {
-    if (_selectedEntity == null && _multiSelectedIds.isEmpty) return;
-    _selectedEntity = null;
-    _selectedNode = null;
-    _multiSelectedIds.clear();
-    _multiSelectedEntities.clear();
-    notifyListeners();
+    if (selectedEntity.value == null && multiSelectedIds.value.isEmpty) return;
+    batch(() {
+      selectedEntity.value = null;
+      selectedNode.value = null;
+      _multiSelectedEntities.clear();
+      _setMultiSelection(const []);
+    });
   }
 
   // ── Dirty flag ───────────────────────────────────────────────────────────
 
-  void markDirty() {
-    if (_isDirty) return;
-    _isDirty = true;
-    notifyListeners();
-  }
+  void markDirty() => isDirty.value = true;
 
-  void markClean() {
-    if (!_isDirty) return;
-    _isDirty = false;
-    notifyListeners();
-  }
+  void markClean() => isDirty.value = false;
 
-  /// Forces a UI rebuild without changing the dirty flag.
-  ///
-  /// Useful after structural mutations (adding/removing components) that the
-  /// dirty flag alone wouldn't trigger a rebuild for.
-  void refresh() => notifyListeners();
+  /// Tells every view of the world to redraw, without changing the dirty
+  /// flag. Called after structural mutations (adding/removing components)
+  /// that no other signal captures.
+  void refresh() => revision.value++;
 
   /// Set by [JustGameEditorPlugin] to re-register game custom components after
   /// a component refresh or hot-reload.
@@ -183,38 +220,35 @@ class EditorSceneState extends ChangeNotifier {
   /// completes) and then rebuilds the UI.
   void reloadCustomComponents() {
     onComponentsRefreshed?.call();
-    notifyListeners();
+    refresh();
   }
 
-  void setGridSnapping({
-    required bool enabled,
-    required double gridSize,
-    bool notify = false,
-  }) {
-    final normalizedSize = gridSize <= 0 ? 32.0 : gridSize;
-    final changed =
-        _gridSnappingEnabled != enabled || _gridSize != normalizedSize;
-    _gridSnappingEnabled = enabled;
-    _gridSize = normalizedSize;
-    if (changed && notify) {
-      notifyListeners();
-    }
+  void setGridSnapping({required bool enabled, required double gridSize}) {
+    batch(() {
+      gridSnappingEnabled.value = enabled;
+      this.gridSize.value = gridSize <= 0 ? 32.0 : gridSize;
+    });
   }
 
   // ── Transform mutations (keep ECS + SceneNode in sync) ───────────────────
+
+  /// A transform edit: the world changed, so it is dirty and views redraw.
+  void _edited() => batch(() {
+    markDirty();
+    refresh();
+  });
 
   /// Translate [entity] by [delta] in world space.
   void applyTranslation(Entity entity, Offset delta) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
     transform.translateXY(delta.dx, delta.dy);
-    if (_gridSnappingEnabled) {
+    if (gridSnappingEnabled.value) {
       final snapped = _snapPosition(transform.position.toOffset());
       transform.setPositionXY(snapped.dx, snapped.dy);
     }
     _entityNodeMap[entity.id]?.localPosition = transform.position.toOffset();
-    markDirty();
-    notifyListeners();
+    _edited();
   }
 
   /// Rotate [entity] by [deltaRad] radians.
@@ -224,8 +258,7 @@ class EditorSceneState extends ChangeNotifier {
     transform.rotate(deltaRad);
     final node = _entityNodeMap[entity.id];
     if (node != null) node.localRotation += deltaRad;
-    markDirty();
-    notifyListeners();
+    _edited();
   }
 
   /// Scale [entity] by a multiplicative [factor] on both axes.
@@ -239,7 +272,7 @@ class EditorSceneState extends ChangeNotifier {
     if (transform == null) return;
     transform.scale.x = (transform.scale.x * factor).clamp(0.01, 50.0);
     transform.scale.y = (transform.scale.y * factor).clamp(0.01, 50.0);
-    if (_gridSnappingEnabled) {
+    if (gridSnappingEnabled.value) {
       transform.scale.x = _snapScale(transform.scale.x);
       transform.scale.y = _snapScale(transform.scale.y);
     }
@@ -247,8 +280,7 @@ class EditorSceneState extends ChangeNotifier {
     if (node != null) {
       node.localScale = (transform.scale.x + transform.scale.y) / 2;
     }
-    markDirty();
-    notifyListeners();
+    _edited();
   }
 
   /// Syncs the scene-graph node for [entity] from its current TransformComponent
@@ -267,14 +299,13 @@ class EditorSceneState extends ChangeNotifier {
   void setPosition(Entity entity, Offset position) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
-    final nextPosition = _gridSnappingEnabled
+    final nextPosition = gridSnappingEnabled.value
         ? _snapPosition(position)
         : position;
     transform.setPositionXY(nextPosition.dx, nextPosition.dy);
     final node = _entityNodeMap[entity.id];
     if (node != null) node.localPosition = nextPosition;
-    markDirty();
-    notifyListeners();
+    _edited();
   }
 
   /// Set [entity]'s rotation directly (used by inspector text fields).
@@ -284,56 +315,53 @@ class EditorSceneState extends ChangeNotifier {
     transform.rotation = radians;
     final node = _entityNodeMap[entity.id];
     if (node != null) node.localRotation = radians;
-    markDirty();
-    notifyListeners();
+    _edited();
   }
 
   /// Set [entity]'s scale directly.
   void setScale(Entity entity, Offset scale) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
-    final sx = _gridSnappingEnabled ? _snapScale(scale.dx) : scale.dx;
-    final sy = _gridSnappingEnabled ? _snapScale(scale.dy) : scale.dy;
+    final sx = gridSnappingEnabled.value ? _snapScale(scale.dx) : scale.dx;
+    final sy = gridSnappingEnabled.value ? _snapScale(scale.dy) : scale.dy;
     transform.scale.x = sx;
     transform.scale.y = sy;
     final node = _entityNodeMap[entity.id];
     if (node != null) node.localScale = (sx + sy) / 2;
-    markDirty();
-    notifyListeners();
+    _edited();
   }
 
   /// Set [entity]'s X scale only (used by inspector).
   void setScaleX(Entity entity, double x) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
-    final sx = _gridSnappingEnabled ? _snapScale(x) : x;
+    final sx = gridSnappingEnabled.value ? _snapScale(x) : x;
     transform.scale.x = sx;
     final node = _entityNodeMap[entity.id];
     if (node != null) node.localScale = (sx + transform.scale.y) / 2;
-    markDirty();
-    notifyListeners();
+    _edited();
   }
 
   /// Set [entity]'s Y scale only (used by inspector).
   void setScaleY(Entity entity, double y) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
-    final sy = _gridSnappingEnabled ? _snapScale(y) : y;
+    final sy = gridSnappingEnabled.value ? _snapScale(y) : y;
     transform.scale.y = sy;
     final node = _entityNodeMap[entity.id];
     if (node != null) node.localScale = (transform.scale.x + sy) / 2;
-    markDirty();
-    notifyListeners();
+    _edited();
   }
 
   Offset _snapPosition(Offset value) {
-    final gx = (value.dx / _gridSize).roundToDouble() * _gridSize;
-    final gy = (value.dy / _gridSize).roundToDouble() * _gridSize;
+    final size = gridSize.value;
+    final gx = (value.dx / size).roundToDouble() * size;
+    final gy = (value.dy / size).roundToDouble() * size;
     return Offset(gx, gy);
   }
 
   double _snapScale(double value) {
-    final step = 1 / _gridSize;
+    final step = 1 / gridSize.value;
     return (value / step).roundToDouble() * step;
   }
 
@@ -343,24 +371,24 @@ class EditorSceneState extends ChangeNotifier {
     if (trimmed.isEmpty) return;
     entity.name = trimmed;
 
-    final oldNode = _entityNodeMap[entity.id];
-    if (oldNode != null) {
-      final parent = oldNode.parent;
-      final newNode = SceneNode(trimmed)
-        ..localPosition = oldNode.localPosition
-        ..localRotation = oldNode.localRotation
-        ..localScale = oldNode.localScale
-        ..isActive = oldNode.isActive;
-      if (parent != null) {
-        parent.removeChild(oldNode);
-        parent.addChild(newNode);
+    batch(() {
+      final oldNode = _entityNodeMap[entity.id];
+      if (oldNode != null) {
+        final parent = oldNode.parent;
+        final newNode = SceneNode(trimmed)
+          ..localPosition = oldNode.localPosition
+          ..localRotation = oldNode.localRotation
+          ..localScale = oldNode.localScale
+          ..isActive = oldNode.isActive;
+        if (parent != null) {
+          parent.removeChild(oldNode);
+          parent.addChild(newNode);
+        }
+        _entityNodeMap[entity.id] = newNode;
+        if (selectedEntity.value?.id == entity.id) selectedNode.value = newNode;
       }
-      _entityNodeMap[entity.id] = newNode;
-      if (_selectedEntity?.id == entity.id) _selectedNode = newNode;
-    }
-
-    markDirty();
-    notifyListeners();
+      _edited();
+    });
   }
 
   /// Register a newly discovered entity that has no matching [SceneNode] yet.
@@ -377,7 +405,7 @@ class EditorSceneState extends ChangeNotifier {
       ..localRotation = transform?.rotation ?? 0.0
       ..localScale = transform?.scale.x ?? 1.0;
 
-    _activeScene!.addNode(node);
+    activeScene.value!.addNode(node);
     _entityNodeMap[entity.id] = node;
     markDirty();
   }
@@ -387,30 +415,38 @@ class EditorSceneState extends ChangeNotifier {
   /// Called by [JustGameEditorPlugin.deleteEntity] before destroying the ECS
   /// entity. Clears selection and marks the scene dirty.
   void removeEntityNode(EntityId id) {
-    final node = _entityNodeMap.remove(id);
-    if (node != null) _activeScene?.removeNode(node);
-    _multiSelectedIds.remove(id);
-    _multiSelectedEntities.remove(id);
-    if (_selectedEntity?.id == id) {
-      _selectedEntity = null;
-      _selectedNode = null;
-    }
-    _isDirty = true;
-    notifyListeners();
+    batch(() {
+      final node = _entityNodeMap.remove(id);
+      if (node != null) activeScene.value?.removeNode(node);
+      _multiSelectedEntities.remove(id);
+      _setMultiSelection(multiSelectedIds.value.where((e) => e != id));
+      if (selectedEntity.value?.id == id) {
+        selectedEntity.value = null;
+        selectedNode.value = null;
+      }
+      _edited();
+    });
   }
 
   // ── Clipboard ────────────────────────────────────────────────────────────
 
-  List<Map<String, dynamic>>? _clipboardJson;
-
-  bool get hasClipboard => _clipboardJson != null;
-
-  List<Map<String, dynamic>>? get clipboardJson =>
-      _clipboardJson != null ? List.unmodifiable(_clipboardJson!) : null;
-
   /// Stores a snapshot of [components] in the clipboard for paste.
-  void setClipboard(List<Map<String, dynamic>> components) {
-    _clipboardJson = List.from(components);
-    notifyListeners();
+  void setClipboard(List<Map<String, dynamic>> components) =>
+      clipboard.value = List.unmodifiable(List.of(components));
+
+  void dispose() {
+    for (final s in [
+      activeScene,
+      selectedEntity,
+      selectedNode,
+      isDirty,
+      multiSelectedIds,
+      gridSnappingEnabled,
+      gridSize,
+      clipboard,
+      revision,
+    ]) {
+      s.dispose();
+    }
   }
 }

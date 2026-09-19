@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'scene_store.dart';
+
 /// Validates scene names and scans the project for existing scenes.
 class SceneNameValidator {
   const SceneNameValidator._();
@@ -100,20 +102,12 @@ class SceneNameValidator {
     return null;
   }
 
-  /// Returns the names of all scene folders in `lib/game/scenes/`.
-  /// Each scene lives in its own sub-folder: `lib/game/scenes/{name}/`.
-  /// Returns an empty list if the directory is missing or I/O fails.
-  static List<String> existingSceneNames() {
+  /// Every existing scene name. One source of truth: the same listing the
+  /// scene picker and the manifest use.
+  static List<String> existingSceneNames(SceneStore store) {
     try {
-      final dir = Directory('${Directory.current.path}/lib/game/scenes');
-      if (!dir.existsSync()) return [];
-      return dir
-          .listSync()
-          .whereType<Directory>()
-          .map((d) => d.path.split(RegExp(r'[/\\]')).last)
-          .where((name) => name.isNotEmpty)
-          .toList();
-    } catch (_) {
+      return store.listSceneNames();
+    } on FileSystemException {
       return [];
     }
   }

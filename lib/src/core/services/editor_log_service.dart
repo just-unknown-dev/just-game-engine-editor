@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:just_debugger/just_debugger.dart';
+import 'package:just_signals/just_signals.dart';
 
 import '../constants/editor_constants.dart';
 import 'editor_log_entry.dart';
@@ -10,15 +11,15 @@ import 'editor_log_storage.dart';
 
 typedef _PlatformErrorHandler = bool Function(Object error, StackTrace stack);
 
-class EditorLogService extends ChangeNotifier {
-  EditorLogService._({EditorLogStorage? storage})
+class EditorLogService {
+  /// A log service over the platform's default storage. One per editor
+  /// scope; there is no process-wide instance.
+  EditorLogService({EditorLogStorage? storage})
     : _storage = storage ?? createEditorLogStorage();
-
-  static final EditorLogService instance = EditorLogService._();
 
   @visibleForTesting
   factory EditorLogService.withStorage(EditorLogStorage storage) =>
-      EditorLogService._(storage: storage);
+      EditorLogService(storage: storage);
 
   final EditorLogStorage _storage;
   final List<EditorLogEntry> _entries = <EditorLogEntry>[];
@@ -46,8 +47,15 @@ class EditorLogService extends ChangeNotifier {
   bool _flushScheduled = false;
   final List<VoidCallback> _pendingNotifies = [];
 
-  List<EditorLogEntry> get entries =>
-      List<EditorLogEntry>.unmodifiable(_entries);
+  /// Every entry, oldest first: a new list on every change, so a dock
+  /// can watch it.
+  final Signal<List<EditorLogEntry>> entries = Signal(
+    const [],
+    debugLabel: 'logEntries',
+  );
+
+  void _publish() =>
+      entries.value = List<EditorLogEntry>.unmodifiable(_entries);
 
   String? get persistencePath => _storage.filePath;
 
@@ -135,7 +143,7 @@ class EditorLogService extends ChangeNotifier {
       _entries
         ..clear()
         ..addAll(_mergeEntries(restored, _entries));
-      notifyListeners();
+      _publish();
     }
 
     if (_sessionActive) {
@@ -209,7 +217,7 @@ class EditorLogService extends ChangeNotifier {
       if (mirrorToDebugger) {
         _controller?.log(normalized, category: source, level: level);
       }
-      notifyListeners();
+      _publish();
     });
   }
 
@@ -237,7 +245,7 @@ class EditorLogService extends ChangeNotifier {
     _entries.clear();
     _scheduleNotify(() {
       _controller?.clearLogs();
-      notifyListeners();
+      _publish();
     });
     await _storage.clear();
   }
@@ -251,6 +259,7 @@ class EditorLogService extends ChangeNotifier {
     _zoneCaptureInstalled = false;
     _loadedPersistedEntries = false;
     _entries.clear();
+    _publish();
     _restoreGlobalCapture();
   }
 
@@ -370,4 +379,6 @@ class EditorLogService extends ChangeNotifier {
   String _entryFingerprint(EditorLogEntry entry) {
     return '${entry.timestamp.toIso8601String()}|${entry.level.name}|${entry.source}|${entry.category}|${entry.message}|${entry.details ?? ''}';
   }
+
+  void dispose() => entries.dispose();
 }

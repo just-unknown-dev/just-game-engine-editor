@@ -1,0 +1,172 @@
+import 'package:flutter/material.dart';
+import 'package:just_game_engine/just_game_engine.dart' as jge;
+
+import '../../../core/serialization/scene_codec.dart';
+import '../../../core/state/editor_scene_state.dart';
+import '../state/designer_geometry.dart';
+import '../state/editor_commands.dart';
+import '../state/prefab_registry.dart';
+import '../state/editor_history.dart';
+import 'level_tool.dart';
+import 'tool_registry.dart';
+
+/// Drag out a rectangle to place the active prefab, sized to the drag.
+///
+/// The fastest way to block out a level: the size *is* the gesture, so there
+/// is no place-then-resize round trip through the inspector for every
+/// platform.
+class DrawRectTool extends LevelToolHandler {
+  DrawRectTool({
+    required this.sceneState,
+    required this.history,
+    required this.uniqueName,
+    required this.codec,
+  });
+
+  /// Shared selection and dirty state.
+  /// Encodes and decodes components; the scope's codec.
+  final SceneCodec codec;
+  final EditorSceneState sceneState;
+
+  /// Where the create command is recorded.
+  final EditorHistory history;
+
+  /// Produces a unique entity name from a prefix, so two platforms never
+  /// collide — the scene format re-links parents by name on load.
+  final String Function(String prefix) uniqueName;
+
+  @override
+  String get id => BuiltInTools.draw;
+
+  @override
+  String get label => 'Draw';
+
+  @override
+  IconData get icon => Icons.crop_square;
+
+  @override
+  String? get shortcut => 'B';
+
+  @override
+  String? get description =>
+      'Drag out a rectangle to place the active prefab, sized to the drag';
+
+  @override
+  int get order => 20;
+
+  Offset? _start;
+
+  @override
+  bool onPointerDown(ToolContext context) {
+    final prefab = context.controller.activePrefab;
+    if (prefab == null) return false;
+
+    _start = context.snapPoint(context.worldPosition);
+
+    // Point prefabs place on release with their own size, so there is no
+    // rectangle to preview while dragging.
+    if (prefab.placement == PrefabPlacement.point) return true;
+
+    context.controller.dragRect.value = Rect.fromPoints(_start!, _start!);
+    return true;
+  }
+
+  @override
+  void onPointerMove(ToolContext context) {
+    final start = _start;
+    if (start == null) return;
+
+    final prefab = context.controller.activePrefab;
+    if (prefab == null || prefab.placement == PrefabPlacement.point) return;
+
+    final current = context.snapPoint(context.worldPosition);
+    final rect = DesignerGeometry.rectFromDrag(start, current);
+    context.controller
+      ..dragRect.value = rect
+      ..setStatus('${rect.width.round()} x ${rect.height.round()}');
+  }
+
+  @override
+  void onPointerUp(ToolContext context) {
+    final start = _start;
+    _start = null;
+    final prefab = context.controller.activePrefab;
+    context.controller.dragRect.value = null;
+    if (start == null || prefab == null) return;
+
+    final Rect placement;
+    if (prefab.placement == PrefabPlacement.point) {
+      final center = context.snapping
+          ? DesignerGeometry.snapCenterForSize(
+              context.worldPosition,
+              prefab.defaultSize,
+              context.gridSize,
+            )
+          : context.worldPosition;
+      placement = Rect.fromCenter(
+        center: center,
+        width: prefab.defaultSize.width,
+        height: prefab.defaultSize.height,
+      );
+    } else {
+      var rect = DesignerGeometry.rectFromDrag(
+        start,
+        context.snapPoint(context.worldPosition),
+      );
+      // A click rather than a drag: fall back to the prefab's own size, so a
+      // mis-click places something usable instead of a degenerate sliver.
+      if (rect.width < context.gridSize / 2 ||
+          rect.height < context.gridSize / 2) {
+        rect = Rect.fromCenter(
+          center: rect.center,
+          width: prefab.defaultSize.width,
+          height: prefab.defaultSize.height,
+        );
+      }
+      placement = rect;
+    }
+
+    _place(context, prefab, placement);
+  }
+
+  @override
+  void onCancel() {
+    _start = null;
+  }
+
+  void _place(ToolContext context, PrefabDefinition prefab, Rect rect) {
+    final components = prefab.build(rect.center, rect.size);
+
+    // Stamp the designer's active layer onto whatever the prefab produced, so
+    // "draw on the background layer" actually works without every prefab
+    // having to know about layers.
+    final layerId = context.controller.activeLayerId.value;
+    for (final component in components) {
+      if (component is jge.LayerComponent) component.layerId = layerId;
+    }
+
+    final spec = EntitySpec(
+      codec: codec,
+      name: uniqueName(prefab.namePrefix ?? prefab.id),
+      componentsJson: [for (final component in components) ?_encode(component)],
+    );
+
+    history.push(
+      CreateEntitiesCommand(
+        label: 'Place ${prefab.name}',
+        world: context.world,
+        sceneState: sceneState,
+        specs: [spec],
+        onCreated: (created) {
+          if (created.isNotEmpty) sceneState.selectEntity(created.first);
+        },
+      ),
+    );
+  }
+
+  /// Components are stored as JSON rather than live instances because
+  /// [CreateEntitiesCommand] has to rebuild them after an undo has destroyed
+  /// the originals.
+  Map<String, dynamic>? _encode(jge.Component component) =>
+      codec.encode(component);
+}
