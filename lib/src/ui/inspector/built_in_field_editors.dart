@@ -89,8 +89,8 @@ abstract final class BuiltInFieldEditors {
 
   static const String _noEntity = '(none)';
 
-  /// A reference to another entity, by name: a dropdown of what the scene
-  /// holds. A name the scene no longer has stays listed, so opening the
+  /// A reference to another entity, by name: a searchable dropdown of what
+  /// the scene holds. A name the scene no longer has stays listed, so opening the
   /// inspector never silently rewrites it.
   static Widget _entityRef(FieldEditorContext c) {
     final current = c.value as String? ?? '';
@@ -103,6 +103,10 @@ abstract final class BuiltInFieldEditors {
       label: c.label,
       value: current.isEmpty ? _noEntity : current,
       options: [_noEntity, ...names],
+      // A level has many entities, and the one wanted may not exist yet: a
+      // player the game spawns is named here before it is ever in the scene.
+      searchable: true,
+      allowCustom: true,
       onChanged: (name) => c.onChanged(name == _noEntity ? '' : name),
     );
   }

@@ -13,6 +13,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../core/constants/editor_constants.dart';
 import '../widgets/scrubbable_number_field.dart';
+import '../widgets/editor_dropdown.dart';
 
 // ── Colour ↔ ShapePaintStyle bridge ──────────────────────────────────────────
 
@@ -393,12 +394,21 @@ class DropdownEditorRow extends StatelessWidget {
     required this.value,
     required this.options,
     required this.onChanged,
+    this.searchable = false,
+    this.allowCustom = false,
   });
 
   final String label;
   final String value;
   final List<String> options;
   final ValueChanged<String> onChanged;
+
+  /// A filter box at the top of the list, for a long one.
+  final bool searchable;
+
+  /// With [searchable]: what was typed may be chosen even if it is not
+  /// listed — an entity that does not exist yet.
+  final bool allowCustom;
 
   @override
   Widget build(BuildContext context) {
@@ -412,35 +422,15 @@ class DropdownEditorRow extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              color: EditorTheme.inputBg,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: EditorTheme.border),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: value,
-                isExpanded: true,
-                dropdownColor: EditorTheme.dialogBg,
-                style: const TextStyle(
-                  color: EditorTheme.textPrimary,
-                  fontSize: 11,
-                ),
-                items: options
-                    .map(
-                      (item) => DropdownMenuItem<String>(
-                        value: item,
-                        child: Text(item),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: (next) {
-                  if (next != null) onChanged(next);
-                },
-              ),
-            ),
+          child: EditorDropdown<String>(
+            value: value,
+            options: [
+              for (final option in options)
+                EditorDropdownOption(value: option, label: option),
+            ],
+            searchable: searchable,
+            customValue: allowCustom ? (typed) => typed : null,
+            onChanged: onChanged,
           ),
         ),
       ],

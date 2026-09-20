@@ -30,6 +30,7 @@ export 'src/core/services/editor_log_service.dart';
 export 'src/ui/panels/scene_picker_panel.dart';
 export 'src/ui/panels/scene_tree_panel.dart';
 export 'src/ui/widgets/scrubbable_number_field.dart';
+export 'src/ui/widgets/editor_dropdown.dart';
 export 'src/core/ecs/systems/editor_log_capture_system.dart';
 export 'src/core/ecs/systems/physics_body_binding_system.dart';
 

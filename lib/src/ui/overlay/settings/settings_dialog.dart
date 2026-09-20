@@ -8,6 +8,7 @@ import '../docks/detail_cards.dart';
 import '../../../core/prefs/editor_prefs.dart';
 import '../../../extension/editor_contributions.dart';
 import '../settings/overlay_ui_settings.dart';
+import '../../widgets/editor_dropdown.dart';
 
 enum _EditorSettingsTab {
   presets,
@@ -894,37 +895,27 @@ class _SettingsEnumDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<T>(
-      initialValue: value,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(fontSize: 10, color: EditorTheme.textMuted),
-        enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-          borderRadius: BorderRadius.circular(8),
+    // The label sits above rather than floating inside the field: the field
+    // is the editor's own dropdown, the same one the inspector uses.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 10, color: EditorTheme.textMuted),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
-          borderRadius: BorderRadius.circular(8),
+        const SizedBox(height: 4),
+        EditorDropdown<T>(
+          value: value,
+          height: 30,
+          options: [
+            for (final item in items)
+              EditorDropdownOption(value: item, label: itemLabel(item)),
+          ],
+          onChanged: onChanged,
         ),
-      ),
-      dropdownColor: const Color(0xFF1A1A1A),
-      items: items
-          .map(
-            (item) => DropdownMenuItem<T>(
-              value: item,
-              child: Text(
-                itemLabel(item),
-                style: TextStyle(fontSize: 10, color: EditorTheme.textPrimary),
-              ),
-            ),
-          )
-          .toList(growable: false),
-      onChanged: (next) {
-        if (next != null) {
-          onChanged(next);
-        }
-      },
+      ],
     );
   }
 }

@@ -18,6 +18,7 @@ import '../../../core/constants/editor_constants.dart';
 import '../../../core/plugin/editor_plugin.dart';
 import '../docks/logs_dock.dart';
 import '../settings/overlay_ui_settings.dart';
+import '../../widgets/editor_dropdown.dart';
 
 // ── Mode ───────────────────────────────────────────────────────────────────────
 
@@ -651,22 +652,18 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
   }
 
   Widget _buildClipDropdown(AnimatedSpriteComponent asc) {
-    return DropdownButton<String>(
+    return EditorDropdown<String>(
       value: asc.clips.containsKey(asc.activeClip) ? asc.activeClip : null,
-      hint: const Text(
-        'clip',
-        style: TextStyle(fontSize: 10, color: EditorTheme.textMuted),
-      ),
-      style: const TextStyle(fontSize: 10, color: EditorTheme.textPrimary),
-      dropdownColor: const Color(0xFF1E1E1E),
-      underline: const SizedBox.shrink(),
-      isDense: true,
-      items: asc.clips.keys
-          .map((k) => DropdownMenuItem(value: k, child: Text(k)))
-          .toList(),
-      onChanged: (v) {
-        if (v != null) _switchClip(v);
-      },
+      hint: 'clip',
+      // A toolbar control: as wide as its label, and as short as the strip.
+      isExpanded: false,
+      height: 22,
+      fontSize: 10,
+      options: [
+        for (final clip in asc.clips.keys)
+          EditorDropdownOption(value: clip, label: clip),
+      ],
+      onChanged: _switchClip,
     );
   }
 
