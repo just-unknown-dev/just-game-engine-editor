@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import 'component_extras.dart';
@@ -37,87 +34,76 @@ abstract final class BuiltInExtras {
       },
     ),
     ComponentEditorExtras(
-      type: 'AnimatedSpriteComponent',
+      type: 'SpriteAnimationComponent',
       summary: (c) {
-        final clip = (c as jge.AnimatedSpriteComponent).activeClip;
-        return clip.isEmpty ? '—' : clip;
+        final clip = (c as jge.SpriteAnimationComponent).clip;
+        return clip.isEmpty ? 'every frame' : clip;
       },
-      // The JSON picker gains a "generate" button that writes a template
-      // sheet description next to the sprite.
+      // The clip is one of the atlas's tags: offer them once it has loaded.
       fieldEditors: {
-        'jsonPath': (c) => AssetRefEditorRow(
+        'clip': (c) => _ClipField(
           label: c.label,
-          value: c.value as String? ?? '',
-          extensions: c.hint.fileExtensions ?? const ['json'],
+          component: c.component as jge.SpriteAnimationComponent,
+          readOnly: c.readOnly,
           onChanged: c.onChanged,
-          onGenerate: () => generateAnimationTemplate(
-            c.component as jge.AnimatedSpriteComponent,
-          ),
         ),
       },
     ),
   ];
+}
 
-  /// Writes `<sprite>_data.json` beside the sprite sheet with one clip per
-  /// row, and returns its path, or null when there is no sprite yet or the
-  /// write fails.
-  static Future<String?> generateAnimationTemplate(
-    jge.AnimatedSpriteComponent asc,
-  ) async {
-    final spritePath = asc.spritePath.trim();
-    if (spritePath.isEmpty) return null;
+/// A sprite animation's clip, chosen from the clips of its atlas.
+class _ClipField extends StatelessWidget {
+  const _ClipField({
+    required this.label,
+    required this.component,
+    required this.readOnly,
+    required this.onChanged,
+  });
 
-    final normalized = spritePath.replaceAll(r'\', '/');
-    final segments = normalized.split('/');
-    final filename = segments.last;
-    final nameWithoutExt = filename.contains('.')
-        ? filename.substring(0, filename.lastIndexOf('.'))
-        : filename;
-    final dir = segments.sublist(0, segments.length - 1).join('/');
-    final outputPath = '$dir/${nameWithoutExt}_data.json';
+  final String label;
+  final jge.SpriteAnimationComponent component;
+  final bool readOnly;
+  final ValueChanged<Object?> onChanged;
 
-    final fw = asc.frameWidth > 0 ? asc.frameWidth : 64;
-    final fh = asc.frameHeight > 0 ? asc.frameHeight : 64;
-    final cols = asc.columns > 0 ? asc.columns : 4;
-    final rows = asc.rows > 0 ? asc.rows : 4;
-
-    const defaultNames = [
-      'idle',
-      'walk',
-      'run',
-      'jump',
-      'fall',
-      'attack',
-      'hurt',
-      'die',
-    ];
-    final clips = <String, dynamic>{};
-    for (var r = 0; r < rows; r++) {
-      final name = r < defaultNames.length ? defaultNames[r] : 'clip_$r';
-      clips[name] = {'row': r, 'fps': 12, 'loop': r < 3};
+  /// The clips of the atlas [component] plays from, if the engine's system
+  /// has loaded it for some entity carrying this component.
+  List<String> _clips(EditorScope? scope) {
+    final world = scope?.world;
+    if (world == null) return const [];
+    for (final system in world.systems) {
+      if (system is! jge.SpriteAnimationSystem) continue;
+      for (final entity in world.query([jge.SpriteAnimationComponent])) {
+        if (!identical(
+          entity.getComponent<jge.SpriteAnimationComponent>(),
+          component,
+        )) {
+          continue;
+        }
+        return system.atlasOf(entity)?.clipNames.toList() ?? const [];
+      }
     }
+    return const [];
+  }
 
-    final template = <String, dynamic>{
-      'meta': {
-        'frameWidth': fw,
-        'frameHeight': fh,
-        'columns': cols,
-        'rows': rows,
-      },
-      'clips': clips,
-    };
-
-    try {
-      final base = Directory.current.path.replaceAll(r'\', '/');
-      final file = File('$base/$outputPath');
-      await file.parent.create(recursive: true);
-      await file.writeAsString(
-        const JsonEncoder.withIndent('  ').convert(template),
+  @override
+  Widget build(BuildContext context) {
+    if (readOnly) return ReadonlyRow(label: label, value: component.clip);
+    final clips = _clips(EditorScopeProvider.maybeOf(context));
+    if (clips.isEmpty) {
+      return TextEditorRow(
+        label: label,
+        initialValue: component.clip,
+        onSubmitted: onChanged,
       );
-      return outputPath;
-    } catch (_) {
-      return null;
     }
+    return DropdownEditorRow(
+      label: label,
+      value: component.clip,
+      options: ['', ...clips],
+      allowCustom: true,
+      onChanged: onChanged,
+    );
   }
 }
 

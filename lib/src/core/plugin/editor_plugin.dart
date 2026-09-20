@@ -6,10 +6,8 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../debugger/engine_debugger.dart';
-import '../ecs/systems/editor_animated_sprite_system.dart';
-import '../ecs/systems/editor_animation_controller_system.dart';
+import '../assets/file_sprite_asset_loader.dart';
 import '../ecs/systems/editor_log_capture_system.dart';
-import '../ecs/systems/editor_sprite_system.dart';
 import '../ecs/systems/physics_body_binding_system.dart';
 import '../entity/entity_ops.dart';
 import '../input/viewport_input.dart';
@@ -335,19 +333,13 @@ class JustGameEditorPlugin implements EnginePlugin {
     )) {
       engine.world.addSystem(EditorLogCaptureSystem(logService));
     }
-    if (!engine.world.systems.any((system) => system is EditorSpriteSystem)) {
-      engine.world.addSystem(EditorSpriteSystem());
-    }
-    if (!engine.world.systems.any(
-      (system) => system is EditorAnimatedSpriteSystem,
-    )) {
-      engine.world.addSystem(EditorAnimatedSpriteSystem());
-    }
-    if (!engine.world.systems.any(
-      (system) => system is EditorAnimationControllerSystem,
-    )) {
-      engine.world.addSystem(EditorAnimationControllerSystem());
-    }
+    // Sprites are shown and played by the engine's own systems, as in the
+    // game — but read from the project's files, so a sheet saved a moment
+    // ago shows without a rebuild.
+    _previousSpriteLoader = SpriteAssets.loader;
+    SpriteAssets.loader = spriteAssets;
+    AnimatorAssets.loader = spriteAssets.loadGraph;
+    registerSpriteSystems(engine.world);
     // While authoring, the output camera is the editor's view: the brain
     // keeps thinking but does not write to it. Play hands it over.
     isAuthoring.addListener(_syncCameraOwnership);
@@ -483,7 +475,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (!_isInitialized) return false;
     // Holding a key keeps nudging; nothing else acts on a repeat.
     if (event is KeyRepeatEvent) {
-      return isAuthoring.value &&
+      return scope.activeWorkspace.value == null &&
+          isAuthoring.value &&
           !_isTypingInTextField &&
           (designer.value?.handleKey(
                 event.logicalKey,
@@ -504,6 +497,9 @@ class JustGameEditorPlugin implements EnginePlugin {
       return true;
     }
     if (!isVisible.value) return false;
+    // A workspace has the screen: every other key is its own — Ctrl+S saves
+    // its file, not the scene; B is its brush, not the level's.
+    if (scope.activeWorkspace.value != null) return false;
 
     final context = CommandContext(
       scope: scope,
@@ -530,6 +526,41 @@ class JustGameEditorPlugin implements EnginePlugin {
       return true;
     }
     return commands.dispatch(key, context, scopes: const {CommandScope.editor});
+  }
+
+  /// Where sprites are read from while the editor runs: the project's files.
+  final FileSpriteAssetLoader spriteAssets = FileSpriteAssetLoader();
+  SpriteAssetLoader? _previousSpriteLoader;
+
+  /// A sprite file changed on disk: show the new one. [atlasPath] limits it
+  /// to one atlas (and the sheet beside it); without it everything reloads.
+  void reloadSprites([String? atlasPath]) {
+    if (atlasPath == null) spriteAssets.clear();
+    for (final system in engine.world.systems) {
+      if (system is SpriteAnimationSystem) system.reload(atlasPath);
+      if (system is SpriteLoadSystem) system.reload();
+    }
+  }
+
+  /// A file a tool wrote changed: whatever in the level shows it, shows the
+  /// new version.
+  void reloadAsset(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.animator.json')) {
+      reloadAnimators(path);
+    } else if (lower.endsWith('.json')) {
+      reloadSprites(path);
+    } else {
+      reloadSprites();
+    }
+  }
+
+  /// An animator graph changed on disk: animators running it start over
+  /// with the new one.
+  void reloadAnimators([String? graphPath]) {
+    for (final system in engine.world.systems) {
+      if (system is AnimatorSystem) system.reload(graphPath);
+    }
   }
 
   void _focusGameOnPlay() {
@@ -624,7 +655,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     final entity = sceneState.selectedEntity.value;
     final isPreviewPlaying =
         entity != null &&
-        ((entity.getComponent<AnimatedSpriteComponent>()?.isPlaying ?? false) ||
+        ((entity.getComponent<SpriteAnimationComponent>()?.isPlaying ??
+                false) ||
             (entity.getComponent<AnimationControllerComponent>()?.isPlaying ??
                 false));
     engine.time.timeScale = isPreviewPlaying ? 1.0 : 0.0;
@@ -1045,6 +1077,10 @@ class JustGameEditorPlugin implements EnginePlugin {
     closeLevelDesigner();
     isAuthoring.removeListener(_syncCameraOwnership);
     playController.state.removeListener(_focusGameOnPlay);
+    if (identical(SpriteAssets.loader, spriteAssets)) {
+      SpriteAssets.loader = _previousSpriteLoader ?? BundleSpriteAssetLoader();
+      AnimatorAssets.useBundle();
+    }
     if (engine.isInitialized && engine.cameraSystem.isInitialized) {
       engine.cameraSystem.brain.driveOutput = true;
     }

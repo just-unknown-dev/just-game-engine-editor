@@ -5,6 +5,8 @@ import 'package:just_signals/just_signals.dart';
 
 import '../../../core/constants/editor_constants.dart';
 import '../../../core/plugin/editor_plugin.dart';
+import '../../../core/scope/editor_scope.dart';
+import '../../../extension/editor_contributions.dart';
 import '../../level_designer/level_designer.dart';
 import '../docks/compact_dock.dart';
 import '../editor_overlay.dart';
@@ -182,6 +184,29 @@ class FullEditorChrome extends StatelessWidget {
               right: panelWidth + 8,
               child: const EditorSnackBarLayer(),
             ),
+            // A module's workspace, over the level and its panels; the
+            // scene stays loaded underneath.
+            Positioned.fill(
+              child: SignalBuilder<OpenWorkspace?>(
+                signal: plugin.scope.activeWorkspace,
+                builder: (context, open, _) => open == null
+                    ? const SizedBox.shrink()
+                    : WorkspaceHost(
+                        open: open,
+                        cornerRadius: settings.cornerRadius + 6,
+                        borderColor: settings.themeColor,
+                        workspace: WorkspaceContext(
+                          scope: plugin.scope,
+                          path: open.path,
+                          onClose: plugin.scope.closeWorkspace,
+                          reloadAssets: plugin.reloadAsset,
+                          fullScreen: plugin.scope.workspaceFullScreen,
+                          onToggleFullScreen:
+                              plugin.scope.toggleWorkspaceFullScreen,
+                        ),
+                      ),
+              ),
+            ),
             Positioned.fill(
               child: SignalBuilder<bool>(
                 signal: plugin.scope.chrome.inputSetupOpen,
@@ -202,3 +227,108 @@ class FullEditorChrome extends StatelessWidget {
 }
 
 // ── Enums & data classes ──────────────────────────────────────────────────────
+
+/// Shows an open workspace the way its definition asks: as a dialog over the
+/// editor — the level dimmed but still there behind it, so opening a tool
+/// does not feel like leaving — or filling the editor outright.
+class WorkspaceHost extends StatelessWidget {
+  const WorkspaceHost({
+    super.key,
+    required this.open,
+    required this.workspace,
+    this.cornerRadius = 12,
+    this.borderColor = EditorTheme.border,
+  });
+
+  final OpenWorkspace open;
+  final WorkspaceContext workspace;
+  final double cornerRadius;
+  final Color borderColor;
+
+  /// The dim over the editor behind a dialog.
+  static const Key scrimKey = Key('workspaceScrim');
+
+  /// Room left around a dialog, so the editor shows at its edges.
+  static const EdgeInsets dialogMargin = EdgeInsets.symmetric(
+    horizontal: 40,
+    vertical: 28,
+  );
+
+  /// Below this there is no room to spare for a margin: the dialog fills.
+  static const Size roomyEnough = Size(1100, 640);
+
+  @override
+  Widget build(BuildContext context) {
+    final body = KeyedSubtree(
+      key: ValueKey('${open.definition.id}:${open.path}'),
+      child: open.definition.build(context, workspace),
+    );
+    final fullScreen = workspace.fullScreen;
+    if (fullScreen == null) return _present(body, false);
+    // One subtree either way, so switching keeps the workspace's state.
+    return ValueListenableBuilder<bool>(
+      valueListenable: fullScreen,
+      builder: (context, filled, _) => _present(body, filled),
+    );
+  }
+
+  Widget _present(Widget body, bool filled) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        final asDialog =
+            !filled &&
+            open.definition.presentation == WorkspacePresentation.dialog &&
+            box.maxWidth >= roomyEnough.width &&
+            box.maxHeight >= roomyEnough.height;
+        if (!asDialog) {
+          return ColoredBox(color: EditorTheme.dialogBg, child: body);
+        }
+        return Stack(
+          children: [
+            // The scrim takes clicks, so nothing behind is pressed by
+            // accident — and does nothing with them: closing is the
+            // workspace's own button, which can ask about unsaved work.
+            const Positioned.fill(
+              child: ModalBarrier(
+                key: scrimKey,
+                dismissible: false,
+                color: Color(0x99000000),
+              ),
+            ),
+            Positioned.fill(
+              child: Padding(
+                padding: dialogMargin,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(cornerRadius),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0xAA000000),
+                        blurRadius: 32,
+                        offset: Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(cornerRadius),
+                    child: DecoratedBox(
+                      position: DecorationPosition.foreground,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(cornerRadius),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: ColoredBox(
+                        color: EditorTheme.dialogBg,
+                        child: body,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}

@@ -155,8 +155,7 @@ void main() {
       );
     }
 
-    // Compared by name (not `Type`) because EditorSpriteSystem/
-    // EditorAnimatedSpriteSystem/EditorAnimationControllerSystem aren't
+    // Compared by name (not `Type`) because the editor's own systems aren't
     // exported from the package's public barrel, so this test file (which
     // only imports the barrel) has no `Type` literal to reference them with.
     const allowedAddedTypeNames = <String>{
@@ -164,9 +163,10 @@ void main() {
       'PhysicsBodyBindingSystem',
       'PhysicsJointBindingSystem',
       'EditorLogCaptureSystem',
-      'EditorSpriteSystem',
-      'EditorAnimatedSpriteSystem',
-      'EditorAnimationControllerSystem',
+      'SpriteLoadSystem',
+      'SpriteAnimationSystem',
+      'AnimatorSystem',
+      'AnimationControllerSystem',
     };
 
     final actuallyAddedTypeNames = <String>{};

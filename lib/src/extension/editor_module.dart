@@ -179,6 +179,13 @@ abstract class EditorModule {
   /// Bottom docks beside the built-in ones.
   List<DockDefinition> get docks => const [];
 
+  /// Full-screen tools that take the viewport: a sprite editor, a dialogue
+  /// graph. Opened with [EditorScope.openWorkspace].
+  List<WorkspaceDefinition> get workspaces => const [];
+
+  /// What this module can do with a file in the Assets dock.
+  List<AssetAction> get assetActions => const [];
+
   /// Buttons after the built-in play controls.
   List<ToolbarButton> get toolbarButtons => const [];
 

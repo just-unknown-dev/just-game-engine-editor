@@ -6,11 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:just_game_engine/just_game_engine.dart'
     show
-        AnimatedSpriteComponent,
         AnimationControllerComponent,
         AnimationEvent,
-        RenderableComponent,
-        Sprite,
+        AtlasAnimationClip,
+        Entity,
+        SpriteAnimationComponent,
+        SpriteAnimationSystem,
+        SpriteAtlas,
         TransformComponent,
         TransformKeyframe;
 
@@ -47,6 +49,14 @@ extension _TLTrackX on _TLTrack {
 }
 
 // ── Selection typedefs ────────────────────────────────────────────────────────
+
+/// One frame of the playing sprite clip, laid out in time.
+typedef _ClipFrame = ({
+  ui.Image? image,
+  Rect source,
+  double start,
+  double length,
+});
 
 typedef _KfSel = ({_TLTrack track, int index});
 typedef _EvSel = ({int index});
@@ -139,14 +149,67 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
 
   dynamic get _entity => widget.plugin.sceneState.selectedEntity.value;
 
-  AnimatedSpriteComponent? get _asc {
+  SpriteAnimationComponent? get _asc {
     final e = _entity;
     if (e == null) return null;
     try {
-      return (e as dynamic).getComponent<AnimatedSpriteComponent>();
+      return (e as dynamic).getComponent<SpriteAnimationComponent>();
     } catch (_) {
       return null;
     }
+  }
+
+  // ── The sprite's atlas: what the engine's own system has loaded ─────────
+
+  SpriteAtlas? get _atlas {
+    final e = _entity;
+    if (e is! Entity) return null;
+    for (final system in widget.plugin.engine.world.systems) {
+      if (system is SpriteAnimationSystem) return system.atlasOf(e);
+    }
+    return null;
+  }
+
+  AtlasAnimationClip? get _clip {
+    final asc = _asc;
+    final atlas = _atlas;
+    if (asc == null || atlas == null) return null;
+    for (final system in widget.plugin.engine.world.systems) {
+      if (system is SpriteAnimationSystem) return system.clipOf(atlas, asc);
+    }
+    return null;
+  }
+
+  /// The clip's frames in time, each with where it sits on its sheet.
+  List<_ClipFrame> get _clipFrames {
+    final atlas = _atlas;
+    final clip = _clip;
+    if (atlas == null || clip == null) return const [];
+    final out = <_ClipFrame>[];
+    var t = 0.0;
+    for (final frame in clip.frames) {
+      final region = atlas.getRegion(frame.regionName);
+      out.add((
+        image: region == null ? null : atlas.pages[region.pageIndex].image,
+        source: region?.frame ?? Rect.zero,
+        start: t,
+        length: frame.duration,
+      ));
+      t += frame.duration;
+    }
+    return out;
+  }
+
+  /// Frame events come from the atlas file; they are edited where the
+  /// sprite is, not here.
+  List<AnimationEvent> get _atlasEvents {
+    final all = _atlas?.userData['events'];
+    final forClip = all is Map ? all[_asc?.clip] : null;
+    if (forClip is! List) return const [];
+    return [
+      for (final e in forClip)
+        if (e is Map) AnimationEvent.fromJson(e.cast<String, dynamic>()),
+    ];
   }
 
   AnimationControllerComponent? get _acc {
@@ -163,18 +226,6 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
 
   bool get _hasAny => _asc != null || _acc != null;
 
-  // ── Sprite sheet image for thumbnails ───────────────────────────────────
-
-  ui.Image? get _spriteImage {
-    try {
-      final e = _entity as dynamic;
-      final rc = e.getComponent<RenderableComponent>();
-      final renderable = rc?.renderable;
-      if (renderable is Sprite) return renderable.image;
-    } catch (_) {}
-    return null;
-  }
-
   // ── Layout helpers ───────────────────────────────────────────────────────
 
   double get _contentH => _mode == _TimelineMode.sprite
@@ -190,7 +241,7 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
       : (_acc?.elapsed ?? 0.0);
 
   double get _duration => _mode == _TimelineMode.sprite
-      ? (_asc?.clipDuration ?? 0.0)
+      ? (_clip?.totalDuration ?? 0.0)
       : (_acc?.duration ?? 1.0);
 
   double _trackTop(_TLTrack track) =>
@@ -205,7 +256,7 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
 
   List<AnimationEvent> get _events {
     if (_mode == _TimelineMode.sprite) {
-      return _asc?.activeClipData?.events ?? const [];
+      return _atlasEvents;
     }
     return _acc?.events ?? const [];
   }
@@ -279,7 +330,8 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
   void _toggleLoop() {
     if (_mode == _TimelineMode.sprite) {
       final asc = _asc;
-      if (asc != null) asc.loop = !asc.loop;
+      // A preview override: whether the clip loops is the atlas's to say.
+      if (asc != null) asc.loopOverride = !_spriteLoops;
     } else {
       final acc = _acc;
       if (acc != null) acc.loop = !acc.loop;
@@ -287,21 +339,19 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
     setState(() {});
   }
 
+  bool get _spriteLoops => _asc?.loopOverride ?? _clip?.loop ?? true;
+
   void _scrubTo(double time) {
     if (_mode == _TimelineMode.sprite) {
       final asc = _asc;
       if (asc == null) return;
-      final clip = asc.activeClipData;
-      final dur = clip != null && clip.frames.isNotEmpty
-          ? clip.frames.length / (clip.fps ?? asc.defaultFps)
-          : 0.0;
-      asc.elapsed = time.clamp(0.0, dur > 0 ? dur : double.infinity);
-      if (clip != null && clip.frames.isNotEmpty) {
-        final fps = clip.fps ?? asc.defaultFps;
-        asc.frameIndex = (asc.elapsed * fps).floor().clamp(
-          0,
-          clip.frames.length - 1,
-        );
+      final frames = _clipFrames;
+      final total = _duration;
+      asc
+        ..elapsed = time.clamp(0.0, total > 0 ? total : 0.0)
+        ..isComplete = false;
+      for (var i = 0; i < frames.length; i++) {
+        if (asc.elapsed >= frames[i].start) asc.frameIndex = i;
       }
     } else {
       final acc = _acc;
@@ -314,7 +364,7 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
   void _switchClip(String name) {
     final asc = _asc;
     if (asc == null) return;
-    asc.switchClip(name, blend: false);
+    asc.switchClip(name, restartIfSame: true);
     setState(() {});
   }
 
@@ -461,22 +511,16 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
 
   void _addEventAt(double time, String name) {
     final ev = AnimationEvent(time: time, name: name);
-    if (_mode == _TimelineMode.sprite) {
-      _asc?.activeClipData?.addEvent(ev);
-    } else {
-      _acc?.addEvent(ev);
-    }
+    // A sprite's events live in its atlas file; only the entity timeline's
+    // are edited here.
+    if (_mode == _TimelineMode.entity) _acc?.addEvent(ev);
     setState(() => _selectedEv = null);
   }
 
   void _deleteSelectedEv() {
     final sel = _selectedEv;
     if (sel == null) return;
-    if (_mode == _TimelineMode.sprite) {
-      _asc?.activeClipData?.removeEvent(sel.index);
-    } else {
-      _acc?.removeEvent(sel.index);
-    }
+    if (_mode == _TimelineMode.entity) _acc?.removeEvent(sel.index);
     setState(() => _selectedEv = null);
   }
 
@@ -485,11 +529,7 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
     if (sel.index >= events.length) return;
     final dt = dx / _pxPerSec;
     final newTime = (events[sel.index].time + dt).clamp(0.0, _duration);
-    if (_mode == _TimelineMode.sprite) {
-      _asc?.activeClipData?.moveEvent(sel.index, newTime);
-    } else {
-      _acc?.moveEvent(sel.index, newTime);
-    }
+    if (_mode == _TimelineMode.entity) _acc?.moveEvent(sel.index, newTime);
     setState(() {});
   }
 
@@ -572,8 +612,8 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
           const Spacer(),
           if (_mode == _TimelineMode.sprite &&
               _asc != null &&
-              _asc!.clips.isNotEmpty)
-            _buildClipDropdown(_asc!),
+              (_atlas?.clipNames.isNotEmpty ?? false))
+            _buildClipDropdown(_asc!, _atlas!),
           IconButton(
             onPressed: widget.onClose,
             icon: const Icon(Icons.close_rounded),
@@ -651,16 +691,16 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
     );
   }
 
-  Widget _buildClipDropdown(AnimatedSpriteComponent asc) {
+  Widget _buildClipDropdown(SpriteAnimationComponent asc, SpriteAtlas atlas) {
     return EditorDropdown<String>(
-      value: asc.clips.containsKey(asc.activeClip) ? asc.activeClip : null,
+      value: atlas.getClip(asc.clip) != null ? asc.clip : null,
       hint: 'clip',
       // A toolbar control: as wide as its label, and as short as the strip.
       isExpanded: false,
       height: 22,
       fontSize: 10,
       options: [
-        for (final clip in asc.clips.keys)
+        for (final clip in atlas.clipNames)
           EditorDropdownOption(value: clip, label: clip),
       ],
       onChanged: _switchClip,
@@ -672,10 +712,10 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
         ? (_asc?.isPlaying ?? false)
         : (_acc?.isPlaying ?? false);
     final loop = _mode == _TimelineMode.sprite
-        ? (_asc?.loop ?? false)
+        ? _spriteLoops
         : (_acc?.loop ?? false);
-    final fps = _mode == _TimelineMode.sprite
-        ? (_asc?.activeClipData?.fps ?? _asc?.defaultFps ?? 12.0)
+    final frameCount = _mode == _TimelineMode.sprite
+        ? _clipFrames.length
         : null;
 
     final bool hasKfSel = _mode == _TimelineMode.entity && _selectedKf != null;
@@ -704,9 +744,9 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
             tooltip: 'Loop',
           ),
           const SizedBox(width: 6),
-          if (fps != null)
+          if (frameCount != null)
             Text(
-              '${fps.toStringAsFixed(1)} fps',
+              '$frameCount frames · ${_duration.toStringAsFixed(2)} s',
               style: const TextStyle(
                 fontSize: 10,
                 color: EditorTheme.textMuted,
@@ -761,7 +801,7 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
   Widget _buildEmpty() {
     return const Center(
       child: Text(
-        'Select an entity with AnimatedSpriteComponent or AnimationControllerComponent',
+        'Select an entity with a Sprite Animation or an Animation Controller',
         style: TextStyle(fontSize: 11, color: EditorTheme.textMuted),
       ),
     );
@@ -795,10 +835,9 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
                               mode: _mode,
                               duration: _duration,
                               pxPerSec: _pxPerSec,
-                              asc: _mode == _TimelineMode.sprite ? _asc : null,
-                              spriteImage: _mode == _TimelineMode.sprite
-                                  ? _spriteImage
-                                  : null,
+                              frames: _mode == _TimelineMode.sprite
+                                  ? _clipFrames
+                                  : const [],
                               eventsRowTop: _eventsRowTop,
                               eventTrackH: _eventTrackH,
                               trackH: _trackH,
@@ -1043,8 +1082,7 @@ class _TimelineGridPainter extends CustomPainter {
     required this.trackH,
     required this.rulerH,
     required this.frameTrackH,
-    this.asc,
-    this.spriteImage,
+    this.frames = const [],
     this.currentFrameIndex = -1,
   });
 
@@ -1056,8 +1094,7 @@ class _TimelineGridPainter extends CustomPainter {
   final double trackH;
   final double rulerH;
   final double frameTrackH;
-  final AnimatedSpriteComponent? asc;
-  final ui.Image? spriteImage;
+  final List<_ClipFrame> frames;
   // Passed as an immutable snapshot so shouldRepaint can detect frame changes.
   final int currentFrameIndex;
 
@@ -1135,26 +1172,20 @@ class _TimelineGridPainter extends CustomPainter {
       }
     }
 
-    // Frame ticks (sprite mode only)
-    if (mode == _TimelineMode.sprite && asc != null) {
-      final clip = asc!.activeClipData;
-      if (clip != null && clip.frames.isNotEmpty) {
-        final fps = clip.fps ?? asc!.defaultFps;
-        final frameDur = 1.0 / fps;
-        final tickPaint = Paint()
-          ..color = Colors.white.withValues(alpha: 0.35)
-          ..strokeWidth = 1;
-        for (int f = 0; f < clip.frames.length; f++) {
-          final x = f * frameDur * pxPerSec;
-          canvas.drawLine(Offset(x, rulerH - 5), Offset(x, rulerH), tickPaint);
-        }
+    // Frame ticks (sprite mode only): one where each frame starts.
+    if (mode == _TimelineMode.sprite) {
+      final tickPaint = Paint()
+        ..color = Colors.white.withValues(alpha: 0.35)
+        ..strokeWidth = 1;
+      for (final frame in frames) {
+        final x = frame.start * pxPerSec;
+        canvas.drawLine(Offset(x, rulerH - 5), Offset(x, rulerH), tickPaint);
       }
     }
   }
 
   void _drawFrameTrack(Canvas canvas, Size size) {
-    final clip = asc?.activeClipData;
-    if (clip == null || clip.frames.isEmpty) {
+    if (frames.isEmpty) {
       canvas.drawRect(
         Rect.fromLTWH(0, rulerH, size.width, frameTrackH),
         Paint()..color = const Color(0xFF1A1A1A),
@@ -1162,21 +1193,15 @@ class _TimelineGridPainter extends CustomPainter {
       return;
     }
 
-    final fps = clip.fps ?? asc!.defaultFps;
-    final frameDur = 1.0 / fps;
-    final currentFrame = currentFrameIndex.clamp(0, clip.frames.length - 1);
-    final image = spriteImage;
-    final fw = asc!.frameWidth.toDouble();
-    final fh = asc!.frameHeight.toDouble();
-    // columns may be 0 if the component was built without explicit config;
-    // fall back to computing it from the image width.
-    final cols = asc!.columns > 0
-        ? asc!.columns
-        : (image != null && fw > 0 ? (image.width / fw).floor() : 0);
+    final currentFrame = currentFrameIndex.clamp(0, frames.length - 1);
 
-    for (int f = 0; f < clip.frames.length; f++) {
-      final x = f * frameDur * pxPerSec;
-      final w = frameDur * pxPerSec;
+    // Each cell is as wide as its frame is long: a held frame looks held.
+    for (int f = 0; f < frames.length; f++) {
+      final x = frames[f].start * pxPerSec;
+      final w = frames[f].length * pxPerSec;
+      final image = frames[f].image;
+      final fw = frames[f].source.width;
+      final fh = frames[f].source.height;
       final isActive = f == currentFrame;
 
       final cellRect = Rect.fromLTWH(x + 1, rulerH + 2, w - 2, frameTrackH - 4);
@@ -1191,10 +1216,7 @@ class _TimelineGridPainter extends CustomPainter {
 
       // Draw sprite thumbnail if image is available and cell is wide enough
       if (image != null && w >= 12 && fw > 0 && fh > 0) {
-        final absFrame = clip.frames[f];
-        final col = cols > 0 ? absFrame % cols : 0;
-        final row = cols > 0 ? absFrame ~/ cols : 0;
-        final srcRect = Rect.fromLTWH(col * fw, row * fh, fw, fh);
+        final srcRect = frames[f].source;
 
         // Fit thumbnail inside cell with padding
         final padding = 2.0;
@@ -1207,7 +1229,12 @@ class _TimelineGridPainter extends CustomPainter {
         final dy = cellRect.top + padding + (availH - dh) / 2;
         final dstRect = Rect.fromLTWH(dx, dy, dw, dh);
 
-        canvas.drawImageRect(image, srcRect, dstRect, Paint());
+        canvas.drawImageRect(
+          image,
+          srcRect,
+          dstRect,
+          Paint()..filterQuality = FilterQuality.none,
+        );
       } else if (w > 8) {
         _drawText(
           canvas,
@@ -1307,8 +1334,10 @@ class _TimelineGridPainter extends CustomPainter {
       old.mode != mode ||
       old.duration != duration ||
       old.pxPerSec != pxPerSec ||
-      old.asc != asc ||
-      old.spriteImage != spriteImage ||
+      old.frames.length != frames.length ||
+      (frames.isNotEmpty &&
+          (old.frames.first.image != frames.first.image ||
+              old.frames.last.source != frames.last.source)) ||
       old.currentFrameIndex != currentFrameIndex;
 }
 

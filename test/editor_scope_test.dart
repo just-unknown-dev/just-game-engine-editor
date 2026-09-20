@@ -81,7 +81,7 @@ void main() {
     expect(scope.codec.definitions, same(scope.definitions));
     expect(scope.scenes.codec, same(scope.codec));
     expect(scope.fieldEditors.typeIds, isNotEmpty);
-    expect(scope.extras.forType('AnimatedSpriteComponent'), isNotNull);
+    expect(scope.extras.forType('SpriteAnimationComponent'), isNotNull);
     expect(scope.prefabs.all, isNotEmpty);
     expect(scope.layers.all, isNotEmpty);
     expect(scope.modules.all, isEmpty);

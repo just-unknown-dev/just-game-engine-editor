@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/editor_constants.dart';
+import '../../../core/scope/editor_scope.dart';
 import '../docks/logs_dock.dart';
 import '../settings/overlay_ui_settings.dart';
 
@@ -51,10 +52,35 @@ class _DockAssetsPanelState extends State<DockAssetsPanel> {
   _AssetNode? _scenesRoot;
   bool _isLoading = true;
 
+  VoidCallback? _stopWatchingWorkspace;
+
   @override
   void initState() {
     super.initState();
     _loadRoots();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // A workspace writes files; when it closes, show what is there now.
+    _stopWatchingWorkspace?.call();
+    _stopWatchingWorkspace = EditorScopeProvider.maybeOf(context)
+        ?.activeWorkspace
+        .watch(() {
+          if (!mounted) return;
+          _loadedChildren.clear();
+          _loadRoots();
+          for (final folder in _expandedFolders) {
+            _loadChildren(folder);
+          }
+        });
+  }
+
+  @override
+  void dispose() {
+    _stopWatchingWorkspace?.call();
+    super.dispose();
   }
 
   Future<void> _loadRoots() async {
@@ -160,6 +186,38 @@ class _DockAssetsPanelState extends State<DockAssetsPanel> {
     };
   }
 
+  /// What modules offer for [node], as small buttons at the row's end.
+  List<Widget> _actionsFor(_AssetNode node) {
+    final scope = EditorScopeProvider.maybeOf(context);
+    if (scope == null) return const [];
+    final path = _toRelativePath(node.path);
+    return [
+      for (final action in scope.assetActions)
+        if (action.appliesTo(path, isDirectory: node.isDirectory))
+          Tooltip(
+            message: action.label,
+            waitDuration: const Duration(milliseconds: 400),
+            child: InkWell(
+              onTap: () => action.run(scope, path),
+              borderRadius: BorderRadius.circular(3),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: Icon(
+                  action.icon,
+                  size: 12,
+                  color: EditorTheme.primaryMutedLight,
+                ),
+              ),
+            ),
+          ),
+    ];
+  }
+
+  /// A file's double-click: the workspace that opens its kind, if any.
+  void _openInWorkspace(_AssetNode node) => EditorScopeProvider.maybeOf(
+    context,
+  )?.openInWorkspace(_toRelativePath(node.path));
+
   Widget _buildNodeRow(_AssetNode node, int depth) {
     final isExpanded = _expandedFolders.contains(node.path);
     final isSelected = _selectedPath == node.path;
@@ -186,12 +244,18 @@ class _DockAssetsPanelState extends State<DockAssetsPanel> {
                 _selectedPath = node.path;
               });
             },
-            trailing: Icon(
-              isExpanded
-                  ? Icons.expand_less_rounded
-                  : Icons.expand_more_rounded,
-              size: 12,
-              color: EditorTheme.textMuted,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ..._actionsFor(node),
+                Icon(
+                  isExpanded
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  size: 12,
+                  color: EditorTheme.textMuted,
+                ),
+              ],
             ),
           ),
           if (isExpanded) ...<Widget>[
@@ -209,7 +273,11 @@ class _DockAssetsPanelState extends State<DockAssetsPanel> {
       depth: depth,
       isSelected: isSelected,
       onTap: () => setState(() => _selectedPath = node.path),
-      trailing: null,
+      onDoubleTap: () => _openInWorkspace(node),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: _actionsFor(node),
+      ),
     );
 
     return Draggable<String>(
@@ -263,11 +331,13 @@ class _DockAssetsPanelState extends State<DockAssetsPanel> {
     required bool isSelected,
     required VoidCallback onTap,
     required Widget? trailing,
+    VoidCallback? onDoubleTap,
   }) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: onTap,
+        onDoubleTap: onDoubleTap,
         child: Container(
           color: isSelected ? EditorTheme.selectionBg : Colors.transparent,
           padding: EdgeInsets.only(

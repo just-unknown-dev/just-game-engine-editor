@@ -177,6 +177,8 @@ class EditorScope {
   final List<SettingsSection> _settingsSections = [];
   final List<DockDefinition> _docks = [];
   final List<ToolbarButton> _toolbarButtons = [];
+  final List<WorkspaceDefinition> _workspaces = [];
+  final List<AssetAction> _assetActions = [];
   final List<SceneTreeAction> _sceneTreeActions = [];
   final List<SceneTreeRowDecoration> _rowDecorations = [];
   final List<EntityProtectionRule> _protectionRules = [];
@@ -200,6 +202,59 @@ class EditorScope {
 
   /// Module docks appended after the built-in ones, by order.
   List<DockDefinition> get docks => List.unmodifiable(_docks);
+
+  /// Full-screen tools modules add, by order.
+  List<WorkspaceDefinition> get workspaces => List.unmodifiable(_workspaces);
+
+  /// What modules offer to do with files in the Assets dock, by order.
+  List<AssetAction> get assetActions => List.unmodifiable(_assetActions);
+
+  /// The workspace that has the viewport, with the file it was opened on;
+  /// null while the level has it.
+  final Signal<OpenWorkspace?> activeWorkspace = Signal<OpenWorkspace?>(
+    null,
+    debugLabel: 'activeWorkspace',
+  );
+
+  /// Whether an open workspace fills the editor instead of sitting in it as
+  /// a dialog. The author's choice, kept while the editor runs.
+  final Signal<bool> workspaceFullScreen = Signal<bool>(
+    false,
+    debugLabel: 'workspaceFullScreen',
+  );
+
+  void toggleWorkspaceFullScreen() =>
+      workspaceFullScreen.value = !workspaceFullScreen.value;
+
+  /// Opens the workspace called [id], on [path] if given. False when no
+  /// module provides it.
+  bool openWorkspace(String id, {String? path}) {
+    for (final w in _workspaces) {
+      if (w.id != id) continue;
+      activeWorkspace.value = OpenWorkspace(w, path);
+      return true;
+    }
+    return false;
+  }
+
+  /// Opens whichever workspace best fits [path]'s ending. False when none
+  /// does.
+  bool openInWorkspace(String path) {
+    WorkspaceDefinition? best;
+    var bestMatch = 0;
+    for (final w in _workspaces) {
+      final match = w.matchOf(path);
+      if (match > bestMatch) {
+        best = w;
+        bestMatch = match;
+      }
+    }
+    if (best == null) return false;
+    activeWorkspace.value = OpenWorkspace(best, path);
+    return true;
+  }
+
+  void closeWorkspace() => activeWorkspace.value = null;
 
   /// Module buttons appended after the built-in toolbar, by order.
   List<ToolbarButton> get toolbarButtons => List.unmodifiable(_toolbarButtons);
@@ -325,6 +380,8 @@ class EditorScope {
       _settingsSections,
       _docks,
       _toolbarButtons,
+      _workspaces,
+      _assetActions,
       _sceneTreeActions,
       _rowDecorations,
       _protectionRules,
@@ -344,6 +401,8 @@ class EditorScope {
       _settingsSections.addAll(module.settingsSections);
       _docks.addAll(module.docks);
       _toolbarButtons.addAll(module.toolbarButtons);
+      _workspaces.addAll(module.workspaces);
+      _assetActions.addAll(module.assetActions);
       _sceneTreeActions.addAll(module.sceneTreeActions);
       _rowDecorations.addAll(module.rowDecorations);
       if (module.protectionRule case final rule?) _protectionRules.add(rule);
@@ -354,6 +413,13 @@ class EditorScope {
     _settingsSections.sort((a, b) => a.order.compareTo(b.order));
     _docks.sort((a, b) => a.order.compareTo(b.order));
     _toolbarButtons.sort((a, b) => a.order.compareTo(b.order));
+    _workspaces.sort((a, b) => a.order.compareTo(b.order));
+    _assetActions.sort((a, b) => a.order.compareTo(b.order));
+    // A workspace whose module went away gives the viewport back.
+    final open = activeWorkspace.value;
+    if (open != null && !_workspaces.any((w) => w.id == open.definition.id)) {
+      activeWorkspace.value = null;
+    }
     _sceneTreeActions.sort((a, b) => a.order.compareTo(b.order));
     _rowDecorations.sort((a, b) => a.order.compareTo(b.order));
     _inspectorSections.sort((a, b) => a.order.compareTo(b.order));
@@ -399,6 +465,8 @@ class EditorScope {
   /// Disposes every service this scope owns, in reverse registration order.
   void dispose() {
     activeDesigner.dispose();
+    activeWorkspace.dispose();
+    workspaceFullScreen.dispose();
     container.close();
   }
 }
@@ -427,4 +495,12 @@ class EditorScopeProvider extends InheritedWidget {
 
   @override
   bool updateShouldNotify(EditorScopeProvider old) => old.scope != scope;
+}
+
+/// A workspace that is open, and the file it was opened on.
+class OpenWorkspace {
+  const OpenWorkspace(this.definition, [this.path]);
+
+  final WorkspaceDefinition definition;
+  final String? path;
 }
