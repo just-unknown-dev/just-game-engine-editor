@@ -457,12 +457,10 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
       Rect.fromLTWH(globalPos.dx, globalPos.dy, 0, 0),
       Offset.zero & overlay.size,
     );
-    // Only the camera is protected — spawn points (player, zombie, ...) are
-    // ordinary, freely-deletable level design.
+    // Nothing is protected by the editor itself: a virtual camera is one
+    // shot among several, as deletable as a spawn point. Modules add rules.
     final scope = widget.scope;
-    final isProtected =
-        widget.entity.hasComponent<CameraComponent>() ||
-        (scope?.isProtected(widget.entity) ?? false);
+    final isProtected = scope?.isProtected(widget.entity) ?? false;
     final extra = scope?.sceneTreeActions ?? const <SceneTreeAction>[];
 
     showMenu<Object>(

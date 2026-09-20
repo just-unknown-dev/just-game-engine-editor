@@ -35,6 +35,10 @@ abstract final class BuiltInPrefabs {
   static const String solidId = 'builtin.solid';
   static const String triggerId = 'builtin.trigger';
   static const String cameraId = 'builtin.camera';
+  static const String cameraZoneId = 'builtin.camera_zone';
+  static const String cameraBoundsId = 'builtin.camera_bounds';
+  static const String targetGroupId = 'builtin.target_group';
+  static const String dollyCameraId = 'builtin.dolly_camera';
   static const String spawnId = 'builtin.spawn';
   static const String markerId = 'builtin.marker';
 
@@ -43,6 +47,7 @@ abstract final class BuiltInPrefabs {
     PrefabCategory(label: 'Shapes', order: 0),
     PrefabCategory(label: 'Physics', order: 10),
     PrefabCategory(label: 'Scene', order: 20),
+    PrefabCategory(label: 'Camera', order: 25),
   ];
 
   /// Every built-in prefab, in palette order.
@@ -55,6 +60,10 @@ abstract final class BuiltInPrefabs {
     _solid,
     _trigger,
     _camera,
+    _cameraZone,
+    _cameraBounds,
+    _targetGroup,
+    _dollyCamera,
     _spawn,
     _marker,
   ];
@@ -216,21 +225,118 @@ abstract final class BuiltInPrefabs {
     ],
   );
 
+  static const Color _cameraColor = Color(0xFF26C6DA);
+
   static final _camera = PrefabDefinition(
     id: cameraId,
-    name: 'Camera',
-    category: 'Scene',
+    name: 'Virtual camera',
+    category: 'Camera',
     icon: Icons.videocam_outlined,
-    color: sceneColor,
+    color: _cameraColor,
     placement: PrefabPlacement.point,
     defaultSize: const Size(48, 48),
-    description: 'A camera. Set its zoom and bounds in the inspector.',
+    description:
+        'A shot the game can show. Name what it follows in the inspector; '
+        'the highest-priority enabled camera is live.',
     namePrefix: 'Camera',
     build: (position, size) => [
       jge.TransformComponent(
         position: jge.Vector3(position.dx, position.dy, 0),
       ),
-      jge.CameraComponent(),
+      jge.VirtualCameraComponent(),
+      jge.CameraFramingComponent(),
+    ],
+  );
+
+  static final _cameraZone = PrefabDefinition(
+    id: cameraZoneId,
+    name: 'Camera zone',
+    category: 'Camera',
+    icon: Icons.sensors,
+    color: const Color(0xFF7E57C2),
+    defaultSize: const Size(640, 360),
+    description:
+        'A shot of its own while its target is inside the rectangle. Name '
+        'the target, the zoom and the framing in the inspector.',
+    namePrefix: 'CameraZone',
+    build: (position, size) => [
+      jge.TransformComponent(
+        position: jge.Vector3(position.dx, position.dy, 0),
+      ),
+      // Off until the trigger turns it on, and above a level's main camera
+      // so it wins while it is.
+      jge.VirtualCameraComponent(priority: 20, enabled: false),
+      jge.CameraFramingComponent(),
+      jge.CameraTriggerComponent(
+        width: size.width,
+        height: size.height,
+        targetTag: '',
+      ),
+    ],
+  );
+
+  static final _cameraBounds = PrefabDefinition(
+    id: cameraBoundsId,
+    name: 'Camera bounds',
+    category: 'Camera',
+    icon: Icons.border_outer,
+    color: const Color(0xFFFFB74D),
+    defaultSize: const Size(1280, 720),
+    description:
+        'The area a camera may show. Name it in a camera\'s Confiner to keep '
+        'that camera inside.',
+    namePrefix: 'CameraBounds',
+    build: (position, size) => [
+      jge.TransformComponent(
+        position: jge.Vector3(position.dx, position.dy, 0),
+      ),
+      jge.CameraBoundsComponent(width: size.width, height: size.height),
+    ],
+  );
+
+  static final _targetGroup = PrefabDefinition(
+    id: targetGroupId,
+    name: 'Target group',
+    category: 'Camera',
+    icon: Icons.group_work_outlined,
+    color: _cameraColor,
+    placement: PrefabPlacement.point,
+    defaultSize: const Size(48, 48),
+    description:
+        'Sits at the centre of its members, so a camera that follows it '
+        'frames them all.',
+    namePrefix: 'TargetGroup',
+    build: (position, size) => [
+      jge.TransformComponent(
+        position: jge.Vector3(position.dx, position.dy, 0),
+      ),
+      jge.CameraTargetGroupComponent(),
+    ],
+  );
+
+  static final _dollyCamera = PrefabDefinition(
+    id: dollyCameraId,
+    name: 'Dolly camera',
+    category: 'Camera',
+    icon: Icons.linear_scale,
+    color: const Color(0xFF4FC3F7),
+    placement: PrefabPlacement.point,
+    defaultSize: const Size(48, 48),
+    description:
+        'A camera on a track: it rides to the point nearest what it follows. '
+        'Edit the track with the Track tool.',
+    namePrefix: 'DollyCamera',
+    build: (position, size) => [
+      jge.TransformComponent(
+        position: jge.Vector3(position.dx, position.dy, 0),
+      ),
+      jge.VirtualCameraComponent(),
+      jge.CameraDollyComponent(
+        waypoints: [
+          position - const Offset(320, 0),
+          position + const Offset(320, 0),
+        ],
+      ),
     ],
   );
 

@@ -20,6 +20,7 @@ abstract final class BuiltInFieldEditors {
     jge.FieldTypes.decimal.id: _number,
     jge.FieldTypes.text.id: _text,
     jge.FieldTypes.assetRef.id: _assetRef,
+    jge.FieldTypes.entityRef.id: _entityRef,
     FieldEditorRegistry.enumKey: _enumeration,
     jge.FieldTypes.enumeration.id: _enumeration,
     jge.FieldTypes.list.id: _json,
@@ -85,6 +86,26 @@ abstract final class BuiltInFieldEditors {
           initialValue: c.value?.toString() ?? '',
           onSubmitted: (text) => c.onChanged(text.trim()),
         );
+
+  static const String _noEntity = '(none)';
+
+  /// A reference to another entity, by name: a dropdown of what the scene
+  /// holds. A name the scene no longer has stays listed, so opening the
+  /// inspector never silently rewrites it.
+  static Widget _entityRef(FieldEditorContext c) {
+    final current = c.value as String? ?? '';
+    if (c.readOnly) return ReadonlyRow(label: c.label, value: current);
+    final names = <String>{
+      ...?c.entityNames?.call(),
+      if (current.isNotEmpty) current,
+    }.toList()..sort();
+    return DropdownEditorRow(
+      label: c.label,
+      value: current.isEmpty ? _noEntity : current,
+      options: [_noEntity, ...names],
+      onChanged: (name) => c.onChanged(name == _noEntity ? '' : name),
+    );
+  }
 
   static Widget _assetRef(FieldEditorContext c) => c.readOnly
       ? _readonly(c)

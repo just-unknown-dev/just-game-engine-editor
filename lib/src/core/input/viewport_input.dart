@@ -69,9 +69,8 @@ class ViewportInput {
     if (canvasSize == Size.zero) return;
 
     // Middle-mouse-drag pans the camera — only while pure-authoring (Play
-    // not pressed): once a scene has a camera entity, CameraTransformSyncSystem
-    // re-asserts mainCamera's position from it every frame during Play, which
-    // would fight a manual pan immediately.
+    // not pressed): during Play the camera brain owns the output camera and
+    // would overwrite a manual pan the next frame.
     if ((event.buttons & kMiddleMouseButton) != 0 && isAuthoring()) {
       _isPanningCamera = true;
       _activeHandle = null;

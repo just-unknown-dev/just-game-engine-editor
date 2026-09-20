@@ -24,6 +24,8 @@ import '../../ui/level_designer/commands/designer_command.dart';
 import '../../ui/level_designer/level_designer_session.dart';
 import '../../ui/level_designer/tools/tool_registry.dart';
 import '../../extension/editor_module.dart';
+import '../../ui/overlay/camera_rig_painter.dart';
+import '../../ui/level_designer/painters/designer_canvas.dart';
 
 export '../play/play_controller.dart' show EditorPlayState, EntitySpawner;
 
@@ -193,6 +195,10 @@ class JustGameEditorPlugin implements EnginePlugin {
   final Signal<bool> showGrid = Signal(true, debugLabel: 'showGrid');
   bool _gridSnappingEnabled = true;
 
+  /// Whether a small view through the game's live camera is drawn over
+  /// the editor while authoring.
+  final Signal<bool> showGamePreview = Signal(true, debugLabel: 'gamePreview');
+
   /// The authoring grid size, in world units.
   final Signal<double> gridSize = Signal(32.0, debugLabel: 'gridSize');
 
@@ -341,18 +347,10 @@ class JustGameEditorPlugin implements EnginePlugin {
     )) {
       engine.world.addSystem(EditorAnimationControllerSystem());
     }
-    // A scene's camera entity should only drive the real camera during
-    // actual play — while authoring (editor open, Play not pressed) there's
-    // no manual pan/zoom to fall back on, so these (added by the app's own
-    // system registration, if present) must not hijack the authoring
-    // viewport. Pressing Play un-suppresses them so the test camera follows
-    // the player properly.
-    engine.world.getSystem<CameraFollowSystem>()?.isAuthoringActive = () =>
-        isAuthoring.value;
-    engine.world
-        .getSystem<CameraTransformSyncSystem>()
-        ?.isAuthoringActive = () =>
-        isAuthoring.value;
+    // While authoring, the output camera is the editor's view: the brain
+    // keeps thinking but does not write to it. Play hands it over.
+    isAuthoring.addListener(_syncCameraOwnership);
+    _syncCameraOwnership();
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
     // Register game custom components and wire post-refresh re-registration.
@@ -545,6 +543,37 @@ class JustGameEditorPlugin implements EnginePlugin {
     _attachDebuggerIfReady();
     if (!_isInitialized || !isVisible.value) return;
     _syncTimeScaleForPreview();
+    // The game is frozen while authoring, so the brain is asked directly:
+    // every camera snaps to what it would frame, which is what the camera
+    // gizmos and the game preview draw.
+    if (isAuthoring.value &&
+        engine.isInitialized &&
+        engine.cameraSystem.isInitialized) {
+      engine.cameraSystem.brain.evaluate(engine.world, 0, snap: true);
+    }
+  }
+
+  /// The editor's view, kept across a play-test so Stop returns to exactly
+  /// where the author was looking.
+  CameraState? _editorView;
+
+  /// Decides who writes the output camera. Authoring: the editor — its pan,
+  /// zoom and bookmarks — while the brain only thinks. Otherwise the brain.
+  void _syncCameraOwnership() {
+    if (!engine.isInitialized || !engine.cameraSystem.isInitialized) return;
+    final brain = engine.cameraSystem.brain;
+    final authoring = isAuthoring.value;
+    if (authoring == !brain.driveOutput) return;
+    final camera = engine.cameraSystem.mainCamera;
+    if (authoring) {
+      brain.driveOutput = false;
+      if (_editorView case final view?) camera.apply(view);
+    } else {
+      // Leaving for a play-test remembers the view; closing the editor
+      // forgets it, so reopening starts from what the game shows.
+      _editorView = isVisible.value ? camera.state : null;
+      brain.driveOutput = true;
+    }
   }
 
   /// While the editor is open and authoring (Play not pressed),
@@ -591,9 +620,22 @@ class JustGameEditorPlugin implements EnginePlugin {
     // stay visible and grabbable on top of everything.
     designer.value?.paint(canvas, size, camera);
 
+    // The designer draws the camera rigs as one of its overlays; with it
+    // closed the base editor draws them itself.
+    if (designer.value == null && isAuthoring.value) {
+      CameraRigPainter.paint(
+        DesignerCanvas(canvas: canvas, size: size, camera: camera),
+        engine.world,
+        brain: scope.cameraBrain,
+        isSelected: (entity) =>
+            sceneState.selectedEntity.value?.id == entity.id ||
+            sceneState.isInMultiSelection(entity.id),
+      );
+    }
+
     _gizmoPainter.paintCameraMarkers(
       canvas,
-      engine.world.query([TransformComponent, CameraComponent]),
+      engine.world.query([TransformComponent, VirtualCameraComponent]),
       camera,
       size,
     );
@@ -605,6 +647,8 @@ class JustGameEditorPlugin implements EnginePlugin {
       size,
     );
 
+    _paintGamePreview(canvas, size, camera);
+
     final selected = sceneState.selectedEntity.value;
     if (selected == null || !selected.isActive) return;
     // The designer's select tool draws its own resize and rotate handles, and
@@ -615,6 +659,87 @@ class JustGameEditorPlugin implements EnginePlugin {
       return;
     }
     _gizmoPainter.paintGizmos(canvas, selected, camera, size);
+  }
+
+  /// The preview's top-left corner on the canvas. The chrome publishes it on
+  /// every layout, so the preview hangs directly below the play controls
+  /// wherever they are.
+  Offset gamePreviewOrigin = const Offset(16, 56);
+
+  /// Where the game preview sits on a canvas of [canvasSize] with its corner
+  /// at [origin]: a fraction of the width, with the game's own aspect.
+  static Rect gamePreviewRect(
+    Size canvasSize, {
+    Offset origin = const Offset(16, 56),
+  }) {
+    final width = (canvasSize.width * 0.24).clamp(160.0, 420.0);
+    return Rect.fromLTWH(
+      origin.dx,
+      origin.dy,
+      width,
+      width * canvasSize.height / canvasSize.width,
+    );
+  }
+
+  /// A small view through the game's live camera, drawn over the editor.
+  ///
+  /// The world is rendered a second time with the output camera briefly
+  /// showing what the brain wants, then handed back exactly as it was — so
+  /// the author sees the shot they are composing without leaving the view
+  /// they are composing it from.
+  void _paintGamePreview(Canvas canvas, Size size, Camera camera) {
+    if (!showGamePreview.value || !isAuthoring.value) return;
+    final brain = scope.cameraBrain;
+    final shot = brain?.liveState;
+    final live = brain?.liveCamera;
+    if (brain == null || shot == null || live == null) return;
+
+    final rect = gamePreviewRect(size, origin: gamePreviewOrigin);
+    final view = camera.state;
+    canvas
+      ..save()
+      ..clipRect(rect)
+      ..drawRect(rect, Paint()..color = const Color(0xFF0E1216))
+      ..translate(rect.left, rect.top)
+      ..scale(rect.width / size.width);
+    camera.apply(shot);
+    try {
+      engine.world.render(canvas, size);
+    } finally {
+      camera
+        ..apply(view)
+        ..viewportSize = size;
+      canvas.restore();
+    }
+
+    const accent = Color(0xFF40E0D0);
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = accent,
+    );
+    final blending = brain.activeBlend != null;
+    final label = TextPainter(
+      text: TextSpan(
+        text:
+            '${brain.soloEntity == live.id ? 'SOLO' : 'LIVE'} · '
+            '${live.name ?? 'camera'}${blending ? ' · blending' : ''}',
+        style: const TextStyle(
+          color: accent,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: rect.width - 12);
+    final at = rect.topLeft + const Offset(6, 4);
+    canvas.drawRect(
+      (at & label.size).inflate(2),
+      Paint()..color = const Color(0xCC0E1216),
+    );
+    label.paint(canvas, at);
   }
 
   void applyOverlaySettings({
@@ -764,6 +889,10 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   void dispose() {
     closeLevelDesigner();
+    isAuthoring.removeListener(_syncCameraOwnership);
+    if (engine.isInitialized && engine.cameraSystem.isInitialized) {
+      engine.cameraSystem.brain.driveOutput = true;
+    }
     try {
       HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     } catch (_) {

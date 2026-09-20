@@ -82,7 +82,7 @@ void main() {
     Engine.resetInstance();
   });
 
-  testWidgets('no status badge, and the play controls sit bottom-left', (
+  testWidgets('no status badge, and the play controls sit top-left', (
     tester,
   ) async {
     Engine.resetInstance();
@@ -110,7 +110,10 @@ void main() {
     final screen = tester.getSize(find.byType(JustGameEditorOverlay));
     final play = tester.getCenter(find.byTooltip('Play'));
     expect(play.dx, lessThan(screen.width / 4), reason: 'left');
-    expect(play.dy, greaterThan(screen.height / 2), reason: 'bottom');
+    expect(play.dy, lessThan(screen.height / 4), reason: 'top');
+    // The game camera preview hangs directly below them.
+    expect(plugin.gamePreviewOrigin.dy, greaterThan(play.dy));
+    expect(plugin.gamePreviewOrigin.dx, lessThan(play.dx));
 
     plugin.dispose();
     Engine.resetInstance();

@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import 'scene_codec.dart';
@@ -79,7 +78,18 @@ class SceneStore {
           'parentName': null,
           'components': encode([
             TransformComponent(position: Vector3(2000, 400, 0)),
-            CameraComponent(bounds: const Rect.fromLTWH(0, 0, 4000, 800)),
+            // Follows whatever the game tags 'player' once it is spawned.
+            VirtualCameraComponent(followTag: 'player'),
+            CameraFramingComponent(),
+            CameraConfinerComponent(boundsName: 'LevelBounds'),
+          ]),
+        },
+        {
+          'name': 'LevelBounds',
+          'parentName': null,
+          'components': encode([
+            TransformComponent(position: Vector3(2000, 400, 0)),
+            CameraBoundsComponent(width: 4000, height: 800),
           ]),
         },
         {

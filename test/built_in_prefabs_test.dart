@@ -26,6 +26,10 @@ void main() {
       BuiltInPrefabs.solidId,
       BuiltInPrefabs.triggerId,
       BuiltInPrefabs.cameraId,
+      BuiltInPrefabs.cameraZoneId,
+      BuiltInPrefabs.cameraBoundsId,
+      BuiltInPrefabs.targetGroupId,
+      BuiltInPrefabs.dollyCameraId,
       BuiltInPrefabs.spawnId,
       BuiltInPrefabs.markerId,
     });
@@ -70,11 +74,22 @@ void main() {
 
       final rect = components.whereType<jge.RectangleComponent>().firstOrNull;
       final circle = components.whereType<jge.CircleComponent>().firstOrNull;
-      expect(
-        rect ?? circle,
-        isNotNull,
-        reason: '${prefab.id} draws nothing, so the drag has no visible result',
-      );
+      if (rect == null && circle == null) {
+        // Not a shape: a camera zone or camera bounds, drawn by the camera
+        // overlay from its extent — which must then be what was drawn.
+        final sized = components
+            .map(DesignerGeometry.sizeOf)
+            .whereType<Size>()
+            .firstOrNull;
+        expect(
+          sized,
+          size,
+          reason:
+              '${prefab.id} draws nothing and has no extent, so the drag has '
+              'no visible result',
+        );
+        continue;
+      }
       if (rect != null) {
         expect(rect.width, size.width, reason: prefab.id);
         expect(rect.height, size.height, reason: prefab.id);

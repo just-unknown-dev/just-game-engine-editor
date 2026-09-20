@@ -247,8 +247,8 @@ class LevelDesignerController {
   /// those panels out, on every layout.
   EdgeInsets viewportInsets = EdgeInsets.zero;
 
-  /// Height kept clear beneath the minimap, for the play controls the
-  /// overlay places there. Published alongside [viewportInsets].
+  /// Height kept clear beneath the minimap, for anything the overlay places
+  /// there. Published alongside [viewportInsets].
   double minimapBottomReserve = 0;
 
   /// The visible part of a canvas of [canvasSize], in screen pixels.

@@ -64,7 +64,11 @@ void main() {
     final scope = testScope(modules: [_Module()]);
     expect(scope.docks.map((d) => d.id), ['test.waves']);
     expect(scope.toolbarButtons.map((b) => b.id), ['test.spawn']);
-    expect(scope.sceneTreeActions.map((a) => a.id), ['test.mark']);
+    // After the editor's own: Solo camera.
+    expect(scope.sceneTreeActions.map((a) => a.id), [
+      BuiltInCameraContributions.soloActionId,
+      'test.mark',
+    ]);
     expect(scope.inspectorSections.map((s) => s.id), ['test.notes']);
     expect(scope.theme.preset('test.neon'), isNotNull);
     // Five built-in accents stay, first and in order.

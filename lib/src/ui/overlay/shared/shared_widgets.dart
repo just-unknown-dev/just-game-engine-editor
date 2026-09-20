@@ -52,6 +52,7 @@ class PlayControlsToolbar extends StatelessWidget {
         plugin.playController.state,
         plugin.designer,
         plugin.sceneState.activeScene,
+        plugin.showGamePreview,
       ],
       builder: (context, _) {
         final state = plugin.playController.state.value;
@@ -117,6 +118,17 @@ class PlayControlsToolbar extends StatelessWidget {
                   onTap: plugin.sceneState.hasScene
                       ? plugin.toggleLevelDesigner
                       : null,
+                  settings: settings,
+                ),
+                _PlayControlButton(
+                  icon: Icons.picture_in_picture_alt_outlined,
+                  tooltip: plugin.showGamePreview.value
+                      ? 'Hide the game camera preview'
+                      : 'Show the game camera preview',
+                  color: EditorTheme.primaryBright,
+                  isActive: plugin.showGamePreview.value,
+                  onTap: () => plugin.showGamePreview.value =
+                      !plugin.showGamePreview.value,
                   settings: settings,
                 ),
                 // What the modules add, after the built-ins.

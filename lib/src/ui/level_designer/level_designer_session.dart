@@ -30,6 +30,8 @@ import 'tools/tool_registry.dart';
 import 'tools/measure_tool.dart';
 import 'tools/paint_tool.dart';
 import 'tools/select_tool.dart';
+import '../overlay/camera_rig_painter.dart';
+import 'tools/path_tool.dart';
 
 /// Owns the Level Designer's runtime: state, tools, history and painting.
 ///
@@ -171,6 +173,7 @@ class LevelDesignerSession {
       SelectionHandlesOverlay(scope.handleLayout),
       SmartGuidesOverlay(),
       MinimapOverlay(),
+      CameraRigOverlay(brain: () => scope.cameraBrain),
     ]);
   }
 
@@ -203,6 +206,27 @@ class LevelDesignerSession {
       ),
       _measureTool,
       _eyedropper,
+      // The generic path tool, bound to a dolly camera's track.
+      PathTool(
+        sceneState: sceneState,
+        history: history,
+        id: BuiltInTools.dolly,
+        label: 'Track',
+        icon: Icons.linear_scale,
+        shortcut: null,
+        description:
+            'Edit a dolly camera\'s track: click to add a point, drag one to '
+            'move it, Alt+click to remove it',
+        order: 45,
+        binding: PathBinding(
+          resolve: (entity) => entity.getComponent<jge.CameraDollyComponent>(),
+          read: (c) => List.of((c as jge.CameraDollyComponent).waypoints),
+          write: (c, points) =>
+              (c as jge.CameraDollyComponent).waypoints = List.of(points),
+          isClosed: (c) => (c as jge.CameraDollyComponent).closed,
+          emptyMessage: 'Select a dolly camera to edit its track',
+        ),
+      ),
     ]);
   }
 

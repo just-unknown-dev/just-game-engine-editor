@@ -64,4 +64,7 @@ abstract final class BuiltInTools {
 
   /// Sample an entity as the thing to draw and paint.
   static const String eyedropper = 'eyedropper';
+
+  /// Edits the track of the selected dolly camera.
+  static const String dolly = 'camera.dolly';
 }

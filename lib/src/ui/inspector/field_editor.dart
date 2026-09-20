@@ -18,6 +18,7 @@ class FieldEditorContext {
     required this.onChanged,
     required this.editors,
     this.readOnly = false,
+    this.entityNames,
   });
 
   /// The definition field being edited: name, kind, limits, read/write.
@@ -41,6 +42,10 @@ class FieldEditorContext {
 
   /// Whether the field cannot be written right now.
   final bool readOnly;
+
+  /// The names of the scene's entities, for a field that refers to one.
+  /// Null where there is no scene to ask.
+  final List<String> Function()? entityNames;
 
   /// Label to show: the hint's, else the field name.
   String get label => hint.label ?? field.name;
@@ -75,6 +80,7 @@ class FieldEditorContext {
     onChanged: onChanged ?? this.onChanged,
     editors: editors,
     readOnly: readOnly,
+    entityNames: entityNames,
   );
 }
 

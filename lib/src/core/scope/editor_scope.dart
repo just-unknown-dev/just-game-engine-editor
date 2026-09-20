@@ -30,6 +30,7 @@ import '../serialization/scene_codec.dart';
 import '../serialization/scene_store.dart';
 import '../services/editor_log_service.dart';
 import '../state/editor_scene_state.dart';
+import '../../extension/built_in_camera_contributions.dart';
 
 /// Everything one editor owns: its registries, services and state, in a
 /// `just_di` container that is disposed with it.
@@ -254,6 +255,17 @@ class EditorScope {
     activeDesigner.dispatchNotifications();
   }
 
+  /// The running game's camera brain, or null for a scope over a bare world
+  /// or an engine that has not started. Camera gizmos, the LIVE badge and
+  /// Solo read it.
+  CameraBrain? get cameraBrain {
+    final e = engine;
+    if (e == null || !e.isInitialized || !e.cameraSystem.isInitialized) {
+      return null;
+    }
+    return e.cameraSystem.brain;
+  }
+
   /// Where the palette group called [label] sorts; one nobody declared
   /// sorts after every declared one.
   int prefabCategoryOrder(String label) {
@@ -305,6 +317,7 @@ class EditorScope {
     fieldEditors.registerAll(BuiltInFieldEditors.all);
     extras.clear();
     extras.registerAll(BuiltInExtras.all);
+    extras.registerAll(BuiltInCameraContributions.extras);
     commands.clear();
     commands.registerAll(BuiltInCommands.all);
     commands.bindAll(BuiltInBindings.of(config));
@@ -319,6 +332,9 @@ class EditorScope {
     ]) {
       l.clear();
     }
+    // The editor's own camera tooling arrives the way a module's would.
+    _sceneTreeActions.addAll(BuiltInCameraContributions.sceneTreeActions);
+    _rowDecorations.addAll(BuiltInCameraContributions.rowDecorations);
     final context = EditorModuleContext(scope: this, isDebug: _isDebug);
     for (final module in modules.all) {
       fieldEditors.registerAll(module.fieldEditors, override: true);

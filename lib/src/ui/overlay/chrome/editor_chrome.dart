@@ -98,8 +98,23 @@ class FullEditorChrome extends StatelessWidget {
             panelWidth + designerPanelWidth,
             DesignerStatusBar.height,
           )
-          ..minimapBottomReserve =
-              PlayControlsToolbar.heightFor(settings) + MinimapLayout.margin;
+          // The play controls sit top-left now; nothing is under the minimap.
+          ..minimapBottomReserve = 0;
+
+        // Top-left of the viewport: clear of the tool strip and the rulers
+        // while designing, otherwise just inside the corner. The game camera
+        // preview hangs below the controls, so the plugin — which paints it on
+        // the canvas — is told where that is.
+        final controlsAt = designer != null
+            ? const Offset(
+                ToolPalette.width +
+                    RulersOverlay.thickness +
+                    MinimapLayout.margin,
+                RulersOverlay.thickness + MinimapLayout.margin,
+              )
+            : const Offset(16, 16);
+        plugin.gamePreviewOrigin =
+            controlsAt + Offset(0, PlayControlsToolbar.heightFor(settings) + 8);
 
         return Stack(
           children: <Widget>[
@@ -151,20 +166,9 @@ class FullEditorChrome extends StatelessWidget {
                   maxDetailHeight: size.height,
                 ),
               ),
-            // Bottom-left: under the minimap while designing, otherwise just
-            // above the status dock.
             Positioned(
-              left: designer != null
-                  ? ToolPalette.width +
-                        RulersOverlay.thickness +
-                        MinimapLayout.margin
-                  : 16,
-              bottom: designer != null
-                  ? DesignerStatusBar.height + MinimapLayout.margin
-                  : (plugin.isStatusPanelVisible.value
-                            ? OverlayLayout.compactDockPanelHeight
-                            : 0) +
-                        16,
+              left: controlsAt.dx,
+              top: controlsAt.dy,
               child: PlayControlsToolbar(plugin: plugin, settings: settings),
             ),
             Positioned(

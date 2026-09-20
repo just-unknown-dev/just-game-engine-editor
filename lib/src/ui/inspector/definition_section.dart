@@ -223,6 +223,10 @@ class DefinitionSection extends StatelessWidget {
       component: component,
       readOnly: !hint.editable || field.write == null,
       editors: scope.fieldEditors,
+      entityNames: () => [
+        for (final e in scope.world.query([jge.TransformComponent]))
+          if (e.isActive && e.name != null) e.name!,
+      ],
       onChanged: (next) {
         field.write?.call(component, next);
         onChanged();

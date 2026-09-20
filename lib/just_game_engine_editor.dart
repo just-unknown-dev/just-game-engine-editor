@@ -62,3 +62,5 @@ export 'src/ui/inspector/built_in_field_editors.dart';
 
 // Level Designer — the dedicated level-authoring workspace.
 export 'src/ui/level_designer/level_designer.dart';
+export 'src/ui/overlay/camera_rig_painter.dart';
+export 'src/extension/built_in_camera_contributions.dart';
