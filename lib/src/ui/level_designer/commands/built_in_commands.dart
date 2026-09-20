@@ -108,6 +108,45 @@ abstract final class BuiltInCommands {
       ),
     ],
     // Editor-wide: dispatched by the plugin after the designer has passed.
+    // Play-test controls. Always in scope, and on function keys: during a
+    // play-test the letters and Space belong to the game.
+    DesignerCommand(
+      id: 'editor.playToggle',
+      label: 'Play / Stop',
+      scope: CommandScope.always,
+      run: (c) => c.plugin!.playController.togglePlay(),
+    ),
+    DesignerCommand(
+      id: 'editor.pauseToggle',
+      label: 'Pause / Resume',
+      scope: CommandScope.always,
+      run: (c) => c.plugin!.playController.togglePause(),
+    ),
+    DesignerCommand(
+      id: 'editor.playRestart',
+      label: 'Restart play-test',
+      scope: CommandScope.always,
+      run: (c) => c.plugin!.playController.restart(),
+    ),
+    DesignerCommand(
+      id: 'editor.playStep',
+      label: 'Step one frame',
+      scope: CommandScope.always,
+      run: (c) => c.plugin!.playController.step(),
+    ),
+    DesignerCommand(
+      id: 'editor.toggleDesigner',
+      label: 'Level Designer',
+      scope: CommandScope.always,
+      run: (c) => c.plugin!.toggleLevelDesigner(),
+    ),
+    DesignerCommand(
+      id: 'editor.togglePreview',
+      label: 'Game camera preview',
+      scope: CommandScope.always,
+      run: (c) =>
+          c.plugin!.showGamePreview.value = !c.plugin!.showGamePreview.value,
+    ),
     DesignerCommand(
       id: 'editor.save',
       label: 'Save scene',

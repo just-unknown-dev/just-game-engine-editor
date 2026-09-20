@@ -36,6 +36,20 @@ class PlayController {
     EditorPlayState.stopped,
     debugLabel: 'playState',
   );
+
+  /// The speeds the toolbar offers. Slow motion is for watching a camera
+  /// blend or a jump arc; double speed for getting back to the hard part.
+  static const List<double> speeds = [0.25, 0.5, 1.0, 2.0];
+
+  /// How fast game time runs while playing.
+  final Signal<double> speed = Signal(1.0, debugLabel: 'playSpeed');
+
+  /// Whole seconds of game time played this session, for the toolbar. A
+  /// signal that changes once a second, not once a frame.
+  final Signal<int> elapsedSeconds = Signal(0, debugLabel: 'playElapsed');
+
+  double _elapsed = 0;
+  int _stepFrames = 0;
   final List<EntityId> _spawned = [];
   PlaySnapshot? _snapshot;
 
@@ -56,6 +70,8 @@ class PlayController {
     if (!engine.isInitialized) return;
 
     if (state.value == EditorPlayState.stopped) {
+      _elapsed = 0;
+      elapsedSeconds.value = 0;
       // Before anything spawns or moves.
       _snapshot = PlaySnapshot.capture(engine.world, scope.codec);
       for (final spawnPoint in engine.world.query([SpawnComponent])) {
@@ -72,8 +88,9 @@ class PlayController {
       );
     }
 
+    _stepFrames = 0;
     state.value = EditorPlayState.playing;
-    engine.time.timeScale = 1.0;
+    engine.time.timeScale = speed.value;
   }
 
   /// Freezes simulation without destroying anything — [play] resumes
@@ -82,6 +99,50 @@ class PlayController {
     if (state.value != EditorPlayState.playing) return;
     state.value = EditorPlayState.paused;
     engine.time.timeScale = 0.0;
+  }
+
+  /// Play when stopped, Stop otherwise: one key for "try it / back to work".
+  void togglePlay() => isRunning ? stop() : play();
+
+  /// Pause while playing, resume while paused.
+  void togglePause() => switch (state.value) {
+    EditorPlayState.playing => pause(),
+    EditorPlayState.paused => play(),
+    EditorPlayState.stopped => null,
+  };
+
+  /// Back to the authored scene and straight into a fresh run.
+  void restart() {
+    if (!isRunning) return;
+    stop();
+    play();
+  }
+
+  /// Changes how fast game time runs; takes effect at once while playing.
+  void setSpeed(double value) {
+    speed.value = value;
+    if (state.value == EditorPlayState.playing) {
+      engine.time.timeScale = value;
+    }
+  }
+
+  /// Runs exactly one frame and pauses again. Pauses first if playing, so
+  /// the key works as "freeze here, now go one at a time".
+  void step() {
+    if (!isRunning) return;
+    if (state.value == EditorPlayState.playing) pause();
+    engine.time.timeScale = speed.value;
+    _stepFrames = 1;
+  }
+
+  /// Called once per frame, after the game has updated, with wall-clock
+  /// [dt]: counts play time and closes a stepped frame.
+  void tick(double dt) {
+    final ran = state.value == EditorPlayState.playing || _stepFrames > 0;
+    if (_stepFrames > 0 && --_stepFrames == 0) engine.time.timeScale = 0.0;
+    if (!ran) return;
+    _elapsed += dt * speed.value;
+    elapsedSeconds.value = _elapsed.floor();
   }
 
   /// Destroys every entity [play] spawned, puts every authored entity back
@@ -111,9 +172,14 @@ class PlayController {
       );
     }
 
+    _stepFrames = 0;
     state.value = EditorPlayState.stopped;
     engine.time.timeScale = 0.0;
   }
 
-  void dispose() => state.dispose();
+  void dispose() {
+    state.dispose();
+    speed.dispose();
+    elapsedSeconds.dispose();
+  }
 }

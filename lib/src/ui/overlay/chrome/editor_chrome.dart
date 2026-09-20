@@ -115,6 +115,12 @@ class FullEditorChrome extends StatelessWidget {
             : const Offset(16, 16);
         plugin.gamePreviewOrigin =
             controlsAt + Offset(0, PlayControlsToolbar.heightFor(settings) + 8);
+        // The same frame as the toolbar above it: radius, border, padding.
+        plugin.gamePreviewStyle = GamePreviewStyle(
+          cornerRadius: settings.cornerRadius + 6,
+          borderColor: settings.themeColor,
+          padding: 5 * settings.compactness,
+        );
 
         return Stack(
           children: <Widget>[

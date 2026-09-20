@@ -105,19 +105,32 @@ void main() {
       expect(output().position, const Offset(12, 34));
     });
 
-    test('the preview keeps the shape of the game view', () {
-      final rect = JustGameEditorPlugin.gamePreviewRect(const Size(1600, 900));
-      expect(rect.width / rect.height, closeTo(1600 / 900, 1e-9));
-      expect(rect.width, lessThan(1600 / 2));
+    test(
+      'the preview is a panel: a header, then the game view in its shape',
+      () {
+        const canvas = Size(1600, 900);
+        final panel = JustGameEditorPlugin.gamePreviewRect(canvas);
+        final view = JustGameEditorPlugin.gamePreviewViewRect(panel);
+        expect(view.width / view.height, closeTo(1600 / 900, 1e-9));
+        expect(panel.width, lessThan(1600 / 2));
+        // Header above, the same padding all round — like the toolbar's frame.
+        expect(
+          view.top - panel.top,
+          JustGameEditorPlugin.gamePreviewHeaderHeight + 5,
+        );
+        expect(view.left - panel.left, 5);
+        expect(panel.right - view.right, 5);
+        expect(panel.bottom - view.bottom, 5);
 
-      // It hangs wherever the chrome says the play controls end.
-      final moved = JustGameEditorPlugin.gamePreviewRect(
-        const Size(1600, 900),
-        origin: const Offset(74, 70),
-      );
-      expect(moved.topLeft, const Offset(74, 70));
-      expect(moved.size, rect.size);
-    });
+        // It hangs wherever the chrome says the play controls end.
+        final moved = JustGameEditorPlugin.gamePreviewRect(
+          canvas,
+          origin: const Offset(74, 70),
+        );
+        expect(moved.topLeft, const Offset(74, 70));
+        expect(moved.size, panel.size);
+      },
+    );
 
     test('Solo looks through one camera, and toggles off again', () {
       final low = shot('Low', Offset.zero, priority: 1);

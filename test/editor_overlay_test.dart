@@ -108,12 +108,16 @@ void main() {
 
     expect(find.text('EDITOR: OPEN'), findsNothing);
     final screen = tester.getSize(find.byType(JustGameEditorOverlay));
-    final play = tester.getCenter(find.byTooltip('Play'));
+    final play = tester.getCenter(find.byTooltip('Play  (F5)'));
     expect(play.dx, lessThan(screen.width / 4), reason: 'left');
     expect(play.dy, lessThan(screen.height / 4), reason: 'top');
     // The game camera preview hangs directly below them.
     expect(plugin.gamePreviewOrigin.dy, greaterThan(play.dy));
     expect(plugin.gamePreviewOrigin.dx, lessThan(play.dx));
+    // …in the toolbar's own frame: its border colour and its corners.
+    final ui = plugin.scope.prefs.settings.value;
+    expect(plugin.gamePreviewStyle.borderColor, ui.themeColor);
+    expect(plugin.gamePreviewStyle.cornerRadius, ui.cornerRadius + 6);
 
     plugin.dispose();
     Engine.resetInstance();

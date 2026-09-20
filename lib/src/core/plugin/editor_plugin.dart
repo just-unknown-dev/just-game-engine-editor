@@ -26,6 +26,7 @@ import '../../ui/level_designer/tools/tool_registry.dart';
 import '../../extension/editor_module.dart';
 import '../../ui/overlay/camera_rig_painter.dart';
 import '../../ui/level_designer/painters/designer_canvas.dart';
+import '../constants/editor_constants.dart';
 
 export '../play/play_controller.dart' show EditorPlayState, EntitySpawner;
 
@@ -541,6 +542,8 @@ class JustGameEditorPlugin implements EnginePlugin {
   void onUpdate(double dt) {
     scope.modules.notifyUpdate(dt);
     _attachDebuggerIfReady();
+    // After the frame's game update: play time, and the end of a stepped frame.
+    if (_isInitialized) playController.tick(dt);
     if (!_isInitialized || !isVisible.value) return;
     _syncTimeScaleForPreview();
     // The game is frozen while authoring, so the brain is asked directly:
@@ -666,22 +669,47 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// wherever they are.
   Offset gamePreviewOrigin = const Offset(16, 56);
 
-  /// Where the game preview sits on a canvas of [canvasSize] with its corner
-  /// at [origin]: a fraction of the width, with the game's own aspect.
+  /// How the preview's panel is drawn. The chrome publishes it with the
+  /// origin, from the same settings the play toolbar is drawn with, so the
+  /// two read as one piece of UI.
+  GamePreviewStyle gamePreviewStyle = const GamePreviewStyle();
+
+  /// Height of the preview panel's header row: the LIVE chip and camera name.
+  static const double gamePreviewHeaderHeight = 22;
+
+  /// The whole preview **panel** on a canvas of [canvasSize], with its corner
+  /// at [origin]: a fraction of the canvas wide, and as tall as its header
+  /// plus a game view of the game's own aspect.
   static Rect gamePreviewRect(
     Size canvasSize, {
     Offset origin = const Offset(16, 56),
+    GamePreviewStyle style = const GamePreviewStyle(),
   }) {
-    final width = (canvasSize.width * 0.24).clamp(160.0, 420.0);
+    final width = (canvasSize.width * 0.24).clamp(180.0, 420.0);
+    final viewWidth = width - style.padding * 2;
     return Rect.fromLTWH(
       origin.dx,
       origin.dy,
       width,
-      width * canvasSize.height / canvasSize.width,
+      style.padding * 2 +
+          gamePreviewHeaderHeight +
+          viewWidth * canvasSize.height / canvasSize.width,
     );
   }
 
-  /// A small view through the game's live camera, drawn over the editor.
+  /// The game view inside [panel]: below the header, inset by the padding.
+  static Rect gamePreviewViewRect(
+    Rect panel, {
+    GamePreviewStyle style = const GamePreviewStyle(),
+  }) => Rect.fromLTRB(
+    panel.left + style.padding,
+    panel.top + style.padding + gamePreviewHeaderHeight,
+    panel.right - style.padding,
+    panel.bottom - style.padding,
+  );
+
+  /// A small view through the game's live camera, in a panel that matches
+  /// the play toolbar it hangs below.
   ///
   /// The world is rendered a second time with the output camera briefly
   /// showing what the brain wants, then handed back exactly as it was — so
@@ -694,14 +722,39 @@ class JustGameEditorPlugin implements EnginePlugin {
     final live = brain?.liveCamera;
     if (brain == null || shot == null || live == null) return;
 
-    final rect = gamePreviewRect(size, origin: gamePreviewOrigin);
+    final style = gamePreviewStyle;
+    final panel = gamePreviewRect(
+      size,
+      origin: gamePreviewOrigin,
+      style: style,
+    );
+    final frame = RRect.fromRectAndRadius(
+      panel,
+      Radius.circular(style.cornerRadius),
+    );
+    // The toolbar's frame: same fill, same border, same corners.
+    canvas
+      ..drawRRect(frame, Paint()..color = EditorTheme.statusBadgeBg)
+      ..drawRRect(
+        frame.deflate(0.5),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = style.borderColor,
+      );
+
+    final viewRect = gamePreviewViewRect(panel, style: style);
+    final viewFrame = RRect.fromRectAndRadius(
+      viewRect,
+      Radius.circular((style.cornerRadius - style.padding).clamp(2.0, 12.0)),
+    );
     final view = camera.state;
     canvas
       ..save()
-      ..clipRect(rect)
-      ..drawRect(rect, Paint()..color = const Color(0xFF0E1216))
-      ..translate(rect.left, rect.top)
-      ..scale(rect.width / size.width);
+      ..clipRRect(viewFrame)
+      ..drawRect(viewRect, Paint()..color = const Color(0xFF0E1216))
+      ..translate(viewRect.left, viewRect.top)
+      ..scale(viewRect.width / size.width);
     camera.apply(shot);
     try {
       engine.world.render(canvas, size);
@@ -711,35 +764,105 @@ class JustGameEditorPlugin implements EnginePlugin {
         ..viewportSize = size;
       canvas.restore();
     }
-
-    const accent = Color(0xFF40E0D0);
-    canvas.drawRect(
-      rect,
+    canvas.drawRRect(
+      viewFrame,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..color = accent,
+        ..strokeWidth = 1
+        ..color = EditorTheme.border,
     );
-    final blending = brain.activeBlend != null;
-    final label = TextPainter(
-      text: TextSpan(
-        text:
-            '${brain.soloEntity == live.id ? 'SOLO' : 'LIVE'} · '
-            '${live.name ?? 'camera'}${blending ? ' · blending' : ''}',
-        style: const TextStyle(
-          color: accent,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-        ),
+
+    _paintGamePreviewHeader(
+      canvas,
+      Rect.fromLTWH(
+        viewRect.left,
+        panel.top + style.padding,
+        viewRect.width,
+        gamePreviewHeaderHeight,
       ),
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: rect.width - 12);
-    final at = rect.topLeft + const Offset(6, 4);
-    canvas.drawRect(
-      (at & label.size).inflate(2),
-      Paint()..color = const Color(0xCC0E1216),
+      name: live.name ?? 'camera',
+      isSolo: brain.soloEntity == live.id,
+      isBlending: brain.activeBlend != null,
     );
-    label.paint(canvas, at);
+  }
+
+  /// `● LIVE  MainCamera` — the toolbar's status chip, then the camera.
+  void _paintGamePreviewHeader(
+    Canvas canvas,
+    Rect row, {
+    required String name,
+    required bool isSolo,
+    required bool isBlending,
+  }) {
+    const accent = CameraRigPainter.live;
+    TextPainter text(String value, TextStyle style, double maxWidth) =>
+        TextPainter(
+          text: TextSpan(text: value, style: style),
+          textDirection: TextDirection.ltr,
+          maxLines: 1,
+          ellipsis: '…',
+        )..layout(maxWidth: maxWidth < 0 ? 0 : maxWidth);
+
+    final state = text(
+      isSolo ? 'SOLO' : 'LIVE',
+      const TextStyle(
+        color: accent,
+        fontSize: 9,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.5,
+      ),
+      row.width,
+    );
+    // The chip: a pill with a dot, as on the toolbar while playing.
+    final chip = Rect.fromLTWH(
+      row.left,
+      row.top + (row.height - 16) / 2 - 2,
+      7 + 6 + 5 + state.width + 7,
+      16,
+    );
+    canvas
+      ..drawRRect(
+        RRect.fromRectAndRadius(chip, const Radius.circular(10)),
+        Paint()..color = accent.withValues(alpha: 0.14),
+      )
+      ..drawCircle(
+        Offset(chip.left + 10, chip.center.dy),
+        3,
+        Paint()..color = accent,
+      );
+    state.paint(
+      canvas,
+      Offset(chip.left + 18, chip.center.dy - state.height / 2),
+    );
+
+    final blending = isBlending
+        ? text(
+            'blending',
+            const TextStyle(
+              color: EditorTheme.textMuted,
+              fontSize: 9,
+              fontStyle: FontStyle.italic,
+            ),
+            row.width,
+          )
+        : null;
+    final label = text(
+      name,
+      const TextStyle(
+        color: EditorTheme.textBright,
+        fontSize: 10,
+        fontWeight: FontWeight.w600,
+      ),
+      row.right - chip.right - 8 - (blending == null ? 0 : blending.width + 8),
+    );
+    label.paint(
+      canvas,
+      Offset(chip.right + 8, chip.center.dy - label.height / 2),
+    );
+    blending?.paint(
+      canvas,
+      Offset(row.right - blending.width, chip.center.dy - blending.height / 2),
+    );
   }
 
   void applyOverlaySettings({
@@ -916,4 +1039,23 @@ class JustGameEditorPlugin implements EnginePlugin {
     }
     designer.dispose();
   }
+}
+
+/// The frame of the game camera preview: what makes it the same kind of panel
+/// as the play toolbar above it.
+class GamePreviewStyle {
+  const GamePreviewStyle({
+    this.cornerRadius = 12,
+    this.borderColor = const Color(0xFFF5736F),
+    this.padding = 5,
+  });
+
+  /// Corner radius of the panel — the toolbar's.
+  final double cornerRadius;
+
+  /// Border colour — the overlay's theme colour, as on the toolbar.
+  final Color borderColor;
+
+  /// Space between the panel's edge and what is in it.
+  final double padding;
 }

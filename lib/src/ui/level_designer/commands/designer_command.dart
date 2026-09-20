@@ -96,10 +96,14 @@ class KeyBinding {
       mods.shift == shift &&
       mods.alt == alt;
 
-  @override
-  String toString() =>
+  /// The keys as a person would say them: `Ctrl+Shift+Z`, `F5`. What a
+  /// tooltip shows beside the command it triggers.
+  String get shortcut =>
       '${control ? 'Ctrl+' : ''}${shift ? 'Shift+' : ''}${alt ? 'Alt+' : ''}'
-      '${key.keyLabel.isEmpty ? key.debugName : key.keyLabel} → $commandId';
+      '${key.keyLabel.isEmpty ? key.debugName : key.keyLabel}';
+
+  @override
+  String toString() => '$shortcut → $commandId';
 }
 
 /// The commands one editor knows and the keys that run them.
