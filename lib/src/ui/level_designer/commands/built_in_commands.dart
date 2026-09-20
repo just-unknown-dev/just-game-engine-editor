@@ -147,6 +147,52 @@ abstract final class BuiltInCommands {
       run: (c) =>
           c.plugin!.showGamePreview.value = !c.plugin!.showGamePreview.value,
     ),
+    // ── The bottom docks ───────────────────────────────────────────────────
+    DesignerCommand(
+      id: 'dock.toggle',
+      label: 'Show or hide the dock panel',
+      scope: CommandScope.always,
+      run: (c) => c.scope.dockController.togglePanel(fallback: 'logs'),
+    ),
+    DesignerCommand(
+      id: 'dock.next',
+      label: 'Next dock',
+      scope: CommandScope.always,
+      run: (c) => c.scope.dockController.cycle(1),
+    ),
+    DesignerCommand(
+      id: 'dock.previous',
+      label: 'Previous dock',
+      scope: CommandScope.always,
+      run: (c) => c.scope.dockController.cycle(-1),
+    ),
+    DesignerCommand(
+      id: 'dock.maximise',
+      label: 'Maximise the dock panel',
+      scope: CommandScope.always,
+      isEnabled: (c) => c.scope.dockController.activeDock != null,
+      run: (c) {
+        final maximised = c.scope.dockController.maximised;
+        maximised.value = !maximised.value;
+      },
+    ),
+    for (final (id, label) in const [
+      ('logs', 'Console'),
+      ('assets', 'Assets'),
+      ('timeline', 'Timeline'),
+      ('fps', 'Profiler'),
+      ('entities', 'World'),
+      ('problems', 'Problems'),
+      ('history', 'History'),
+      ('animator', 'Animator'),
+      ('search', 'Search the scene'),
+    ])
+      DesignerCommand(
+        id: 'dock.open.$id',
+        label: 'Dock: $label',
+        scope: CommandScope.always,
+        run: (c) => c.scope.dockController.toggle(id),
+      ),
     DesignerCommand(
       id: 'editor.save',
       label: 'Save scene',

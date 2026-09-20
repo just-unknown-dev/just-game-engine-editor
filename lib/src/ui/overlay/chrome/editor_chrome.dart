@@ -9,6 +9,7 @@ import '../../../core/scope/editor_scope.dart';
 import '../../../extension/editor_contributions.dart';
 import '../../level_designer/level_designer.dart';
 import '../docks/compact_dock.dart';
+import '../docks/shell/dock_popouts.dart';
 import '../editor_overlay.dart';
 import '../input_setup/input_setup_panel.dart';
 import '../right_panel/right_panel.dart';
@@ -86,6 +87,11 @@ class FullEditorChrome extends StatelessWidget {
         plugin.designer,
         plugin.gridSize,
         plugin.isStatusPanelVisible,
+        // The docks take room from the designer: its panels stop where the
+        // dock panel starts, and the level's view is inset by it.
+        plugin.scope.dockController.openId,
+        plugin.scope.dockController.heights,
+        plugin.scope.dockController.maximised,
       ],
       builder: (context, _) {
         final panelWidth = plugin.scope.chrome.rightPanelWidth.value;
@@ -93,12 +99,24 @@ class FullEditorChrome extends StatelessWidget {
 
         final designer = plugin.designer.value;
         final designerPanelWidth = math.min(260.0, leftWidth / 3);
+        // What the docks occupy at the foot of the designer: the strip when
+        // it is showing, and the open panel above it.
+        final showDocks = plugin.isStatusPanelVisible.value;
+        final docksTop = designer == null ? 0.0 : DesignerStatusBar.height;
+        final docksHeight = !showDocks
+            ? 0.0
+            : OverlayLayout.compactDockPanelHeight +
+                  plugin.scope.dockController.panelHeight(
+                    size.height -
+                        docksTop -
+                        OverlayLayout.compactDockPanelHeight,
+                  );
         designer?.controller
           ?..viewportInsets = EdgeInsets.fromLTRB(
             ToolPalette.width,
             0,
             panelWidth + designerPanelWidth,
-            DesignerStatusBar.height,
+            DesignerStatusBar.height + docksHeight,
           )
           // The play controls sit top-left now; nothing is under the minimap.
           ..minimapBottomReserve = 0;
@@ -142,7 +160,7 @@ class FullEditorChrome extends StatelessWidget {
               Positioned(
                 top: 0,
                 left: 0,
-                bottom: DesignerStatusBar.height,
+                bottom: DesignerStatusBar.height + docksHeight,
                 right: panelWidth,
                 child: LevelDesignerWorkspace(
                   session: designer,
@@ -163,15 +181,18 @@ class FullEditorChrome extends StatelessWidget {
                 ),
               ),
             ],
-            if (plugin.isStatusPanelVisible.value && designer == null)
+            // The docks are there while designing too — above the designer's
+            // own status bar — so assets, the console and the timeline are at
+            // hand exactly when a level is being built.
+            if (showDocks)
               Positioned(
                 left: 0,
                 right: panelWidth,
-                bottom: 0,
+                bottom: docksTop,
                 child: CompactStatusDock(
                   plugin: plugin,
                   maxDetailWidth: leftWidth,
-                  maxDetailHeight: size.height,
+                  maxDetailHeight: size.height - docksTop,
                 ),
               ),
             Positioned(
@@ -184,6 +205,8 @@ class FullEditorChrome extends StatelessWidget {
               right: panelWidth + 8,
               child: const EditorSnackBarLayer(),
             ),
+            // Docks popped out of the panel float over the editor.
+            Positioned.fill(child: DockPopouts(plugin: plugin)),
             // A module's workspace, over the level and its panels; the
             // scene stays loaded underneath.
             Positioned.fill(

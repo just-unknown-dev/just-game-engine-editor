@@ -4,6 +4,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_storage/just_storage.dart';
 import 'package:just_signals/just_signals.dart';
 
+import '../validation/scene_validator.dart';
 import '../../extension/editor_module.dart';
 import '../../ui/level_designer/state/built_in_prefabs.dart';
 import '../../ui/level_designer/state/layer_preset.dart';
@@ -179,6 +180,8 @@ class EditorScope {
   final List<ToolbarButton> _toolbarButtons = [];
   final List<WorkspaceDefinition> _workspaces = [];
   final List<AssetAction> _assetActions = [];
+  final List<SceneValidator> _validators = [];
+  final List<TimelineEventSink> _timelineEventSinks = [];
   final List<SceneTreeAction> _sceneTreeActions = [];
   final List<SceneTreeRowDecoration> _rowDecorations = [];
   final List<EntityProtectionRule> _protectionRules = [];
@@ -205,6 +208,13 @@ class EditorScope {
 
   /// Full-screen tools modules add, by order.
   List<WorkspaceDefinition> get workspaces => List.unmodifiable(_workspaces);
+
+  /// Ways modules offer to write a sprite clip's events back.
+  List<TimelineEventSink> get timelineEventSinks =>
+      List.unmodifiable(_timelineEventSinks);
+
+  /// Scene checks modules add to the editor's own.
+  List<SceneValidator> get validators => List.unmodifiable(_validators);
 
   /// What modules offer to do with files in the Assets dock, by order.
   List<AssetAction> get assetActions => List.unmodifiable(_assetActions);
@@ -382,6 +392,8 @@ class EditorScope {
       _toolbarButtons,
       _workspaces,
       _assetActions,
+      _validators,
+      _timelineEventSinks,
       _sceneTreeActions,
       _rowDecorations,
       _protectionRules,
@@ -403,6 +415,8 @@ class EditorScope {
       _toolbarButtons.addAll(module.toolbarButtons);
       _workspaces.addAll(module.workspaces);
       _assetActions.addAll(module.assetActions);
+      _validators.addAll(module.validators);
+      _timelineEventSinks.addAll(module.timelineEventSinks);
       _sceneTreeActions.addAll(module.sceneTreeActions);
       _rowDecorations.addAll(module.rowDecorations);
       if (module.protectionRule case final rule?) _protectionRules.add(rule);

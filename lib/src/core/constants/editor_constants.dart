@@ -67,7 +67,8 @@ abstract final class EditorTheme {
 // ── Overlay layout ───────────────────────────────────────────────────────────
 
 abstract final class OverlayLayout {
-  static const double compactDockPanelHeight = 56;
+  /// The status bar: one line of text.
+  static const double compactDockPanelHeight = 26;
   static const double rightPanelDefaultWidth = 360;
   static const double rightPanelMinWidth = 280;
   static const double rightPanelMaxWidth = 640;

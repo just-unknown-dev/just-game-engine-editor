@@ -1,3 +1,4 @@
+import '../core/validation/scene_validator.dart';
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
@@ -182,6 +183,14 @@ abstract class EditorModule {
   /// Full-screen tools that take the viewport: a sprite editor, a dialogue
   /// graph. Opened with [EditorScope.openWorkspace].
   List<WorkspaceDefinition> get workspaces => const [];
+
+  /// Checks this module makes of the open scene, listed in the Problems
+  /// dock beside the editor's own: a level with no spawn point, say.
+  List<SceneValidator> get validators => const [];
+
+  /// Ways to write a sprite clip's events back to its source, so the
+  /// Timeline can edit them.
+  List<TimelineEventSink> get timelineEventSinks => const [];
 
   /// What this module can do with a file in the Assets dock.
   List<AssetAction> get assetActions => const [];

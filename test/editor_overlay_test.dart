@@ -69,14 +69,14 @@ void main() {
     plugin.toggleVisibility();
     await tester.pumpAndSettle();
 
-    expect(find.text('FPS'), findsOneWidget);
-    expect(find.text('Entities'), findsOneWidget);
+    expect(find.textContaining(' fps · '), findsOneWidget);
+    expect(find.text('No scene'), findsOneWidget);
     expect(find.text('Status Panel'), findsNothing);
 
     plugin.toggleVisibility();
     await tester.pumpAndSettle();
 
-    expect(find.text('FPS'), findsNothing);
+    expect(find.textContaining(' fps · '), findsNothing);
 
     plugin.dispose();
     Engine.resetInstance();

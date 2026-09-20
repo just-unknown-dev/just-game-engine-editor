@@ -8,6 +8,7 @@ import 'package:just_game_engine/just_game_engine.dart'
     show
         AnimationControllerComponent,
         AnimationEvent,
+        KeyframeEasing,
         AtlasAnimationClip,
         Entity,
         SpriteAnimationComponent,
@@ -20,6 +21,7 @@ import '../../../core/constants/editor_constants.dart';
 import '../../../core/plugin/editor_plugin.dart';
 import '../docks/logs_dock.dart';
 import '../settings/overlay_ui_settings.dart';
+import '../../../extension/editor_contributions.dart';
 import '../../widgets/editor_dropdown.dart';
 
 // ── Mode ───────────────────────────────────────────────────────────────────────
@@ -71,7 +73,12 @@ class DockTimelinePanel extends StatefulWidget {
     required this.onClose,
     required this.settings,
     required this.plugin,
+    this.embedded = false,
   });
+
+  /// Inside the tabbed dock panel: it supplies the frame, the height and
+  /// the close button, so this draws only its content.
+  final bool embedded;
 
   final double height;
   final ValueChanged<double> onResize;
@@ -108,12 +115,17 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
       if (mounted) setState(() => _scrollOffset = _hscroll.offset);
     });
     _ticker = createTicker((_) {
+      _applyLoopRange();
+      _recordIfMoved();
       final playing = _mode == _TimelineMode.sprite
           ? (_asc?.isPlaying ?? false)
           : (_acc?.isPlaying ?? false);
       if (playing && mounted) setState(() {});
     });
     _ticker.start();
+    // Opened on an entity that only has a transform timeline: start there,
+    // rather than on an empty sprite tab until the selection next changes.
+    if (_asc == null && _acc != null) _mode = _TimelineMode.entity;
     final state = widget.plugin.sceneState;
     _stopWatching = [
       state.selectedEntity.watch(_onSceneChanged),
@@ -341,7 +353,124 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
 
   bool get _spriteLoops => _asc?.loopOverride ?? _clip?.loop ?? true;
 
-  void _scrubTo(double time) {
+  // ── Snap, loop range, record, copy and paste ────────────────────────────
+
+  /// Times land on the grid: a sprite frame's start, or a twentieth of a
+  /// second on the entity timeline. Off, they land where the pointer is.
+  bool _snap = true;
+  static const double _snapStep = 0.05;
+
+  double _snapTime(double t) {
+    if (!_snap) return t;
+    if (_mode == _TimelineMode.sprite) {
+      final frames = _clipFrames;
+      if (frames.isEmpty) return t;
+      var best = frames.first.start;
+      for (final f in frames) {
+        if ((f.start - t).abs() < (best - t).abs()) best = f.start;
+      }
+      return best;
+    }
+    return (t / _snapStep).round() * _snapStep;
+  }
+
+  /// A stretch of the timeline played round and round while previewing —
+  /// the landing of a jump, without the jump. Not saved.
+  double? _loopIn;
+  double? _loopOut;
+
+  void _applyLoopRange() {
+    final a = _loopIn, b = _loopOut;
+    if (a == null || b == null || b <= a) return;
+    final playing = _mode == _TimelineMode.sprite
+        ? (_asc?.isPlaying ?? false)
+        : (_acc?.isPlaying ?? false);
+    if (playing && (_elapsed >= b || _elapsed < a)) _seek(a);
+  }
+
+  /// Record: move the entity in the viewport and a keyframe is written at
+  /// the playhead for whatever changed. The timeline is suspended meanwhile,
+  /// or it would pin the entity back onto its curve every frame.
+  bool _record = false;
+  Map<_TLTrack, double>? _recorded;
+  int _resumeRecordingIn = 0;
+
+  void _setRecord(bool on) {
+    setState(() => _record = on);
+    _acc?.suspended = on;
+    _recorded = on ? _transformNow() : null;
+  }
+
+  Map<_TLTrack, double> _transformNow() => {
+    for (final t in _TLTrack.values) t: _currentTransformValue(t),
+  };
+
+  void _recordIfMoved() {
+    final acc = _acc;
+    if (!_record || acc == null || _mode != _TimelineMode.entity) return;
+    // A scrub lets the timeline place the entity for a frame or two; what it
+    // does then is not the author moving anything.
+    if (_resumeRecordingIn > 0) {
+      if (--_resumeRecordingIn == 0) {
+        acc.suspended = true;
+        _recorded = _transformNow();
+      }
+      return;
+    }
+    if (acc.isPlaying) return;
+    final before = _recorded;
+    final now = _transformNow();
+    _recorded = now;
+    if (before == null) return;
+    for (final track in _TLTrack.values) {
+      if ((now[track]! - before[track]!).abs() > 1e-4) {
+        _addKeyframeAt(acc.elapsed, track);
+      }
+    }
+  }
+
+  TransformKeyframe? _copiedKf;
+
+  TransformKeyframe? get _selectedKeyframe {
+    final sel = _selectedKf;
+    final acc = _acc;
+    if (sel == null || acc == null) return null;
+    final indices = _kfIndicesForTrack(sel.track);
+    return sel.index < indices.length
+        ? acc.keyframes[indices[sel.index]]
+        : null;
+  }
+
+  void _copyKf() => setState(() => _copiedKf = _selectedKeyframe);
+
+  void _pasteKf() {
+    final kf = _copiedKf;
+    final acc = _acc;
+    if (kf == null || acc == null) return;
+    acc.addOrUpdateKeyframe(kf.copyWith(time: _snapTime(acc.elapsed)));
+    widget.plugin.sceneState.markDirty();
+    setState(() {});
+  }
+
+  void _setEasing(KeyframeEasing easing) {
+    final sel = _selectedKf;
+    final acc = _acc;
+    if (sel == null || acc == null) return;
+    final indices = _kfIndicesForTrack(sel.track);
+    if (sel.index >= indices.length) return;
+    final at = indices[sel.index];
+    acc.keyframes[at] = acc.keyframes[at].copyWith(easing: easing);
+    widget.plugin.sceneState.markDirty();
+    setState(() {});
+  }
+
+  void _scrubTo(double time) => _seek(_snapTime(time));
+
+  void _seek(double time) {
+    if (_record && _mode == _TimelineMode.entity) {
+      _acc?.suspended = false;
+      _resumeRecordingIn = 2;
+    }
     if (_mode == _TimelineMode.sprite) {
       final asc = _asc;
       if (asc == null) return;
@@ -373,6 +502,7 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
   void _addKeyframeAt(double time, _TLTrack track) {
     final acc = _acc;
     if (acc == null) return;
+    time = _snapTime(time);
     final val = _currentTransformValue(track);
     final kf = TransformKeyframe(
       time: time,
@@ -509,19 +639,60 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
     _addEventAt(time, name.trim());
   }
 
+  /// Who can write a sprite's events back to where they live — its project
+  /// file, through whichever module made it. Null leaves them read-only.
+  TimelineEventSink? get _eventSink {
+    final atlas = _asc?.atlasPath.trim() ?? '';
+    if (atlas.isEmpty) return null;
+    for (final sink in widget.plugin.scope.timelineEventSinks) {
+      if (sink.handles(atlas)) return sink;
+    }
+    return null;
+  }
+
+  /// Hands the sprite's [events] to the module that owns the file, then
+  /// shows the re-exported atlas.
+  Future<void> _writeSpriteEvents(List<AnimationEvent> events) async {
+    final asc = _asc;
+    final sink = _eventSink;
+    if (asc == null || sink == null) {
+      widget.plugin.logService.log(
+        'This sprite\'s events are part of its atlas file; nothing here can '
+        'write them.',
+        source: 'timeline',
+      );
+      return;
+    }
+    final atlas = asc.atlasPath.trim();
+    events.sort((a, b) => a.time.compareTo(b.time));
+    if (await sink.write(atlas, asc.clip, events)) {
+      widget.plugin.reloadAsset(atlas);
+    }
+    if (mounted) setState(() => _selectedEv = null);
+  }
+
   void _addEventAt(double time, String name) {
-    final ev = AnimationEvent(time: time, name: name);
-    // A sprite's events live in its atlas file; only the entity timeline's
-    // are edited here.
-    if (_mode == _TimelineMode.entity) _acc?.addEvent(ev);
-    setState(() => _selectedEv = null);
+    final ev = AnimationEvent(time: _snapTime(time), name: name);
+    if (_mode == _TimelineMode.entity) {
+      _acc?.addEvent(ev);
+      setState(() => _selectedEv = null);
+    } else {
+      _writeSpriteEvents([..._atlasEvents, ev]);
+    }
   }
 
   void _deleteSelectedEv() {
     final sel = _selectedEv;
     if (sel == null) return;
-    if (_mode == _TimelineMode.entity) _acc?.removeEvent(sel.index);
-    setState(() => _selectedEv = null);
+    if (_mode == _TimelineMode.entity) {
+      _acc?.removeEvent(sel.index);
+      setState(() => _selectedEv = null);
+    } else {
+      _writeSpriteEvents([
+        for (final (i, e) in _atlasEvents.indexed)
+          if (i != sel.index) e,
+      ]);
+    }
   }
 
   void _moveEv(_EvSel sel, double dx) {
@@ -538,7 +709,7 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: widget.height,
+      height: widget.embedded ? null : widget.height,
       child: Material(
         color: Colors.transparent,
         child: Container(
@@ -558,7 +729,7 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
           ),
           child: Column(
             children: <Widget>[
-              PanelResizeHandle(onDrag: widget.onResize),
+              if (!widget.embedded) PanelResizeHandle(onDrag: widget.onResize),
               _buildHeader(),
               if (_hasBoth) _buildModeTabStrip(),
               if (_hasAny)
@@ -614,15 +785,16 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
               _asc != null &&
               (_atlas?.clipNames.isNotEmpty ?? false))
             _buildClipDropdown(_asc!, _atlas!),
-          IconButton(
-            onPressed: widget.onClose,
-            icon: const Icon(Icons.close_rounded),
-            color: EditorTheme.textSecondary,
-            iconSize: 14,
-            splashRadius: 14,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          ),
+          if (!widget.embedded)
+            IconButton(
+              onPressed: widget.onClose,
+              icon: const Icon(Icons.close_rounded),
+              color: EditorTheme.textSecondary,
+              iconSize: 14,
+              splashRadius: 14,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            ),
         ],
       ),
     );
@@ -719,7 +891,9 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
         : null;
 
     final bool hasKfSel = _mode == _TimelineMode.entity && _selectedKf != null;
-    final bool hasEvSel = _selectedEv != null;
+    final bool hasEvSel =
+        _selectedEv != null &&
+        (_mode == _TimelineMode.entity || _eventSink != null);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -775,8 +949,75 @@ class _DockTimelinePanelState extends State<DockTimelinePanel>
             ),
             tooltip: 'Zoom in',
           ),
+          const SizedBox(width: 6),
+          _TLIconBtn(
+            icon: Icons.grid_4x4_rounded,
+            accent: _snap ? const Color(0xFF7DE6B1) : null,
+            onTap: () => setState(() => _snap = !_snap),
+            tooltip: _mode == _TimelineMode.sprite
+                ? 'Snap to frames'
+                : 'Snap to 0.05 s',
+          ),
+          _TLIconBtn(
+            icon: Icons.first_page_rounded,
+            accent: _loopIn != null ? const Color(0xFFFFC86B) : null,
+            onTap: () => setState(() => _loopIn = _elapsed),
+            tooltip: 'Loop range: start here',
+          ),
+          _TLIconBtn(
+            icon: Icons.last_page_rounded,
+            accent: _loopOut != null ? const Color(0xFFFFC86B) : null,
+            onTap: () => setState(() => _loopOut = _elapsed),
+            tooltip: 'Loop range: end here',
+          ),
+          if (_loopIn != null || _loopOut != null) ...[
+            Text(
+              '${(_loopIn ?? 0).toStringAsFixed(2)}–'
+              '${(_loopOut ?? _duration).toStringAsFixed(2)} s',
+              style: const TextStyle(fontSize: 10, color: Color(0xFFFFC86B)),
+            ),
+            _TLIconBtn(
+              icon: Icons.close_rounded,
+              onTap: () => setState(() => _loopIn = _loopOut = null),
+              tooltip: 'Clear the loop range',
+            ),
+          ],
+          if (_mode == _TimelineMode.entity) ...[
+            const SizedBox(width: 6),
+            _TLIconBtn(
+              icon: Icons.fiber_manual_record_rounded,
+              accent: _record ? EditorTheme.error : null,
+              onTap: () => _setRecord(!_record),
+              tooltip: _record
+                  ? 'Recording: move the entity to key it. Click to stop.'
+                  : 'Record: key the entity wherever you move it',
+            ),
+            _TLIconBtn(
+              icon: Icons.content_paste_rounded,
+              onTap: _copiedKf == null ? () {} : _pasteKf,
+              accent: _copiedKf == null ? EditorTheme.textMuted : null,
+              tooltip: 'Paste the keyframe at the playhead',
+            ),
+          ],
           if (hasKfSel) ...[
             const SizedBox(width: 4),
+            _TLIconBtn(
+              icon: Icons.content_copy_rounded,
+              onTap: _copyKf,
+              tooltip: 'Copy keyframe',
+            ),
+            EditorDropdown<KeyframeEasing>(
+              value: _selectedKeyframe?.easing ?? KeyframeEasing.linear,
+              tooltip: 'How it eases into the next keyframe',
+              isExpanded: false,
+              height: 22,
+              fontSize: 10,
+              options: [
+                for (final e in KeyframeEasing.values)
+                  EditorDropdownOption(value: e, label: e.name),
+              ],
+              onChanged: _setEasing,
+            ),
             _TLIconBtn(
               icon: Icons.delete_outline_rounded,
               accent: EditorTheme.error,

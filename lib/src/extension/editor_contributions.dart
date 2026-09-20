@@ -21,6 +21,49 @@ class SettingsSection {
   final Widget Function(BuildContext context, EditorPrefs prefs) build;
 }
 
+/// How loudly a dock's badge speaks.
+enum DockSeverity { none, info, warning, error }
+
+/// The small marker on a dock's tab: a count, a dot for "something new".
+class DockBadge {
+  const DockBadge(this.text, [this.severity = DockSeverity.none]);
+
+  /// Short: `3`, `●`. Empty shows nothing.
+  final String text;
+  final DockSeverity severity;
+}
+
+/// A fact a module's dock puts on the status bar: a live value that is
+/// always in view — `Waves  3 left`. The bar is one button that opens the
+/// dock panel, so a readout informs; it does not open its dock by itself.
+class DockReadout {
+  const DockReadout({
+    required this.value,
+    this.label,
+    this.accent,
+    this.openArgs,
+  });
+
+  /// What the number is — `FPS` on the Profiler's. The dock's own label
+  /// when null.
+  final String? label;
+
+  /// Read a few times a second while the editor is open; keep it cheap.
+  /// An empty string leaves the segment off the strip for now.
+  final String Function(EditorScope scope) value;
+  final Color? accent;
+
+  /// Passed to the dock when the readout opens it — a preset filter, say.
+  final Map<String, Object?>? openArgs;
+}
+
+/// What a dock remembers between launches: its filters, its view mode,
+/// which folders were open. Small JSON-able values by key.
+abstract class DockMemory {
+  T? read<T>(String key);
+  void write(String key, Object? value);
+}
+
 /// What a dock's content is built with.
 class DockContext {
   const DockContext({
@@ -28,6 +71,8 @@ class DockContext {
     required this.height,
     required this.onResize,
     required this.onClose,
+    this.memory,
+    this.args = const {},
   });
 
   final EditorScope scope;
@@ -38,11 +83,16 @@ class DockContext {
   /// Called with the drag delta when the user resizes the dock.
   final ValueChanged<double> onResize;
   final VoidCallback onClose;
+
+  /// This dock's own remembered values; null where nothing persists.
+  final DockMemory? memory;
+
+  /// What the dock was opened with ([DockReadout.openArgs], a command).
+  final Map<String, Object?> args;
 }
 
-/// A bottom dock a module adds beside the built-in ones (FPS, Entities,
-/// Logs, Assets, Timeline). Docks open one at a time; opening one closes
-/// whichever was open.
+/// A dock in the bottom panel: a tab beside the built-in ones (Console,
+/// Assets, Timeline, Profiler, World…).
 class DockDefinition {
   const DockDefinition({
     required this.id,
@@ -52,6 +102,11 @@ class DockDefinition {
     this.order = 100,
     this.defaultHeight = 280,
     this.badge,
+    this.tabBadge,
+    this.readout,
+    this.headerActions,
+    this.keepAlive = false,
+    this.pinnedByDefault = true,
   });
 
   final String id;
@@ -62,8 +117,27 @@ class DockDefinition {
   final int order;
   final double defaultHeight;
 
-  /// A short value shown on the dock's status button: a count, an FPS.
+  /// A short value shown in the status strip: a count, an FPS. Kept for
+  /// modules written before [readout]; a [readout] wins when both are set.
   final String Function(EditorScope scope)? badge;
+
+  /// The marker on the tab itself.
+  final DockBadge? Function(EditorScope scope)? tabBadge;
+
+  /// This dock's segment of the status strip.
+  final DockReadout? readout;
+
+  /// Buttons for the panel's header while this dock is the active one.
+  final List<Widget> Function(BuildContext context, DockContext dock)?
+  headerActions;
+
+  /// Keep the dock built while another tab is showing, so it loses nothing:
+  /// a scroll position, a capture in progress. Costs what the dock costs.
+  final bool keepAlive;
+
+  /// Whether the dock starts as a tab; otherwise it waits in the `+` menu.
+  final bool pinnedByDefault;
+
   final Widget Function(BuildContext context, DockContext dock) build;
 }
 
@@ -146,6 +220,28 @@ class WorkspaceDefinition {
     }
     return best;
   }
+}
+
+/// Writes a sprite clip's frame events back to the file they live in.
+///
+/// The Timeline shows a sprite's events from its atlas; the atlas is an
+/// export, so editing them means changing the project it was exported from
+/// and exporting again. The module that owns that format offers this; the
+/// editor itself knows no sprite format.
+class TimelineEventSink {
+  const TimelineEventSink({required this.handles, required this.write});
+
+  /// Whether this sink can write events for the atlas at [atlasPath].
+  final bool Function(String atlasPath) handles;
+
+  /// Replaces [clip]'s events (times in seconds) and re-exports the atlas.
+  /// False when it could not.
+  final Future<bool> Function(
+    String atlasPath,
+    String clip,
+    List<jge.AnimationEvent> events,
+  )
+  write;
 }
 
 /// Something a module offers to do with a file in the Assets dock.

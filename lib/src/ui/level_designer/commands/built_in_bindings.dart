@@ -69,6 +69,41 @@ abstract final class BuiltInBindings {
     const KeyBinding(LogicalKeyboardKey.f10, 'editor.playStep'),
     const KeyBinding(LogicalKeyboardKey.f3, 'editor.toggleDesigner'),
     const KeyBinding(LogicalKeyboardKey.f4, 'editor.togglePreview'),
+    // The docks: Ctrl+` for the panel, as in every editor with a terminal,
+    // and Ctrl+Shift+letter for a dock by name.
+    const KeyBinding(
+      LogicalKeyboardKey.backquote,
+      'dock.toggle',
+      control: true,
+    ),
+    const KeyBinding(
+      LogicalKeyboardKey.pageDown,
+      'dock.next',
+      control: true,
+      alt: true,
+    ),
+    const KeyBinding(
+      LogicalKeyboardKey.pageUp,
+      'dock.previous',
+      control: true,
+      alt: true,
+    ),
+    const KeyBinding(
+      LogicalKeyboardKey.keyM,
+      'dock.maximise',
+      control: true,
+      shift: true,
+    ),
+    for (final (key, id) in [
+      (LogicalKeyboardKey.keyC, 'logs'),
+      (LogicalKeyboardKey.keyA, 'assets'),
+      (LogicalKeyboardKey.keyT, 'timeline'),
+      (LogicalKeyboardKey.keyP, 'fps'),
+      (LogicalKeyboardKey.keyW, 'entities'),
+      (LogicalKeyboardKey.keyF, 'search'),
+      (LogicalKeyboardKey.keyH, 'history'),
+    ])
+      KeyBinding(key, 'dock.open.$id', control: true, shift: true),
     const KeyBinding(LogicalKeyboardKey.keyS, 'editor.save', control: true),
     const KeyBinding(LogicalKeyboardKey.keyC, 'editor.copy', control: true),
     const KeyBinding(LogicalKeyboardKey.keyV, 'editor.paste', control: true),

@@ -6,6 +6,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../debugger/engine_debugger.dart';
+import '../../ui/level_designer/state/editor_commands.dart';
 import '../assets/file_sprite_asset_loader.dart';
 import '../ecs/systems/editor_log_capture_system.dart';
 import '../ecs/systems/physics_body_binding_system.dart';
@@ -181,8 +182,8 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// initialized — see [register].
   final bool _startVisible;
 
-  /// Whether the compact status dock is shown; it can be on its own
-  /// while the editor is closed.
+  /// Whether the status bar is shown. It comes and goes with the editor
+  /// (F1); F2 opens and shuts the dock panel above it.
   final Signal<bool> isStatusPanelVisible = Signal(
     false,
     debugLabel: 'statusPanelVisible',
@@ -492,8 +493,11 @@ class JustGameEditorPlugin implements EnginePlugin {
       toggleVisibility();
       return true;
     }
+    // F2: the dock panel. The status bar itself comes and goes with the
+    // editor, so there is nothing else for this key to switch.
     if (key == _statusPanelToggleKey) {
-      toggleStatusPanelVisibility();
+      if (!isVisible.value || scope.activeWorkspace.value != null) return false;
+      scope.dockController.togglePanel(fallback: 'logs');
       return true;
     }
     if (!isVisible.value) return false;
@@ -540,6 +544,64 @@ class JustGameEditorPlugin implements EnginePlugin {
       if (system is SpriteAnimationSystem) system.reload(atlasPath);
       if (system is SpriteLoadSystem) system.reload();
     }
+  }
+
+  /// Whether dropping [path] on the viewport makes something: an image, a
+  /// sprite project, or a sprite atlas.
+  static bool canDropAsset(String path) {
+    final p = path.toLowerCase();
+    return p.endsWith('.png') ||
+        p.endsWith('.jpg') ||
+        p.endsWith('.jpeg') ||
+        p.endsWith('.webp') ||
+        p.endsWith('.jsprite') ||
+        (p.endsWith('.json') &&
+            !p.endsWith('.scene.json') &&
+            !p.endsWith('.animator.json'));
+  }
+
+  /// Makes an entity for the asset at [path], where it was dropped on the
+  /// viewport ([canvasPosition], in the canvas's own pixels): a still sprite
+  /// for an image, a sprite animation for an atlas or a sprite project (whose
+  /// atlas sits beside it). One undo step while the Level Designer is open.
+  /// Null when there is no scene, or the file is not something to place.
+  Entity? dropAsset(String path, Offset canvasPosition) {
+    if (!sceneState.hasScene || !canDropAsset(path)) return null;
+    final at = engine.cameraSystem.mainCamera.screenToWorld(canvasPosition);
+    final lower = path.toLowerCase();
+    final dot = path.lastIndexOf('.');
+    final stem = path.substring(path.lastIndexOf('/') + 1, dot);
+    final isImage = !lower.endsWith('.json') && !lower.endsWith('.jsprite');
+    final entity = engine.world.createEntityWithComponents([
+      TransformComponent(position: Vector3(at.dx, at.dy, 0)),
+      if (isImage)
+        SpriteComponent(spritePath: path, pixelArt: true)
+      else
+        SpriteAnimationComponent(
+          atlasPath: lower.endsWith('.json')
+              ? path
+              : '${path.substring(0, dot)}.json',
+        ),
+    ], name: stem);
+    sceneState
+      ..syncEntityNode(entity)
+      ..markDirty()
+      ..refresh()
+      ..selectEntity(entity);
+    final session = designer.value;
+    if (session != null) {
+      session.history.pushApplied(
+        CreateEntitiesCommand.adopting(
+          label: 'Place $stem',
+          world: engine.world,
+          sceneState: sceneState,
+          entities: [entity],
+          codec: scope.codec,
+        ),
+      );
+    }
+    logService.log('Placed $stem from $path.', source: 'assets');
+    return entity;
   }
 
   /// A file a tool wrote changed: whatever in the level shows it, shows the

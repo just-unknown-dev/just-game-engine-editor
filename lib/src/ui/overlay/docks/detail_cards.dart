@@ -130,7 +130,12 @@ class DockPerformancePanel extends StatefulWidget {
     required this.onResize,
     required this.onClose,
     required this.settings,
+    this.embedded = false,
   });
+
+  /// Inside the tabbed dock panel: it supplies the frame, the height and
+  /// the close button, so this draws only its content.
+  final bool embedded;
 
   final JustDebuggerController controller;
   final double height;
@@ -151,7 +156,7 @@ class _DockPerformancePanelState extends State<DockPerformancePanel> {
       animation: widget.controller,
       builder: (context, _) {
         return SizedBox(
-          height: widget.height,
+          height: widget.embedded ? null : widget.height,
           child: Material(
             color: Colors.transparent,
             child: Container(
@@ -173,7 +178,8 @@ class _DockPerformancePanelState extends State<DockPerformancePanel> {
               ),
               child: Column(
                 children: <Widget>[
-                  PanelResizeHandle(onDrag: widget.onResize),
+                  if (!widget.embedded)
+                    PanelResizeHandle(onDrag: widget.onResize),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(10, 2, 4, 2),
                     child: Row(
@@ -203,18 +209,19 @@ class _DockPerformancePanelState extends State<DockPerformancePanel> {
                           ),
                         ),
                         const Spacer(),
-                        IconButton(
-                          onPressed: widget.onClose,
-                          icon: const Icon(Icons.close_rounded),
-                          color: EditorTheme.textSecondary,
-                          iconSize: 14,
-                          splashRadius: 14,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
+                        if (!widget.embedded)
+                          IconButton(
+                            onPressed: widget.onClose,
+                            icon: const Icon(Icons.close_rounded),
+                            color: EditorTheme.textSecondary,
+                            iconSize: 14,
+                            splashRadius: 14,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 28,
+                              minHeight: 28,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -389,201 +396,6 @@ class _PerformanceDetailContent extends StatelessWidget {
                         ),
                         Text(
                           '${entry.value.toStringAsFixed(2)} ms',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: EditorTheme.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                })
-                .toList(growable: false),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class DockEcsPanel extends StatelessWidget {
-  const DockEcsPanel({
-    super.key,
-    required this.controller,
-    required this.height,
-    required this.onResize,
-    required this.onClose,
-    required this.settings,
-  });
-
-  final JustDebuggerController controller;
-  final double height;
-  final ValueChanged<double> onResize;
-  final VoidCallback onClose;
-  final OverlayUiSettings settings;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        return SizedBox(
-          height: height,
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xF41B1B1B),
-                border: Border(
-                  left: BorderSide(color: Colors.white.withValues(alpha: 0.04)),
-                  right: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.04),
-                  ),
-                ),
-                boxShadow: const <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x55000000),
-                    blurRadius: 12,
-                    offset: Offset(0, -4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: <Widget>[
-                  PanelResizeHandle(onDrag: onResize),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 2, 4, 2),
-                    child: Row(
-                      children: <Widget>[
-                        Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF7DE6B1,
-                            ).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Icon(
-                            Icons.hub_rounded,
-                            size: 11,
-                            color: Color(0xFF7DE6B1),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'ECS',
-                          style: TextStyle(
-                            fontSize: 11 * settings.effectiveTextScale,
-                            fontWeight: FontWeight.w600,
-                            color: EditorTheme.textPrimary,
-                          ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          onPressed: onClose,
-                          icon: const Icon(Icons.close_rounded),
-                          color: EditorTheme.textSecondary,
-                          iconSize: 14,
-                          splashRadius: 14,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Divider(
-                    height: 1,
-                    color: Colors.white.withValues(alpha: 0.06),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(10),
-                      child: _EcsDetailContent(
-                        controller: controller,
-                        settings: settings,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _EcsDetailContent extends StatelessWidget {
-  const _EcsDetailContent({required this.controller, required this.settings});
-
-  final JustDebuggerController controller;
-  final OverlayUiSettings settings;
-
-  @override
-  Widget build(BuildContext context) {
-    final snapshot = controller.snapshot;
-    final components = snapshot.componentUsage.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Wrap(
-          spacing: 5,
-          runSpacing: 5,
-          children: <Widget>[
-            DetailStatTile(
-              label: 'Entities',
-              value: '${snapshot.entityCount}',
-              settings: settings,
-            ),
-            DetailStatTile(
-              label: 'Active Entities',
-              value: '${snapshot.activeEntityCount}',
-              settings: settings,
-            ),
-            DetailStatTile(
-              label: 'Systems',
-              value: '${snapshot.systemCount}',
-              settings: settings,
-            ),
-            DetailStatTile(
-              label: 'Archetypes',
-              value: '${snapshot.archetypeCount}',
-              settings: settings,
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        DetailSectionCard(
-          sectionId: 'ecs_top_components',
-          title: 'Top Components',
-          settings: settings,
-          child: Column(
-            children: components
-                .take(6)
-                .map((entry) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            entry.key,
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: EditorTheme.textSecondary,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '${entry.value}',
                           style: const TextStyle(
                             fontSize: 10,
                             color: EditorTheme.textPrimary,

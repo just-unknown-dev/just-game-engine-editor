@@ -39,12 +39,12 @@ class InputSetupButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(settings.cornerRadius),
           child: Container(
             padding: EdgeInsets.symmetric(
-              horizontal: 8 * settings.compactness,
-              vertical: 6 * settings.compactness,
+              horizontal: 6 * settings.compactness,
+              vertical: 3 * settings.compactness,
             ),
             child: Icon(
               Icons.keyboard_alt_outlined,
-              size: 15 * settings.effectiveTextScale,
+              size: 14 * settings.effectiveTextScale,
               color: settings.themeColor,
             ),
           ),

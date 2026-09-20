@@ -132,6 +132,28 @@ class EditorHistory {
   }
 
   /// Reverses the most recent command.
+  /// What has been done, oldest first.
+  List<EditorCommand> get undoEntries => List.unmodifiable(_undoStack);
+
+  /// What has been undone, the next to redo last.
+  List<EditorCommand> get redoEntries => List.unmodifiable(_redoStack);
+
+  /// Undoes or redoes until exactly [done] steps are applied: 0 is the scene
+  /// as opened, [undoEntries].length plus [redoEntries].length is everything.
+  void jumpTo(int done) {
+    final target = done.clamp(0, _undoStack.length + _redoStack.length);
+    while (_undoStack.length > target) {
+      final before = _undoStack.length;
+      undo();
+      if (_undoStack.length == before) return; // a step refused to move
+    }
+    while (_undoStack.length < target) {
+      final before = _undoStack.length;
+      redo();
+      if (_undoStack.length == before) return;
+    }
+  }
+
   void undo() {
     if (_undoStack.isEmpty) return;
     final command = _undoStack.removeLast();

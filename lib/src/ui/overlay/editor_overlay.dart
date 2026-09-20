@@ -257,7 +257,30 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
           onPointerUp: widget.plugin.viewport.onPointerUp,
           onPointerCancel: widget.plugin.viewport.onPointerCancel,
           onPointerSignal: widget.plugin.viewport.onPointerScroll,
-          child: AbsorbPointer(absorbing: true, child: widget.gameChild),
+          // An asset dragged out of the Assets dock lands here: an image
+          // becomes a sprite where it was dropped.
+          child: DragTarget<String>(
+            onWillAcceptWithDetails: (d) =>
+                widget.plugin.sceneState.hasScene &&
+                JustGameEditorPlugin.canDropAsset(d.data),
+            onAcceptWithDetails: (d) {
+              final box = context.findRenderObject() as RenderBox?;
+              if (box == null) return;
+              widget.plugin.dropAsset(d.data, box.globalToLocal(d.offset));
+            },
+            builder: (context, incoming, _) => DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                border: incoming.isEmpty
+                    ? null
+                    : Border.all(
+                        color: EditorTheme.primaryBright.withValues(alpha: 0.7),
+                        width: 2,
+                      ),
+              ),
+              child: AbsorbPointer(absorbing: true, child: widget.gameChild),
+            ),
+          ),
         );
       },
     );
