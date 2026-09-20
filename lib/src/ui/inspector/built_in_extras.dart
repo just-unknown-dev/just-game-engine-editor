@@ -5,10 +5,37 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import 'component_extras.dart';
 import 'field_rows.dart';
+import 'collection_editor.dart';
+import '../../core/scope/editor_scope.dart';
+import 'package:flutter/widgets.dart';
 
 /// What the editor itself adds to built-in components beyond their fields.
 abstract final class BuiltInExtras {
   static List<ComponentEditorExtras> get all => [
+    // The hierarchy stores entity ids, which mean nothing to an author: show
+    // who they are, and let a click go there.
+    ComponentEditorExtras(
+      type: 'ChildrenComponent',
+      summary: (c) {
+        final n = (c as jge.ChildrenComponent).childIds.length;
+        return n == 1 ? '1 child' : '$n children';
+      },
+      fieldEditors: {
+        'childIds': (c) => _EntityLinks(
+          label: c.label,
+          ids: [...(c.component as jge.ChildrenComponent).childIds],
+        ),
+      },
+    ),
+    ComponentEditorExtras(
+      type: 'ParentComponent',
+      fieldEditors: {
+        'parentId': (c) => _EntityLinks(
+          label: c.label,
+          ids: [?(c.component as jge.ParentComponent).parentId],
+        ),
+      },
+    ),
     ComponentEditorExtras(
       type: 'AnimatedSpriteComponent',
       summary: (c) {
@@ -92,4 +119,36 @@ abstract final class BuiltInExtras {
       return null;
     }
   }
+}
+
+/// Entity ids as the names of the entities they point at, each a link that
+/// selects it.
+class _EntityLinks extends StatelessWidget {
+  const _EntityLinks({required this.label, required this.ids});
+
+  final String label;
+  final List<int> ids;
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = EditorScopeProvider.maybeOf(context);
+    final world = scope?.world;
+    return EntityLinkList(
+      label: label,
+      names: [
+        for (final id in ids) (id: id, name: _nameOf(world?.getEntity(id), id)),
+      ],
+      onSelect: (id) {
+        final entity = world?.getEntity(id);
+        if (entity != null) scope!.sceneState.selectEntity(entity);
+      },
+    );
+  }
+
+  /// Null when the entity is gone, so the row can say so.
+  static String? _nameOf(jge.Entity? entity, int id) => entity == null
+      ? null
+      : (entity.name?.isNotEmpty ?? false)
+      ? entity.name
+      : 'entity #$id';
 }

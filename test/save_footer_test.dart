@@ -12,11 +12,11 @@ void main() {
     (tester) async {
       Engine.resetInstance();
       // A scene is opened below, and the panel beside the footer lists the
-    // world's entities — so the engine has to be a running one.
-    final engine = Engine();
-    await tester.runAsync(engine.initialize);
-    final plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
-    await tester.runAsync(plugin.onInitialize);
+      // world's entities — so the engine has to be a running one.
+      final engine = Engine();
+      await tester.runAsync(engine.initialize);
+      final plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
+      await tester.runAsync(plugin.onInitialize);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(

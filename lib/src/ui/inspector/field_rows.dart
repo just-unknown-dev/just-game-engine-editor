@@ -319,6 +319,205 @@ class _ScrubFieldRowState extends State<ScrubFieldRow> {
   }
 }
 
+/// A vector on one row: the field's label, then a scrubbable cell per axis —
+/// `Position  X [ 0.0 ]  Y [ 0.0 ]`. Each cell's letter is its drag handle,
+/// in the axis colour the gizmos use.
+class AxesFieldRow extends StatefulWidget {
+  const AxesFieldRow({
+    super.key,
+    required this.label,
+    required this.axes,
+    required this.values,
+    required this.scrubConfig,
+    required this.onChanged,
+    this.scrubConfigs,
+    this.readOnly = false,
+  }) : assert(axes.length == values.length),
+       assert(scrubConfigs == null || scrubConfigs.length == values.length);
+
+  final String label;
+
+  /// The axis letters, one per value: `['X', 'Y']`.
+  final List<String> axes;
+  final List<double> values;
+  final NumberScrubConfig scrubConfig;
+
+  /// One per cell, where they differ — a row of separate fields, each with
+  /// its own limits. Null gives every cell [scrubConfig].
+  final List<NumberScrubConfig>? scrubConfigs;
+  final bool readOnly;
+
+  /// Every value, with the edited one replaced.
+  final ValueChanged<List<double>> onChanged;
+
+  /// Red, green, blue, then amber for a fourth.
+  static const List<Color> axisColors = [
+    Color(0xFFE5737B),
+    Color(0xFF7DD68A),
+    Color(0xFF6FA8F5),
+    Color(0xFFE6C36B),
+  ];
+
+  @override
+  State<AxesFieldRow> createState() => _AxesFieldRowState();
+}
+
+class _AxesFieldRowState extends State<AxesFieldRow> {
+  final List<TextEditingController> _ctrls = [];
+  final List<FocusNode> _focus = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _grow();
+  }
+
+  void _grow() {
+    while (_ctrls.length < widget.values.length) {
+      _ctrls.add(
+        TextEditingController(
+          text: _fmt(_ctrls.length, widget.values[_ctrls.length]),
+        ),
+      );
+      _focus.add(FocusNode());
+    }
+  }
+
+  @override
+  void didUpdateWidget(AxesFieldRow old) {
+    super.didUpdateWidget(old);
+    _grow();
+    for (var i = 0; i < widget.values.length; i++) {
+      final was = i < old.values.length ? old.values[i] : null;
+      if (!_focus[i].hasFocus && widget.values[i] != was) {
+        _ctrls[i].text = _fmt(i, widget.values[i]);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final c in _ctrls) {
+      c.dispose();
+    }
+    for (final f in _focus) {
+      f.dispose();
+    }
+    super.dispose();
+  }
+
+  NumberScrubConfig _config(int i) =>
+      widget.scrubConfigs?[i] ?? widget.scrubConfig;
+
+  /// A letter's width, or room for the longest of `Min` / `Max`.
+  double get _cellLabelWidth {
+    final longest = widget.axes.fold(0, (n, a) => math.max(n, a.length));
+    return longest <= 1 ? 12 : 6.0 * longest + 6;
+  }
+
+  String _fmt(int i, double v) {
+    final config = _config(i);
+    if (config.integer) return v.round().toString();
+    return v.toStringAsFixed(config.fractionDigits);
+  }
+
+  void _commit(int i) {
+    final v = double.tryParse(_ctrls[i].text.trim());
+    if (v == null) return;
+    widget.onChanged(List<double>.of(widget.values)..[i] = v);
+  }
+
+  Widget _cell(int i) {
+    final color = AxesFieldRow.axisColors[i % AxesFieldRow.axisColors.length];
+    if (widget.readOnly) {
+      return Row(
+        children: [
+          SizedBox(
+            width: _cellLabelWidth,
+            child: Text(
+              widget.axes[i],
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              _fmt(i, widget.values[i]),
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: EditorTheme.textPrimary,
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return Tooltip(
+      message: '${widget.label} ${widget.axes[i]}',
+      waitDuration: const Duration(milliseconds: 600),
+      child: ScrubbableNumberField(
+        label: widget.axes[i],
+        labelWidth: _cellLabelWidth,
+        labelColor: color,
+        controller: _ctrls[i],
+        focusNode: _focus[i],
+        onCommit: () => _commit(i),
+        config: _config(i),
+      ),
+    );
+  }
+
+  /// Below this a cell cannot show `-1234.5` next to its letter.
+  static const double _minCell = 62;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = Text(
+      widget.label,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        color: EditorTheme.textMuted,
+        fontSize: 10,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+    final cells = Row(
+      children: [
+        for (var i = 0; i < widget.values.length; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          Expanded(child: _cell(i)),
+        ],
+      ],
+    );
+    return LayoutBuilder(
+      builder: (context, box) {
+        final n = widget.values.length;
+        final fits =
+            box.maxWidth - 96 - 6 * (n - 1) >=
+            (_minCell - 12 + _cellLabelWidth) * n;
+        // A narrow panel: the label takes its own line, the axes still
+        // share one.
+        if (!fits) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [label, const SizedBox(height: 4), cells],
+          );
+        }
+        return Row(
+          children: [
+            SizedBox(width: 96, child: label),
+            Expanded(child: cells),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class TextEditorRow extends StatelessWidget {
   const TextEditorRow({
     super.key,

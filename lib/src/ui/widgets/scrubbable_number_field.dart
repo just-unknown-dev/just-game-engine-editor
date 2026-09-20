@@ -32,6 +32,7 @@ class ScrubbableNumberField extends StatefulWidget {
     required this.onCommit,
     required this.config,
     this.labelWidth = 52,
+    this.labelColor,
   });
 
   final String label;
@@ -40,6 +41,10 @@ class ScrubbableNumberField extends StatefulWidget {
   final VoidCallback onCommit;
   final NumberScrubConfig config;
   final double labelWidth;
+
+  /// The label's colour at rest — an axis letter's red, green or blue.
+  /// Null is the usual muted text.
+  final Color? labelColor;
 
   @override
   State<ScrubbableNumberField> createState() => _ScrubbableNumberFieldState();
@@ -147,9 +152,11 @@ class _ScrubbableNumberFieldState extends State<ScrubbableNumberField> {
                     style: TextStyle(
                       color: highlight
                           ? EditorTheme.primaryMutedLight
-                          : EditorTheme.textMuted,
+                          : widget.labelColor ?? EditorTheme.textMuted,
                       fontSize: 10,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: widget.labelColor == null
+                          ? FontWeight.w500
+                          : FontWeight.w800,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),

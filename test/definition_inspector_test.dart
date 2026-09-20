@@ -131,7 +131,10 @@ void main() {
     );
     expect(find.text('Transform'), findsOneWidget);
     expect(find.text('POSITION'), findsOneWidget);
-    expect(find.text('Position X'), findsOneWidget);
+    // A vector is one row: its label once, then a cell per axis.
+    expect(find.text('Position'), findsOneWidget);
+    expect(find.byTooltip('Position X'), findsOneWidget);
+    expect(find.text('Position X'), findsNothing);
     expect(find.text('Angle'), findsOneWidget);
     expect(find.text('Tilt X'), findsNothing, reason: 'hidden by its hint');
   });

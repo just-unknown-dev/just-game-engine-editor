@@ -105,8 +105,13 @@ class PhysicsShapeEditor extends StatelessWidget {
       onChanged: apply,
     );
     List<Widget> point(String label, Offset p, void Function(Offset) apply) => [
-      num('$label X', p.dx, _point, (v) => apply(Offset(v, p.dy))),
-      num('$label Y', p.dy, _point, (v) => apply(Offset(p.dx, v))),
+      AxesFieldRow(
+        label: label,
+        axes: const ['X', 'Y'],
+        values: [p.dx, p.dy],
+        scrubConfig: _point,
+        onChanged: (v) => apply(Offset(v[0], v[1])),
+      ),
     ];
 
     final rows = <Widget>[

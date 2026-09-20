@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
@@ -5,7 +7,9 @@ import '../../core/constants/editor_constants.dart';
 import '../../core/scope/editor_scope.dart';
 import '../../core/state/editor_scene_state.dart';
 import 'component_extras.dart';
+import '../widgets/scrubbable_number_field.dart';
 import 'field_editor.dart';
+import 'field_rows.dart';
 
 /// One inspector section per component on [entity], built from each
 /// component's definition. A component with no definition (and no legacy
@@ -209,14 +213,100 @@ class DefinitionSection extends StatelessWidget {
     return out;
   }
 
-  List<Widget> _rows(List<jge.SchemaField> fields) => [
-    for (final field in fields)
-      Padding(padding: const EdgeInsets.only(bottom: 6), child: _row(field)),
-  ];
+  /// One row per field — except fields a [jge.FieldRowHint] gathers, which
+  /// share the row where the first of them would be.
+  List<Widget> _rows(List<jge.SchemaField> fields) {
+    final out = <Widget>[];
+    final done = <String>{};
+    for (final field in fields) {
+      if (done.contains(field.name)) continue;
+      final together = _rowMates(field, fields);
+      done.addAll([for (final f in together.$2) f.name]);
+      out.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: together.$1 == null
+              ? _row(field)
+              : _sharedRow(together.$1!, together.$2),
+        ),
+      );
+    }
+    return out;
+  }
+
+  bool _isNumber(jge.SchemaField f) =>
+      f.kind.id == jge.FieldTypes.decimal.id ||
+      f.kind.id == jge.FieldTypes.integer.id;
+
+  /// The row hint [field] belongs to and the fields of it that are here,
+  /// in the hint's order; `(null, [field])` when it stands alone. A field
+  /// with an editor of its own is never gathered.
+  (jge.FieldRowHint?, List<jge.SchemaField>) _rowMates(
+    jge.SchemaField field,
+    List<jge.SchemaField> among,
+  ) {
+    for (final row in hints.fieldRows) {
+      if (!row.cells.containsKey(field.name)) continue;
+      final mates = [
+        for (final name in row.cells.keys)
+          for (final f in among)
+            if (f.name == name &&
+                _isNumber(f) &&
+                extras?.fieldEditors[name] == null)
+              f,
+      ];
+      if (mates.length > 1 && mates.contains(field)) return (row, mates);
+    }
+    return (null, [field]);
+  }
+
+  Widget _sharedRow(jge.FieldRowHint row, List<jge.SchemaField> fields) {
+    final contexts = [for (final f in fields) _context(f)];
+    double shown(FieldEditorContext c) {
+      final raw = (c.value as num?)?.toDouble() ?? 0.0;
+      return c.hint.unit == jge.AngleUnit.degrees ? raw * 180 / math.pi : raw;
+    }
+
+    final values = [for (final c in contexts) shown(c)];
+    return AxesFieldRow(
+      label: row.label,
+      axes: [for (final f in fields) row.cells[f.name]!],
+      values: values,
+      scrubConfig: const NumberScrubConfig(),
+      scrubConfigs: [
+        for (final c in contexts)
+          c.scrub ??
+              NumberScrubConfig(
+                integer: c.field.kind.id == jge.FieldTypes.integer.id,
+              ),
+      ],
+      readOnly: contexts.any((c) => c.readOnly),
+      onChanged: (next) {
+        for (var i = 0; i < next.length; i++) {
+          if (next[i] == values[i]) continue;
+          final c = contexts[i];
+          final stored = c.hint.unit == jge.AngleUnit.degrees
+              ? next[i] * math.pi / 180
+              : next[i];
+          c.onChanged(
+            c.field.kind.id == jge.FieldTypes.integer.id
+                ? stored.round()
+                : stored,
+          );
+        }
+      },
+    );
+  }
 
   Widget _row(jge.SchemaField field) {
+    final ctx = _context(field);
+    final custom = extras?.fieldEditors[field.name];
+    return custom != null ? custom(ctx) : scope.fieldEditors.build(ctx);
+  }
+
+  FieldEditorContext _context(jge.SchemaField field) {
     final hint = hints.fields[field.name] ?? const jge.FieldHint();
-    final ctx = FieldEditorContext(
+    return FieldEditorContext(
       field: field,
       hint: hint,
       value: field.read(component),
@@ -232,7 +322,5 @@ class DefinitionSection extends StatelessWidget {
         onChanged();
       },
     );
-    final custom = extras?.fieldEditors[field.name];
-    return custom != null ? custom(ctx) : scope.fieldEditors.build(ctx);
   }
 }

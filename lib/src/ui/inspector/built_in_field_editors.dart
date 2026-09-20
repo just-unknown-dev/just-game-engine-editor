@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -8,6 +7,7 @@ import '../widgets/scrubbable_number_field.dart' show NumberScrubConfig;
 import 'field_editor.dart';
 import 'field_rows.dart';
 import 'physics_shape_editor.dart';
+import 'collection_editor.dart';
 
 /// The editors for the engine's built-in field types, keyed by type id.
 ///
@@ -141,22 +141,15 @@ abstract final class BuiltInFieldEditors {
   static String _enumName(Object? value) =>
       value is Enum ? value.name : (value?.toString() ?? '');
 
-  static Widget _json(FieldEditorContext c) {
-    final pretty = const JsonEncoder.withIndent('  ').convert(c.value);
-    if (c.readOnly) return ReadonlyRow(label: c.label, value: pretty);
-    return TextEditorRow(
-      label: c.label,
-      initialValue: pretty,
-      onSubmitted: (text) {
-        try {
-          final decoded = jsonDecode(text);
-          if (decoded is List || decoded is Map) c.onChanged(decoded);
-        } on FormatException {
-          // Leave the value as it was; the field shows it again.
-        }
-      },
-    );
-  }
+  /// A list or a map, as rows rather than as JSON to hand-edit.
+  static Widget _json(FieldEditorContext c) => CollectionEditor(
+    label: c.label,
+    value: c.value,
+    readOnly: c.readOnly,
+    template: c.hint.itemTemplate,
+    description: c.hint.description,
+    onChanged: c.onChanged,
+  );
 
   /// Compound numeric editors: one scrub row per axis, sharing the hint.
   static Widget _axes(
@@ -174,25 +167,13 @@ abstract final class BuiltInFieldEditors {
           min: c.field.min,
           max: c.field.max,
         );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var i = 0; i < axes.length; i++)
-          Padding(
-            padding: EdgeInsets.only(bottom: i == axes.length - 1 ? 0 : 6),
-            child: c.readOnly
-                ? ReadonlyRow(label: axes[i].$1, value: '${axes[i].$2}')
-                : ScrubFieldRow(
-                    label: axes[i].$1,
-                    value: axes[i].$2,
-                    scrubConfig: scrub,
-                    onChanged: (v) {
-                      final next = List<double>.of(values)..[i] = v;
-                      c.onChanged(build(next));
-                    },
-                  ),
-          ),
-      ],
+    return AxesFieldRow(
+      label: c.label,
+      axes: [for (final a in axes) a.$1],
+      values: values,
+      scrubConfig: scrub,
+      readOnly: c.readOnly,
+      onChanged: (next) => c.onChanged(build(next)),
     );
   }
 
@@ -200,10 +181,7 @@ abstract final class BuiltInFieldEditors {
     final v = c.value is jge.Vector2
         ? c.value as jge.Vector2
         : jge.Vector2.zero();
-    return _axes(c, [
-      ('${c.label} X', v.x),
-      ('${c.label} Y', v.y),
-    ], (n) => jge.Vector2(n[0], n[1]));
+    return _axes(c, [('X', v.x), ('Y', v.y)], (n) => jge.Vector2(n[0], n[1]));
   }
 
   static Widget _vector3(FieldEditorContext c) {
@@ -211,18 +189,15 @@ abstract final class BuiltInFieldEditors {
         ? c.value as jge.Vector3
         : jge.Vector3.zero();
     return _axes(c, [
-      ('${c.label} X', v.x),
-      ('${c.label} Y', v.y),
-      ('${c.label} Z', v.z),
+      ('X', v.x),
+      ('Y', v.y),
+      ('Z', v.z),
     ], (n) => jge.Vector3(n[0], n[1], n[2]));
   }
 
   static Widget _offset(FieldEditorContext c) {
     final o = c.value is Offset ? c.value as Offset : Offset.zero;
-    return _axes(c, [
-      ('${c.label} X', o.dx),
-      ('${c.label} Y', o.dy),
-    ], (n) => Offset(n[0], n[1]));
+    return _axes(c, [('X', o.dx), ('Y', o.dy)], (n) => Offset(n[0], n[1]));
   }
 
   static Widget _offsetList(FieldEditorContext c) {
