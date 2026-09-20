@@ -352,6 +352,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     // keeps thinking but does not write to it. Play hands it over.
     isAuthoring.addListener(_syncCameraOwnership);
     _syncCameraOwnership();
+    playController.state.addListener(_focusGameOnPlay);
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
     // Register game custom components and wire post-refresh re-registration.
@@ -529,6 +530,36 @@ class JustGameEditorPlugin implements EnginePlugin {
       return true;
     }
     return commands.dispatch(key, context, scopes: const {CommandScope.editor});
+  }
+
+  void _focusGameOnPlay() {
+    if (playController.state.value == EditorPlayState.playing) focusGame();
+  }
+
+  /// Gives the keyboard to the game.
+  ///
+  /// The game hears keys only while its own focus node is the primary focus,
+  /// and nothing else hands that back: type a value in the inspector, press
+  /// Play, and the keys kept going to the text field — the player stood
+  /// still until the editor was restarted. Called when a play-test starts or
+  /// resumes, and when the viewport is pressed during one (the editor's
+  /// viewport absorbs the press the game would otherwise refocus on).
+  void focusGame() {
+    FocusNode? game;
+    for (final node in gameFocusScopeNode.descendants) {
+      final context = node.context;
+      if (context == null || node.onKeyEvent == null) continue;
+      if (context.findAncestorWidgetOfExactType<GameWidget>() != null) {
+        game = node;
+        break;
+      }
+    }
+    if (game == null) {
+      // No game view to find: at least stop a text field eating the keys.
+      if (_isTypingInTextField) FocusManager.instance.primaryFocus?.unfocus();
+      return;
+    }
+    if (!game.hasPrimaryFocus) game.requestFocus();
   }
 
   /// Whether a text field has keyboard focus.
@@ -1013,6 +1044,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   void dispose() {
     closeLevelDesigner();
     isAuthoring.removeListener(_syncCameraOwnership);
+    playController.state.removeListener(_focusGameOnPlay);
     if (engine.isInitialized && engine.cameraSystem.isInitialized) {
       engine.cameraSystem.brain.driveOutput = true;
     }

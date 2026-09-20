@@ -246,7 +246,13 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
         _scheduleCanvasSizeUpdate(size);
 
         return Listener(
-          onPointerDown: widget.plugin.viewport.onPointerDown,
+          onPointerDown: (event) {
+            // A press on the game view mid-play means "back to the game".
+            if (widget.plugin.playController.isRunning) {
+              widget.plugin.focusGame();
+            }
+            widget.plugin.viewport.onPointerDown(event);
+          },
           onPointerMove: widget.plugin.viewport.onPointerMove,
           onPointerUp: widget.plugin.viewport.onPointerUp,
           onPointerCancel: widget.plugin.viewport.onPointerCancel,
