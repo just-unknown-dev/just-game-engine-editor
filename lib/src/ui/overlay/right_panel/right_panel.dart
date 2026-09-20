@@ -256,50 +256,147 @@ class _SaveFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDirty = plugin.sceneState.isDirty.value;
+    final keys = plugin.scope.commands.bindingsFor('editor.save');
+    final shortcut = keys.isEmpty ? null : keys.first.shortcut;
 
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: EditorTheme.border)),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: isDirty ? EditorTheme.warning : EditorTheme.border,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: <Widget>[
+            // Always says where the scene stands, not only when it is dirty.
             if (isDirty)
-              Padding(
-                padding: EdgeInsets.only(right: 8),
-                child: OverlayBadge(
-                  label: 'UNSAVED',
-                  accent: EditorTheme.warning,
-                  settings: settings,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.file_copy,
+                    size: 12,
+                    color: EditorTheme.warning,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'UNSAVED',
+                    style: TextStyle(
+                      color: EditorTheme.warning,
+                      fontSize: 10 * settings.effectiveTextScale,
+                    ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.check_rounded,
+                    size: 12,
+                    color: EditorTheme.textMuted,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Saved',
+                    style: TextStyle(
+                      color: EditorTheme.textMuted,
+                      fontSize: 10 * settings.effectiveTextScale,
+                    ),
+                  ),
+                ],
               ),
             const Spacer(),
-            SizedBox(
-              height: 32,
-              child: ElevatedButton.icon(
-                onPressed: isDirty ? () => plugin.saveScene() : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: EditorTheme.buttonBg,
-                  disabledBackgroundColor: EditorTheme.surfaceBg,
-                  foregroundColor: settings.themeColor,
-                  disabledForegroundColor: EditorTheme.border,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(settings.cornerRadius),
-                  ),
-                ),
-                icon: const Icon(Icons.save_rounded, size: 14),
-                label: Text(
-                  'Save',
-                  style: TextStyle(
-                    fontSize: 12 * settings.effectiveTextScale,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+            _SaveButton(
+              enabled: isDirty,
+              shortcut: shortcut,
+              settings: settings,
+              onPressed: plugin.saveScene,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Save, at the height of the editor's other controls: tinted with the theme
+/// colour while there is something to save, and still legible when there is
+/// not.
+class _SaveButton extends StatelessWidget {
+  const _SaveButton({
+    required this.enabled,
+    required this.shortcut,
+    required this.settings,
+    required this.onPressed,
+  });
+
+  final bool enabled;
+  final String? shortcut;
+  final OverlayUiSettings settings;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = settings.themeColor;
+    final foreground = enabled
+        ? EditorTheme.textBright
+        : EditorTheme.textMuted.withValues(alpha: 0.6);
+    final radius = BorderRadius.circular(settings.cornerRadius);
+    return Tooltip(
+      message: enabled
+          ? 'Save scene${shortcut == null ? '' : '  ($shortcut)'}'
+          : 'Nothing to save',
+      waitDuration: const Duration(milliseconds: 400),
+      child: Material(
+        color: enabled ? accent.withValues(alpha: 0.18) : Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: BorderSide(
+            color: enabled ? accent.withValues(alpha: 0.7) : EditorTheme.border,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: enabled ? onPressed : null,
+          hoverColor: accent.withValues(alpha: 0.14),
+          child: SizedBox(
+            height: 28,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.save_rounded,
+                    size: 13,
+                    color: enabled ? accent : foreground,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Save',
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: 11 * settings.effectiveTextScale,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (shortcut != null) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      shortcut!,
+                      style: TextStyle(
+                        color: foreground.withValues(alpha: 0.55),
+                        fontSize: 9 * settings.effectiveTextScale,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

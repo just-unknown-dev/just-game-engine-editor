@@ -347,37 +347,65 @@ class _PlayControlButton extends StatelessWidget {
   }
 }
 
+/// A small status pill: tinted with its [accent] rather than filled with it.
+///
+/// A solid bright pill with white text is both the loudest thing in the panel
+/// and the hardest to read (white on the warning yellow is about 1.4:1). This
+/// is the same chip the play toolbar uses for `PLAYING`: a faint fill, a hair
+/// of border, and the accent as the text colour.
 class OverlayBadge extends StatelessWidget {
   const OverlayBadge({
     super.key,
     required this.label,
     this.accent = EditorTheme.buttonBg,
     this.settings = const OverlayUiSettings.defaults(),
+    this.showDot = false,
   });
 
   final String label;
   final Color accent;
   final OverlayUiSettings settings;
 
+  /// A leading dot, for a badge that reports a state rather than a label.
+  final bool showDot;
+
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: accent,
+        color: accent.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: 0.45)),
       ),
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: 8 * settings.compactness,
           vertical: 3 * settings.compactness,
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: EditorTheme.textBadge,
-            fontSize: 11 * settings.effectiveTextScale,
-            fontWeight: FontWeight.w700,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showDot) ...[
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: accent,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                color: accent,
+                fontSize: 9 * settings.effectiveTextScale,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
         ),
       ),
     );
