@@ -69,12 +69,21 @@ void main() {
       tester.getRect(fields.at(0)).right,
       lessThan(tester.getRect(fields.at(1)).left),
     );
-    // The label sits beside them, in the inspector's label column.
+    // The label sits beside them, in the inspector's label column, and each
+    // cell's letter rides inside its own box — so the box begins where the
+    // column ends, exactly as a lone number's does.
     expect(
       tester.getRect(find.text('Scale')).right,
       lessThanOrEqualTo(tester.getRect(find.text('X')).left),
     );
-    expect(tester.getRect(find.text('X')).left, 96);
+    expect(tester.getRect(fields.at(0)).left, 96);
+    expect(
+      tester
+          .getRect(fields.at(0))
+          .contains(tester.getRect(find.text('X')).center),
+      isTrue,
+      reason: 'the letter is in the box',
+    );
   });
 
   testWidgets('editing one axis leaves the others', (tester) async {

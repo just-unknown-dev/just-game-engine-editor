@@ -1,3 +1,4 @@
+import '../inspector/field_style.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -32,6 +33,7 @@ class ScrubbableNumberField extends StatefulWidget {
     required this.onCommit,
     required this.config,
     this.labelWidth = 52,
+    this.labelInside = false,
     this.labelColor,
   });
 
@@ -41,6 +43,11 @@ class ScrubbableNumberField extends StatefulWidget {
   final VoidCallback onCommit;
   final NumberScrubConfig config;
   final double labelWidth;
+
+  /// Draw the label inside the box, before the value, instead of in a
+  /// column of its own. What an axis cell does, so that every box on every
+  /// row starts at the same place.
+  final bool labelInside;
 
   /// The label's colour at rest — an axis letter's red, green or blue.
   /// Null is the usual muted text.
@@ -124,9 +131,41 @@ class _ScrubbableNumberFieldState extends State<ScrubbableNumberField> {
     widget.onCommit();
   }
 
+  /// The label, which is also the handle a value is scrubbed by.
+  Widget _handle({required bool highlight, EdgeInsets? padding}) => MouseRegion(
+    cursor: SystemMouseCursors.resizeLeftRight,
+    onEnter: (_) => setState(() => _isHovering = true),
+    onExit: (_) => setState(() => _isHovering = false),
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: _onDragStart,
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      onHorizontalDragCancel: () =>
+          _onDragEnd(DragEndDetails(primaryVelocity: 0)),
+      child: Padding(
+        padding: padding ?? EdgeInsets.zero,
+        child: Text(
+          widget.label,
+          style: TextStyle(
+            color: highlight
+                ? EditorTheme.primaryMutedLight
+                : widget.labelColor ?? EditorTheme.textMuted,
+            fontSize: 10,
+            fontWeight: widget.labelColor == null
+                ? FontWeight.w500
+                : FontWeight.w800,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final highlight = _isDragging || _isHovering;
+    if (widget.labelInside) return _field(highlight);
 
     return Row(
       children: <Widget>[
@@ -165,38 +204,28 @@ class _ScrubbableNumberFieldState extends State<ScrubbableNumberField> {
             ),
           ),
         ),
-        Expanded(
-          child: TextField(
-            controller: widget.controller,
-            focusNode: widget.focusNode,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-            decoration: const InputDecoration(
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              filled: true,
-              fillColor: EditorTheme.surfaceDarker,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(4)),
-                borderSide: BorderSide(color: EditorTheme.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(4)),
-                borderSide: BorderSide(color: EditorTheme.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(4)),
-                borderSide: BorderSide(color: EditorTheme.primaryMutedLight),
-              ),
-            ),
-            keyboardType: const TextInputType.numberWithOptions(
-              signed: true,
-              decimal: true,
-            ),
-            onSubmitted: (_) => _commit(),
-            onEditingComplete: _commit,
-          ),
-        ),
+        Expanded(child: _field(highlight)),
       ],
     );
   }
+
+  Widget _field(bool highlight) => TextField(
+    controller: widget.controller,
+    focusNode: widget.focusNode,
+    style: InspectorField.valueStyle,
+    decoration: InspectorField.decoration(
+      prefix: widget.labelInside
+          ? _handle(
+              highlight: highlight,
+              padding: const EdgeInsets.only(left: 8, right: 6),
+            )
+          : null,
+    ),
+    keyboardType: const TextInputType.numberWithOptions(
+      signed: true,
+      decimal: true,
+    ),
+    onSubmitted: (_) => _commit(),
+    onEditingComplete: _commit,
+  );
 }

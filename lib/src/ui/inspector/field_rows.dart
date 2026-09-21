@@ -4,6 +4,7 @@
 /// and look like the rest of the inspector.
 library;
 
+import 'field_style.dart';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -135,7 +136,8 @@ class ColorEditorRow extends StatelessWidget {
             },
             borderRadius: BorderRadius.circular(4),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              height: InspectorField.height,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
                 color: EditorTheme.inputBg,
                 borderRadius: BorderRadius.circular(4),
@@ -236,15 +238,37 @@ class BoolEditorRow extends StatelessWidget {
             style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
           ),
         ),
-        SizedBox(
-          width: 20,
-          height: 20,
-          child: Checkbox(
-            value: value,
-            onChanged: (v) => onChanged(v ?? false),
-            activeColor: EditorTheme.primaryMutedLight,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            side: const BorderSide(color: EditorTheme.border),
+        Expanded(
+          child: InkWell(
+            onTap: () => onChanged(!value),
+            borderRadius: BorderRadius.circular(InspectorField.radius),
+            child: Container(
+              height: InspectorField.height,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: InspectorField.boxDecoration(),
+              child: Row(
+                children: [
+                  Icon(
+                    value
+                        ? Icons.check_box_rounded
+                        : Icons.check_box_outline_blank_rounded,
+                    size: 14,
+                    color: value
+                        ? EditorTheme.primaryMutedLight
+                        : EditorTheme.textMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    value ? 'On' : 'Off',
+                    style: InspectorField.valueStyle.copyWith(
+                      color: value
+                          ? EditorTheme.textPrimary
+                          : EditorTheme.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ],
@@ -314,7 +338,7 @@ class _ScrubFieldRowState extends State<ScrubFieldRow> {
       focusNode: _focus,
       onCommit: _commit,
       config: widget.scrubConfig,
-      labelWidth: 96,
+      labelWidth: InspectorField.labelWidth,
     );
   }
 }
@@ -461,7 +485,7 @@ class _AxesFieldRowState extends State<AxesFieldRow> {
       waitDuration: const Duration(milliseconds: 600),
       child: ScrubbableNumberField(
         label: widget.axes[i],
-        labelWidth: _cellLabelWidth,
+        labelInside: true,
         labelColor: color,
         controller: _ctrls[i],
         focusNode: _focus[i],
@@ -551,34 +575,11 @@ class TextEditorRow extends StatelessWidget {
         Expanded(
           child: TextFormField(
             initialValue: initialValue,
-            style: const TextStyle(
-              color: EditorTheme.textPrimary,
-              fontSize: 11,
-            ),
+            style: InspectorField.valueStyle,
             minLines: 1,
             maxLines: 4,
             onFieldSubmitted: onSubmitted,
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 8,
-              ),
-              filled: true,
-              fillColor: EditorTheme.inputBg,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: const BorderSide(color: EditorTheme.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: const BorderSide(color: EditorTheme.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: const BorderSide(color: EditorTheme.primaryActive),
-              ),
-            ),
+            decoration: InspectorField.decoration(),
           ),
         ),
       ],
@@ -805,9 +806,9 @@ class _MiniNumberField extends StatelessWidget {
       },
       decoration: InputDecoration(
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        contentPadding: InspectorField.padding,
         filled: true,
-        fillColor: EditorTheme.inputBg,
+        fillColor: InspectorField.fill,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
           borderSide: const BorderSide(color: EditorTheme.border),
@@ -982,10 +983,8 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
                   return GestureDetector(
                     onTap: _toggleExpanded,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
-                      ),
+                      height: InspectorField.height,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
                         color: EditorTheme.inputBg,
                         borderRadius: BorderRadius.circular(4),
