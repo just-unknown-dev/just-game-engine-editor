@@ -15,7 +15,8 @@ import '../extra/extra_docks.dart';
 import '../profiler/frame_capture.dart';
 import '../profiler/profiler_dock.dart';
 import '../detail_cards.dart';
-import '../timeline_dock.dart';
+import '../../../timeline/timeline_dock.dart';
+import '../../../timeline/timeline_session.dart';
 import '../world/world_dock.dart';
 
 /// The editor's own docks, contributed the way a module's are: one
@@ -195,16 +196,15 @@ abstract final class BuiltInDocks {
         icon: Icons.movie_filter_outlined,
         order: 30,
         defaultHeight: 300,
-        build: (context, dock) => withSettings(
-          (settings) => DockTimelinePanel(
-            embedded: true,
-            height: dock.height,
-            onResize: dock.onResize,
-            onClose: dock.onClose,
-            settings: settings,
-            plugin: plugin,
-          ),
-        ),
+        build: (context, dock) {
+          TimelineSession.of(scope)
+            ..isAuthoring = (() => plugin.isAuthoring.value)
+            ..onSaved = plugin.reloadAsset;
+          return TimelineDock(
+            scope: scope,
+            openPath: dock.args['path'] as String?,
+          );
+        },
       ),
       DockDefinition(
         id: profiler,

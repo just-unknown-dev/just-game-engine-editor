@@ -82,6 +82,16 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
     return AnimatorGraph.parse(await file.readAsString());
   }
 
+  /// A timeline, from the project's files; the timeline system keeps what
+  /// it loads until told to reload.
+  Future<TimelineAsset> loadTimeline(String path) async {
+    final file = _file(path);
+    if (!await file.exists()) {
+      return TimelineAsset.parse(await rootBundle.loadString(path));
+    }
+    return TimelineAsset.parse(await file.readAsString());
+  }
+
   /// Forgets [path] — and, for an atlas, the sheet beside it, which was
   /// re-exported with it.
   @override

@@ -1,3 +1,5 @@
+import '../timeline/motion_path.dart';
+import '../timeline/timeline_session.dart';
 import 'dart:math' as math;
 
 export 'state/modifier_keys.dart';
@@ -174,6 +176,7 @@ class LevelDesignerSession {
       SmartGuidesOverlay(),
       MinimapOverlay(),
       CameraRigOverlay(brain: () => scope.cameraBrain),
+      MotionPathOverlay(() => TimelineSession.of(scope)),
     ]);
   }
 

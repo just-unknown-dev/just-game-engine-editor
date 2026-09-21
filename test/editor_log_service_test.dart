@@ -10,6 +10,27 @@ import 'package:just_game_engine_editor/src/core/constants/editor_constants.dart
     show EditorLogConstants;
 
 void main() {
+  test('the default log file belongs to this process', () async {
+    // flutter test runs test files side by side. They used to share one file
+    // under the system temp directory, so one file's lines could turn up in
+    // another file's expectations — a failure that only ever showed in a full
+    // run, and never twice in the same place.
+    final storage = createEditorLogStorage();
+    await storage.appendEntry(
+      EditorLogEntry(
+        message: 'hello',
+        source: 'test',
+        category: 'test',
+        level: DebuggerLogLevel.info,
+        timestamp: DateTime(2026, 9, 21),
+      ),
+    );
+    final path = storage.filePath!;
+    addTearDown(() => File(path).parent.deleteSync(recursive: true));
+    expect(path, contains('$pid'));
+    expect(await storage.loadEntries(), hasLength(1));
+  });
+
   test('runWithCapture records plain print output once', () async {
     final storage = _MemoryEditorLogStorage();
     final service = EditorLogService.withStorage(storage);

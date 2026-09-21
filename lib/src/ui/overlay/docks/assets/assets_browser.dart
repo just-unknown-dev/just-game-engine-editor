@@ -141,6 +141,14 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
 
   void _open(AssetEntry entry) {
     if (entry.isDirectory) return _go(entry.path);
+    // A timeline is edited in the dock beside this one, not in a workspace.
+    if (entry.path.toLowerCase().endsWith('.timeline.json')) {
+      widget.scope.dockController.open(
+        'timeline', // BuiltInDocks.timeline, which imports this file
+        args: {'path': entry.path},
+      );
+      return;
+    }
     if (!widget.scope.openInWorkspace(entry.path)) {
       _index.openExternally(entry.path);
     }

@@ -222,28 +222,6 @@ class WorkspaceDefinition {
   }
 }
 
-/// Writes a sprite clip's frame events back to the file they live in.
-///
-/// The Timeline shows a sprite's events from its atlas; the atlas is an
-/// export, so editing them means changing the project it was exported from
-/// and exporting again. The module that owns that format offers this; the
-/// editor itself knows no sprite format.
-class TimelineEventSink {
-  const TimelineEventSink({required this.handles, required this.write});
-
-  /// Whether this sink can write events for the atlas at [atlasPath].
-  final bool Function(String atlasPath) handles;
-
-  /// Replaces [clip]'s events (times in seconds) and re-exports the atlas.
-  /// False when it could not.
-  final Future<bool> Function(
-    String atlasPath,
-    String clip,
-    List<jge.AnimationEvent> events,
-  )
-  write;
-}
-
 /// Something a module offers to do with a file in the Assets dock.
 class AssetAction {
   const AssetAction({

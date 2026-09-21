@@ -69,6 +69,39 @@ void main() {
       expect(check().single.message, 'The level has no Spawn.');
     });
 
+    test('a timeline bound to nobody, or to a field that is not there', () {
+      scope.world.createEntityWithComponents([
+        TransformComponent(),
+      ], name: 'Spawn');
+      final door = scope.world.createEntityWithComponents([
+        TransformComponent(),
+        TimelinePlayerComponent(
+          inline: TimelineAsset(
+            duration: 1,
+            tracks: [
+              PropertyTrack(
+                component: 'TransformComponent',
+                field: 'position',
+                channel: 'x',
+                binding: const TrackBinding.name('Lift'),
+              ),
+              PropertyTrack(
+                component: 'VelocityComponent',
+                field: 'velocity',
+                channel: 'x',
+              ),
+            ],
+          ),
+        ),
+      ], name: 'Door');
+      final problems = check();
+      expect(problems.map((p) => p.entity), everyElement(door));
+      expect(problems.first.severity, ProblemSeverity.error);
+      expect(problems.first.message, contains('VelocityComponent.velocity.x'));
+      expect(problems.last.message, contains('answers to Lift'));
+      expect(problems, hasLength(2));
+    });
+
     test(
       'a file that is not there is an error, on the entity that names it',
       () {

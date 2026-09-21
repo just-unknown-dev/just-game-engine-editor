@@ -340,6 +340,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     _previousSpriteLoader = SpriteAssets.loader;
     SpriteAssets.loader = spriteAssets;
     AnimatorAssets.loader = spriteAssets.loadGraph;
+    TimelineAssets.loader = spriteAssets.loadTimeline;
     registerSpriteSystems(engine.world);
     // While authoring, the output camera is the editor's view: the brain
     // keeps thinking but does not write to it. Play hands it over.
@@ -610,6 +611,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     final lower = path.toLowerCase();
     if (lower.endsWith('.animator.json')) {
       reloadAnimators(path);
+    } else if (lower.endsWith('.timeline.json')) {
+      reloadTimelines(path);
     } else if (lower.endsWith('.json')) {
       reloadSprites(path);
     } else {
@@ -622,6 +625,24 @@ class JustGameEditorPlugin implements EnginePlugin {
   void reloadAnimators([String? graphPath]) {
     for (final system in engine.world.systems) {
       if (system is AnimatorSystem) system.reload(graphPath);
+    }
+  }
+
+  /// A timeline changed on disk: players of it start over with the new one.
+  void reloadTimelines([String? timelinePath]) {
+    for (final system in engine.world.systems) {
+      if (system is TimelineSystem) system.reload(timelinePath);
+    }
+  }
+
+  // A timeline writes to the fields it animates. While authoring those
+  // fields are the scene being edited, so timelines only run in a play-test
+  // (whose changes are thrown away) — the Timeline dock previews by itself.
+  void _syncTimelinePlayback() {
+    if (!engine.isInitialized) return;
+    final run = !isAuthoring.value;
+    for (final system in engine.world.systems) {
+      if (system is TimelineSystem) system.isActive = run;
     }
   }
 
@@ -668,6 +689,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     _attachDebuggerIfReady();
     // After the frame's game update: play time, and the end of a stepped frame.
     if (_isInitialized) playController.tick(dt);
+    if (_isInitialized) _syncTimelinePlayback();
     if (!_isInitialized || !isVisible.value) return;
     _syncTimeScaleForPreview();
     // The game is frozen while authoring, so the brain is asked directly:
@@ -717,10 +739,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     final entity = sceneState.selectedEntity.value;
     final isPreviewPlaying =
         entity != null &&
-        ((entity.getComponent<SpriteAnimationComponent>()?.isPlaying ??
-                false) ||
-            (entity.getComponent<AnimationControllerComponent>()?.isPlaying ??
-                false));
+        (entity.getComponent<SpriteAnimationComponent>()?.isPlaying ?? false);
     engine.time.timeScale = isPreviewPlaying ? 1.0 : 0.0;
   }
 
@@ -1142,6 +1161,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (identical(SpriteAssets.loader, spriteAssets)) {
       SpriteAssets.loader = _previousSpriteLoader ?? BundleSpriteAssetLoader();
       AnimatorAssets.useBundle();
+      TimelineAssets.useBundle();
     }
     if (engine.isInitialized && engine.cameraSystem.isInitialized) {
       engine.cameraSystem.brain.driveOutput = true;

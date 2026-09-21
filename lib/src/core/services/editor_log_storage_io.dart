@@ -135,18 +135,27 @@ class _IoEditorLogStorage implements EditorLogStorage {
   /// logs go under the app's support directory there. Desktop keeps using the
   /// working directory so `.editor_logs/` stays alongside the project like
   /// before.
+  ///
+  /// Under test the folder belongs to **this process**. `flutter test` runs
+  /// test files side by side, and a log they all shared would let one file's
+  /// lines — and one file's rotation — turn up in another file's
+  /// expectations. A test that wants a particular path asks for one with
+  /// [createEditorLogStorageForPath].
   static Future<File> _resolveFile() async {
     final isTest = Platform.environment.containsKey('FLUTTER_TEST');
     final Directory root;
+    var folder = '.editor_logs';
     if (isTest) {
       root = Directory.systemTemp;
+      folder = '.editor_logs_test_$pid';
     } else if (Platform.isAndroid || Platform.isIOS) {
       root = await getApplicationSupportDirectory();
     } else {
       root = Directory.current;
     }
+    final separator = Platform.pathSeparator;
     return File(
-      '${root.path}${Platform.pathSeparator}.editor_logs${Platform.pathSeparator}editor_runtime.jsonl',
+      '${root.path}$separator$folder${separator}editor_runtime.jsonl',
     );
   }
 }

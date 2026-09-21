@@ -242,11 +242,20 @@ class DockEmptyState extends StatelessWidget {
     required this.icon,
     required this.title,
     this.hint,
+    this.actionLabel,
+    this.actionIcon,
+    this.onAction,
   });
 
   final IconData icon;
   final String title;
   final String? hint;
+
+  /// The one thing to do from here — "Add a Timeline Player". Shown only
+  /// with [onAction].
+  final String? actionLabel;
+  final IconData? actionIcon;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) => Center(
@@ -269,6 +278,36 @@ class DockEmptyState extends StatelessWidget {
             hint!,
             textAlign: TextAlign.center,
             style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+          ),
+        ],
+        if (onAction != null && actionLabel != null) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 26,
+            child: ElevatedButton.icon(
+              onPressed: onAction,
+              // Stated in full: the ambient Material theme is the light
+              // default, and its primary is not this editor's.
+              style: ElevatedButton.styleFrom(
+                backgroundColor: EditorTheme.buttonBg,
+                foregroundColor: EditorTheme.primary,
+                disabledBackgroundColor: EditorTheme.buttonBg,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                  side: const BorderSide(color: EditorTheme.border),
+                ),
+              ),
+              icon: Icon(actionIcon ?? Icons.add_rounded, size: 14),
+              label: Text(
+                actionLabel!,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ],
       ],

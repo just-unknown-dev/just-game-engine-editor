@@ -133,6 +133,18 @@ class EditorScope {
   /// the plugin is built before that.
   World get world => _world ?? engine!.world;
 
+  /// Ways of putting the world back to the scene as authored, for whatever
+  /// shows something else in it for a while — a timeline being previewed.
+  final List<void Function()> authoredStateGuards = [];
+
+  /// Called by whoever is about to read the scene as authored: a save, the
+  /// snapshot a play-test starts from.
+  void restoreAuthoredState() {
+    for (final restore in List.of(authoredStateGuards)) {
+      restore();
+    }
+  }
+
   /// Resolves a service by type. Prefer the typed accessors on hot paths.
   T get<T extends Object>() => container.get<T>();
 
@@ -181,7 +193,6 @@ class EditorScope {
   final List<WorkspaceDefinition> _workspaces = [];
   final List<AssetAction> _assetActions = [];
   final List<SceneValidator> _validators = [];
-  final List<TimelineEventSink> _timelineEventSinks = [];
   final List<SceneTreeAction> _sceneTreeActions = [];
   final List<SceneTreeRowDecoration> _rowDecorations = [];
   final List<EntityProtectionRule> _protectionRules = [];
@@ -208,10 +219,6 @@ class EditorScope {
 
   /// Full-screen tools modules add, by order.
   List<WorkspaceDefinition> get workspaces => List.unmodifiable(_workspaces);
-
-  /// Ways modules offer to write a sprite clip's events back.
-  List<TimelineEventSink> get timelineEventSinks =>
-      List.unmodifiable(_timelineEventSinks);
 
   /// Scene checks modules add to the editor's own.
   List<SceneValidator> get validators => List.unmodifiable(_validators);
@@ -393,7 +400,6 @@ class EditorScope {
       _workspaces,
       _assetActions,
       _validators,
-      _timelineEventSinks,
       _sceneTreeActions,
       _rowDecorations,
       _protectionRules,
@@ -416,7 +422,6 @@ class EditorScope {
       _workspaces.addAll(module.workspaces);
       _assetActions.addAll(module.assetActions);
       _validators.addAll(module.validators);
-      _timelineEventSinks.addAll(module.timelineEventSinks);
       _sceneTreeActions.addAll(module.sceneTreeActions);
       _rowDecorations.addAll(module.rowDecorations);
       if (module.protectionRule case final rule?) _protectionRules.add(rule);

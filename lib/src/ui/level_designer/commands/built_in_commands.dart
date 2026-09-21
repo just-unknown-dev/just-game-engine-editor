@@ -1,3 +1,4 @@
+import '../../timeline/timeline_session.dart';
 import 'package:flutter/widgets.dart' show Offset;
 
 import 'designer_command.dart';
@@ -166,6 +167,62 @@ abstract final class BuiltInCommands {
       scope: CommandScope.always,
       run: (c) => c.scope.dockController.cycle(-1),
     ),
+    // The Timeline dock's own keys work while it has the keyboard; as
+    // commands they can also be run from the console or bound to a key.
+    for (final (id, label, run)
+        in <(String, String, void Function(TimelineSession))>[
+          (
+            'play',
+            'Timeline: play or pause',
+            (t) {
+              t.isPlaying.value ? t.pause() : t.play();
+            },
+          ),
+          ('stop', 'Timeline: stop and show the scene', (t) => t.stop()),
+          (
+            'key',
+            'Timeline: key the selected track',
+            (t) {
+              final track = t.selectedTrack.value;
+              if (track != null) t.setKey(track, t.playhead.value);
+            },
+          ),
+          ('next_frame', 'Timeline: next frame', (t) => t.stepFrames(1)),
+          (
+            'previous_frame',
+            'Timeline: previous frame',
+            (t) {
+              t.stepFrames(-1);
+            },
+          ),
+          ('copy', 'Timeline: copy', (t) => t.copy()),
+          ('paste', 'Timeline: paste at the playhead', (t) => t.paste()),
+          ('duplicate', 'Timeline: duplicate', (t) => t.duplicate()),
+          (
+            'delete',
+            'Timeline: delete',
+            (t) {
+              t.removeItems(t.selection.value);
+            },
+          ),
+          (
+            'ripple_delete',
+            'Timeline: ripple delete',
+            (t) {
+              t.rippleDelete(t.selection.value);
+            },
+          ),
+          ('undo', 'Timeline: undo', (t) => t.undo()),
+          ('redo', 'Timeline: redo', (t) => t.redo()),
+          ('save', 'Timeline: save', (t) => t.save()),
+        ])
+      DesignerCommand(
+        id: 'timeline.$id',
+        label: label,
+        scope: CommandScope.always,
+        isEnabled: (c) => TimelineSession.of(c.scope).asset.value != null,
+        run: (c) => run(TimelineSession.of(c.scope)),
+      ),
     DesignerCommand(
       id: 'dock.maximise',
       label: 'Maximise the dock panel',

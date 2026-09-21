@@ -166,7 +166,8 @@ void main() {
       'SpriteLoadSystem',
       'SpriteAnimationSystem',
       'AnimatorSystem',
-      'AnimationControllerSystem',
+      'TimelineSystem',
+      'TimelineTriggerSystem',
     };
 
     final actuallyAddedTypeNames = <String>{};

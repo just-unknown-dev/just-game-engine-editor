@@ -72,7 +72,8 @@ class PlayController {
     if (state.value == EditorPlayState.stopped) {
       _elapsed = 0;
       elapsedSeconds.value = 0;
-      // Before anything spawns or moves.
+      // Before anything spawns or moves — and with nothing previewed.
+      scope.restoreAuthoredState();
       _snapshot = PlaySnapshot.capture(engine.world, scope.codec);
       for (final spawnPoint in engine.world.query([SpawnComponent])) {
         final tag = spawnPoint.getComponent<SpawnComponent>()!.tag;

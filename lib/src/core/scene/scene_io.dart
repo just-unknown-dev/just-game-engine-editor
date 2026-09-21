@@ -176,6 +176,7 @@ class SceneIO {
   }) async {
     final scene = sceneState.activeScene.value;
     if (scene == null) return;
+    scope.restoreAuthoredState();
 
     // While playing, the world holds simulated state and spawned entities,
     // not the level. Save what was authored.

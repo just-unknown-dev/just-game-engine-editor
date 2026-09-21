@@ -1,3 +1,5 @@
+import '../timeline/field_key_button.dart';
+import '../timeline/timeline_session.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -22,6 +24,7 @@ List<Widget> buildComponentSections({
   for (final component in entity.components)
     if (scope.definitionForInspector(component) case final definition?)
       DefinitionSection(
+        entity: entity,
         component: component,
         definition: definition,
         scope: scope,
@@ -33,6 +36,8 @@ List<Widget> buildComponentSections({
         onChanged: () {
           sceneState.syncEntityNode(entity);
           sceneState.markDirty();
+          // Before the refresh, so what is drawn is what was keyed.
+          TimelineSession.of(scope).captureEdits();
           sceneState.refresh();
         },
       ),
@@ -48,8 +53,11 @@ class DefinitionSection extends StatelessWidget {
     required this.scope,
     required this.onDelete,
     required this.onChanged,
+    this.entity,
   });
 
+  /// Whose component this is; with it, fields get a timeline key button.
+  final jge.Entity? entity;
   final jge.Component component;
   final jge.ComponentDefinition definition;
   final EditorScope scope;
@@ -225,13 +233,45 @@ class DefinitionSection extends StatelessWidget {
       out.add(
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: together.$1 == null
-              ? _row(field)
-              : _sharedRow(together.$1!, together.$2),
+          child: _withKeyButton(
+            together.$1 == null
+                ? _row(field)
+                : _sharedRow(together.$1!, together.$2),
+            together.$2,
+          ),
         ),
       );
     }
     return out;
+  }
+
+  /// [row] with a key button after it, when a timeline is open that could
+  /// animate its [fields] on this entity.
+  Widget _withKeyButton(Widget row, List<jge.SchemaField> fields) {
+    final owner = entity;
+    if (owner == null) return row;
+    final session = TimelineSession.of(scope);
+    if (session.asset.value == null || session.bindingFor(owner) == null) {
+      return row;
+    }
+    final keyable = [
+      for (final f in fields)
+        if (jge.PropertyAccess.canAnimate(f)) f,
+    ];
+    if (keyable.isEmpty || definition.type == 'TimelinePlayerComponent') {
+      return row;
+    }
+    return Row(
+      children: [
+        Expanded(child: row),
+        FieldKeyButton(
+          session: session,
+          entity: owner,
+          component: component,
+          fields: keyable,
+        ),
+      ],
+    );
   }
 
   bool _isNumber(jge.SchemaField f) =>

@@ -84,6 +84,7 @@ abstract final class BuiltInValidators {
     missingAssets,
     unresolvedEntityReferences,
     animatorClips,
+    timelines,
     camerasWithoutTargets,
     drawnWithoutTransform,
   ];
@@ -176,6 +177,80 @@ abstract final class BuiltInValidators {
 
   /// An animator graph whose states play clips its sprite's atlas lacks —
   /// the character shows a still frame and never says why.
+  /// A timeline that would do nothing, or less than it says: a track bound
+  /// to nobody in this scene, a field that is not there, and whatever the
+  /// timeline finds wrong with itself.
+  static List<SceneProblem> timelines(ValidationContext context) {
+    final out = <SceneProblem>[];
+    for (final entity in context.world.entities) {
+      final player = entity.getComponent<jge.TimelinePlayerComponent>();
+      if (player == null) continue;
+      final path = player.timelinePath.trim();
+      final jge.TimelineAsset asset;
+      if (path.isEmpty) {
+        final inline = player.inline;
+        if (inline == null) continue;
+        asset = inline;
+      } else {
+        final json = context.readJson(path);
+        if (json == null) continue; // missingAssets
+        asset = jge.TimelineAsset.fromJson(json);
+      }
+      final what = path.isEmpty ? 'its timeline' : path;
+      for (final problem in asset.validate()) {
+        out.add(
+          SceneProblem(
+            entity: entity,
+            message: '${_nameOf(entity)}, $what: $problem',
+          ),
+        );
+      }
+      final nobody = <String>{};
+      for (final track in asset.tracks) {
+        final bound = track.binding.resolve(
+          context.world,
+          entity,
+          includeInactive: true,
+        );
+        if (bound == null) {
+          if (nobody.add(track.binding.label)) {
+            out.add(
+              SceneProblem(
+                entity: entity,
+                message:
+                    '${_nameOf(entity)}, $what: nothing in the scene answers '
+                    'to ${track.binding.label}, which it animates.',
+              ),
+            );
+          }
+          continue;
+        }
+        if (track is jge.PropertyTrack &&
+            jge.PropertyAccess.of(
+                  bound,
+                  track.component,
+                  track.field,
+                  track.channel,
+                ) ==
+                null) {
+          out.add(
+            SceneProblem(
+              severity: ProblemSeverity.error,
+              entity: entity,
+              message:
+                  '${_nameOf(entity)}, $what: ${_nameOf(bound)} has no '
+                  '${track.path} to animate.',
+              hint:
+                  'Add the component, or remove the track in the Timeline '
+                  'dock.',
+            ),
+          );
+        }
+      }
+    }
+    return out;
+  }
+
   static List<SceneProblem> animatorClips(ValidationContext context) {
     final out = <SceneProblem>[];
     for (final entity in context.world.entities) {

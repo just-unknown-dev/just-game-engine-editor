@@ -188,10 +188,6 @@ abstract class EditorModule {
   /// dock beside the editor's own: a level with no spawn point, say.
   List<SceneValidator> get validators => const [];
 
-  /// Ways to write a sprite clip's events back to its source, so the
-  /// Timeline can edit them.
-  List<TimelineEventSink> get timelineEventSinks => const [];
-
   /// What this module can do with a file in the Assets dock.
   List<AssetAction> get assetActions => const [];
 
