@@ -67,6 +67,44 @@ class CompactChrome extends StatelessWidget {
 /// Chrome shown while the full editor is open: right inspector panel, the
 /// compact dock confined to the canvas column, the status badge, and
 /// snackbars. See [CompactChrome] for the sizing assumption.
+/// How much of the window the editor's chrome takes from the game.
+///
+/// The game is laid out inside what is left, so the world is never hidden
+/// behind a panel: the canvas really is smaller, which means the camera's
+/// viewport, the pointer's coordinates and everything drawn on the canvas
+/// follow without being told.
+///
+/// Both layers work this out from the same function — the chrome, which
+/// draws the panels, and the overlay, which sizes the game — so they cannot
+/// drift apart.
+EdgeInsets editorGameInsets({
+  required Size window,
+  required JustGameEditorPlugin plugin,
+  required bool designing,
+  required double rightPanelWidth,
+}) {
+  // The docks: the status bar, and the panel standing on it.
+  final designerBar = designing ? DesignerStatusBar.height : 0.0;
+  final docks = !plugin.isStatusPanelVisible.value
+      ? 0.0
+      : OverlayLayout.compactDockPanelHeight +
+            plugin.scope.dockController.panelHeight(
+              window.height -
+                  designerBar -
+                  OverlayLayout.compactDockPanelHeight,
+            );
+  return EdgeInsets.fromLTRB(
+    designing ? ToolPalette.width : 0,
+    0,
+    rightPanelWidth + (designing ? designerRightPanelWidth(window) : 0),
+    designerBar + docks,
+  );
+}
+
+/// The designer's own panel, beside the editor's.
+double designerRightPanelWidth(Size window) =>
+    math.min(260.0, window.width / 3);
+
 class FullEditorChrome extends StatelessWidget {
   const FullEditorChrome({
     super.key,
@@ -98,7 +136,13 @@ class FullEditorChrome extends StatelessWidget {
         final leftWidth = math.max(0.0, size.width - panelWidth);
 
         final designer = plugin.designer.value;
-        final designerPanelWidth = math.min(260.0, leftWidth / 3);
+        final designerPanelWidth = designerRightPanelWidth(size);
+        final gameInsets = editorGameInsets(
+          window: size,
+          plugin: plugin,
+          designing: designer != null,
+          rightPanelWidth: panelWidth,
+        );
         // What the docks occupy at the foot of the designer: the strip when
         // it is showing, and the open panel above it.
         final showDocks = plugin.isStatusPanelVisible.value;
@@ -112,12 +156,10 @@ class FullEditorChrome extends StatelessWidget {
                         OverlayLayout.compactDockPanelHeight,
                   );
         designer?.controller
-          ?..viewportInsets = EdgeInsets.fromLTRB(
-            ToolPalette.width,
-            0,
-            panelWidth + designerPanelWidth,
-            DesignerStatusBar.height + docksHeight,
-          )
+          // The canvas is laid out inside the free space now, so all of it
+          // is visible: rulers, the minimap and anything else drawn in
+          // screen space have the whole of it.
+          ?..viewportInsets = EdgeInsets.zero
           // The play controls sit top-left now; nothing is under the minimap.
           ..minimapBottomReserve = 0;
 
@@ -134,7 +176,9 @@ class FullEditorChrome extends StatelessWidget {
               )
             : const Offset(16, 16);
         plugin.gamePreviewOrigin =
-            controlsAt + Offset(0, PlayControlsToolbar.heightFor(settings) + 8);
+            controlsAt +
+            Offset(0, PlayControlsToolbar.heightFor(settings) + 8) -
+            Offset(gameInsets.left, gameInsets.top);
         // The same frame as the toolbar above it: radius, border, padding.
         plugin.gamePreviewStyle = GamePreviewStyle(
           cornerRadius: settings.cornerRadius + 6,

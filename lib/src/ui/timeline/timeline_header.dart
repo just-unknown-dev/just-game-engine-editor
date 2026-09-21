@@ -177,6 +177,7 @@ class TimelineHeader extends StatelessWidget {
           ),
         ),
         if (session.player != null) _divider(),
+        ..._playRange(context),
         ..._selected(context),
         DockIconButton(
           icon: Icons.show_chart_rounded,
@@ -257,6 +258,83 @@ class TimelineHeader extends StatelessWidget {
       integer: frames,
       onSubmitted: (v) => onSeconds(frames ? v / session.fps : v),
     );
+  }
+
+  /// What this entity plays of the timeline. Two boxes and a cross beat a
+  /// gesture nobody can guess at.
+  List<Widget> _playRange(BuildContext context) {
+    final player = session.player;
+    if (player == null) return const [];
+    final range = session.playRange ?? (0.0, session.duration);
+    return [
+      Tooltip(
+        message: player.hasRange
+            ? 'This entity plays only part of the timeline. Drag the ends on '
+                  'the ruler, or type here.'
+            : 'Set what this entity plays of the timeline. The rest stays '
+                  'authored, and other entities can play all of it.',
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              player.hasRange
+                  ? Icons.filter_center_focus_rounded
+                  : Icons.all_inclusive_rounded,
+              size: 12,
+              color: player.hasRange
+                  ? EditorTheme.primaryBright
+                  : EditorTheme.textMuted,
+            ),
+            const SizedBox(width: 5),
+            const Text(
+              'Plays',
+              style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            ),
+            const SizedBox(width: 6),
+          ],
+        ),
+      ),
+      // A timeline starts at zero, and so does almost every play range, so
+      // the start is only worth a box once it is not zero — dragged there on
+      // the ruler, or set on the player itself.
+      if (range.$1 > 0) ...[
+        _timeBox(
+          label: '',
+          tooltip: 'From here',
+          seconds: range.$1,
+          width: 42,
+          onSeconds: (v) => session.setPlayRange(v, range.$2),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(right: 8),
+          child: Text(
+            '→',
+            style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
+          ),
+        ),
+      ] else
+        const Padding(
+          padding: EdgeInsets.only(right: 6),
+          child: Text(
+            'to',
+            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+          ),
+        ),
+      _timeBox(
+        label: '',
+        tooltip: 'To here',
+        seconds: range.$2,
+        width: 42,
+        onSeconds: (v) => session.setPlayRange(range.$1, v),
+      ),
+      if (player.hasRange)
+        DockIconButton(
+          icon: Icons.close_rounded,
+          tooltip: 'Play the whole timeline again',
+          onTap: session.clearPlayRange,
+        ),
+      const SizedBox(width: 8),
+    ];
   }
 
   /// A hairline between groups of controls.

@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/shell/dock_panel.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart'
+    show GameCanvasArea;
 
 class _WavesModule extends EditorModule {
   int builds = 0;
@@ -373,6 +375,50 @@ void main() {
       await done(tester);
     });
 
+    testWidgets('opening a dock makes the game smaller, not covered', (
+      tester,
+    ) async {
+      if (!kDebugMode) return;
+      await pump(tester);
+      Rect canvas() => tester.getRect(find.byType(GameCanvasArea));
+      final window = tester.getRect(find.byType(JustGameEditorOverlay));
+
+      // With the editor open the game already gives up the right panel and
+      // the status bar at its foot.
+      final shut = canvas();
+      expect(shut.width, lessThan(window.width));
+      expect(shut.height, lessThan(window.height));
+      expect(
+        window.bottom - shut.bottom,
+        OverlayLayout.compactDockPanelHeight,
+        reason: 'the status bar',
+      );
+
+      // Opening a dock takes its height from the game as well, rather than
+      // standing over it.
+      dock().open('test.waves');
+      await tester.pump();
+      await tester.pump();
+      final open = canvas();
+      expect(open.height, lessThan(shut.height));
+      expect(shut.height - open.height, 240);
+      expect(open.width, shut.width, reason: 'nothing changed sideways');
+
+      // The panel stands in the room the game gave up, not on top of it.
+      final panel = tester.getRect(find.byType(DockPanel));
+      expect(panel.top, greaterThanOrEqualTo(open.bottom - 1));
+
+      // Which is the point of laying it out rather than painting over it:
+      // the canvas is smaller, so the camera's viewport is too.
+      expect(plugin.viewport.canvasSize.height, closeTo(open.height, 1));
+
+      dock().close();
+      await tester.pump();
+      await tester.pump();
+      expect(canvas().height, shut.height, reason: 'and it comes back');
+      await done(tester);
+    });
+
     testWidgets('the docks are there in the Level Designer, and it makes '
         'room for them', (tester) async {
       if (!kDebugMode) return;
@@ -387,14 +433,23 @@ void main() {
         findsOneWidget,
         reason: 'the status bar is there',
       );
-      final collapsed = session.controller.viewportInsets.bottom;
+      // The game is laid out in what the chrome leaves, so opening a panel
+      // makes the canvas itself shorter rather than covering it.
+      double canvasHeight() =>
+          tester.getRect(find.byType(GameCanvasArea)).height;
+      final collapsed = canvasHeight();
+      expect(
+        session.controller.viewportInsets,
+        EdgeInsets.zero,
+        reason: 'the canvas is the visible area; nothing is inset twice',
+      );
 
       dock().open('test.waves');
       await tester.pump();
       await tester.pump();
       expect(find.textContaining('WAVES BODY'), findsOneWidget);
       expect(
-        session.controller.viewportInsets.bottom - collapsed,
+        collapsed - canvasHeight(),
         240,
         reason: 'the level is not hidden behind the panel',
       );

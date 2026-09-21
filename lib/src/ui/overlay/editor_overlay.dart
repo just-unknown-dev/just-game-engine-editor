@@ -171,31 +171,9 @@ class JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
                         return OverlayUiSettingsWatcher(
                           plugin: plugin,
                           settings: settings,
-                          child: SignalBuilder<double>(
-                            signal: widget.plugin.scope.chrome.rightPanelWidth,
-                            builder: (context, rightPanelWidth, _) {
-                              return Row(
-                                children: <Widget>[
-                                  Expanded(
-                                    child: Column(
-                                      children: [
-                                        Expanded(
-                                          child: GameCanvasArea(
-                                            plugin: plugin,
-                                            gameChild: gameChild,
-                                          ),
-                                        ),
-                                        SizedBox(
-                                          height: OverlayLayout
-                                              .compactDockPanelHeight,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  SizedBox(width: rightPanelWidth),
-                                ],
-                              );
-                            },
+                          child: _GameInWhatIsLeft(
+                            plugin: plugin,
+                            gameChild: gameChild,
                           ),
                         );
                       },
@@ -209,6 +187,67 @@ class JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
       ),
     );
   }
+}
+
+/// The game, laid out inside whatever the editor's chrome leaves.
+///
+/// The canvas is genuinely smaller, so the camera's viewport, the pointer's
+/// coordinates and everything painted on the canvas follow by themselves —
+/// nothing has to be told where the panels are.
+class _GameInWhatIsLeft extends StatefulWidget {
+  const _GameInWhatIsLeft({required this.plugin, required this.gameChild});
+
+  final JustGameEditorPlugin plugin;
+  final Widget gameChild;
+
+  @override
+  State<_GameInWhatIsLeft> createState() => _GameInWhatIsLeftState();
+}
+
+class _GameInWhatIsLeftState extends State<_GameInWhatIsLeft> {
+  final List<void Function()> _stop = [];
+
+  @override
+  void initState() {
+    super.initState();
+    void rebuild() {
+      if (mounted) setState(() {});
+    }
+
+    final plugin = widget.plugin;
+    final dock = plugin.scope.dockController;
+    for (final signal in <Signal<Object?>>[
+      plugin.scope.chrome.rightPanelWidth,
+      plugin.isStatusPanelVisible,
+      plugin.designer,
+      dock.openId,
+      dock.heights,
+      dock.maximised,
+    ]) {
+      _stop.add(signal.watch(rebuild));
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final stop in _stop) {
+      stop();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => Padding(
+      padding: editorGameInsets(
+        window: constraints.biggest,
+        plugin: widget.plugin,
+        designing: widget.plugin.designer.value != null,
+        rightPanelWidth: widget.plugin.scope.chrome.rightPanelWidth.value,
+      ),
+      child: GameCanvasArea(plugin: widget.plugin, gameChild: widget.gameChild),
+    ),
+  );
 }
 
 // ── Canvas ─────────────────────────────────────────────────────────────────
