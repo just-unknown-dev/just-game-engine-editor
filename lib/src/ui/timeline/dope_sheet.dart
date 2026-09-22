@@ -515,7 +515,10 @@ class DopeSheetState extends State<DopeSheet> {
   // Panning with the middle button.
   bool _panning = false;
 
-  DateTime _lastDown = DateTime(0);
+  /// When the last press landed, by the *event's* clock rather than the
+  /// wall's: that is the device's time in a game and the test's time under
+  /// a test, so a double click means the same thing in both.
+  Duration _lastDown = Duration.zero;
   Offset _lastDownAt = Offset.zero;
 
   double get _offsetY =>
@@ -622,9 +625,9 @@ class DopeSheetState extends State<DopeSheet> {
     }
     if (e.buttons != kPrimaryMouseButton) return;
 
-    final now = DateTime.now();
+    final now = e.timeStamp;
     final isDouble =
-        now.difference(_lastDown) < const Duration(milliseconds: 350) &&
+        now - _lastDown < const Duration(milliseconds: 350) &&
         (local - _lastDownAt).distance < 6;
     _lastDown = now;
     _lastDownAt = local;

@@ -240,6 +240,7 @@ void main() {
         'logs',
         'assets',
         'timeline',
+        'uitheme',
         'fps',
         'entities',
         'problems',

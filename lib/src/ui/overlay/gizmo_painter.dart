@@ -665,7 +665,13 @@ class GizmoHitTester {
   }
 
   GizmoHitResult _hitTestHandles(Offset pos, Entity entity, Camera camera) {
-    final transform = entity.getComponent<TransformComponent>()!;
+    final transform = entity.getComponent<TransformComponent>();
+    // A piece of interface is selected from the tree like anything else,
+    // but it is nowhere in the world: it has no transform, and the world's
+    // gizmo has nothing to take hold of. Before the tree listed UI
+    // entities this could not happen; once it could, the null check here
+    // threw on every pointer move over the viewport.
+    if (transform == null) return const GizmoHitResult(GizmoHandle.none, null);
     final center = camera.worldToScreen(transform.position.toOffset());
     final bounds = _computeScreenBounds(entity, transform, camera);
 

@@ -53,3 +53,6 @@ export 'tools/select_tool.dart';
 export 'tools/tool_registry.dart';
 export 'tools/level_tool.dart';
 export 'state/editor_history.dart';
+export 'ui_mode/ui_device.dart';
+export 'ui_mode/ui_mode_overlay.dart';
+export 'ui_mode/ui_mode_session.dart';

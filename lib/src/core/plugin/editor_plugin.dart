@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -21,6 +23,8 @@ import '../state/editor_scene_state.dart';
 import '../../ui/overlay/gizmo_painter.dart';
 import '../../ui/level_designer/commands/designer_command.dart';
 import '../../ui/level_designer/level_designer_session.dart';
+import '../../ui/level_designer/state/editor_history.dart';
+import '../../ui/level_designer/ui_mode/ui_mode_session.dart';
 import '../../ui/level_designer/tools/tool_registry.dart';
 import '../../extension/editor_module.dart';
 import '../../ui/overlay/camera_rig_painter.dart';
@@ -341,6 +345,11 @@ class JustGameEditorPlugin implements EnginePlugin {
     SpriteAssets.loader = spriteAssets;
     AnimatorAssets.loader = spriteAssets.loadGraph;
     TimelineAssets.loader = spriteAssets.loadTimeline;
+    UiThemes.loader = spriteAssets.loadUiTheme;
+    UiFonts.read = spriteAssets.loadFontData;
+    // The fonts in the project, so the text-style editor can offer them by
+    // name from the first inspector that opens.
+    unawaited(reloadFonts());
     registerSpriteSystems(engine.world);
     // While authoring, the output camera is the editor's view: the brain
     // keeps thinking but does not write to it. Play hands it over.
@@ -386,6 +395,17 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   // ── Level Designer ────────────────────────────────────────────────────────
+
+  /// The UI mode: the viewport showing the scene's interface, on a device
+  /// frame, instead of the world.
+  ///
+  /// It needs no Level Designer — a HUD is built from the scene tree and
+  /// the inspector — so it keeps an undo stack of its own for the drags
+  /// made in it.
+  late final UiModeSession uiMode = UiModeSession(world: () => engine.world);
+
+  /// Undo for edits made by dragging in the UI mode.
+  final EditorHistory uiHistory = EditorHistory();
 
   /// The Level Designer session, created lazily the first time the designer is
   /// opened on a scene.
@@ -613,6 +633,12 @@ class JustGameEditorPlugin implements EnginePlugin {
       reloadAnimators(path);
     } else if (lower.endsWith('.timeline.json')) {
       reloadTimelines(path);
+    } else if (lower.endsWith('.uitheme.json')) {
+      reloadUiThemes(path);
+    } else if (lower.endsWith('.ttf') ||
+        lower.endsWith('.otf') ||
+        lower.endsWith('.ttc')) {
+      reloadFonts(path);
     } else if (lower.endsWith('.json')) {
       reloadSprites(path);
     } else {
@@ -633,6 +659,37 @@ class JustGameEditorPlugin implements EnginePlugin {
     for (final system in engine.world.systems) {
       if (system is TimelineSystem) system.reload(timelinePath);
     }
+  }
+
+  /// A UI theme changed on disk: every canvas drawn with it is restyled on
+  /// the next frame, without reopening the scene.
+  Future<void> reloadUiThemes([String? themePath]) async {
+    UiThemes.evict(themePath);
+    final paths = <String>{
+      ?themePath,
+      for (final entity in engine.world.query([UiCanvasComponent]))
+        if (entity.getComponent<UiCanvasComponent>()!.theme.isNotEmpty)
+          entity.getComponent<UiCanvasComponent>()!.theme,
+    };
+    for (final path in paths) {
+      await UiThemes.load(path);
+    }
+    for (final entity in engine.world.query([UiCanvasComponent])) {
+      entity.getComponent<UiCanvasComponent>()!.markDirty();
+    }
+  }
+
+  /// A font file appeared or changed: load it so the inspector offers it
+  /// and anything using it redraws with it.
+  ///
+  /// Without a path, everything in `assets/fonts` — which is how a font
+  /// dropped into the project becomes available with no rebuild and no
+  /// line in pubspec.yaml.
+  Future<void> reloadFonts([String? fontPath]) async {
+    UiFonts.reset();
+    await UiFonts.loadAll(
+      fontPath != null ? [fontPath] : spriteAssets.fontFiles(),
+    );
   }
 
   // A timeline writes to the fields it animates. While authoring those

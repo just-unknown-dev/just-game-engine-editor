@@ -115,6 +115,86 @@ void main() {
     expect(angle.left, lessThan(left), reason: 'the label column is outside');
   });
 
+  testWidgets('the UI rows fit a narrow inspector, open or shut', (
+    tester,
+  ) async {
+    // A row is a label column and then its control, so a control that is
+    // itself a row brings a second label column and overflows. These two
+    // hold the fields where that is easy to get wrong.
+    scope = testScope();
+    entity = scope.world.createEntityWithComponents([
+      TransformComponent(),
+      TextComponent(
+        text: 'Coins: {coins}',
+        style: const UiTextStyle(size: 18, color: Color(0xFFFFCC00)),
+      ),
+      ButtonComponent(
+        label: 'Play',
+        onPressed: const UiActionList([
+          UiAction('scene.load', 'level_02'),
+          UiAction('game.pause'),
+        ]),
+      ),
+    ], name: 'Sign');
+    tester.view.physicalSize = const Size(356, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    Future<void> pump() async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                children: buildComponentSections(
+                  entity: entity,
+                  sceneState: scope.sceneState,
+                  scope: scope,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'nothing overflowed at 356 px',
+      );
+    }
+
+    await pump();
+    expect(find.text('Style'), findsOneWidget);
+    expect(find.text('On pressed'), findsOneWidget);
+    // Both of a button's actions are listed, with their arguments.
+    expect(find.text('scene.load'), findsOneWidget);
+    expect(find.text('game.pause'), findsOneWidget);
+
+    // Opening the style shows the rest of it, still inside the panel.
+    await tester.tap(find.text('Style'));
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'nor when it is open');
+    expect(find.text('Font'), findsOneWidget);
+    expect(find.text('Outline'), findsOneWidget);
+
+    // Nothing reaches back into the label column, and nothing runs off the
+    // panel. An action's own rows are indented under it on purpose, so the
+    // rule is a floor and a ceiling rather than one shared edge.
+    final panel = tester.getRect(find.byType(SingleChildScrollView));
+    final boxes = [
+      for (final element in find.byType(TextField).evaluate())
+        tester.getRect(find.byWidget(element.widget)),
+    ];
+    expect(boxes, isNotEmpty);
+    final column = boxes.map((b) => b.left).reduce((a, b) => a < b ? a : b);
+    expect(column, greaterThanOrEqualTo(InspectorField.labelWidth));
+    for (final box in boxes) {
+      expect(box.left, greaterThanOrEqualTo(column - 0.5));
+      expect(box.right, lessThanOrEqualTo(panel.right + 0.5));
+    }
+  });
+
   testWidgets('a yes-or-no is a box with a word in it, not a bare tick', (
     tester,
   ) async {

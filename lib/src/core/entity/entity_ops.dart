@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show IconData, Icons;
 import 'package:flutter/painting.dart';
 import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart';
@@ -75,6 +76,117 @@ class EntityOps {
       category: 'entity',
     );
   }
+
+  /// Names UI entities, which have no transform and so are not covered by
+  /// [uniqueName].
+  late final UniqueNamer uniqueUiName = UniqueNamer(
+    () => world.entities.map((e) => e.name).whereType<String>(),
+  );
+
+  /// Creates a piece of interface of [kind] and selects it.
+  ///
+  /// Everything but a canvas goes under one: under [parent] when it is
+  /// given, otherwise under what is selected, otherwise under the scene's
+  /// first canvas — and if there is no canvas at all, one is made, because
+  /// UI outside a canvas is never drawn.
+  Entity? createUi(String kind, {Entity? parent}) {
+    if (!sceneState.hasScene) return null;
+
+    final isRoot = kind == 'canvas' || kind == 'screen';
+    final under = isRoot ? null : (parent ?? _uiParent());
+    if (!isRoot && under == null) return null;
+
+    final entity = world.createEntityWithComponents([
+      ..._componentsFor(kind),
+      if (!isRoot) ParentComponent(parentId: under!.id),
+    ], name: uniqueUiName(_nameFor(kind)));
+
+    if (!isRoot) {
+      var children = under!.getComponent<ChildrenComponent>();
+      if (children == null) {
+        children = ChildrenComponent();
+        under.addComponent(children);
+      }
+      children.addChild(entity.id);
+    }
+
+    sceneState.registerEntity(entity);
+    sceneState.selectEntity(entity);
+    sceneState.refresh();
+    onChanged?.call();
+    scope.log.log(
+      'Created UI ${entity.name} ($kind).',
+      source: 'editor',
+      category: 'entity',
+    );
+    return entity;
+  }
+
+  /// Where a new element goes: what is selected if that is UI, the canvas
+  /// above it if it is not a container, or the scene's first canvas.
+  Entity? _uiParent() {
+    final selected = sceneState.selectedEntity.value;
+    if (selected != null && _isUi(selected)) return selected;
+    for (final entity in world.query([UiCanvasComponent])) {
+      return entity;
+    }
+    return createUi('canvas');
+  }
+
+  static bool _isUi(Entity entity) =>
+      entity.getComponent<UiCanvasComponent>() != null ||
+      entity.getComponent<UiSlotComponent>() != null;
+
+  static String _nameFor(String kind) =>
+      kind.startsWith('custom:') ? kind.substring(7) : kind;
+
+  static List<Component> _componentsFor(String kind) {
+    if (kind.startsWith('custom:')) {
+      return [
+        UiCustomComponent(widgetId: kind.substring(7)),
+        UiSlotComponent(),
+      ];
+    }
+    return switch (kind) {
+      'canvas' => [UiCanvasComponent(), ChildrenComponent()],
+      'screen' => [
+        UiCanvasComponent(isScreen: true, modal: true, visible: false),
+        ChildrenComponent(),
+      ],
+      'row' => _container(UiLayoutKind.row),
+      'column' => _container(UiLayoutKind.column),
+      'stack' => _container(UiLayoutKind.stack),
+      'wrap' => _container(UiLayoutKind.wrap),
+      'grid' => _container(UiLayoutKind.grid),
+      'scroll' => _container(UiLayoutKind.scroll),
+      'panel' => [
+        UiPanelComponent(),
+        UiSlotComponent(mode: UiSlotMode.anchored),
+        ChildrenComponent(),
+      ],
+      'text' => [TextComponent(text: 'Text'), UiSlotComponent()],
+      'button' => [ButtonComponent(label: 'Button'), UiSlotComponent()],
+      'image' => [UiImageComponent(), UiSlotComponent()],
+      'progress' => [UiProgressComponent(), UiSlotComponent()],
+      'toggle' => [UiToggleComponent(label: 'Toggle'), UiSlotComponent()],
+      'slider' => [UiSliderComponent(), UiSlotComponent()],
+      'field' => [UiTextFieldComponent(hint: 'Type here'), UiSlotComponent()],
+      'dropdown' => [
+        UiDropdownComponent(options: ['One', 'Two']),
+        UiSlotComponent(),
+      ],
+      'spacer' => [UiSpacerComponent(), UiSlotComponent()],
+      // Something from a newer editor, or a typo in a shortcut: an empty
+      // node is easier to delete than a crash is to recover from.
+      _ => [UiSlotComponent()],
+    };
+  }
+
+  static List<Component> _container(UiLayoutKind kind) => [
+    UiLayoutComponent(kind: kind),
+    UiSlotComponent(mode: UiSlotMode.anchored, anchor: UiAnchor.stretch),
+    ChildrenComponent(),
+  ];
 
   /// Entities covered by the current selection: the multi-selection when there
   /// is one, otherwise just the primary selection.
@@ -253,6 +365,49 @@ class EntityOps {
     );
   }
 
+  /// Moves [moved] to just before or after [anchor] among its siblings.
+  ///
+  /// Sibling order is what a row or a column lays its children out in, and
+  /// it is kept by the order the scene file is written in — so this is a
+  /// real edit, not a view.
+  ///
+  /// Only within a parent: the entities at the root of a scene have no
+  /// list to be ordered in.
+  void reorderEntity(Entity moved, Entity anchor, {required bool before}) {
+    if (moved.id == anchor.id) return;
+    final parentId = anchor.getComponent<ParentComponent>()?.parentId;
+    if (parentId == null) return;
+    final parent = world.getEntity(parentId);
+    final children = parent?.getComponent<ChildrenComponent>();
+    if (parent == null || children == null) return;
+    if (_isDescendantOf(parent, moved)) return;
+
+    // Dropped next to a sibling it is not a sibling of yet.
+    if (moved.getComponent<ParentComponent>()?.parentId != parentId) {
+      reparentEntity(moved, parent);
+    }
+
+    final ids = children.childIds;
+    ids.remove(moved.id);
+    final at = ids.indexOf(anchor.id);
+    if (at < 0) {
+      ids.add(moved.id);
+    } else {
+      ids.insert(before ? at : at + 1, moved.id);
+    }
+
+    sceneState.markDirty();
+    sceneState.refresh();
+    onChanged?.call();
+    scope.log.log(
+      'Moved ${moved.name ?? moved.id} '
+      '${before ? 'before' : 'after'} ${anchor.name ?? anchor.id}.',
+      source: 'editor',
+      category: 'hierarchy',
+      mirrorToDebugger: false,
+    );
+  }
+
   /// Makes [child] a child of [newParent], auto-computing localOffset.
   void reparentEntity(Entity child, Entity newParent) {
     if (child.id == newParent.id) return;
@@ -380,4 +535,140 @@ class EntityOps {
     );
     onChanged?.call();
   }
+}
+
+/// One entry of the editor's Create-UI menu.
+class UiCreateOption {
+  const UiCreateOption(this.id, this.label, this.icon, {this.group = ''});
+
+  /// What [EntityOps.createUi] is called with — `text`, `row`, or
+  /// `custom:inventory_grid`.
+  final String id;
+  final String label;
+  final IconData icon;
+
+  /// How the menu groups it: Roots, Containers, Elements, or the empty
+  /// string for what the game brought.
+  final String group;
+}
+
+/// The icon a piece of interface is shown with, in the tree and anywhere
+/// else a row stands for one.
+///
+/// Beside [UiCreateOptions] on purpose: the icon a thing is made with and
+/// the icon it is then listed under should be the same one, and here they
+/// cannot drift apart.
+IconData? uiIconFor(Entity entity) {
+  if (entity.getComponent<UiCanvasComponent>() case final canvas?) {
+    return canvas.isScreen ? Icons.web_asset_outlined : Icons.web_asset;
+  }
+  if (entity.getComponent<UiCustomComponent>() != null) {
+    return Icons.extension_outlined;
+  }
+  if (entity.getComponent<UiLayoutComponent>() case final layout?) {
+    return switch (layout.kind) {
+      UiLayoutKind.row => Icons.view_column,
+      UiLayoutKind.column => Icons.view_agenda,
+      UiLayoutKind.stack => Icons.layers,
+      UiLayoutKind.wrap => Icons.wrap_text,
+      UiLayoutKind.grid => Icons.grid_view,
+      UiLayoutKind.scroll => Icons.swap_vert,
+      UiLayoutKind.safeArea => Icons.crop_free,
+    };
+  }
+  if (entity.getComponent<TextComponent>() != null) return Icons.text_fields;
+  if (entity.getComponent<ButtonComponent>() != null) {
+    return Icons.smart_button;
+  }
+  if (entity.getComponent<UiImageComponent>() != null) {
+    return Icons.image_outlined;
+  }
+  if (entity.getComponent<UiProgressComponent>() != null) {
+    return Icons.linear_scale;
+  }
+  if (entity.getComponent<UiToggleComponent>() != null) {
+    return Icons.toggle_on_outlined;
+  }
+  if (entity.getComponent<UiSliderComponent>() != null) return Icons.tune;
+  if (entity.getComponent<UiTextFieldComponent>() != null) {
+    return Icons.keyboard_alt_outlined;
+  }
+  if (entity.getComponent<UiDropdownComponent>() != null) {
+    return Icons.arrow_drop_down_circle_outlined;
+  }
+  if (entity.getComponent<UiSpacerComponent>() != null) {
+    return Icons.space_bar;
+  }
+  // A panel last: it is usually *also* something else, and what that
+  // something is says more about the row than its background does.
+  if (entity.getComponent<UiPanelComponent>() != null) {
+    return Icons.rectangle_outlined;
+  }
+  // Interface, but nothing yet says what kind.
+  return entity.getComponent<UiSlotComponent>() == null
+      ? null
+      : Icons.widgets_outlined;
+}
+
+/// What a Create-UI menu offers: the built-in kinds, then everything the
+/// running game registered through `UiWidgets`.
+abstract final class UiCreateOptions {
+  static const List<UiCreateOption> builtIns = [
+    UiCreateOption('canvas', 'Canvas', Icons.web_asset, group: 'Root'),
+    UiCreateOption('screen', 'Screen', Icons.web_asset_outlined, group: 'Root'),
+    UiCreateOption('row', 'Row', Icons.view_column, group: 'Containers'),
+    UiCreateOption('column', 'Column', Icons.view_agenda, group: 'Containers'),
+    UiCreateOption('stack', 'Stack', Icons.layers, group: 'Containers'),
+    UiCreateOption('wrap', 'Wrap', Icons.wrap_text, group: 'Containers'),
+    UiCreateOption('grid', 'Grid', Icons.grid_view, group: 'Containers'),
+    UiCreateOption('scroll', 'Scroll', Icons.swap_vert, group: 'Containers'),
+    UiCreateOption(
+      'panel',
+      'Panel',
+      Icons.rectangle_outlined,
+      group: 'Containers',
+    ),
+    UiCreateOption('text', 'Text', Icons.text_fields, group: 'Elements'),
+    UiCreateOption('button', 'Button', Icons.smart_button, group: 'Elements'),
+    UiCreateOption('image', 'Image', Icons.image_outlined, group: 'Elements'),
+    UiCreateOption(
+      'progress',
+      'Progress bar',
+      Icons.linear_scale,
+      group: 'Elements',
+    ),
+    UiCreateOption(
+      'toggle',
+      'Toggle',
+      Icons.toggle_on_outlined,
+      group: 'Elements',
+    ),
+    UiCreateOption('slider', 'Slider', Icons.tune, group: 'Elements'),
+    UiCreateOption(
+      'field',
+      'Text field',
+      Icons.keyboard_alt_outlined,
+      group: 'Elements',
+    ),
+    UiCreateOption(
+      'dropdown',
+      'Dropdown',
+      Icons.arrow_drop_down_circle_outlined,
+      group: 'Elements',
+    ),
+    UiCreateOption('spacer', 'Spacer', Icons.space_bar, group: 'Elements'),
+  ];
+
+  /// The built-ins plus the game's own widgets, which are only there while
+  /// a game that registered them is running in the editor.
+  static List<UiCreateOption> get all => [
+    ...builtIns,
+    for (final definition in UiWidgets.all)
+      UiCreateOption(
+        'custom:${definition.id}',
+        definition.label,
+        definition.icon ?? Icons.extension_outlined,
+        group: 'From the game',
+      ),
+  ];
 }

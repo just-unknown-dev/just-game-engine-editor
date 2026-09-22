@@ -87,6 +87,7 @@ abstract final class BuiltInValidators {
     timelines,
     camerasWithoutTargets,
     drawnWithoutTransform,
+    uiScreens,
   ];
 
   static String _nameOf(jge.Entity e) => e.name ?? 'Entity ${e.id}';
@@ -334,4 +335,211 @@ abstract final class BuiltInValidators {
               hint: 'Add a Transform.',
             ),
       ];
+
+  /// The interface: actions that go nowhere, screens nobody can use, and
+  /// elements outside any canvas.
+  ///
+  /// What a game registered is only known while that game is running in
+  /// the editor, so the checks that need the registries stay quiet when
+  /// they are empty — an empty registry means "we cannot tell", not
+  /// "nothing is registered".
+  static List<SceneProblem> uiScreens(ValidationContext context) {
+    final out = <SceneProblem>[];
+    final world = context.world;
+    final knownBindings = jge.UiBindings.names.toSet();
+    final knownActions = jge.UiActions.customNames.toSet();
+    final knownWidgets = {for (final w in jge.UiWidgets.all) w.id};
+
+    for (final entity in world.entities) {
+      if (!entity.isActive) continue;
+      final canvas = entity.getComponent<jge.UiCanvasComponent>();
+      final slot = entity.getComponent<jge.UiSlotComponent>();
+      // World-space text and buttons are interface too: what they do and
+      // what they read is checked the same way. Only where a thing *sits*
+      // is about the screen.
+      if (canvas == null && slot == null && !_carriesUi(entity)) continue;
+      final name = _nameOf(entity);
+
+      // A slot says "screen space", and outside a canvas that is never
+      // drawn, however right it looks in the inspector.
+      if (slot != null &&
+          canvas == null &&
+          _canvasAbove(world, entity) == null) {
+        out.add(
+          SceneProblem(
+            entity: entity,
+            severity: ProblemSeverity.error,
+            message: '$name is interface but sits under no UI Canvas.',
+            hint: 'Move it under a canvas, or add one above it.',
+          ),
+        );
+      }
+
+      // What a button does.
+      for (final actions in _actionListsOf(entity)) {
+        for (final action in actions.actions) {
+          final custom = action.customName;
+          if (custom != null) {
+            if (knownActions.isNotEmpty && !knownActions.contains(custom)) {
+              out.add(
+                SceneProblem(
+                  entity: entity,
+                  message:
+                      '$name does "custom:$custom", which this game does '
+                      'not register.',
+                ),
+              );
+            }
+            continue;
+          }
+          if (!jge.UiActions.builtIns.containsKey(action.kind)) {
+            out.add(
+              SceneProblem(
+                entity: entity,
+                severity: ProblemSeverity.error,
+                message: '$name does "${action.kind}", which is not an action.',
+              ),
+            );
+          }
+        }
+      }
+
+      // A control nothing happens with.
+      if (_isInteractive(entity) &&
+          _actionListsOf(entity).every((a) => a.isEmpty)) {
+        out.add(
+          SceneProblem(
+            entity: entity,
+            message: '$name can be used, but nothing happens when it is.',
+            hint: 'Give it an action, or make it a plain element.',
+          ),
+        );
+      }
+
+      // What the text reads.
+      final text = entity.getComponent<jge.TextComponent>();
+      if (text != null && knownBindings.isNotEmpty) {
+        for (final binding in jge.UiBindings.namesIn(text.text)) {
+          if (knownBindings.contains(binding)) continue;
+          out.add(
+            SceneProblem(
+              entity: entity,
+              message: '$name reads {$binding}, which the game does not offer.',
+            ),
+          );
+        }
+      }
+
+      // A widget the game brought.
+      final custom = entity.getComponent<jge.UiCustomComponent>();
+      if (custom != null && knownWidgets.isNotEmpty) {
+        if (!knownWidgets.contains(custom.widgetId)) {
+          out.add(
+            SceneProblem(
+              entity: entity,
+              severity: ProblemSeverity.error,
+              message:
+                  '$name is the widget "${custom.widgetId}", which this game '
+                  'does not register.',
+            ),
+          );
+        }
+      }
+
+      if (canvas == null) continue;
+
+      // A screen nobody can reach without a pointer.
+      if (canvas.isScreen) {
+        final under = _descendantsOf(world, entity);
+        final focusable = [
+          for (final e in under)
+            if (_isFocusable(e)) e,
+        ];
+        if (focusable.isEmpty) {
+          out.add(
+            SceneProblem(
+              entity: entity,
+              message:
+                  '$name is a screen with nothing to focus: it cannot be '
+                  'used without a pointer.',
+            ),
+          );
+        } else if (canvas.initialFocus.isEmpty) {
+          out.add(
+            SceneProblem(
+              entity: entity,
+              message: '$name does not say what takes focus when it opens.',
+              hint: 'Set "First focus" to one of the controls under it.',
+            ),
+          );
+        } else if (!focusable.any((e) => e.name == canvas.initialFocus)) {
+          out.add(
+            SceneProblem(
+              entity: entity,
+              severity: ProblemSeverity.error,
+              message:
+                  '$name focuses "${canvas.initialFocus}" when it opens, '
+                  'which is not a control under it.',
+            ),
+          );
+        }
+      }
+    }
+    return out;
+  }
+
+  /// The canvas [entity] is under, or null when it is under none.
+  static jge.Entity? _canvasAbove(jge.World world, jge.Entity entity) {
+    var current = entity;
+    for (var step = 0; step < 32; step++) {
+      final parentId = current.getComponent<jge.ParentComponent>()?.parentId;
+      if (parentId == null) return null;
+      final parent = world.getEntity(parentId);
+      if (parent == null) return null;
+      if (parent.getComponent<jge.UiCanvasComponent>() != null) return parent;
+      current = parent;
+    }
+    return null;
+  }
+
+  static List<jge.Entity> _descendantsOf(jge.World world, jge.Entity entity) {
+    final out = <jge.Entity>[];
+    final children = entity.getComponent<jge.ChildrenComponent>();
+    if (children == null) return out;
+    for (final id in children.childIds) {
+      final child = world.getEntity(id);
+      if (child == null) continue;
+      out
+        ..add(child)
+        ..addAll(_descendantsOf(world, child));
+    }
+    return out;
+  }
+
+  /// Every list of actions an entity holds, whatever holds them.
+  static List<jge.UiActionList> _actionListsOf(jge.Entity entity) => [
+    ?entity.getComponent<jge.ButtonComponent>()?.onPressed,
+    ?entity.getComponent<jge.UiToggleComponent>()?.onChanged,
+    ?entity.getComponent<jge.UiSliderComponent>()?.onChanged,
+    ?entity.getComponent<jge.UiDropdownComponent>()?.onChanged,
+    ?entity.getComponent<jge.UiTextFieldComponent>()?.onSubmitted,
+    ?entity.getComponent<jge.UiTextFieldComponent>()?.onChanged,
+  ];
+
+  /// Whether an entity holds any interface component at all.
+  static bool _carriesUi(jge.Entity entity) =>
+      entity.getComponent<jge.TextComponent>() != null ||
+      entity.getComponent<jge.UiCustomComponent>() != null ||
+      entity.getComponent<jge.UiTextFieldComponent>() != null ||
+      _isInteractive(entity);
+
+  static bool _isInteractive(jge.Entity entity) =>
+      entity.getComponent<jge.ButtonComponent>() != null ||
+      entity.getComponent<jge.UiToggleComponent>() != null ||
+      entity.getComponent<jge.UiSliderComponent>() != null ||
+      entity.getComponent<jge.UiDropdownComponent>() != null;
+
+  static bool _isFocusable(jge.Entity entity) =>
+      _isInteractive(entity) ||
+      entity.getComponent<jge.UiTextFieldComponent>() != null;
 }

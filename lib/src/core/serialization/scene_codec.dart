@@ -32,7 +32,7 @@ class SceneCodec {
   /// Inactive entities are skipped, and so are components with no
   /// definition — runtime-only state such as a physics body handle.
   List<Map<String, dynamic>> encodeEntities(List<Entity> entities) {
-    final active = entities.where((e) => e.isActive).toList();
+    final active = _inTreeOrder(entities.where((e) => e.isActive).toList());
     final names = {for (final e in active) e.id: e.name ?? 'entity_${e.id}'};
     return [
       for (final e in active)
@@ -48,6 +48,41 @@ class SceneCodec {
               .toList(),
         },
     ];
+  }
+
+  /// [entities] with each parent before its children, and siblings in the
+  /// order their parent lists them.
+  ///
+  /// The order a scene file is written in *is* the sibling order: loading
+  /// rebuilds each `ChildrenComponent` by walking the file. So a row whose
+  /// buttons were dragged into a new order keeps it by being written in
+  /// it.
+  static List<Entity> _inTreeOrder(List<Entity> entities) {
+    final byId = {for (final e in entities) e.id: e};
+    final out = <Entity>[];
+    final placed = <EntityId>{};
+
+    void walk(Entity entity) {
+      if (!placed.add(entity.id)) return;
+      out.add(entity);
+      final children = entity.getComponent<ChildrenComponent>();
+      if (children == null) return;
+      for (final id in children.childIds) {
+        final child = byId[id];
+        if (child != null) walk(child);
+      }
+    }
+
+    for (final entity in entities) {
+      final parentId = entity.getComponent<ParentComponent>()?.parentId;
+      // A root, or a child whose parent is not being saved.
+      if (parentId == null || !byId.containsKey(parentId)) walk(entity);
+    }
+    // A child its parent forgot to list, and anything in a parent loop.
+    for (final entity in entities) {
+      walk(entity);
+    }
+    return out;
   }
 
   /// The definition [component] is saved and inspected through, or null.

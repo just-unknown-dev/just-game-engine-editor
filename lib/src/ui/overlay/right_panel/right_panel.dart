@@ -406,28 +406,40 @@ class _SaveButton extends StatelessWidget {
 /// The scene tree, with per-entity hide and lock while the Level Designer is
 /// open — rebuilt whenever either changes, so the row icons stay current.
 Widget _sceneTree(JustGameEditorPlugin plugin) {
-  Widget tree(EntityViewToggles? toggles) => SceneTreePanel(
-    scope: plugin.scope,
-    sceneState: plugin.sceneState,
-    world: plugin.engine.world,
-    viewToggles: toggles,
-    onCreateEntity: plugin.entities.createEntity,
-    onCreateGroup: plugin.entities.createGroup,
-    onCreateGroupFrom: (entity) =>
-        plugin.entities.createGroup(children: [entity]),
-    onDeleteEntity: plugin.entities.deleteEntity,
-    onCopyEntity: plugin.entities.copyEntity,
-    onPasteEntity: plugin.entities.pasteEntity,
-    onReparentEntity: plugin.entities.reparentEntity,
-  );
+  Widget tree(EntityViewToggles? toggles, {bool uiMode = false}) =>
+      SceneTreePanel(
+        scope: plugin.scope,
+        sceneState: plugin.sceneState,
+        world: plugin.engine.world,
+        viewToggles: toggles,
+        onCreateEntity: plugin.entities.createEntity,
+        onCreateGroup: plugin.entities.createGroup,
+        onCreateGroupFrom: (entity) =>
+            plugin.entities.createGroup(children: [entity]),
+        onDeleteEntity: plugin.entities.deleteEntity,
+        onCopyEntity: plugin.entities.copyEntity,
+        onPasteEntity: plugin.entities.pasteEntity,
+        onReparentEntity: plugin.entities.reparentEntity,
+        onCreateUi: plugin.entities.createUi,
+        onReorderEntity: plugin.entities.reorderEntity,
+        onToggleUiMode: (on) => plugin.uiMode.enabled.value = on,
+        uiModeOn: uiMode,
+      );
 
   final designer = plugin.designer.value;
-  if (designer == null) return tree(null);
+  if (designer == null) {
+    return SignalBuilder<bool>(
+      signal: plugin.uiMode.enabled,
+      builder: (context, uiMode, _) => tree(null, uiMode: uiMode),
+    );
+  }
   final c = designer.controller;
-  return SignalBuilder2<Set<EntityId>, Set<EntityId>>(
+  return SignalBuilder3<Set<EntityId>, Set<EntityId>, bool>(
     signal1: c.hiddenEntities,
     signal2: c.lockedEntities,
-    builder: (context, hidden, locked, _) => tree(
+    signal3: plugin.uiMode.enabled,
+    builder: (context, hidden, locked, uiMode, _) => tree(
+      uiMode: uiMode,
       EntityViewToggles(
         isHidden: (e) => hidden.contains(e.id),
         isLocked: (e) => locked.contains(e.id),

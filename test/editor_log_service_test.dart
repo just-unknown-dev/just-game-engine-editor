@@ -11,10 +11,11 @@ import 'package:just_game_engine_editor/src/core/constants/editor_constants.dart
 
 void main() {
   test('the default log file belongs to this process', () async {
-    // flutter test runs test files side by side. They used to share one file
-    // under the system temp directory, so one file's lines could turn up in
-    // another file's expectations — a failure that only ever showed in a full
-    // run, and never twice in the same place.
+    // flutter test runs test files side by side *and shares processes*, so
+    // this folder is keyed on the isolate. It used to be one file under the
+    // system temp directory, and then one per process — both let another
+    // file's lines turn up in this one's expectations, a failure that only
+    // ever showed in a full run and never twice in the same place.
     final storage = createEditorLogStorage();
     await storage.appendEntry(
       EditorLogEntry(
@@ -27,7 +28,7 @@ void main() {
     );
     final path = storage.filePath!;
     addTearDown(() => File(path).parent.deleteSync(recursive: true));
-    expect(path, contains('$pid'));
+    expect(path, contains('$pid'), reason: 'and to this process');
     expect(await storage.loadEntries(), hasLength(1));
   });
 

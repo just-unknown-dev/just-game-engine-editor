@@ -599,18 +599,28 @@ class SelectTool extends LevelToolHandler {
   // ── Picking ───────────────────────────────────────────────────────────────
 
   /// The entities the current selection covers, primary plus multi-selection.
+  /// What this tool can move: what is selected, less anything that is not
+  /// in the world.
+  ///
+  /// A piece of interface is selected from the scene tree like anything
+  /// else, but it has no transform — it is placed by its slot, and moved
+  /// in the UI mode. Handing one to a tool that reads transforms is how a
+  /// pointer move in the viewport ended in a null check.
   List<jge.Entity> _selectionEntities(jge.World world) {
     final ids = sceneState.multiSelectedIds.value;
     if (ids.isNotEmpty) {
       return ids
           .map(world.getEntity)
           .whereType<jge.Entity>()
-          .where((e) => e.isActive)
+          .where((e) => e.isActive && _isInTheWorld(e))
           .toList();
     }
     final selected = sceneState.selectedEntity.value;
-    return selected == null ? const [] : [selected];
+    return selected == null || !_isInTheWorld(selected) ? const [] : [selected];
   }
+
+  static bool _isInTheWorld(jge.Entity entity) =>
+      entity.getComponent<jge.TransformComponent>() != null;
 
   /// Combined bounds of [entities]; a sizeless marker counts as a point.
   static Rect? _groupBounds(List<jge.Entity> entities) {

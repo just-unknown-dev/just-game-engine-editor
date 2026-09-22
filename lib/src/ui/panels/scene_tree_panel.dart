@@ -1,13 +1,18 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 import '../../core/constants/editor_constants.dart';
+import '../../core/entity/entity_ops.dart';
+import '../widgets/editor_menu.dart';
 import '../../core/scope/editor_scope.dart';
 import '../../core/state/editor_scene_state.dart';
 import '../../extension/editor_contributions.dart';
 
-/// Scrollable, hierarchical list of all ECS entities with a [TransformComponent].
+/// Scrollable, hierarchical list of the scene's entities: everything
+/// with a [TransformComponent], and everything that is interface.
 ///
 /// Root entities appear at depth 0. Entities with a [ParentComponent] are
 /// nested under their parent with expand/collapse chevrons. Drag an entity row
@@ -24,6 +29,10 @@ class SceneTreePanel extends StatefulWidget {
     required this.onCopyEntity,
     required this.onPasteEntity,
     required this.onReparentEntity,
+    this.onCreateUi,
+    this.onReorderEntity,
+    this.onToggleUiMode,
+    this.uiModeOn = false,
     this.viewToggles,
     this.scope,
   });
@@ -47,6 +56,22 @@ class SceneTreePanel extends StatefulWidget {
   final void Function(Entity entity) onCopyEntity;
   final VoidCallback onPasteEntity;
   final void Function(Entity child, Entity newParent) onReparentEntity;
+
+  /// Turns the viewport's UI mode on and off. Without it the button is
+  /// not shown.
+  final void Function(bool on)? onToggleUiMode;
+
+  /// Whether that mode is on now.
+  final bool uiModeOn;
+
+  /// Moves an entity before or after one of its siblings. Without it, a
+  /// drop always re-parents.
+  final void Function(Entity moved, Entity anchor, {required bool before})?
+  onReorderEntity;
+
+  /// Creates a piece of interface of the given kind — `text`, `row`,
+  /// `custom:inventory_grid`. Without it the Create-UI button is not shown.
+  final void Function(String kind)? onCreateUi;
 
   @override
   State<SceneTreePanel> createState() => _SceneTreePanelState();
@@ -105,6 +130,34 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     );
   }
 
+  /// Whether an entity belongs to the interface rather than the world.
+  static bool _isUiEntity(Entity entity) =>
+      entity.getComponent<UiCanvasComponent>() != null ||
+      entity.getComponent<UiSlotComponent>() != null;
+
+  /// Everything that can be made, grouped as the menu shows it: the
+  /// built-in kinds first, then whatever the running game registered.
+  Future<void> _showCreateUiMenu(BuildContext context) async {
+    final box = context.findRenderObject() as RenderBox?;
+    final at = box == null
+        ? Offset.zero
+        : box.localToGlobal(box.size.bottomLeft(Offset.zero));
+    final items = <PopupMenuEntry<String>>[];
+    var group = '';
+    for (final option in UiCreateOptions.all) {
+      if (option.group != group) {
+        if (items.isNotEmpty) items.add(editorMenuDivider());
+        items.add(editorMenuHeading<String>(option.group));
+        group = option.group;
+      }
+      items.add(
+        editorMenuItem<String>(option.id, option.label, icon: option.icon),
+      );
+    }
+    final chosen = await showEditorMenu<String>(context, at, items);
+    if (chosen != null) widget.onCreateUi?.call(chosen);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -125,6 +178,46 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
                 ),
               ),
               const Spacer(),
+              if (widget.onToggleUiMode != null)
+                Tooltip(
+                  message: widget.uiModeOn
+                      ? 'Back to the world'
+                      : 'Edit the interface',
+                  child: IconButton(
+                    onPressed: () => widget.onToggleUiMode!(!widget.uiModeOn),
+                    icon: Icon(
+                      widget.uiModeOn ? Icons.public_off : Icons.phone_iphone,
+                    ),
+                    iconSize: 15,
+                    color: widget.uiModeOn
+                        ? EditorTheme.primaryBright
+                        : EditorTheme.primary,
+                    splashRadius: 16,
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
+                    ),
+                  ),
+                ),
+              if (widget.onCreateUi != null)
+                Tooltip(
+                  message: 'Create UI',
+                  child: Builder(
+                    builder: (context) => IconButton(
+                      onPressed: () => _showCreateUiMenu(context),
+                      icon: const Icon(Icons.widgets_outlined),
+                      iconSize: 15,
+                      color: EditorTheme.primary,
+                      splashRadius: 16,
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                    ),
+                  ),
+                ),
               Tooltip(
                 message: 'Create group',
                 child: IconButton(
@@ -217,9 +310,15 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
               widget.sceneState.revision,
             ],
             builder: (context, _) {
-              final allEntities = widget.world
-                  .query([TransformComponent])
-                  .where((e) => e.isActive)
+              // Anything in the world — a piece of interface has no
+              // transform, and the tree is where it is authored too.
+              final allEntities = widget.world.entities
+                  .where(
+                    (e) =>
+                        e.isActive &&
+                        (e.getComponent<TransformComponent>() != null ||
+                            _isUiEntity(e)),
+                  )
                   .toList();
 
               if (allEntities.isEmpty) {
@@ -329,6 +428,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         onPaste: widget.onPasteEntity,
         onCreateGroupFrom: () => widget.onCreateGroupFrom(entity),
         onReparent: widget.onReparentEntity,
+        onReorder: widget.onReorderEntity,
         viewToggles: widget.viewToggles,
         scope: widget.scope,
       ),
@@ -365,6 +465,7 @@ class _EntityTreeRow extends StatefulWidget {
     required this.onPaste,
     required this.onCreateGroupFrom,
     required this.onReparent,
+    this.onReorder,
     this.viewToggles,
     this.scope,
   });
@@ -390,12 +491,25 @@ class _EntityTreeRow extends StatefulWidget {
   final VoidCallback onPaste;
   final VoidCallback onCreateGroupFrom;
   final void Function(Entity child, Entity newParent) onReparent;
+  final void Function(Entity moved, Entity anchor, {required bool before})?
+  onReorder;
 
   @override
   State<_EntityTreeRow> createState() => _EntityTreeRowState();
 }
 
 class _EntityTreeRowState extends State<_EntityTreeRow> {
+  /// Where a drop would land: inside this entity, or between it and the
+  /// sibling above or below.
+  DropZone _dropZone = DropZone.onto;
+
+  DropZone _zoneOf(Offset globalOffset) {
+    if (widget.onReorder == null) return DropZone.onto;
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return DropZone.onto;
+    return dropZoneFor(box.globalToLocal(globalOffset).dy, box.size.height);
+  }
+
   bool _isEditing = false;
   late TextEditingController _nameCtrl;
   final FocusNode _nameFocus = FocusNode();
@@ -622,20 +736,31 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
               // Expand/collapse chevron for groups with children.
               if (widget.hasChildren)
                 GestureDetector(
+                  // Opaque, and with room around it: a 14px glyph left the
+                  // chevron all but unhittable — the tap fell through to
+                  // the row and selected it instead of opening it.
+                  behavior: HitTestBehavior.opaque,
                   onTap: widget.onToggleExpand,
-                  child: Icon(
-                    widget.isExpanded
-                        ? Icons.expand_more_rounded
-                        : Icons.chevron_right_rounded,
-                    size: 14,
-                    color: EditorTheme.primary,
+                  child: SizedBox(
+                    width: 18,
+                    height: 22,
+                    child: Icon(
+                      widget.isExpanded
+                          ? Icons.expand_more_rounded
+                          : Icons.chevron_right_rounded,
+                      size: 14,
+                      color: EditorTheme.primary,
+                    ),
                   ),
                 )
               else
-                const SizedBox(width: 14),
-              const SizedBox(width: 4),
+                const SizedBox(width: 18),
               Icon(
-                isGroup ? Icons.folder_rounded : _iconForTag(tag),
+                // A piece of interface says what kind it is; a folder icon
+                // on a Column would say only that it has children, which
+                // the chevron beside it already says.
+                uiIconFor(widget.entity) ??
+                    (isGroup ? Icons.folder_rounded : _iconForTag(tag)),
                 size: 14,
                 color: widget.isSelected
                     ? EditorTheme.primary
@@ -750,12 +875,53 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
         onWillAcceptWithDetails: (details) =>
             details.data.id != widget.entity.id,
         onAcceptWithDetails: (details) {
-          setState(() => _isDragOver = false);
-          widget.onReparent(details.data, widget.entity);
+          final zone = _zoneOf(details.offset);
+          setState(() {
+            _isDragOver = false;
+            _dropZone = DropZone.onto;
+          });
+          if (zone == DropZone.onto || widget.onReorder == null) {
+            widget.onReparent(details.data, widget.entity);
+          } else {
+            widget.onReorder!(
+              details.data,
+              widget.entity,
+              before: zone == DropZone.above,
+            );
+          }
         },
-        onMove: (_) => setState(() => _isDragOver = true),
-        onLeave: (_) => setState(() => _isDragOver = false),
-        builder: (context, candidates, rejected) => row,
+        onMove: (details) => setState(() {
+          _isDragOver = true;
+          _dropZone = _zoneOf(details.offset);
+        }),
+        onLeave: (_) => setState(() {
+          _isDragOver = false;
+          _dropZone = DropZone.onto;
+        }),
+        builder: (context, candidates, rejected) =>
+            _isDragOver && _dropZone != DropZone.onto
+            // A line where it would land, rather than the whole row lit up
+            // as if it would go inside.
+            ? DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: _dropZone == DropZone.above
+                        ? const BorderSide(
+                            color: EditorTheme.primaryBright,
+                            width: 2,
+                          )
+                        : BorderSide.none,
+                    bottom: _dropZone == DropZone.below
+                        ? const BorderSide(
+                            color: EditorTheme.primaryBright,
+                            width: 2,
+                          )
+                        : BorderSide.none,
+                  ),
+                ),
+                child: row,
+              )
+            : row,
       ),
     );
   }
@@ -780,6 +946,26 @@ class _EntityTreeRowState extends State<_EntityTreeRow> {
       _ => Icons.category_rounded,
     };
   }
+}
+
+/// Where a dragged entity would land relative to the row under it.
+enum DropZone { above, onto, below }
+
+/// How near a row's edge a drop has to be to mean "between these two"
+/// rather than "inside this one".
+///
+/// A few pixels, not a share of the row: dropping something *into* a
+/// container is the common move and has to be the easy one. A band that
+/// was a share of the row left barely a third of it meaning what the whole
+/// row plainly looks like it means, and re-parenting felt broken.
+const double kTreeDropEdge = 5;
+
+/// What a drop [dy] pixels down a row [height] tall means.
+DropZone dropZoneFor(double dy, double height) {
+  final edge = math.min(kTreeDropEdge, height / 3);
+  if (dy < edge) return DropZone.above;
+  if (dy > height - edge) return DropZone.below;
+  return DropZone.onto;
 }
 
 /// Per-entity hide and lock for the scene tree, supplied by the Level

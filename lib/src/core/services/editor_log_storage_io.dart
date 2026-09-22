@@ -136,18 +136,27 @@ class _IoEditorLogStorage implements EditorLogStorage {
   /// working directory so `.editor_logs/` stays alongside the project like
   /// before.
   ///
-  /// Under test the folder belongs to **this process**. `flutter test` runs
-  /// test files side by side, and a log they all shared would let one file's
-  /// lines — and one file's rotation — turn up in another file's
-  /// expectations. A test that wants a particular path asks for one with
+  /// Under test the folder belongs to **this isolate**. `flutter test` runs
+  /// test files side by side *and shares processes between them*, so a log
+  /// keyed on the process still let one file's lines — and one file's
+  /// rotation — turn up in another file's expectations. Statics are
+  /// per-isolate, so [_isolateTag] is exactly the boundary that matters. A
+  /// test that wants a particular path asks for one with
   /// [createEditorLogStorageForPath].
+  /// Tells this isolate's logs from every other isolate's. Made once, and
+  /// static state is per-isolate, so it is the same for this isolate's
+  /// lifetime and different in the next one.
+  static final String _isolateTag =
+      '${pid}_${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}'
+      '_${identityHashCode(_IoEditorLogStorage).toRadixString(36)}';
+
   static Future<File> _resolveFile() async {
     final isTest = Platform.environment.containsKey('FLUTTER_TEST');
     final Directory root;
     var folder = '.editor_logs';
     if (isTest) {
       root = Directory.systemTemp;
-      folder = '.editor_logs_test_$pid';
+      folder = '.editor_logs_test_$_isolateTag';
     } else if (Platform.isAndroid || Platform.isIOS) {
       root = await getApplicationSupportDirectory();
     } else {

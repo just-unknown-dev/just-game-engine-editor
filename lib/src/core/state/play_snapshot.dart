@@ -26,8 +26,18 @@ class PlaySnapshot {
   }
 
   /// The entities a save writes: everything active with a transform.
-  static List<Entity> authored(World world) =>
-      world.query([TransformComponent]).where((e) => e.isActive).toList();
+  /// What the scene file holds: everything in the world, and everything
+  /// that is interface — which has no transform, and would otherwise never
+  /// be saved at all.
+  static List<Entity> authored(World world) => world.entities
+      .where(
+        (e) =>
+            e.isActive &&
+            (e.getComponent<TransformComponent>() != null ||
+                e.getComponent<UiCanvasComponent>() != null ||
+                e.getComponent<UiSlotComponent>() != null),
+      )
+      .toList();
 
   /// Ids of the authored entities, parallel to [entities].
   final List<EntityId> ids;

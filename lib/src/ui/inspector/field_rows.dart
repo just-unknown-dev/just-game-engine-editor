@@ -96,12 +96,29 @@ class ColorEditorRow extends StatelessWidget {
     required this.paintStyle,
     required this.onChanged,
     this.supportsGradient = false,
+    this.inherited = false,
+    this.inheritedFrom = '',
+    this.onClear,
   });
 
   final String label;
   final jge.ShapePaintStyle paintStyle;
   final ValueChanged<jge.ShapePaintStyle> onChanged;
   final bool supportsGradient;
+
+  /// Whether this colour is not the field's own but the one it falls back
+  /// to. The swatch still shows what will be drawn; the value beside it is
+  /// muted, because a colour nobody chose here must not read as one
+  /// somebody did.
+  final bool inherited;
+
+  /// What it falls back to, for the note beside it: a theme role, or
+  /// "nothing" where an unset colour means no colour at all.
+  final String inheritedFrom;
+
+  /// Puts the colour back to whatever it inherits. Null where the field
+  /// must always have one.
+  final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
@@ -161,13 +178,34 @@ class ColorEditorRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    hasGradient ? 'Gradient' : hex,
-                    style: const TextStyle(
-                      color: EditorTheme.textPrimary,
-                      fontSize: 11,
+                  Flexible(
+                    child: Text(
+                      hasGradient ? 'Gradient' : hex,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: inherited
+                            ? EditorTheme.textMuted
+                            : EditorTheme.textPrimary,
+                        fontSize: 11,
+                        fontStyle: inherited
+                            ? FontStyle.italic
+                            : FontStyle.normal,
+                      ),
                     ),
                   ),
+                  if (inherited && inheritedFrom.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        inheritedFrom,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: EditorTheme.textMuted,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  ],
                   const Spacer(),
                   const Icon(
                     Icons.colorize_rounded,
@@ -179,6 +217,21 @@ class ColorEditorRow extends StatelessWidget {
             ),
           ),
         ),
+        // Only where there is something to put back: a row that always
+        // offers to clear reads as though something is always set.
+        if (!inherited && onClear != null)
+          Tooltip(
+            message: inheritedFrom.isEmpty ? 'Clear' : 'Back to $inheritedFrom',
+            child: IconButton(
+              onPressed: onClear,
+              icon: const Icon(Icons.settings_backup_restore_rounded),
+              iconSize: 14,
+              color: EditorTheme.textMuted,
+              splashRadius: 12,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+            ),
+          ),
       ],
     );
   }
@@ -732,14 +785,14 @@ class _OffsetListEditorRowState extends State<OffsetListEditorRow> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: _MiniNumberField(
+                        child: MiniNumberField(
                           value: _points[i].dx,
                           onSubmitted: (v) => _setX(i, v),
                         ),
                       ),
                       const SizedBox(width: 4),
                       Expanded(
-                        child: _MiniNumberField(
+                        child: MiniNumberField(
                           value: _points[i].dy,
                           onSubmitted: (v) => _setY(i, v),
                         ),
@@ -788,18 +841,42 @@ class _OffsetListEditorRowState extends State<OffsetListEditorRow> {
   }
 }
 
-class _MiniNumberField extends StatelessWidget {
-  const _MiniNumberField({required this.value, required this.onSubmitted});
+/// The controls below are the bare ones: a box and nothing else.
+///
+/// Every `…EditorRow` in this file is a *row* — a label column and then its
+/// control — so one must never be put inside another row, or the label
+/// column overflows whatever it was given. Anything building a row of its
+/// own reaches for these instead.
+class MiniNumberField extends StatelessWidget {
+  const MiniNumberField({
+    super.key,
+    required this.value,
+    required this.onSubmitted,
+    this.fractionDigits = 1,
+    this.inherited = false,
+  });
 
   final double value;
   final ValueChanged<double> onSubmitted;
 
+  /// How the number is written; 0 for a whole one.
+  final int fractionDigits;
+
+  /// Whether this is not the field's own value but the one it takes from
+  /// somewhere else — a theme role, a parent. Drawn muted, so a number
+  /// nobody chose here does not read as a number somebody did.
+  final bool inherited;
+
   @override
   Widget build(BuildContext context) {
     return TextFormField(
-      key: ValueKey(value),
-      initialValue: value.toStringAsFixed(1),
-      style: const TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
+      key: ValueKey('$value:$inherited'),
+      initialValue: value.toStringAsFixed(fractionDigits),
+      style: TextStyle(
+        color: inherited ? EditorTheme.textMuted : EditorTheme.textPrimary,
+        fontSize: 11,
+        fontStyle: inherited ? FontStyle.italic : FontStyle.normal,
+      ),
       onFieldSubmitted: (text) {
         final parsed = double.tryParse(text.trim());
         if (parsed != null) onSubmitted(parsed);
@@ -824,6 +901,110 @@ class _MiniNumberField extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A bare line of text: the same box, no label column.
+class MiniTextField extends StatelessWidget {
+  const MiniTextField({
+    super.key,
+    required this.value,
+    required this.onSubmitted,
+    this.hint = '',
+  });
+
+  final String value;
+  final ValueChanged<String> onSubmitted;
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) => TextFormField(
+    key: ValueKey(value),
+    initialValue: value,
+    style: InspectorField.valueStyle,
+    onFieldSubmitted: onSubmitted,
+    decoration: InspectorField.decoration().copyWith(
+      hintText: hint.isEmpty ? null : hint,
+      hintStyle: const TextStyle(
+        color: EditorTheme.textMuted,
+        fontSize: InspectorField.fontSize,
+      ),
+    ),
+  );
+}
+
+/// A bare colour swatch that opens the colour dialog: the same box, no
+/// label column.
+class MiniColorField extends StatelessWidget {
+  const MiniColorField({
+    super.key,
+    required this.color,
+    required this.onChanged,
+    this.showHex = true,
+    this.inherited = false,
+  });
+
+  final Color color;
+  final ValueChanged<Color> onChanged;
+
+  /// Whether the value is written beside the swatch. Off where the row is
+  /// tight and the swatch says enough.
+  final bool showHex;
+
+  /// Whether the colour comes from somewhere else — a theme role. The
+  /// swatch is still the colour that will be drawn; the text beside it is
+  /// muted to say nobody chose it here.
+  final bool inherited;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: () async {
+      final picked = await JustColourDialog.show(
+        context,
+        initialSelection: shapePaintStyleToSelection(
+          jge.ShapePaintStyle(color: color),
+        ),
+        view: ColourDialogView.colourOnly,
+      );
+      if (picked != null) {
+        onChanged(selectionToShapePaintStyle(picked).color);
+      }
+    },
+    borderRadius: BorderRadius.circular(InspectorField.radius),
+    child: Container(
+      height: InspectorField.height,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: InspectorField.boxDecoration(),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(3),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+            ),
+          ),
+          if (showHex) ...[
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                '#${color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}',
+                overflow: TextOverflow.ellipsis,
+                style: inherited
+                    ? InspectorField.valueStyle.copyWith(
+                        color: EditorTheme.textMuted,
+                        fontStyle: FontStyle.italic,
+                      )
+                    : InspectorField.valueStyle,
+              ),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
 }
 
 // ── Asset path picker row ─────────────────────────────────────────────────────
