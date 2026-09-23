@@ -59,6 +59,28 @@ class ViewportInput {
   /// from being fought by the simulation.
   bool get isDragging => _activeHandle != null;
 
+  /// What is under [localPosition] in the viewport, or null for bare
+  /// level. The same hit test a click uses, so the menu opens on what a
+  /// click would have selected.
+  Entity? entityAt(Offset localPosition) {
+    if (canvasSize == Size.zero) return null;
+    final camera = cameraOf()..viewportSize = canvasSize;
+    final hit = hitTester.hitTest(
+      localPosition,
+      sceneState.selectedEntity.value,
+      world.query([TransformComponent]).where((e) => e.isActive).toList(),
+      camera,
+      canvasSize,
+    );
+    return hit.entity;
+  }
+
+  /// Turns a point on the canvas into a point in the level.
+  Offset worldPointAt(Offset localPosition) {
+    final camera = cameraOf()..viewportSize = canvasSize;
+    return camera.screenToWorld(localPosition);
+  }
+
   /// Must be called with the canvas size so coordinate conversions are correct.
   void updateCanvasSize(Size size) {
     canvasSize = size;
@@ -67,6 +89,9 @@ class ViewportInput {
   void onPointerDown(PointerDownEvent event) {
     if (!isActive()) return;
     if (canvasSize == Size.zero) return;
+    // The right button belongs to the context menu, which the overlay
+    // opens: selecting and dragging are the left button's business.
+    if ((event.buttons & kSecondaryButton) != 0) return;
 
     // Middle-mouse-drag pans the camera — only while pure-authoring (Play
     // not pressed): during Play the camera brain owns the output camera and

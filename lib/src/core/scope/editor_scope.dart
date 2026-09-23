@@ -16,6 +16,7 @@ import '../../ui/inspector/field_editor.dart';
 import '../../ui/level_designer/commands/built_in_bindings.dart';
 import '../../ui/level_designer/commands/built_in_commands.dart';
 import '../../ui/level_designer/commands/designer_command.dart';
+import '../../ui/level_designer/state/editor_history.dart';
 import '../../extension/designer_contributions.dart';
 import '../../extension/editor_contributions.dart';
 import '../../ui/overlay/chrome_state.dart';
@@ -31,6 +32,11 @@ import '../serialization/scene_codec.dart';
 import '../serialization/scene_store.dart';
 import '../services/editor_log_service.dart';
 import '../state/editor_scene_state.dart';
+import '../../extension/built_in_row_decorations.dart';
+import '../entity/entity_ops.dart';
+import '../state/editor_view_state.dart';
+import '../../ui/level_designer/ui_mode/ui_mode_session.dart';
+import '../../ui/level_designer/ui_mode/ui_workspace.dart';
 import '../../extension/built_in_camera_contributions.dart';
 
 /// Everything one editor owns: its registries, services and state, in a
@@ -111,6 +117,27 @@ class EditorScope {
       ..registerLazySingleton<EditorSceneState>(
         () => EditorSceneState()..setGridSnapping(enabled: true, gridSize: 32),
         dispose: (s) => s.dispose(),
+      )
+      ..registerLazySingleton<EditorHistory>(
+        EditorHistory.new,
+        dispose: (h) => h.dispose(),
+      )
+      ..registerLazySingleton<EditorViewState>(
+        EditorViewState.new,
+        dispose: (v) => v.dispose(),
+      )
+      ..registerLazySingleton<EntityOps>(
+        () => EntityOps(
+          scope: this,
+          world: () => this.world,
+          sceneState: sceneState,
+          camera: _mainCamera,
+          onChanged: sceneState.refresh,
+        ),
+      )
+      ..registerLazySingleton<UiModeSession>(
+        () => UiModeSession(world: () => this.world),
+        dispose: (u) => u.dispose(),
       );
     this.modules.registerAll(modules);
     reload();
@@ -195,6 +222,7 @@ class EditorScope {
   final List<SceneValidator> _validators = [];
   final List<SceneTreeAction> _sceneTreeActions = [];
   final List<SceneTreeRowDecoration> _rowDecorations = [];
+  final List<EntityIcon> _entityIcons = [];
   final List<EntityProtectionRule> _protectionRules = [];
   final List<InspectorSection> _inspectorSections = [];
 
@@ -218,7 +246,8 @@ class EditorScope {
   List<DockDefinition> get docks => List.unmodifiable(_docks);
 
   /// Full-screen tools modules add, by order.
-  List<WorkspaceDefinition> get workspaces => List.unmodifiable(_workspaces);
+  List<WorkspaceDefinition> get workspaces =>
+      List.unmodifiable([...BuiltInWorkspaces.all, ..._workspaces]);
 
   /// Scene checks modules add to the editor's own.
   List<SceneValidator> get validators => List.unmodifiable(_validators);
@@ -246,9 +275,12 @@ class EditorScope {
   /// Opens the workspace called [id], on [path] if given. False when no
   /// module provides it.
   bool openWorkspace(String id, {String? path}) {
-    for (final w in _workspaces) {
+    for (final w in workspaces) {
       if (w.id != id) continue;
       activeWorkspace.value = OpenWorkspace(w, path);
+      // The interface editor's own flag follows the workspace, so the
+      // buttons that light up when it is open have one thing to read.
+      uiMode.enabled.value = id == BuiltInWorkspaces.ui;
       return true;
     }
     return false;
@@ -271,7 +303,10 @@ class EditorScope {
     return true;
   }
 
-  void closeWorkspace() => activeWorkspace.value = null;
+  void closeWorkspace() {
+    activeWorkspace.value = null;
+    uiMode.enabled.value = false;
+  }
 
   /// Module buttons appended after the built-in toolbar, by order.
   List<ToolbarButton> get toolbarButtons => List.unmodifiable(_toolbarButtons);
@@ -283,6 +318,18 @@ class EditorScope {
   /// Module widgets drawn on every scene tree row, by order.
   List<SceneTreeRowDecoration> get rowDecorations =>
       List.unmodifiable(_rowDecorations);
+
+  /// What the modules say the entities of their game look like.
+  List<EntityIcon> get entityIcons => List.unmodifiable(_entityIcons);
+
+  /// The icon for [entity]: a module's, if one claims it.
+  IconData? iconFor(Entity entity) {
+    for (final icon in _entityIcons) {
+      final found = icon.of(entity);
+      if (found != null) return found;
+    }
+    return null;
+  }
 
   /// Module rules that keep an entity from being deleted or renamed.
   List<EntityProtectionRule> get protectionRules =>
@@ -381,6 +428,40 @@ class EditorScope {
   /// Selection, scene graph and grid state.
   EditorSceneState get sceneState => container.get<EditorSceneState>();
 
+  /// Undo for everything the editor does: the scene tree, the inspector,
+  /// the UI mode and the Level Designer.
+  ///
+  /// One stack per editor, not per designer session. Undo that only worked
+  /// while a particular panel happened to be open was undo nobody could
+  /// rely on, and two stacks meant Ctrl+Z reversed whichever of them the
+  /// key happened to reach.
+  EditorHistory get history => container.get<EditorHistory>();
+
+  /// What is hidden and what is locked against picking — editor-only, and
+  /// there whether or not the Level Designer is open.
+  EditorViewState get view => container.get<EditorViewState>();
+
+  /// Create, delete, group, re-parent and clipboard operations.
+  ///
+  /// On the scope because everything that edits the scene wants it, the
+  /// interface editor in its own window included.
+  EntityOps get entities => container.get<EntityOps>();
+
+  /// The camera new entities are placed in front of; a bare one before the
+  /// engine has a viewport, which is all a HUD's entities need.
+  Camera _mainCamera() {
+    final e = engine;
+    if (e == null || !e.isInitialized || !e.cameraSystem.isInitialized) {
+      return Camera();
+    }
+    return e.cameraSystem.mainCamera;
+  }
+
+  /// The interface editor's state — which screen it is showing, what is
+  /// snapped to, where each node landed. On the scope because a
+  /// workspace is built from one: its builder gets nothing else.
+  UiModeSession get uiMode => container.get<UiModeSession>();
+
   /// Rebuilds every scope-level registry from scratch: built-ins, then each
   /// module's contributions in registration order. Idempotent, so it is safe
   /// on every hot reload — and nothing a module stopped contributing survives.
@@ -402,6 +483,7 @@ class EditorScope {
       _validators,
       _sceneTreeActions,
       _rowDecorations,
+      _entityIcons,
       _protectionRules,
       _inspectorSections,
     ]) {
@@ -410,6 +492,7 @@ class EditorScope {
     // The editor's own camera tooling arrives the way a module's would.
     _sceneTreeActions.addAll(BuiltInCameraContributions.sceneTreeActions);
     _rowDecorations.addAll(BuiltInCameraContributions.rowDecorations);
+    _rowDecorations.addAll(BuiltInRowDecorations.all);
     final context = EditorModuleContext(scope: this, isDebug: _isDebug);
     for (final module in modules.all) {
       fieldEditors.registerAll(module.fieldEditors, override: true);
@@ -424,6 +507,7 @@ class EditorScope {
       _validators.addAll(module.validators);
       _sceneTreeActions.addAll(module.sceneTreeActions);
       _rowDecorations.addAll(module.rowDecorations);
+      _entityIcons.addAll(module.entityIcons);
       if (module.protectionRule case final rule?) _protectionRules.add(rule);
       _inspectorSections.addAll(module.inspectorSections);
       module.themePresets.forEach(theme.register);
@@ -441,6 +525,7 @@ class EditorScope {
     }
     _sceneTreeActions.sort((a, b) => a.order.compareTo(b.order));
     _rowDecorations.sort((a, b) => a.order.compareTo(b.order));
+    _entityIcons.sort((a, b) => a.order.compareTo(b.order));
     _inspectorSections.sort((a, b) => a.order.compareTo(b.order));
     // A designer whose module went away falls back to the built-in one.
     final active = activeDesigner.value;

@@ -1,0 +1,172 @@
+/// The right-click menu on the level itself.
+///
+/// The same things the scene tree offers, where the entity actually is:
+/// right-clicking a platform in the viewport should do what right-clicking
+/// its row does, and on bare level it offers what can be made there.
+library;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:just_game_engine/just_game_engine.dart' as jge;
+
+import '../../core/plugin/editor_plugin.dart';
+import '../widgets/editor_menu.dart';
+
+/// Opens the viewport's context menu at [globalPosition].
+///
+/// [entity] is what was under the pointer, null for bare level; [worldPoint]
+/// is where that is in the level, which is where a paste or a new entity
+/// lands.
+Future<void> showViewportMenu(
+  BuildContext context,
+  JustGameEditorPlugin plugin, {
+  required jge.Entity? entity,
+  required Offset globalPosition,
+  required Offset worldPoint,
+}) async {
+  if (!plugin.sceneState.hasScene) return;
+  final scope = plugin.scope;
+  final view = scope.view;
+
+  // Right-clicking something that is not in the selection selects it, so
+  // the menu is never about something other than what was clicked.
+  if (entity != null &&
+      plugin.sceneState.selectedEntity.value?.id != entity.id &&
+      !plugin.sceneState.isInMultiSelection(entity.id)) {
+    plugin.sceneState.selectEntity(entity);
+  }
+
+  final hasHidden = view.hidden.value.isNotEmpty;
+  final hasLocked = view.locked.value.isNotEmpty;
+
+  final chosen = await showEditorMenu<String>(context, globalPosition, [
+    if (entity != null) ...[
+      editorMenuItem(
+        'focus',
+        'Focus',
+        icon: Icons.center_focus_strong_outlined,
+      ),
+      editorMenuItem('duplicate', 'Duplicate', icon: Icons.copy_outlined),
+      editorMenuItem('delete', 'Delete', icon: Icons.delete_outline),
+      editorMenuDivider(),
+      editorMenuItem('copy', 'Copy', icon: Icons.content_copy_outlined),
+    ],
+    editorMenuItem(
+      'paste',
+      'Paste here',
+      icon: Icons.content_paste_outlined,
+      enabled: plugin.sceneState.hasClipboard,
+    ),
+    if (entity == null)
+      editorMenuItem('create', 'New entity here', icon: Icons.add_box_outlined),
+    if (entity != null) ...[
+      editorMenuDivider(),
+      editorMenuItem('group', 'Group', icon: Icons.folder_open_rounded),
+      editorMenuItem(
+        'ungroup',
+        'Ungroup',
+        icon: Icons.folder_off_outlined,
+        enabled:
+            entity.getComponent<jge.ChildrenComponent>()?.childIds.isNotEmpty ??
+            false,
+      ),
+      editorMenuDivider(),
+      editorMenuItem(
+        'hide',
+        view.isHidden(entity.id) ? 'Show it' : 'Hide it',
+        icon: view.isHidden(entity.id)
+            ? Icons.visibility
+            : Icons.visibility_off_outlined,
+      ),
+      editorMenuItem(
+        'lock',
+        view.isLocked(entity.id) ? 'Unlock it' : 'Lock it',
+        icon: view.isLocked(entity.id)
+            ? Icons.lock_open_outlined
+            : Icons.lock_outline,
+      ),
+    ],
+    if (hasHidden || entity != null)
+      editorMenuItem(
+        hasHidden ? 'showAll' : 'isolate',
+        hasHidden ? 'Show everything again' : 'Isolate: hide everything else',
+        icon: hasHidden ? Icons.visibility : Icons.visibility_outlined,
+      ),
+    if (hasLocked)
+      editorMenuItem(
+        'unlockAll',
+        'Unlock everything',
+        icon: Icons.lock_open_outlined,
+      ),
+    // What the modules add to an entity's tree menu, offered here too:
+    // it is the same entity and the same question.
+    if (entity != null && scope.sceneTreeActions.isNotEmpty) ...[
+      editorMenuDivider(),
+      for (final action in scope.sceneTreeActions)
+        editorMenuItem(
+          'module:${action.id}',
+          action.label,
+          icon: action.icon,
+          enabled: action.isEnabled?.call(entity, scope) ?? true,
+        ),
+    ],
+    if (entity != null) ...[
+      editorMenuDivider(),
+      editorMenuItem('copyName', 'Copy its name', icon: Icons.abc),
+    ],
+  ]);
+  if (chosen == null) return;
+
+  final entities = plugin.entities;
+  switch (chosen) {
+    case 'focus':
+      if (entity != null) plugin.focusOn(entity);
+    case 'duplicate':
+      entities.duplicateSelection(
+        scope.history,
+        gridSize: plugin.sceneState.gridSize.value,
+      );
+    case 'delete':
+      entities.deleteSelection(scope.history);
+    case 'copy':
+      if (entity != null) entities.copyEntity(entity);
+    case 'paste':
+      entities.pasteEntity(at: worldPoint);
+    case 'create':
+      entities.createEntity(at: worldPoint);
+    case 'group':
+      entities.groupSelection();
+    case 'ungroup':
+      if (entity != null) entities.ungroup(entity);
+    case 'hide':
+      if (entity != null) view.toggleHidden(entity.id);
+    case 'lock':
+      if (entity != null) view.toggleLocked(entity.id);
+    case 'isolate':
+      if (entity != null) {
+        view.isolate(scope.world, [
+          for (final e in _selection(plugin, entity)) e.id,
+        ]);
+      }
+    case 'showAll':
+      view.showAll();
+    case 'unlockAll':
+      view.unlockAll();
+    case 'copyName':
+      await Clipboard.setData(ClipboardData(text: entity?.name ?? ''));
+    default:
+      if (!chosen.startsWith('module:')) return;
+      final id = chosen.substring('module:'.length);
+      if (entity == null) return;
+      for (final action in scope.sceneTreeActions) {
+        if (action.id == id) action.run(entity, scope);
+      }
+  }
+}
+
+/// What the menu acts on: the selection when the clicked entity is part of
+/// it, otherwise that entity alone.
+List<jge.Entity> _selection(JustGameEditorPlugin plugin, jge.Entity entity) {
+  final selection = plugin.entities.selectionEntities;
+  return selection.any((e) => e.id == entity.id) ? selection : [entity];
+}

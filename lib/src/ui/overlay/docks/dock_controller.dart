@@ -274,13 +274,14 @@ class DockController {
                 '${e.key}': (e.value as Map).cast<String, Object?>(),
           });
       }
-      _lastDock = json['last'] as String?;
       final open = json['open'];
-      // Settings do not reopen by themselves; a dock does — unless one was
-      // opened while the preferences were still loading, which wins.
-      if (open is String && open != settingsId && openId.value == null) {
-        openId.value = open;
-      }
+      // The panel starts collapsed, however it was left: the editor opens
+      // on the level, its panels and the status strip, and the docks are
+      // there when they are asked for. Which dock it was is remembered,
+      // so F2 brings that one straight back.
+      _lastDock =
+          json['last'] as String? ??
+          (open is String && open != settingsId ? open : null);
     } catch (_) {
       // A damaged preference is not worth failing the editor over.
     }

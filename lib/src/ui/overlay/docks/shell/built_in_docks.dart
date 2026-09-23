@@ -40,7 +40,6 @@ abstract final class BuiltInDocks {
   static final Expando<List<DockDefinition>> _cache = Expando('builtInDocks');
   static final Expando<AssetIndex> _indexes = Expando('assetIndex');
   static final Expando<FrameCapture> _captures = Expando('frameCapture');
-  static final Expando<ProblemScan> _scans = Expando('problemScan');
   static final Expando<ValueNotifier<EditorHistory?>> _histories = Expando(
     'designerHistory',
   );
@@ -48,20 +47,18 @@ abstract final class BuiltInDocks {
   /// What is wrong with the open scene; one scan per editor, shared by the
   /// Problems dock, its tab badge and its readout.
   static ProblemScan problemScanOf(JustGameEditorPlugin plugin) =>
-      _scans[plugin] ??= ProblemScan(plugin.scope);
+      ProblemScan.of(plugin.scope);
 
   /// The Level Designer's undo history, or null while it is shut.
-  static ValueNotifier<EditorHistory?> _historyOf(JustGameEditorPlugin plugin) {
-    final existing = _histories[plugin];
-    if (existing != null) return existing;
-    final notifier = ValueNotifier<EditorHistory?>(
-      plugin.designer.value?.history,
-    );
-    plugin.designer.addListener(
-      () => notifier.value = plugin.designer.value?.history,
-    );
-    return _histories[plugin] = notifier;
-  }
+  /// The editor's undo stack.
+  ///
+  /// It used to follow the designer in and out of existence, so the dock
+  /// was empty whenever the designer was shut; there is one stack now and
+  /// it is always there. The notifier stays because that is what the dock
+  /// takes, and a module may yet swap one in.
+  static ValueNotifier<EditorHistory?> _historyOf(
+    JustGameEditorPlugin plugin,
+  ) => _histories[plugin] ??= ValueNotifier<EditorHistory?>(plugin.history);
 
   /// The profiler's frames: one capture per editor, fed from the debugger
   /// all the while — a spike is worth having even if the Profiler was shut.

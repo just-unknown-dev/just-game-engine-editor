@@ -3,6 +3,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
 import '../../../core/state/editor_scene_state.dart';
+import '../../../core/state/editor_view_state.dart';
 import '../tools/level_tool.dart';
 import '../tools/tool_registry.dart';
 import 'prefab_registry.dart';
@@ -58,12 +59,18 @@ class LevelDesignerController {
   LevelDesignerController({
     required this.sceneState,
     required this.history,
+    EditorViewState? view,
     ToolRegistry? tools,
     PrefabRegistry? prefabs,
     PrefabRegistry? sessionPrefabs,
-  }) : tools = tools ?? ToolRegistry(),
+  }) : view = view ?? EditorViewState(),
+       tools = tools ?? ToolRegistry(),
        prefabs = prefabs ?? PrefabRegistry(),
        sessionPrefabs = sessionPrefabs ?? PrefabRegistry();
+
+  /// What is hidden and what is locked. The scope's, so the scene tree's
+  /// eye and padlock mean the same thing with the designer shut.
+  final EditorViewState view;
 
   /// The tools [toolId] resolves against — the session's.
   final ToolRegistry tools;
@@ -204,32 +211,21 @@ class LevelDesignerController {
   /// Brush width in cells for the paint tool: 1, 3 or 5.
   final Signal<int> brushSize = Signal(1, debugLabel: 'brushSize');
 
-  /// Entities hidden in the viewport (H, or everything else under isolate).
-  /// Editor-only, like hidden layers: nothing about the entity changes.
-  final Signal<Set<jge.EntityId>> hiddenEntities = Signal(
-    <jge.EntityId>{},
-    debugLabel: 'hiddenEntities',
-  );
+  /// Entities hidden in the viewport (H, or everything else under
+  /// isolate). Editor-only, like hidden layers: nothing about the entity
+  /// changes and nothing is saved.
+  Signal<Set<jge.EntityId>> get hiddenEntities => view.hidden;
 
   /// Entities excluded from picking (L).
-  final Signal<Set<jge.EntityId>> lockedEntities = Signal(
-    <jge.EntityId>{},
-    debugLabel: 'lockedEntities',
-  );
+  Signal<Set<jge.EntityId>> get lockedEntities => view.locked;
 
   /// Hides or shows [ids].
-  void setEntitiesHidden(Iterable<jge.EntityId> ids, {required bool hidden}) {
-    final next = Set<jge.EntityId>.from(hiddenEntities.value);
-    hidden ? next.addAll(ids) : next.removeAll(ids);
-    hiddenEntities.value = next;
-  }
+  void setEntitiesHidden(Iterable<jge.EntityId> ids, {required bool hidden}) =>
+      view.setHidden(ids, hidden: hidden);
 
   /// Locks or unlocks [ids].
-  void setEntitiesLocked(Iterable<jge.EntityId> ids, {required bool locked}) {
-    final next = Set<jge.EntityId>.from(lockedEntities.value);
-    locked ? next.addAll(ids) : next.removeAll(ids);
-    lockedEntities.value = next;
-  }
+  void setEntitiesLocked(Iterable<jge.EntityId> ids, {required bool locked}) =>
+      view.setLocked(ids, locked: locked);
 
   /// Whether [entity] is drawn in the viewport while authoring — neither it
   /// nor its layer is hidden.
@@ -312,8 +308,8 @@ class LevelDesignerController {
     snapEnabled.dispose();
     smartSnap.dispose();
     brushSize.dispose();
-    hiddenEntities.dispose();
-    lockedEntities.dispose();
+    // Not the hidden and locked sets: the scope owns those, and they
+    // outlive any one designer session.
     status.dispose();
   }
 }

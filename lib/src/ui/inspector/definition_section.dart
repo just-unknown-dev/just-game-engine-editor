@@ -8,6 +8,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import '../../core/constants/editor_constants.dart';
 import '../../core/scope/editor_scope.dart';
 import '../../core/state/editor_scene_state.dart';
+import '../level_designer/state/editor_commands.dart';
 import 'component_extras.dart';
 import '../widgets/scrubbable_number_field.dart';
 import 'field_editor.dart';
@@ -358,7 +359,22 @@ class DefinitionSection extends StatelessWidget {
           if (e.isActive && e.name != null) e.name!,
       ],
       onChanged: (next) {
-        field.write?.call(component, next);
+        final write = field.write;
+        if (write == null) return;
+        // Through the history, so an inspector edit is undoable like every
+        // other edit. `ComponentFieldCommand` merges consecutive writes to
+        // the same field, which is what makes a scrub one undo step
+        // instead of one per pixel.
+        scope.history.push(
+          ComponentFieldCommand(
+            label: 'Change ${hint.label ?? field.name}',
+            component: component,
+            write: (c, v) => write(c, v),
+            before: field.read(component),
+            after: next,
+            sceneState: scope.sceneState,
+          ),
+        );
         onChanged();
       },
     );

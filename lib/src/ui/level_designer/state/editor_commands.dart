@@ -2,6 +2,7 @@ import 'package:flutter/painting.dart' show Offset;
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../../core/serialization/scene_codec.dart';
+import '../../../core/entity/hierarchy_commands.dart';
 import '../../../core/state/editor_scene_state.dart';
 import 'editor_history.dart';
 
@@ -334,10 +335,47 @@ class DeleteEntitiesCommand extends EditorCommand {
     required this.sceneState,
     required List<jge.Entity> entities,
     required SceneCodec codec,
-  }) : _specs = entities
-           .map((e) => EntitySpec.of(e, codec))
-           .toList(growable: false),
-       _ids = entities.map((e) => e.id).toList(growable: false);
+  }) {
+    // The whole subtree: deleting a card and leaving its labels behind as
+    // roots is not what anyone means by deleting the card. Captured
+    // parent-first so undo can rebuild it from the top down.
+    final ordered = <jge.Entity>[];
+    void collect(jge.Entity entity) {
+      if (ordered.any((e) => e.id == entity.id)) return;
+      ordered.add(entity);
+      final children = entity.getComponent<jge.ChildrenComponent>();
+      if (children == null) return;
+      for (final id in List.of(children.childIds)) {
+        final child = world.getEntity(id);
+        if (child != null) collect(child);
+      }
+    }
+
+    for (final entity in entities) {
+      collect(entity);
+    }
+    for (final entity in ordered) {
+      _specs.add(EntitySpec.of(entity, codec));
+      _ids.add(entity.id);
+      // By name and index, because ids are handed out again when the
+      // entities come back: what the file uses to say the same thing.
+      _slots.add(
+        _DeletedSlot(
+          parentName: _parentNameOf(entity, world),
+          index: HierarchySlot.of(
+            entity,
+            world: world,
+            sceneState: sceneState,
+          ).index,
+        ),
+      );
+    }
+  }
+
+  static String? _parentNameOf(jge.Entity entity, jge.World world) {
+    final parentId = entity.getComponent<jge.ParentComponent>()?.parentId;
+    return parentId == null ? null : world.getEntity(parentId)?.name;
+  }
 
   @override
   final String label;
@@ -348,14 +386,16 @@ class DeleteEntitiesCommand extends EditorCommand {
   /// Notified so panels refresh.
   final EditorSceneState sceneState;
 
-  final List<EntitySpec> _specs;
-  final List<jge.EntityId> _ids;
+  final List<EntitySpec> _specs = [];
+  final List<jge.EntityId> _ids = [];
+  final List<_DeletedSlot> _slots = [];
 
   @override
   void redo() {
     for (final id in _ids) {
       final entity = world.getEntity(id);
       if (entity == null) continue;
+      detachEntity(entity, world: world, sceneState: sceneState);
       sceneState.removeEntityNode(id);
       world.destroyEntity(entity);
     }
@@ -367,23 +407,56 @@ class DeleteEntitiesCommand extends EditorCommand {
 
   @override
   void undo() {
+    final restored = <jge.Entity>[];
     for (final spec in _specs) {
       final components = <jge.Component>[];
       for (final json in spec.componentsJson) {
         final component = spec.codec.decode(json);
         if (component != null) components.add(component);
       }
-      if (components.isEmpty) continue;
+      if (components.isEmpty) {
+        restored.add(jge.Entity(-1));
+        continue;
+      }
       final entity = world.createEntityWithComponents(
         components,
         name: spec.name,
       );
       sceneState.registerEntity(entity);
+      restored.add(entity);
     }
+
+    // Parents first, so a child is put back into a parent that exists.
+    // Ids are new, so the link is made from the names that were saved —
+    // the same thing a scene file records.
+    for (var i = 0; i < restored.length; i++) {
+      final entity = restored[i];
+      if (entity.id < 0) continue;
+      final slot = _slots[i];
+      final parentName = slot.parentName;
+      final parent = parentName == null
+          ? null
+          : world.findEntityByName(parentName);
+      placeEntity(
+        entity,
+        world: world,
+        sceneState: sceneState,
+        slot: HierarchySlot(parentId: parent?.id, index: slot.index),
+      );
+    }
+
     sceneState
       ..markDirty()
       ..refresh();
   }
+}
+
+/// Where a deleted entity was, in terms that survive it being destroyed.
+class _DeletedSlot {
+  const _DeletedSlot({required this.parentName, required this.index});
+
+  final String? parentName;
+  final int index;
 }
 
 /// Changes one field of one component, using the editor descriptor's own

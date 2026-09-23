@@ -50,13 +50,14 @@ class LevelDesignerSession {
     required this.onArray,
     ModifierKeys Function()? readModifiers,
     jge.Camera Function()? camera,
-  }) : history = EditorHistory(),
+  }) : history = scope.history,
        _uniqueName = uniqueName,
        _readModifiers = readModifiers ?? ModifierKeys.fromHardwareKeyboard,
        _camera = camera {
     controller = LevelDesignerController(
       sceneState: sceneState,
       history: history,
+      view: scope.view,
       tools: tools,
       prefabs: scope.prefabs,
       sessionPrefabs: sessionPrefabs,
@@ -233,7 +234,10 @@ class LevelDesignerSession {
     ]);
   }
 
-  /// Undo stack for every designer edit.
+  /// Undo for every edit, shared with the rest of the editor.
+  ///
+  /// The scope owns it, so closing the designer does not throw away what
+  /// was done in it and Ctrl+Z means the same thing everywhere.
   final EditorHistory history;
 
   /// Designer state, exposed as signals for the UI.
@@ -686,10 +690,12 @@ class LevelDesignerSession {
   void paint(Canvas canvas, Size canvasSize, jge.Camera camera) => _painter
       .paint(canvas, canvasSize, camera, world, controller, overlays.all);
 
-  /// Releases signals and drops history.
+  /// Releases what this session owns.
+  ///
+  /// Not the history: the scope owns that, and closing the designer must
+  /// not throw away what was done while it was open.
   void dispose() {
     _stopWatchingDesigner();
-    history.dispose();
     controller.dispose();
   }
 }

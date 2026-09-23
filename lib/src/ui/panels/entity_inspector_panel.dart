@@ -4,6 +4,7 @@ import 'package:just_signals/just_signals.dart';
 
 import '../dialogs/add_component_picker.dart';
 import '../../core/constants/editor_constants.dart';
+import '../../core/entity/hierarchy_commands.dart';
 import '../../core/scope/editor_scope.dart';
 import '../inspector/definition_section.dart';
 import '../../core/state/editor_scene_state.dart';
@@ -150,6 +151,8 @@ class _EntityInspector extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _EnabledRow(entity: entity, scope: scope, sceneState: sceneState),
+          const SizedBox(height: 6),
           for (int i = 0; i < sections.length; i++) ...[
             if (i > 0) const SizedBox(height: 6),
             sections[i],
@@ -158,4 +161,55 @@ class _EntityInspector extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Whether the entity is switched on — saved with the scene, and not to
+/// be confused with the tree's eye, which only hides it while building.
+class _EnabledRow extends StatelessWidget {
+  const _EnabledRow({
+    required this.entity,
+    required this.scope,
+    required this.sceneState,
+  });
+
+  final Entity entity;
+  final EditorScope scope;
+  final EditorSceneState sceneState;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
+    decoration: BoxDecoration(
+      color: EditorTheme.panelBg,
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: EditorTheme.border),
+    ),
+    child: Row(
+      children: [
+        const Expanded(
+          child: Text(
+            'Enabled',
+            style: TextStyle(color: EditorTheme.textSecondary, fontSize: 12),
+          ),
+        ),
+        Text(
+          entity.isActive ? 'in the game' : 'off in the game',
+          style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+        ),
+        const SizedBox(width: 8),
+        Switch(
+          value: entity.isActive,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          activeThumbColor: EditorTheme.primaryBright,
+          onChanged: (on) => scope.history.push(
+            SetEnabledCommand(
+              sceneState: sceneState,
+              entity: entity,
+              enabled: on,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }

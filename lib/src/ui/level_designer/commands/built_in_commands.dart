@@ -271,33 +271,35 @@ abstract final class BuiltInCommands {
       scope: CommandScope.editor,
       run: (c) => c.plugin!.entities.pasteEntity(),
     ),
+    // Undo belongs to the editor, not to whichever panel is open: the
+    // scope owns one stack and these reach it whether or not a designer
+    // session exists.
     DesignerCommand(
       id: 'editor.undo',
       label: 'Undo',
       scope: CommandScope.editor,
-      isEnabled: (c) => c.session != null,
-      run: (c) => c.session!.history.undo(),
+      isEnabled: (c) => c.scope.history.canUndo.value,
+      run: (c) => c.scope.history.undo(),
     ),
     DesignerCommand(
       id: 'editor.redo',
       label: 'Redo',
       scope: CommandScope.editor,
-      isEnabled: (c) => c.session != null,
-      run: (c) => c.session!.history.redo(),
+      isEnabled: (c) => c.scope.history.canRedo.value,
+      run: (c) => c.scope.history.redo(),
     ),
     DesignerCommand(
       id: 'editor.duplicate',
       label: 'Duplicate the selection',
       scope: CommandScope.editor,
-      isEnabled: (c) => c.session != null,
+      isEnabled: (c) => c.plugin != null,
       run: (c) => c.plugin!.duplicateSelection(),
     ),
     DesignerCommand(
       id: 'editor.delete',
       label: 'Delete the selection',
       scope: CommandScope.editor,
-      isEnabled: (c) =>
-          c.session != null && (c.plugin?.isAuthoring.value ?? true),
+      isEnabled: (c) => c.plugin != null && c.plugin!.isAuthoring.value,
       run: (c) => c.plugin!.deleteSelection(),
     ),
   ];

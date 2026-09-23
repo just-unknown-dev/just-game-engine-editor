@@ -132,18 +132,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: SceneTreePanel(
-              scope: scope,
-              sceneState: scope.sceneState,
-              world: scope.world,
-              onCreateEntity: () {},
-              onCreateGroup: () {},
-              onCreateGroupFrom: (_) {},
-              onDeleteEntity: (_) {},
-              onCopyEntity: (_) {},
-              onPasteEntity: () {},
-              onReparentEntity: (_, _) {},
-            ),
+            body: SceneTreePanel(scope: scope, entities: ops),
           ),
         ),
       );
@@ -156,41 +145,9 @@ void main() {
       expect(find.byIcon(Icons.folder_rounded), findsNothing);
     });
   });
-  group('what a drop on a row means', () {
-    // A tree row is about this tall.
-    const height = 31.0;
+  // What a drop on a row means is the scene tree's own business now:
+  // see scene_tree_drag_test.dart.
 
-    test('the body of a row means inside it', () {
-      expect(dropZoneFor(height / 2, height), DropZone.onto);
-      // Eight pixels down used to mean "between": the band was a share of
-      // the row, which left most of a row meaning something other than
-      // what it looks like it means.
-      expect(dropZoneFor(8, height), DropZone.onto);
-      expect(dropZoneFor(height - 8, height), DropZone.onto);
-    });
-
-    test('the very edges mean between', () {
-      expect(dropZoneFor(0, height), DropZone.above);
-      expect(dropZoneFor(4, height), DropZone.above);
-      expect(dropZoneFor(height, height), DropZone.below);
-      expect(dropZoneFor(height - 1, height), DropZone.below);
-    });
-
-    test('a row too short to have edges is all body', () {
-      // A third each way at most, so there is always somewhere to drop
-      // into however tight the row.
-      expect(dropZoneFor(6, 12), DropZone.onto);
-      expect(dropZoneFor(1, 12), DropZone.above);
-    });
-
-    test('most of a row means inside it', () {
-      var onto = 0;
-      for (var dy = 0.0; dy <= height; dy += 0.5) {
-        if (dropZoneFor(dy, height) == DropZone.onto) onto++;
-      }
-      expect(onto / (height / 0.5 + 1), greaterThan(0.6));
-    });
-  });
   group('a piece of interface is not in the world', () {
     test('the viewport gizmo has nothing to grab, and does not throw', () {
       ops.createUi('canvas');

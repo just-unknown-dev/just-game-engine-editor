@@ -5,6 +5,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../ui/level_designer/state/editor_commands.dart';
 import '../../ui/level_designer/state/editor_history.dart';
+import 'hierarchy_commands.dart';
 import '../scope/editor_scope.dart';
 import '../state/editor_scene_state.dart';
 import '../state/unique_namer.dart';
@@ -58,11 +59,13 @@ class EntityOps {
   /// Creates a new entity at the camera centre, adds a visible
   /// [RectangleComponent] so it immediately appears on canvas, selects it,
   /// and registers it in the authoring scene graph.
-  void createEntity() {
+  /// Makes an empty entity, at [at] in world coordinates when given — a
+  /// right click on the level means "one of these, here".
+  void createEntity({Offset? at}) {
     if (!sceneState.hasScene) return;
 
     final camera = cameraOf();
-    final spawnPos = camera.position;
+    final spawnPos = at ?? camera.position;
 
     final entity = world.createEntityWithComponents([
       TransformComponent(position: Vector3.fromOffset(spawnPos)),
@@ -187,6 +190,78 @@ class EntityOps {
     UiSlotComponent(mode: UiSlotMode.anchored, anchor: UiAnchor.stretch),
     ChildrenComponent(),
   ];
+
+  /// Renames [entity], refusing a name something else already has.
+  ///
+  /// Returns false when the name is taken, so the row can say so and keep
+  /// the box open. Names are how a scene file records who a child's parent
+  /// is, and two entities sharing one quietly breaks the hierarchy the
+  /// next time the scene is loaded.
+  bool renameEntity(Entity entity, String name) {
+    final trimmed = name.trim();
+    if (trimmed == entity.name) return true;
+    if (!RenameCommand.isAvailable(trimmed, entity, world: world)) {
+      return false;
+    }
+    scope.history.push(
+      RenameCommand(sceneState: sceneState, entity: entity, name: trimmed),
+    );
+    onChanged?.call();
+    return true;
+  }
+
+  /// Turns everything selected into one group, as an undoable step.
+  Entity? groupSelection() {
+    final targets = selectionEntities;
+    if (targets.isEmpty || !sceneState.hasScene) return null;
+
+    // Where the group goes: the middle of what it holds, so moving it
+    // afterwards turns them about something sensible.
+    var sum = Offset.zero;
+    var counted = 0;
+    for (final entity in targets) {
+      final t = entity.getComponent<TransformComponent>();
+      if (t == null) continue;
+      sum += Offset(t.position.x, t.position.y);
+      counted++;
+    }
+    final centre = counted == 0
+        ? cameraOf().position
+        : sum / counted.toDouble();
+
+    final command = GroupCommand(
+      world: world,
+      sceneState: sceneState,
+      entities: targets,
+      name: uniqueName('group'),
+      position: Vector3.fromOffset(centre),
+    );
+    scope.history.push(command);
+
+    final group = command.group;
+    sceneState.clearMultiSelection();
+    if (group != null) sceneState.selectEntity(group);
+    sceneState.refresh();
+    onChanged?.call();
+    return group;
+  }
+
+  /// Takes a group apart: its children move up to where it was, and the
+  /// empty group goes.
+  void ungroup(Entity group) {
+    final children = group.getComponent<ChildrenComponent>()?.childIds;
+    if (children == null || children.isEmpty) return;
+    scope.history.push(
+      UngroupCommand(
+        world: world,
+        sceneState: sceneState,
+        group: group,
+        codec: scope.codec,
+      ),
+    );
+    sceneState.refresh();
+    onChanged?.call();
+  }
 
   /// Entities covered by the current selection: the multi-selection when there
   /// is one, otherwise just the primary selection.
@@ -376,86 +451,110 @@ class EntityOps {
   void reorderEntity(Entity moved, Entity anchor, {required bool before}) {
     if (moved.id == anchor.id) return;
     final parentId = anchor.getComponent<ParentComponent>()?.parentId;
-    if (parentId == null) return;
-    final parent = world.getEntity(parentId);
-    final children = parent?.getComponent<ChildrenComponent>();
-    if (parent == null || children == null) return;
-    if (_isDescendantOf(parent, moved)) return;
+    final parent = parentId == null ? null : world.getEntity(parentId);
 
-    // Dropped next to a sibling it is not a sibling of yet.
-    if (moved.getComponent<ParentComponent>()?.parentId != parentId) {
-      reparentEntity(moved, parent);
-    }
+    // Where the anchor sits among the things it shares a level with.
+    final siblings = parent == null
+        ? sceneState.rootOrder(world)
+        : parent.getComponent<ChildrenComponent>()?.childIds ??
+              const <EntityId>[];
+    var at = siblings.indexOf(anchor.id);
+    if (at < 0) return;
+    if (!before) at++;
+    // Moving something that is already above the anchor shifts the target
+    // down by the gap it leaves behind.
+    final from = siblings.indexOf(moved.id);
+    if (from >= 0 && from < at) at--;
 
-    final ids = children.childIds;
-    ids.remove(moved.id);
-    final at = ids.indexOf(anchor.id);
-    if (at < 0) {
-      ids.add(moved.id);
+    final sameLevel =
+        moved.getComponent<ParentComponent>()?.parentId == parentId;
+    if (sameLevel) {
+      scope.history.push(
+        ReorderCommand(
+          label:
+              'Move ${moved.name ?? moved.id} '
+              '${before ? 'before' : 'after'} ${anchor.name ?? anchor.id}',
+          world: world,
+          sceneState: sceneState,
+          entity: moved,
+          index: at,
+        ),
+      );
     } else {
-      ids.insert(before ? at : at + 1, moved.id);
+      reparentAll([moved], parent, index: at);
     }
+    onChanged?.call();
+  }
 
-    sceneState.markDirty();
-    sceneState.refresh();
+  /// Moves [entity] one place up or down among the things it sits with.
+  void nudgeOrder(Entity entity, {required bool up}) {
+    final parentId = entity.getComponent<ParentComponent>()?.parentId;
+    final parent = parentId == null ? null : world.getEntity(parentId);
+    final siblings = parent == null
+        ? sceneState.rootOrder(world)
+        : parent.getComponent<ChildrenComponent>()?.childIds ??
+              const <EntityId>[];
+    final at = siblings.indexOf(entity.id);
+    if (at < 0) return;
+    final to = up ? at - 1 : at + 1;
+    if (to < 0 || to >= siblings.length) return;
+    scope.history.push(
+      ReorderCommand(
+        label: 'Move ${entity.name ?? entity.id} ${up ? 'up' : 'down'}',
+        world: world,
+        sceneState: sceneState,
+        entity: entity,
+        index: to,
+      ),
+    );
+    onChanged?.call();
+  }
+
+  /// Makes [child] a child of [newParent], auto-computing localOffset.
+  /// Makes [child] a child of [newParent], as one undoable step.
+  ///
+  /// [index] puts it at a place among the new parent's children; without
+  /// one it goes last.
+  void reparentEntity(Entity child, Entity newParent, {int? index}) {
+    final command = ReparentCommand(
+      label:
+          'Move ${child.name ?? child.id} into '
+          '${newParent.name ?? newParent.id}',
+      world: world,
+      sceneState: sceneState,
+      entities: [child],
+      parent: newParent,
+      index: index,
+    );
+    if (!command.isValid) return;
+    scope.history.push(command);
     onChanged?.call();
     scope.log.log(
-      'Moved ${moved.name ?? moved.id} '
-      '${before ? 'before' : 'after'} ${anchor.name ?? anchor.id}.',
+      'Reparented ${child.name ?? child.id} under '
+      '${newParent.name ?? newParent.id}.',
       source: 'editor',
       category: 'hierarchy',
       mirrorToDebugger: false,
     );
   }
 
-  /// Makes [child] a child of [newParent], auto-computing localOffset.
-  void reparentEntity(Entity child, Entity newParent) {
-    if (child.id == newParent.id) return;
-
-    // Prevent circular parenting: newParent must not be a descendant of child.
-    if (_isDescendantOf(newParent, child)) return;
-
-    // Detach from existing parent first.
-    final existing = child.getComponent<ParentComponent>();
-    if (existing?.parentId != null) {
-      final oldParent = world.getEntity(existing!.parentId!);
-      oldParent?.getComponent<ChildrenComponent>()?.removeChild(child.id);
-    }
-
-    // Compute localOffset so the child keeps its world position.
-    final childT = child.getComponent<TransformComponent>();
-    final parentT = newParent.getComponent<TransformComponent>();
-    final localOffset = (childT != null && parentT != null)
-        ? Vector3.fromXY(
-            childT.position.x - parentT.position.x,
-            childT.position.y - parentT.position.y,
-          )
-        : Vector3.zero();
-
-    // Set ParentComponent on child.
-    if (existing != null) {
-      existing.parentId = newParent.id;
-      existing.localOffset = localOffset;
-    } else {
-      child.addComponent(
-        ParentComponent(parentId: newParent.id, localOffset: localOffset),
-      );
-    }
-
-    // Ensure parent has ChildrenComponent.
-    if (!newParent.hasComponent<ChildrenComponent>()) {
-      newParent.addComponent(ChildrenComponent());
-    }
-    newParent.getComponent<ChildrenComponent>()!.addChild(child.id);
-
-    sceneState.markDirty();
-    sceneState.refresh();
-    scope.log.log(
-      'Reparented ${child.name ?? child.id} under ${newParent.name ?? newParent.id}.',
-      source: 'editor',
-      category: 'hierarchy',
-      mirrorToDebugger: false,
+  /// Moves [entities] under [parent] — or to the top level when it is
+  /// null — as one undoable step.
+  void reparentAll(List<Entity> entities, Entity? parent, {int? index}) {
+    if (entities.isEmpty) return;
+    final command = ReparentCommand(
+      label: entities.length == 1
+          ? 'Move ${entities.single.name ?? 'entity'}'
+          : 'Move ${entities.length} entities',
+      world: world,
+      sceneState: sceneState,
+      entities: entities,
+      parent: parent,
+      index: index,
     );
+    if (!command.isValid) return;
+    scope.history.push(command);
+    onChanged?.call();
   }
 
   /// Removes [child] from its parent, making it a root entity.
@@ -478,15 +577,6 @@ class EntityOps {
     );
   }
 
-  bool _isDescendantOf(Entity candidate, Entity ancestor) {
-    final pc = candidate.getComponent<ParentComponent>();
-    if (pc?.parentId == null) return false;
-    if (pc!.parentId == ancestor.id) return true;
-    final parent = world.getEntity(pc.parentId!);
-    if (parent == null) return false;
-    return _isDescendantOf(parent, ancestor);
-  }
-
   /// Copies [entity]'s components to the clipboard as serialised JSON.
   void copyEntity(Entity entity) {
     final components = entity.components
@@ -503,7 +593,7 @@ class EntityOps {
   }
 
   /// Spawns a new entity from the clipboard, offset from the camera centre.
-  void pasteEntity() {
+  void pasteEntity({Offset? at}) {
     if (!sceneState.hasClipboard) return;
 
     final components = (sceneState.clipboard.value ?? [])
@@ -511,7 +601,7 @@ class EntityOps {
         .whereType<Component>()
         .toList();
 
-    final pastePosOffset = cameraOf().position + const Offset(30, 30);
+    final pastePosOffset = at ?? cameraOf().position + const Offset(30, 30);
     final pastePos = Vector3.fromOffset(pastePosOffset);
 
     final transform = components.whereType<TransformComponent>().firstOrNull;

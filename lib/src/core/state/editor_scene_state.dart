@@ -61,6 +61,14 @@ class EditorSceneState {
 
   final Map<EntityId, SceneNode> _entityNodeMap = {};
 
+  /// What order the scene's top-level entities are in.
+  ///
+  /// The world keeps no order, so without this the roots listed and saved
+  /// in whatever order they happened to be created and could not be
+  /// rearranged. Read through [rootOrder], which drops anything that has
+  /// since been destroyed or given a parent.
+  final List<EntityId> _rootOrder = [];
+
   // Mirrors multiSelectedIds so toggleMultiSelect can promote a new primary
   // Entity object (not just an id) when the current primary is deselected.
   final Map<EntityId, Entity> _multiSelectedEntities = {};
@@ -85,9 +93,16 @@ class EditorSceneState {
   // ── Scene lifecycle ──────────────────────────────────────────────────────
 
   /// Open [scene] and link entity IDs to scene nodes via [entityNodeMap].
-  void openScene(Scene scene, Map<EntityId, SceneNode> entityNodeMap) {
+  void openScene(
+    Scene scene,
+    Map<EntityId, SceneNode> entityNodeMap, {
+    List<EntityId> rootOrder = const [],
+  }) {
     batch(() {
       activeScene.value = scene;
+      _rootOrder
+        ..clear()
+        ..addAll(rootOrder);
       _entityNodeMap
         ..clear()
         ..addAll(entityNodeMap);
@@ -104,6 +119,7 @@ class EditorSceneState {
   void closeScene() {
     batch(() {
       activeScene.value = null;
+      _rootOrder.clear();
       _entityNodeMap.clear();
       selectedEntity.value = null;
       selectedNode.value = null;
@@ -202,6 +218,36 @@ class EditorSceneState {
   }
 
   // ── Dirty flag ───────────────────────────────────────────────────────────
+
+  /// The scene's top-level entities, in the order they are shown and
+  /// saved. [world] is asked which of them are still roots.
+  List<EntityId> rootOrder(World world) {
+    final live = <EntityId>[];
+    for (final id in _rootOrder) {
+      final entity = world.getEntity(id);
+      if (entity == null || !entity.isActive) continue;
+      if (entity.getComponent<ParentComponent>()?.parentId != null) continue;
+      live.add(id);
+    }
+    // Anything the editor never saw created — a scene loaded around it, a
+    // system's own entity — goes last rather than being left out.
+    for (final entity in world.entities) {
+      if (!entity.isActive) continue;
+      if (entity.getComponent<ParentComponent>()?.parentId != null) continue;
+      if (!live.contains(entity.id)) live.add(entity.id);
+    }
+    return live;
+  }
+
+  /// Puts [id] at [index] among the roots. Used by the reorder command.
+  void moveRoot(EntityId id, int index) {
+    _rootOrder.remove(id);
+    _rootOrder.insert(index.clamp(0, _rootOrder.length), id);
+    _edited();
+  }
+
+  /// Where [id] sits among the roots, or -1.
+  int rootIndexOf(EntityId id) => _rootOrder.indexOf(id);
 
   void markDirty() => isDirty.value = true;
 
@@ -397,6 +443,13 @@ class EditorSceneState {
   /// adds it as a child of [scene.root].
   void registerEntity(Entity entity) {
     if (!hasScene) return;
+    // A new entity is the last root until something parents it. The world
+    // has no order of its own, so this is the only record of what order
+    // the top level is in, and it is what the scene file is written in.
+    if (entity.getComponent<ParentComponent>()?.parentId == null &&
+        !_rootOrder.contains(entity.id)) {
+      _rootOrder.add(entity.id);
+    }
     if (_entityNodeMap.containsKey(entity.id)) return;
 
     final transform = entity.getComponent<TransformComponent>();
@@ -416,6 +469,7 @@ class EditorSceneState {
   /// entity. Clears selection and marks the scene dirty.
   void removeEntityNode(EntityId id) {
     batch(() {
+      _rootOrder.remove(id);
       final node = _entityNodeMap.remove(id);
       if (node != null) activeScene.value?.removeNode(node);
       _multiSelectedEntities.remove(id);

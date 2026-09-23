@@ -25,6 +25,7 @@ import '../../ui/level_designer/commands/designer_command.dart';
 import '../../ui/level_designer/level_designer_session.dart';
 import '../../ui/level_designer/state/editor_history.dart';
 import '../../ui/level_designer/ui_mode/ui_mode_session.dart';
+import '../../ui/level_designer/ui_mode/ui_workspace.dart';
 import '../../ui/level_designer/tools/tool_registry.dart';
 import '../../extension/editor_module.dart';
 import '../../ui/overlay/camera_rig_painter.dart';
@@ -242,14 +243,9 @@ class JustGameEditorPlugin implements EnginePlugin {
     sceneState: sceneState,
   );
 
-  /// Create, delete, group, re-parent and clipboard operations.
-  late final EntityOps entities = EntityOps(
-    scope: scope,
-    world: () => engine.world,
-    sceneState: sceneState,
-    camera: () => engine.cameraSystem.mainCamera,
-    onChanged: sceneState.refresh,
-  );
+  /// Create, delete, group, re-parent and clipboard operations — the
+  /// scope's, shared with the windows that open over the editor.
+  EntityOps get entities => scope.entities;
 
   /// Pointer handling for the game canvas: gizmos, pan, zoom, designer tools.
   late final ViewportInput viewport = ViewportInput(
@@ -402,10 +398,11 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// It needs no Level Designer — a HUD is built from the scene tree and
   /// the inspector — so it keeps an undo stack of its own for the drags
   /// made in it.
-  late final UiModeSession uiMode = UiModeSession(world: () => engine.world);
+  UiModeSession get uiMode => scope.uiMode;
 
-  /// Undo for edits made by dragging in the UI mode.
-  final EditorHistory uiHistory = EditorHistory();
+  /// Undo for everything the editor does. The scope owns it; this is the
+  /// name the rest of the editor reaches it by.
+  EditorHistory get history => scope.history;
 
   /// The Level Designer session, created lazily the first time the designer is
   /// opened on a scene.
@@ -609,18 +606,15 @@ class JustGameEditorPlugin implements EnginePlugin {
       ..markDirty()
       ..refresh()
       ..selectEntity(entity);
-    final session = designer.value;
-    if (session != null) {
-      session.history.pushApplied(
-        CreateEntitiesCommand.adopting(
-          label: 'Place $stem',
-          world: engine.world,
-          sceneState: sceneState,
-          entities: [entity],
-          codec: scope.codec,
-        ),
-      );
-    }
+    history.pushApplied(
+      CreateEntitiesCommand.adopting(
+        label: 'Place $stem',
+        world: engine.world,
+        sceneState: sceneState,
+        entities: [entity],
+        codec: scope.codec,
+      ),
+    );
     logService.log('Placed $stem from $path.', source: 'assets');
     return entity;
   }
@@ -1089,28 +1083,45 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// Entities covered by the current selection.
   List<Entity> get selectionEntities => entities.selectionEntities;
 
-  /// Deletes everything selected, as one undoable action.
-  void deleteSelection() {
-    final history = designer.value?.history;
-    if (history != null) entities.deleteSelection(history);
+  /// Puts the viewport on [entity] — what double-clicking a row in the
+  /// scene tree does.
+  ///
+  /// A piece of interface is nowhere in the world, so for one of those the
+  /// interface editor opens instead, where it *is* somewhere. A HUD is
+  /// the door to it: a canvas sits in the world and has a transform, but
+  /// putting the camera on it would show nothing worth seeing.
+  void focusOn(Entity entity) {
+    if (entity.getComponent<UiCanvasComponent>() != null) {
+      scope.openWorkspace(BuiltInWorkspaces.ui);
+      sceneState.selectEntity(entity);
+      return;
+    }
+    final transform = entity.getComponent<TransformComponent>();
+    if (transform == null) {
+      if (entity.getComponent<UiSlotComponent>() != null) {
+        scope.openWorkspace(BuiltInWorkspaces.ui);
+      }
+      sceneState.selectEntity(entity);
+      return;
+    }
+    engine.cameraSystem.mainCamera.position = Offset(
+      transform.position.x,
+      transform.position.y,
+    );
+    sceneState.selectEntity(entity);
   }
+
+  /// Deletes everything selected, as one undoable action.
+  void deleteSelection() => entities.deleteSelection(history);
 
   /// Duplicates everything selected, offset by one grid cell so the copies
   /// are visible rather than hidden exactly behind the originals.
-  void duplicateSelection() {
-    final history = designer.value?.history;
-    if (history != null) {
+  void duplicateSelection() =>
       entities.duplicateSelection(history, gridSize: gridSize.value);
-    }
-  }
 
   /// Repeats the selection [count] times, each copy [step] further along.
-  void arraySelection({required int count, required Offset step}) {
-    final history = designer.value?.history;
-    if (history != null) {
+  void arraySelection({required int count, required Offset step}) =>
       entities.arraySelection(history, count: count, step: step);
-    }
-  }
 
   /// Opens [sceneName] through [sceneIO], closing the Level Designer first:
   /// its undo commands hold entities of the scene being left, and it reopens

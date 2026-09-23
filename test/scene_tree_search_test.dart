@@ -3,11 +3,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
+import 'support/test_scope.dart';
+
 void main() {
+  setUpAll(registerCoreCodecs);
+
   testWidgets('search filters by name and by component type', (tester) async {
-    final world = World()..initialize();
-    addTearDown(world.dispose);
-    world
+    final scope = testScope();
+    scope.sceneState.openScene(Scene(name: 'level'), const {});
+    final ops = EntityOps(
+      scope: scope,
+      world: () => scope.world,
+      sceneState: scope.sceneState,
+      camera: Camera.new,
+    );
+    scope.world
       ..createEntityWithComponents([
         TransformComponent(),
         SpawnComponent(),
@@ -21,17 +31,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SceneTreePanel(
-            sceneState: EditorSceneState(),
-            world: world,
-            onCreateEntity: () {},
-            onCreateGroup: () {},
-            onCreateGroupFrom: (_) {},
-            onDeleteEntity: (_) {},
-            onCopyEntity: (_) {},
-            onPasteEntity: () {},
-            onReparentEntity: (_, _) {},
-          ),
+          body: SceneTreePanel(scope: scope, entities: ops),
         ),
       ),
     );

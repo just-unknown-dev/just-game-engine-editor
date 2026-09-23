@@ -152,6 +152,22 @@ void main() {
       expect(c.activeDock, 'a');
     });
 
+    test('the panel is collapsed on a fresh start', () {
+      // Nothing saved at all: no dock, and the status strip is all that
+      // is at the foot of the editor.
+      final fresh = DockController()..attach(saved: '', store: (_) {});
+      addTearDown(fresh.dispose);
+      fresh.reconcile([_dock('a'), _dock('b')]);
+
+      expect(fresh.activeDock, isNull);
+      expect(fresh.panelHeight(600), 0);
+
+      // And F2 opens one, which is when the panel takes any room.
+      fresh.togglePanel();
+      expect(fresh.activeDock, 'a');
+      expect(fresh.panelHeight(600), greaterThan(0));
+    });
+
     test('everything survives a restart', () {
       String? stored;
       c
@@ -169,6 +185,12 @@ void main() {
       final next = DockController()..attach(saved: stored!, store: (_) {});
       addTearDown(next.dispose);
       next.reconcile([_dock('a'), _dock('b')]);
+      // The panel opens collapsed, whatever was showing when the editor
+      // was last shut: the level is what an editor opens on.
+      expect(next.activeDock, isNull);
+      // But it remembers which dock it was, so F2 brings that one back
+      // rather than whichever happens to be first.
+      next.togglePanel();
       expect(next.activeDock, 'b');
       expect(next.order.value, ['b'], reason: 'a stays unpinned');
       expect(next.heightOf('b', fallback: 280), 320);

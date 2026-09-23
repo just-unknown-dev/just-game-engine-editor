@@ -73,11 +73,11 @@ class SceneIO {
 
   Future<void> _open(String sceneName) async {
     // Destroy any entities left over from a previously open scene.
-    for (final e
-        in world
-            .query([TransformComponent])
-            .where((e) => e.isActive)
-            .toList()) {
+    //
+    // Whatever a scene would have *saved*, which is more than the things
+    // with a transform: a HUD left behind by the last level would have
+    // piled up on top of this one's.
+    for (final e in authored(world)) {
       world.destroyEntity(e);
     }
 
@@ -114,15 +114,25 @@ class SceneIO {
             .whereType<Component>()
             .toList();
         if (components.isNotEmpty) {
-          world.createEntityWithComponents(components, name: entityName);
+          final made = world.createEntityWithComponents(
+            components,
+            name: entityName,
+          );
+          // Saved switched off: it is in the scene and listed in the
+          // tree, and the game will not run it.
+          if (entityData['enabled'] == false) made.isActive = false;
         }
       }
 
       // Second pass: re-link parent-child relationships by name.
+      //
+      // Every entity, not only the ones with a transform: a piece of
+      // interface has none, and building this map from a transform query
+      // silently dropped every HUD and menu link — the tree showed a
+      // canvas's children as though they were roots.
       final nameToEntity = <String?, Entity>{
-        for (final e
-            in world.query([TransformComponent]).where((e) => e.isActive))
-          e.name: e,
+        for (final e in world.entities)
+          if (e.isAlive) e.name: e,
       };
       for (final item in entityList) {
         final entityData = item as Map<String, dynamic>;
@@ -131,7 +141,14 @@ class SceneIO {
         final childEntity = nameToEntity[entityData['name'] as String?];
         final parentEntity = nameToEntity[parentName];
         if (childEntity == null || parentEntity == null) continue;
-        childEntity.getComponent<ParentComponent>()?.parentId = parentEntity.id;
+        // Both ends of the link, and both made where a file leaves one
+        // out — the same rule `SceneLoader` follows.
+        final existing = childEntity.getComponent<ParentComponent>();
+        if (existing != null) {
+          existing.parentId = parentEntity.id;
+        } else {
+          childEntity.addComponent(ParentComponent(parentId: parentEntity.id));
+        }
         if (!parentEntity.hasComponent<ChildrenComponent>()) {
           parentEntity.addComponent(ChildrenComponent());
         }
@@ -161,7 +178,18 @@ class SceneIO {
       nodeMap[entity.id] = node;
     }
 
-    sceneState.openScene(scene, nodeMap);
+    // The file's order is the record of what order the roots are in: the
+    // loader creates them in the order they are written.
+    sceneState.openScene(
+      scene,
+      nodeMap,
+      rootOrder: [
+        for (final entity in world.entities)
+          if (entity.isActive &&
+              entity.getComponent<ParentComponent>()?.parentId == null)
+            entity.id,
+      ],
+    );
     scope.modules.notifySceneOpened(sceneName);
     scope.log.log(
       'Opened scene $sceneName with ${nodeMap.length} linked entities.',
@@ -186,7 +214,10 @@ class SceneIO {
       encoded = snapshot;
     } else {
       final entities = authored(world);
-      encoded = scope.codec.encodeEntities(entities);
+      encoded = scope.codec.encodeEntities(
+        entities,
+        rootOrder: sceneState.rootOrder(world),
+      );
     }
     await scope.scenes.writeSceneJson(
       scene.name,

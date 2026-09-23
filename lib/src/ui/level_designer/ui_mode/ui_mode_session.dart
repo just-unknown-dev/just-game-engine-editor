@@ -40,6 +40,56 @@ class UiModeSession {
   /// Whether a drag lands on a sibling's edge or the middle of the parent.
   final Signal<bool> snap = Signal(true, debugLabel: 'uiSnap');
 
+  /// How large the screen is drawn, as a share of its design size.
+  ///
+  /// Zero means *fit*: as large as the window will take, which is where it
+  /// starts and where Ctrl+0 puts it back.
+  final Signal<double> zoom = Signal(0, debugLabel: 'uiZoom');
+
+  /// How far the screen has been pushed from the middle of the view.
+  final Signal<Offset> pan = Signal(Offset.zero, debugLabel: 'uiPan');
+
+  /// As small and as large as the wheel will take it.
+  static const double minZoom = 0.1;
+  static const double maxZoom = 8;
+
+  /// The sizes the buttons and the menu step through.
+  static const List<double> zoomStops = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
+
+  /// What *fit* worked out to last time the frame was laid out — what a
+  /// step in or out is measured from while fitting.
+  double fittedZoom = 1;
+
+  /// Whether the screen is being sized to the window rather than to a
+  /// number the author picked.
+  bool get isFitted => zoom.value <= 0;
+
+  /// The size it is actually drawn at, fitted or not.
+  double get shownZoom => isFitted ? fittedZoom : zoom.value;
+
+  void zoomToFit() {
+    pan.value = Offset.zero;
+    zoom.value = 0;
+  }
+
+  /// The next size up (or down, for a negative [steps]) from whatever is
+  /// on screen now — so the first step away from *fit* is a step from
+  /// what the eye is already looking at.
+  void zoomBy(int steps) {
+    final from = shownZoom;
+    if (steps > 0) {
+      zoom.value = zoomStops.firstWhere(
+        (stop) => stop > from + 0.001,
+        orElse: () => zoomStops.last,
+      );
+    } else {
+      zoom.value = zoomStops.lastWhere(
+        (stop) => stop < from - 0.001,
+        orElse: () => zoomStops.first,
+      );
+    }
+  }
+
   /// Where each node landed, filled in by the layer as it builds.
   final Map<int, GlobalKey> nodeKeys = {};
 
@@ -54,6 +104,8 @@ class UiModeSession {
     landscape.dispose();
     showBoxes.dispose();
     snap.dispose();
+    zoom.dispose();
+    pan.dispose();
   }
 
   /// Where [entity] is on screen, or null when it is not drawn.

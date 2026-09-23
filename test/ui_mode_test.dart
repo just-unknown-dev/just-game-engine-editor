@@ -1,5 +1,6 @@
-// The viewport's UI mode: a device frame with the real interface in it,
-// picked and dragged with the editor's own handles.
+// The interface editor: a device frame with the real interface in it,
+// picked and dragged with the editor's own handles — opened as a
+// workspace, in a dialog over the editor, as the sprite editor is.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -65,6 +66,12 @@ void main() {
     );
     await tester.pump();
   }
+
+  /// How many screen pixels one design pixel is drawn as. The frame fills
+  /// the space it is given, so a drag has to be measured, not assumed.
+  double scaleOf(WidgetTester tester) =>
+      tester.getSize(find.byType(FittedBox).first).width /
+      session.frameSize.width;
 
   setUp(() {
     scope = testScope();
@@ -137,10 +144,7 @@ void main() {
       await tester.pump();
 
       expect(scope.sceneState.selectedEntity.value?.id, scene.second.id);
-      expect(
-        scope.sceneState.selectedEntity.value?.id,
-        isNot(scene.canvas.id),
-      );
+      expect(scope.sceneState.selectedEntity.value?.id, isNot(scene.canvas.id));
     });
   });
 
@@ -154,12 +158,13 @@ void main() {
       final slot = scene.first.getComponent<UiSlotComponent>()!;
       expect(slot.offset, const Offset(20, 20));
 
+      final scale = scaleOf(tester);
       final from = _centreOf(tester, 'Coins');
       final gesture = await tester.startGesture(from);
       await tester.pump();
-      await gesture.moveBy(const Offset(30, 0));
+      await gesture.moveBy(Offset(30 * scale, 0));
       await tester.pump();
-      await gesture.moveBy(const Offset(30, 0));
+      await gesture.moveBy(Offset(30 * scale, 0));
       await tester.pump();
       await gesture.up();
       await tester.pump();
@@ -185,7 +190,7 @@ void main() {
       // enough that it should land exactly on it.
       final gesture = await tester.startGesture(_centreOf(tester, 'Coins'));
       await tester.pump();
-      await gesture.moveBy(const Offset(177, 0));
+      await gesture.moveBy(Offset(177 * scaleOf(tester), 0));
       await tester.pump();
       await gesture.up();
       await tester.pump();
@@ -193,9 +198,7 @@ void main() {
       expect(slot.offset.dx, closeTo(200, 0.5));
     });
 
-    testWidgets('nothing moves when the drag began on nothing', (
-      tester,
-    ) async {
+    testWidgets('nothing moves when the drag began on nothing', (tester) async {
       final scene = buildScene();
       await pumpMode(tester);
       final slot = scene.first.getComponent<UiSlotComponent>()!;
@@ -267,6 +270,39 @@ void main() {
         expect(device.width, greaterThan(0));
         expect(device.height, greaterThan(0));
       }
+    });
+  });
+  group('opened as a workspace', () {
+    test("the interface editor is the editor's own, in a dialog", () {
+      final scope = testScope();
+      final ui = scope.workspaces.firstWhere(
+        (w) => w.id == BuiltInWorkspaces.ui,
+      );
+
+      // A dialog over the editor rather than a frame drawn over the
+      // viewport: editing a HUD is its own job, and it wants the screen.
+      expect(ui.presentation, WorkspacePresentation.dialog);
+      expect(ui.label, 'Interface');
+    });
+
+    test('the flag the buttons read follows the workspace', () {
+      final scope = testScope();
+      expect(scope.uiMode.enabled.value, isFalse);
+
+      expect(scope.openWorkspace(BuiltInWorkspaces.ui), isTrue);
+      expect(scope.activeWorkspace.value!.definition.id, BuiltInWorkspaces.ui);
+      expect(scope.uiMode.enabled.value, isTrue);
+
+      // Closed from anywhere — the dialog's own chrome included — and the
+      // toolbar button goes dark with it.
+      scope.closeWorkspace();
+      expect(scope.activeWorkspace.value, isNull);
+      expect(scope.uiMode.enabled.value, isFalse);
+    });
+
+    test('the session lives on the scope, so one is shared', () {
+      final scope = testScope();
+      expect(identical(scope.uiMode, scope.uiMode), isTrue);
     });
   });
 }

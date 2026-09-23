@@ -1,7 +1,6 @@
 // Motion paths: where the open timeline takes things, and dragging a key's
 // dot in the viewport.
 
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';

@@ -200,6 +200,11 @@ abstract class EditorModule {
   /// Things drawn at the end of scene-tree rows.
   List<SceneTreeRowDecoration> get rowDecorations => const [];
 
+  /// Icons for the kinds of entity this module's game is made of — a
+  /// coin, a hazard, a checkpoint. Asked in [EntityIcon.order], and the
+  /// first non-null answer is the one drawn.
+  List<EntityIcon> get entityIcons => const [];
+
   /// Which entities the scene tree must not delete, beyond the camera.
   EntityProtectionRule? get protectionRule => null;
 

@@ -29,15 +29,25 @@ class SceneCodec {
 
   /// Encodes [entities] the way a scene file stores them.
   ///
-  /// Inactive entities are skipped, and so are components with no
-  /// definition — runtime-only state such as a physics body handle.
-  List<Map<String, dynamic>> encodeEntities(List<Entity> entities) {
-    final active = _inTreeOrder(entities.where((e) => e.isActive).toList());
+  /// Destroyed entities are gone from the world already; a switched-off
+  /// one is saved with `enabled: false`, because being off is part of
+  /// the scene. Components with no definition are skipped — runtime-only
+  /// state such as a physics body handle.
+  List<Map<String, dynamic>> encodeEntities(
+    List<Entity> entities, {
+    List<EntityId>? rootOrder,
+  }) {
+    final active = _inTreeOrder(
+      entities.where((e) => e.isAlive).toList(),
+      rootOrder: rootOrder,
+    );
     final names = {for (final e in active) e.id: e.name ?? 'entity_${e.id}'};
     return [
       for (final e in active)
         {
           'name': e.name,
+          // Left out when it is on, which is nearly always.
+          if (!e.isActive) 'enabled': false,
           'parentName': switch (e.getComponent<ParentComponent>()?.parentId) {
             final id? => names[id],
             null => null,
@@ -57,7 +67,10 @@ class SceneCodec {
   /// rebuilds each `ChildrenComponent` by walking the file. So a row whose
   /// buttons were dragged into a new order keeps it by being written in
   /// it.
-  static List<Entity> _inTreeOrder(List<Entity> entities) {
+  static List<Entity> _inTreeOrder(
+    List<Entity> entities, {
+    List<EntityId>? rootOrder,
+  }) {
     final byId = {for (final e in entities) e.id: e};
     final out = <Entity>[];
     final placed = <EntityId>{};
@@ -73,6 +86,14 @@ class SceneCodec {
       }
     }
 
+    // The roots in the order the editor holds them, so rearranging the top
+    // level is a real edit and not a redraw.
+    for (final id in rootOrder ?? const <EntityId>[]) {
+      final entity = byId[id];
+      if (entity == null) continue;
+      final parentId = entity.getComponent<ParentComponent>()?.parentId;
+      if (parentId == null || !byId.containsKey(parentId)) walk(entity);
+    }
     for (final entity in entities) {
       final parentId = entity.getComponent<ParentComponent>()?.parentId;
       // A root, or a child whose parent is not being saved.

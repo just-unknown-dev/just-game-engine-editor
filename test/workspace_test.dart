@@ -64,7 +64,12 @@ class _PaintModule extends EditorModule {
 void main() {
   test('a module lists workspaces; a file opens in the one that fits best', () {
     final scope = testScope(modules: [_PaintModule()]);
-    expect([for (final w in scope.workspaces) w.id], ['paint', 'graph']);
+    // The interface editor is the editor's own workspace and is always
+    // there; the module's come after it.
+    expect(
+      [for (final w in scope.workspaces) w.id],
+      [BuiltInWorkspaces.ui, 'paint', 'graph'],
+    );
     expect(scope.activeWorkspace.value, isNull);
 
     expect(scope.openInWorkspace('assets/sprites/hero.PNG'), isTrue);
@@ -91,7 +96,11 @@ void main() {
     scope.openWorkspace('paint');
     scope.modules.unregister(module.id);
     scope.reload();
-    expect(scope.workspaces, isEmpty);
+    expect(
+      [for (final w in scope.workspaces) w.id],
+      [BuiltInWorkspaces.ui],
+      reason: "only the editor's own is left",
+    );
     expect(scope.activeWorkspace.value, isNull);
   });
 

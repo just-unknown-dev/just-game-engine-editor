@@ -6,7 +6,7 @@ import 'package:just_signals/just_signals.dart';
 
 import '../../panels/entity_inspector_panel.dart';
 import '../../panels/scene_picker_panel.dart';
-import '../../panels/scene_tree_panel.dart';
+import '../../scene_tree/scene_tree_panel.dart';
 import '../../../core/constants/editor_constants.dart';
 import '../../../core/plugin/editor_plugin.dart';
 import '../docks/logs_dock.dart';
@@ -403,51 +403,26 @@ class _SaveButton extends StatelessWidget {
   }
 }
 
-/// The scene tree, with per-entity hide and lock while the Level Designer is
-/// open — rebuilt whenever either changes, so the row icons stay current.
+/// The scene tree. Hide and lock are the scope's, so the eye and the
+/// padlock work whether or not the Level Designer is open.
 Widget _sceneTree(JustGameEditorPlugin plugin) {
-  Widget tree(EntityViewToggles? toggles, {bool uiMode = false}) =>
-      SceneTreePanel(
-        scope: plugin.scope,
-        sceneState: plugin.sceneState,
-        world: plugin.engine.world,
-        viewToggles: toggles,
-        onCreateEntity: plugin.entities.createEntity,
-        onCreateGroup: plugin.entities.createGroup,
-        onCreateGroupFrom: (entity) =>
-            plugin.entities.createGroup(children: [entity]),
-        onDeleteEntity: plugin.entities.deleteEntity,
-        onCopyEntity: plugin.entities.copyEntity,
-        onPasteEntity: plugin.entities.pasteEntity,
-        onReparentEntity: plugin.entities.reparentEntity,
-        onCreateUi: plugin.entities.createUi,
-        onReorderEntity: plugin.entities.reorderEntity,
-        onToggleUiMode: (on) => plugin.uiMode.enabled.value = on,
-        uiModeOn: uiMode,
-      );
-
-  final designer = plugin.designer.value;
-  if (designer == null) {
-    return SignalBuilder<bool>(
-      signal: plugin.uiMode.enabled,
-      builder: (context, uiMode, _) => tree(null, uiMode: uiMode),
-    );
-  }
-  final c = designer.controller;
-  return SignalBuilder3<Set<EntityId>, Set<EntityId>, bool>(
-    signal1: c.hiddenEntities,
-    signal2: c.lockedEntities,
-    signal3: plugin.uiMode.enabled,
-    builder: (context, hidden, locked, uiMode, _) => tree(
-      uiMode: uiMode,
-      EntityViewToggles(
-        isHidden: (e) => hidden.contains(e.id),
-        isLocked: (e) => locked.contains(e.id),
-        onToggleHidden: (e) =>
-            c.setEntitiesHidden([e.id], hidden: !hidden.contains(e.id)),
-        onToggleLocked: (e) =>
-            c.setEntitiesLocked([e.id], locked: !locked.contains(e.id)),
-      ),
+  final view = plugin.scope.view;
+  return SignalBuilder3<Set<EntityId>, Set<EntityId>, EditorPlayState>(
+    signal1: view.hidden,
+    signal2: view.locked,
+    // While the game runs, what it spawned is listed apart from what the
+    // scene says — and the divider has to appear the moment play starts.
+    signal3: plugin.playController.state,
+    builder: (context, hidden, locked, play, _) => SceneTreePanel(
+      scope: plugin.scope,
+      entities: plugin.entities,
+      onFocusEntity: plugin.focusOn,
+      onCreateUi: plugin.entities.createUi,
+      authored: plugin.playController.snapshot?.existing,
+      isHidden: (e) => hidden.contains(e.id),
+      isLocked: (e) => locked.contains(e.id),
+      onToggleHidden: (e) => view.toggleHidden(e.id),
+      onToggleLocked: (e) => view.toggleLocked(e.id),
     ),
   );
 }

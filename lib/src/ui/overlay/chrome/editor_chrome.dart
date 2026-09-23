@@ -225,25 +225,9 @@ class FullEditorChrome extends StatelessWidget {
                 ),
               ),
             ],
-            // The UI mode takes the viewport: the world is still running
-            // underneath, but what is being worked on is the interface, on
-            // a device frame, drawn by the very widgets the game uses.
-            Positioned(
-              top: 0,
-              left: 0,
-              bottom: docksHeight,
-              right: panelWidth,
-              child: SignalBuilder<bool>(
-                signal: plugin.uiMode.enabled,
-                builder: (context, on, _) => on
-                    ? UiModeOverlay(
-                        session: plugin.uiMode,
-                        sceneState: plugin.sceneState,
-                        history: plugin.uiHistory,
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ),
+            // The interface editor is a workspace now — a dialog over the
+            // editor, like the sprite editor — so nothing of it is mounted
+            // here over the viewport.
             // The docks are there while designing too — above the designer's
             // own status bar — so assets, the console and the timeline are at
             // hand exactly when a level is being built.

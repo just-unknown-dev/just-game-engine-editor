@@ -351,7 +351,7 @@ abstract final class BuiltInValidators {
     final knownWidgets = {for (final w in jge.UiWidgets.all) w.id};
 
     for (final entity in world.entities) {
-      if (!entity.isActive) continue;
+      if (!entity.isAlive) continue;
       final canvas = entity.getComponent<jge.UiCanvasComponent>();
       final slot = entity.getComponent<jge.UiSlotComponent>();
       // World-space text and buttons are interface too: what they do and
@@ -480,6 +480,21 @@ abstract final class BuiltInValidators {
               message:
                   '$name focuses "${canvas.initialFocus}" when it opens, '
                   'which is not a control under it.',
+            ),
+          );
+        } else if (focusable.any(
+          (e) => e.name == canvas.initialFocus && !e.isActive,
+        )) {
+          // Switched off in the scene: the screen opens with the focus
+          // on something the game never builds.
+          out.add(
+            SceneProblem(
+              entity: entity,
+              severity: ProblemSeverity.error,
+              message:
+                  '$name focuses "${canvas.initialFocus}" when it opens, '
+                  'which is switched off.',
+              hint: 'Switch it back on, or focus something else.',
             ),
           );
         }

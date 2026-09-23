@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:just_signals/just_signals.dart';
@@ -9,6 +10,7 @@ import '../../core/scope/editor_scope.dart';
 import '../../core/theme/theme_controller.dart';
 import 'chrome/editor_chrome.dart';
 import 'settings/overlay_ui_settings.dart';
+import 'viewport_menu.dart';
 import 'shared/snackbar.dart';
 
 // ─ Frame-safe overlay settings watcher ────────────────────────────────────
@@ -277,6 +279,19 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
     });
   }
 
+  /// The right-click menu, on whatever the pointer is over.
+  void _openMenu(BuildContext context, PointerDownEvent event) {
+    final plugin = widget.plugin;
+    if (plugin.playController.isRunning || !plugin.isVisible.value) return;
+    showViewportMenu(
+      context,
+      plugin,
+      entity: plugin.viewport.entityAt(event.localPosition),
+      globalPosition: event.position,
+      worldPoint: plugin.viewport.worldPointAt(event.localPosition),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -291,6 +306,9 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
               widget.plugin.focusGame();
             }
             widget.plugin.viewport.onPointerDown(event);
+            if ((event.buttons & kSecondaryButton) != 0) {
+              _openMenu(context, event);
+            }
           },
           onPointerMove: widget.plugin.viewport.onPointerMove,
           onPointerUp: widget.plugin.viewport.onPointerUp,

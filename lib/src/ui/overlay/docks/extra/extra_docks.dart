@@ -18,6 +18,13 @@ import '../shared/dock_widgets.dart';
 class ProblemScan {
   ProblemScan(this.scope);
 
+  static final Expando<ProblemScan> _byScope = Expando('problemScan');
+
+  /// The scan for [scope] — the same one wherever it is asked for, so a
+  /// scene is not checked once per thing that wants the answer.
+  static ProblemScan of(EditorScope scope) =>
+      _byScope[scope] ??= ProblemScan(scope);
+
   final EditorScope scope;
   List<SceneProblem> _problems = const [];
   DateTime? _at;

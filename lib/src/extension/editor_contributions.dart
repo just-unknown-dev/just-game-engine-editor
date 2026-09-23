@@ -300,6 +300,23 @@ class SceneTreeRowDecoration {
   final Widget? Function(BuildContext context, jge.Entity entity) build;
 }
 
+/// An icon for an entity in the scene tree, when a module knows better
+/// than the generic one.
+///
+/// The editor knows about interface and about parents and children; what
+/// a *coin* or a *hazard* looks like is a game's own business, which is
+/// why this is a hook and not a switch in here. The first one to answer
+/// wins, lowest [order] asked first.
+class EntityIcon {
+  const EntityIcon({required this.id, required this.of, this.order = 100});
+
+  final String id;
+  final int order;
+
+  /// The icon for [entity], or null to leave it to the next one.
+  final IconData? Function(jge.Entity entity) of;
+}
+
 /// Says which entities the scene tree must not delete. The built-in rule
 /// protects the camera; a module adds its own.
 class EntityProtectionRule {
