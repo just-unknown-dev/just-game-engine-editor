@@ -138,6 +138,20 @@ void main() {
       expect(names(build(expanded: {root.id})), ['Root', 'Child']);
     });
 
+    test('switching one off leaves it where it was', () {
+      node('First');
+      final middle = node('Middle');
+      node('Last');
+
+      middle.isActive = false;
+
+      // The remembered order is about what the scene holds, not about
+      // what is switched on: reading `isActive` there dropped the row
+      // out and the fallback pass put it back at the end, so turning a
+      // row off sent it to the bottom of the tree.
+      expect(names(build()), ['First', 'Middle', 'Last']);
+    });
+
     test('a destroyed entity is gone from the tree', () {
       final root = node('Root');
       final child = node('Child', under: root);

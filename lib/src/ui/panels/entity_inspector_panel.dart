@@ -4,7 +4,6 @@ import 'package:just_signals/just_signals.dart';
 
 import '../dialogs/add_component_picker.dart';
 import '../../core/constants/editor_constants.dart';
-import '../../core/entity/hierarchy_commands.dart';
 import '../../core/scope/editor_scope.dart';
 import '../inspector/definition_section.dart';
 import '../../core/state/editor_scene_state.dart';
@@ -35,8 +34,27 @@ class EntityInspectorPanel extends StatelessWidget {
         sceneState.selectedEntity,
         sceneState.multiSelectedIds,
         sceneState.revision,
+        scope.view.pinned,
+        // The notices at the top read these, so the panel follows them.
+        scope.view.locked,
       ],
       builder: (context, _) {
+        // Pinned: what is shown stops following what is selected, so an
+        // entity's components can be read while picking something else.
+        final pinnedId = scope.view.pinned.value;
+        if (pinnedId != null) {
+          final pinned = world.getEntity(pinnedId);
+          if (pinned != null && pinned.isAlive) {
+            return _EntityInspector(
+              key: ValueKey('pinned:$pinnedId'),
+              scope: scope,
+              entity: pinned,
+              sceneState: sceneState,
+            );
+          }
+          // Pinned to something that has gone: let it go.
+          scope.view.unpin();
+        }
         if (sceneState.hasMultiSelection) {
           return _MultiSelectionPanel(
             sceneState: sceneState,
@@ -146,69 +164,130 @@ class _EntityInspector extends StatelessWidget {
       }
     }
 
+    // Switched off: what it is made of is not running, so nothing here
+    // can be changed by accident. Said in words as well as in ink — a
+    // panel that quietly ignores every click is worse than one that
+    // explains itself.
+    final off = !entity.isActive;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _EnabledRow(entity: entity, scope: scope, sceneState: sceneState),
-          const SizedBox(height: 6),
-          for (int i = 0; i < sections.length; i++) ...[
-            if (i > 0) const SizedBox(height: 6),
-            sections[i],
+          // Why the panel is behaving oddly, said in the panel itself:
+          // showing something other than the selection, refusing edits,
+          // or sitting over an entity the viewport will not give up.
+          if (off) ...[
+            const _Notice(
+              icon: Icons.do_not_disturb_on_outlined,
+              tint: EditorTheme.warning,
+              message:
+                  'Switched off in the game. Turn it on with the tick in '
+                  'the scene tree to edit it.',
+            ),
+            const SizedBox(height: 6),
           ],
+          if (scope.view.isPinned(entity.id)) ...[
+            _Notice(
+              icon: Icons.lock_outline,
+              tint: EditorTheme.primaryBright,
+              message:
+                  'Pinned to ${entity.name ?? 'this entity'}. The inspector '
+                  'stays here while you select other things.',
+              actionLabel: 'Unpin',
+              onAction: scope.view.unpin,
+            ),
+            const SizedBox(height: 6),
+          ],
+          if (scope.view.isLocked(entity.id)) ...[
+            _Notice(
+              icon: Icons.back_hand_outlined,
+              tint: EditorTheme.textMuted,
+              message:
+                  'Locked against picking: it cannot be grabbed in the '
+                  'viewport. Its fields still work.',
+              actionLabel: 'Unlock',
+              onAction: () => scope.view.toggleLocked(entity.id),
+            ),
+            const SizedBox(height: 6),
+          ],
+          IgnorePointer(
+            ignoring: off,
+            child: Opacity(
+              opacity: off ? 0.45 : 1,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (int i = 0; i < sections.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 6),
+                    sections[i],
+                  ],
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-/// Whether the entity is switched on — saved with the scene, and not to
-/// be confused with the tree's eye, which only hides it while building.
-class _EnabledRow extends StatelessWidget {
-  const _EnabledRow({
-    required this.entity,
-    required this.scope,
-    required this.sceneState,
+/// A line at the top of the inspector saying why it is behaving as it
+/// is, and — where there is one — the way out.
+class _Notice extends StatelessWidget {
+  const _Notice({
+    required this.icon,
+    required this.tint,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
   });
 
-  final Entity entity;
-  final EditorScope scope;
-  final EditorSceneState sceneState;
+  final IconData icon;
+  final Color tint;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
+    padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
     decoration: BoxDecoration(
-      color: EditorTheme.panelBg,
-      borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: EditorTheme.border),
+      color: tint.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(color: tint.withValues(alpha: 0.45)),
     ),
     child: Row(
       children: [
-        const Expanded(
-          child: Text(
-            'Enabled',
-            style: TextStyle(color: EditorTheme.textSecondary, fontSize: 12),
-          ),
-        ),
-        Text(
-          entity.isActive ? 'in the game' : 'off in the game',
-          style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
-        ),
+        Icon(icon, size: 13, color: tint),
         const SizedBox(width: 8),
-        Switch(
-          value: entity.isActive,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          activeThumbColor: EditorTheme.primaryBright,
-          onChanged: (on) => scope.history.push(
-            SetEnabledCommand(
-              sceneState: sceneState,
-              entity: entity,
-              enabled: on,
+        Expanded(
+          child: Text(
+            message,
+            style: const TextStyle(
+              color: EditorTheme.textSecondary,
+              fontSize: 10,
+              height: 1.4,
             ),
           ),
         ),
+        if (actionLabel != null && onAction != null)
+          InkWell(
+            onTap: onAction,
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              child: Text(
+                actionLabel!,
+                style: TextStyle(
+                  color: tint,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
       ],
     ),
   );

@@ -18,6 +18,10 @@ PopupMenuItem<T> editorMenuItem<T>(
   Color? color,
   double height = 30,
   IconData? icon,
+
+  /// The icon's own colour, where the icon *is* the point — a swatch in
+  /// a list of colours, which was otherwise eight identical grey squares.
+  Color? iconColor,
 }) => PopupMenuItem<T>(
   value: value,
   height: height,
@@ -28,7 +32,9 @@ PopupMenuItem<T> editorMenuItem<T>(
         Icon(
           icon,
           size: 13,
-          color: enabled ? EditorTheme.textSecondary : EditorTheme.textMuted,
+          color: enabled
+              ? (iconColor ?? color ?? EditorTheme.textSecondary)
+              : EditorTheme.textMuted,
         ),
         const SizedBox(width: 8),
       ],

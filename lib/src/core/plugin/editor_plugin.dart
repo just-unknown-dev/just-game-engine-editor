@@ -256,6 +256,10 @@ class JustGameEditorPlugin implements EnginePlugin {
     gridSize: () => gridSize.value,
     isActive: () => _isInitialized && isVisible.value,
     isAuthoring: () => isAuthoring.value,
+    // Locked in the tree, or hidden: neither can be picked in the
+    // viewport, which is what the padlock is for.
+    isPickable: (entity) =>
+        !scope.view.isLocked(entity.id) && !scope.view.isHidden(entity.id),
   );
 
   // ── Focus nodes ───────────────────────────────────────────────────────────
@@ -362,6 +366,9 @@ class JustGameEditorPlugin implements EnginePlugin {
       source: 'editor',
       category: 'lifecycle',
     );
+    // From the start, not only once a designer has been opened: the eye
+    // in the scene tree works whether or not one ever is.
+    _updateRenderFilter();
     // Launching the editor entry point is asking for the editor: open it and
     // its status panel straight away rather than waiting for F1.
     if (_startVisible) setVisible(true);
@@ -458,18 +465,23 @@ class JustGameEditorPlugin implements EnginePlugin {
     _updateRenderFilter();
   }
 
-  /// Hides what the designer has hidden — layers, entities, everything
-  /// outside an isolated selection — without touching the entities. Only
-  /// while authoring: a play-test shows the level as it ships.
+  /// Hides what the editor has hidden — the eye in the scene tree, and
+  /// the designer's layers and isolated selection — without touching the
+  /// entities. Only while authoring: a play-test shows the level as it
+  /// ships.
+  ///
+  /// The eye used to work only with the Level Designer open, because
+  /// this filter was installed only then; everywhere else the engine
+  /// drew the world and knew nothing of it.
   void _updateRenderFilter() {
     final render = engine.world.getSystem<RenderSystem>();
     if (render == null) return;
-    final session = designer.value;
-    render.shouldRender = session == null
-        ? null
-        : (entity) =>
-              !isAuthoring.value ||
-              session.controller.isShownInViewport(entity);
+    render.shouldRender = (entity) {
+      if (!isAuthoring.value) return true;
+      if (scope.view.isHidden(entity.id)) return false;
+      final session = designer.value;
+      return session == null || session.controller.isShownInViewport(entity);
+    };
   }
 
   /// Closes the Level Designer and releases its state.

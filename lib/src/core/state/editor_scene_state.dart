@@ -225,14 +225,18 @@ class EditorSceneState {
     final live = <EntityId>[];
     for (final id in _rootOrder) {
       final entity = world.getEntity(id);
-      if (entity == null || !entity.isActive) continue;
+      // Alive, not enabled: an entity switched off is still in the
+      // scene and still where it was. Reading `isActive` here dropped
+      // it from the remembered order, and the pass below then put it
+      // back at the end — so switching a row off sent it to the bottom.
+      if (entity == null || !entity.isAlive) continue;
       if (entity.getComponent<ParentComponent>()?.parentId != null) continue;
       live.add(id);
     }
     // Anything the editor never saw created — a scene loaded around it, a
     // system's own entity — goes last rather than being left out.
     for (final entity in world.entities) {
-      if (!entity.isActive) continue;
+      if (!entity.isAlive) continue;
       if (entity.getComponent<ParentComponent>()?.parentId != null) continue;
       if (!live.contains(entity.id)) live.add(entity.id);
     }

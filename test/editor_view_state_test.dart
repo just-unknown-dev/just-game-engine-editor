@@ -96,7 +96,7 @@ void main() {
     expect(scope.view.hidden.value, isEmpty);
   });
 
-  testWidgets('the tree offers the eye and the padlock with no designer', (
+  testWidgets('hiding, and pinning the inspector, with no designer', (
     tester,
   ) async {
     final a = node('A');
@@ -120,9 +120,144 @@ void main() {
     );
     await tester.pump();
 
+    // The padlock pins the inspector to the row — Unity's inspector
+    // lock. Locking against picking lives in the row's menu now.
+    await tester.tap(find.byIcon(Icons.lock_open_outlined));
+    await tester.pump();
+    expect(scope.view.isPinned(a.id), isTrue);
+
     await tester.tap(find.byIcon(Icons.visibility_outlined));
     await tester.pump();
-
     expect(scope.view.isHidden(a.id), isTrue);
+  });
+
+  testWidgets('a switched-off entity cannot be edited from the inspector', (
+    tester,
+  ) async {
+    final a = node('A');
+    scope.sceneState.selectEntity(a);
+    tester.view.physicalSize = const Size(360, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: EntityInspectorPanel(
+            scope: scope,
+            sceneState: scope.sceneState,
+            world: scope.world,
+            onDetachFromParent: (_) {},
+            onGroupSelection: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.textContaining('Switched off'), findsNothing);
+
+    a.isActive = false;
+    scope.sceneState.refresh();
+    await tester.pump();
+
+    // Said in words, and meant: the sections below are behind an
+    // IgnorePointer, so nothing can be changed on an entity that is not
+    // running.
+    expect(find.textContaining('Switched off in the game'), findsOneWidget);
+    final ignoring = tester.widgetList<IgnorePointer>(
+      find.byType(IgnorePointer),
+    );
+    expect(ignoring.any((w) => w.ignoring), isTrue);
+  });
+
+  testWidgets('a pinned inspector stays on its entity', (tester) async {
+    final a = node('A');
+    final b = node('B');
+    a.addComponent(TagComponent('pinned_one'));
+    scope.sceneState.selectEntity(a);
+    tester.view.physicalSize = const Size(360, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: EntityInspectorPanel(
+            scope: scope,
+            sceneState: scope.sceneState,
+            world: scope.world,
+            onDetachFromParent: (_) {},
+            onGroupSelection: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('pinned_one'), findsOneWidget);
+
+    scope.view.togglePinned(a.id);
+    scope.sceneState.selectEntity(b);
+    await tester.pump();
+
+    // Selection moved; what is shown did not. That is the whole point of
+    // the pin — reading one thing while picking another.
+    expect(scope.sceneState.selectedEntity.value?.id, b.id);
+    expect(find.text('pinned_one'), findsOneWidget);
+
+    // And the panel says why it is not following the selection, with
+    // the way out beside it.
+    expect(find.textContaining('Pinned to A'), findsOneWidget);
+    await tester.tap(find.text('Unpin'));
+    await tester.pump();
+    expect(scope.view.pinned.value, isNull);
+    expect(find.text('pinned_one'), findsNothing);
+  });
+
+  test('only one thing is pinned at a time', () {
+    final a = node('A');
+    final b = node('B');
+
+    scope.view.togglePinned(a.id);
+    scope.view.togglePinned(b.id);
+
+    expect(scope.view.isPinned(a.id), isFalse, reason: 'the pin moved');
+    expect(scope.view.isPinned(b.id), isTrue);
+
+    scope.view.togglePinned(b.id);
+    expect(scope.view.pinned.value, isNull, reason: 'and releases');
+  });
+
+  testWidgets('a locked entity says so in the inspector too', (tester) async {
+    final a = node('A');
+    scope.sceneState.selectEntity(a);
+    tester.view.physicalSize = const Size(360, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: EntityInspectorPanel(
+            scope: scope,
+            sceneState: scope.sceneState,
+            world: scope.world,
+            onDetachFromParent: (_) {},
+            onGroupSelection: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.textContaining('Locked against picking'), findsNothing);
+
+    scope.view.toggleLocked(a.id);
+    await tester.pump();
+
+    // Said, and undone from where it is said — the row's menu is the
+    // other way, which is a long way from the panel you are reading.
+    expect(find.textContaining('Locked against picking'), findsOneWidget);
+    await tester.tap(find.text('Unlock'));
+    await tester.pump();
+    expect(scope.view.isLocked(a.id), isFalse);
   });
 }

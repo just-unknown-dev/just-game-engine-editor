@@ -19,6 +19,8 @@ import '../../core/entity/entity_ops.dart';
 import '../../core/scope/editor_scope.dart';
 import '../../core/state/editor_scene_state.dart';
 import '../overlay/docks/extra/extra_docks.dart';
+import '../../core/entity/hierarchy_commands.dart';
+import '../inspector/field_style.dart';
 import '../widgets/editor_menu.dart';
 import 'scene_tree_controller.dart';
 import 'scene_tree_model.dart';
@@ -86,6 +88,10 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   /// [_dragging]: a drag let go of outside the list leaves no `onLeave`
   /// behind it, and the line it drew used to stay on screen afterwards,
   /// where it read as an underline on a perfectly ordinary row.
+  /// Whether the tree has the keyboard, so the selected row can say the
+  /// arrows are about to act on it.
+  bool _hasKeys = false;
+
   jge.EntityId? _dragOver;
   DropZone _dropZone = DropZone.onto;
 
@@ -185,11 +191,16 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
       children: [
         _header(),
         _searchField(),
-        // Its own builder: the chips say what is being filtered by, so
-        // they have to be redrawn when that changes.
-        SignalBuilder<TreeFilter>(
-          signal: _tree.filter,
-          builder: (context, filter, _) => _filterChips(filter),
+        // Its own builder: the chips say what is being filtered by and
+        // what this scene can be filtered *on*, so they follow both the
+        // filter and the scene.
+        SignalConsumer(
+          signals: [
+            _tree.filter,
+            _sceneState.revision,
+            _sceneState.activeScene,
+          ],
+          builder: (context, _) => _filterChips(_tree.filter.value),
         ),
         Expanded(
           child: SignalConsumer(
@@ -198,6 +209,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
               _sceneState.selectedEntity,
               _sceneState.multiSelectedIds,
               _sceneState.revision,
+              widget.scope.view.pinned,
               _tree.expanded,
               _tree.colors,
               _tree.filter,
@@ -258,6 +270,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
 
     return Focus(
       focusNode: _keys,
+      onFocusChange: (has) => setState(() => _hasKeys = has),
       onKeyEvent: _onKey,
       child: Listener(
         // Every pointer up in the list reaches here, rows included, so
@@ -292,13 +305,49 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         if (_dragOver != null) return;
         widget.entities.reparentAll(details.data, null);
       },
-      builder: (context, _, _) => ListView.builder(
-        key: _listKey,
-        controller: _tree.scroll,
-        padding: EdgeInsets.zero,
-        itemCount: tree.length,
-        itemExtent: kSceneTreeRowTileHeight,
-        itemBuilder: (context, index) => _row(tree, index),
+      builder: (context, candidates, _) => Stack(
+        children: [
+          Positioned.fill(
+            child: Scrollbar(
+              controller: _tree.scroll,
+              child: ListView.builder(
+                key: _listKey,
+                controller: _tree.scroll,
+                padding: EdgeInsets.zero,
+                itemCount: tree.length,
+                itemExtent: kSceneTreeRowTileHeight,
+                itemBuilder: (context, index) => _row(tree, index),
+              ),
+            ),
+          ),
+          // A drag let go of below the last row moves to the top level.
+          // It always did; nothing said so, and nothing showed it was
+          // about to happen.
+          if (candidates.isNotEmpty && _dragOver == null)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: tree.length * kSceneTreeRowTileHeight,
+              bottom: 0,
+              child: IgnorePointer(
+                child: Container(
+                  alignment: Alignment.topCenter,
+                  padding: const EdgeInsets.only(top: 6),
+                  decoration: BoxDecoration(
+                    color: EditorTheme.dragOverBg,
+                    border: Border.all(color: EditorTheme.primaryBright),
+                  ),
+                  child: const Text(
+                    'Move to the top level',
+                    style: TextStyle(
+                      color: EditorTheme.primaryBright,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -314,6 +363,20 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
       isMultiSelected: _sceneState.isInMultiSelection(entity.id),
       icon: widget.scope.iconFor(entity),
       color: _tree.colorOf(entity.id),
+      hasKeyboardFocus: _hasKeys,
+      onToggleEnabled: () => widget.scope.history.push(
+        SetEnabledCommand(
+          sceneState: _sceneState,
+          entity: entity,
+          enabled: !entity.isActive,
+        ),
+      ),
+      onPickColor: (at) => _pickColor(context, entity, at),
+      onControlDown: () => _controlDown = true,
+      onToggleHidden: widget.onToggleHidden == null
+          ? null
+          : () => widget.onToggleHidden!(entity),
+      onShowMenu: (at) => _showMenu(context, entity, at),
       // What the editor and the modules have to say about this entity:
       // its problems, what animates it, a camera that is live.
       trailing: [
@@ -328,13 +391,8 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
       onCommitRename: (name) => _commitRename(entity, name),
       onCancelRename: _cancelRename,
       isHidden: widget.isHidden?.call(entity) ?? false,
-      isLocked: widget.isLocked?.call(entity) ?? false,
-      onToggleHidden: widget.onToggleHidden == null
-          ? null
-          : () => widget.onToggleHidden!(entity),
-      onToggleLocked: widget.onToggleLocked == null
-          ? null
-          : () => widget.onToggleLocked!(entity),
+      isPinned: widget.scope.view.isPinned(entity.id),
+      onTogglePinned: () => widget.scope.view.togglePinned(entity.id),
       onToggleExpand: ({required bool subtree}) {
         if (subtree) {
           _tree.expandSubtree(entity.id);
@@ -362,6 +420,15 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         // viewport, and a slower one on a row that is already selected
         // renames it — the way a file list behaves.
         onPointerDown: (event) {
+          // A press on the tick, the mark, the eye, the padlock or the
+          // menu is about that control. The row hears it too, being
+          // above them, and used to select the entity on the way past.
+          if (_controlDown) {
+            _controlDown = false;
+            _pressedOn = null;
+            _rowTookIt = true;
+            return;
+          }
           _pressedAt = event.position;
           // A `Listener` hears every button. Only the left one selects,
           // renames or focuses — the right one belongs to the context
@@ -441,6 +508,9 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   /// so which one it was has to be remembered from the press.
   bool _pressedPrimary = false;
   jge.EntityId? _pressedOn;
+
+  /// Set by a row's own control as the pointer goes down on it.
+  bool _controlDown = false;
 
   /// Whether the pointer that just went up was on a row.
   bool _rowTookIt = false;
@@ -656,7 +726,12 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   ) async {
     final chosen = await showEditorMenu<int>(context, at, [
       for (var i = 0; i < SceneTreeController.swatches.length; i++)
-        editorMenuItem(i, _colorNames[i], icon: Icons.square_rounded),
+        editorMenuItem(
+          i,
+          _colorNames[i],
+          icon: Icons.square_rounded,
+          iconColor: SceneTreeController.swatches[i],
+        ),
       editorMenuDivider(),
       editorMenuItem(-1, 'No colour', icon: Icons.format_color_reset),
     ]);
@@ -676,6 +751,20 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     'Purple',
     'Grey',
   ];
+
+  /// `12 entities`, or what is picked when more than one thing is.
+  ///
+  /// Counted from the world rather than from the rows, which are a frame
+  /// behind at this point in the build — except under a filter, where
+  /// what is shown is the interesting number.
+  String _countLabel() {
+    final picked = _sceneState.multiSelectedIds.value.length;
+    if (picked > 1) return '$picked selected';
+    final count = _tree.filter.value.isEmpty
+        ? _world.entities.where((e) => e.isAlive).length
+        : _tree.rows.length;
+    return count == 1 ? '1 entity' : '$count entities';
+  }
 
   // ── The filter bar ───────────────────────────────────────────────────
 
@@ -705,63 +794,72 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   };
 
   Widget _filterChips(TreeFilter filter) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 2),
-      child: Wrap(
-        spacing: 4,
-        runSpacing: 4,
-        children: [
-          _FilterChip(
-            label: filter.componentType.isEmpty
-                ? 'Component'
-                : filter.componentType,
-            on: filter.componentType.isNotEmpty,
-            onPressed: (at) => _pickFilter(
-              at,
-              _componentTypes(),
-              'Any component',
-              (value) =>
-                  _tree.filter.value = filter.copyWith(componentType: value),
-            ),
-          ),
-          _FilterChip(
-            label: filter.tag.isEmpty ? 'Tag' : filter.tag,
-            on: filter.tag.isNotEmpty,
-            onPressed: (at) => _pickFilter(
-              at,
-              _tags(),
-              'Any tag',
-              (value) => _tree.filter.value = filter.copyWith(tag: value),
-            ),
-          ),
-          _FilterChip(
-            label: filter.layer.isEmpty ? 'Layer' : filter.layer,
-            on: filter.layer.isNotEmpty,
-            onPressed: (at) => _pickFilter(
-              at,
-              _layers(),
-              'Any layer',
-              (value) => _tree.filter.value = filter.copyWith(layer: value),
-            ),
-          ),
-          _FilterChip(
-            label: 'Problems',
-            on: filter.problems,
-            onPressed: (_) => _tree.filter.value = filter.copyWith(
-              problems: !filter.problems,
-            ),
-          ),
-          if (!filter.isEmpty)
-            _FilterChip(
-              label: 'Clear',
-              on: false,
-              onPressed: (_) {
-                _search.clear();
-                _tree.filter.value = TreeFilter.none;
-              },
-            ),
-        ],
+    // Only what this scene can answer: a Tag chip over a scene with no
+    // tags opens an empty menu and takes a row up saying nothing.
+    final tags = _tags();
+    final layers = _layers();
+    final problemCount = ProblemScan.of(widget.scope).problems.length;
+    final chips = <Widget>[
+      _FilterChip(
+        label: filter.componentType.isEmpty
+            ? 'Component'
+            : filter.componentType,
+        on: filter.componentType.isNotEmpty,
+        count: filter.componentType.isEmpty ? _componentTypes().length : null,
+        onPressed: (at) => _pickFilter(
+          at,
+          _componentTypes(),
+          'Any component',
+          (value) => _tree.filter.value = filter.copyWith(componentType: value),
+        ),
       ),
+      if (tags.isNotEmpty || filter.tag.isNotEmpty)
+        _FilterChip(
+          label: filter.tag.isEmpty ? 'Tag' : filter.tag,
+          on: filter.tag.isNotEmpty,
+          count: filter.tag.isEmpty ? tags.length : null,
+          onPressed: (at) => _pickFilter(
+            at,
+            tags,
+            'Any tag',
+            (value) => _tree.filter.value = filter.copyWith(tag: value),
+          ),
+        ),
+      if (layers.isNotEmpty || filter.layer.isNotEmpty)
+        _FilterChip(
+          label: filter.layer.isEmpty ? 'Layer' : filter.layer,
+          on: filter.layer.isNotEmpty,
+          count: filter.layer.isEmpty ? layers.length : null,
+          onPressed: (at) => _pickFilter(
+            at,
+            layers,
+            'Any layer',
+            (value) => _tree.filter.value = filter.copyWith(layer: value),
+          ),
+        ),
+      if (problemCount > 0 || filter.problems)
+        _FilterChip(
+          label: 'Problems',
+          on: filter.problems,
+          count: problemCount,
+          isMenu: false,
+          onPressed: (_) =>
+              _tree.filter.value = filter.copyWith(problems: !filter.problems),
+        ),
+      if (!filter.isEmpty)
+        _FilterChip(
+          label: 'Clear',
+          on: false,
+          isMenu: false,
+          onPressed: (_) {
+            _search.clear();
+            _tree.filter.value = TreeFilter.none;
+          },
+        ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+      child: Wrap(spacing: 4, runSpacing: 4, children: chips),
     );
   }
 
@@ -915,10 +1013,13 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   // ── Chrome ───────────────────────────────────────────────────────────
 
   Widget _header() => Padding(
-    padding: const EdgeInsets.fromLTRB(12, 8, 6, 4),
+    padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
     child: Row(
       children: [
-        Flexible(
+        // The title gives way first: in the interface editor this panel
+        // is 264 wide, and the buttons and the count are the parts worth
+        // keeping whole.
+        Expanded(
           child: Text(
             widget.contents == TreeContents.ui ? 'INTERFACE' : 'SCENE TREE',
             overflow: TextOverflow.ellipsis,
@@ -930,7 +1031,30 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
             ),
           ),
         ),
-        const Spacer(),
+        // What is in the scene, or what is picked out of it — the
+        // question the tree is most often asked, and it had no answer.
+        const SizedBox(width: 4),
+        // Its own builder, or it says what was true when the panel was
+        // last rebuilt for some other reason. Flexible so that a narrow
+        // panel — the interface editor's is 264 — shortens it instead of
+        // overflowing the row.
+        Flexible(
+          flex: 0,
+          child: SignalConsumer(
+            signals: [
+              _sceneState.revision,
+              _sceneState.multiSelectedIds,
+              _sceneState.activeScene,
+              _tree.filter,
+            ],
+            builder: (context, _) => Text(
+              _countLabel(),
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: EditorTheme.textMuted, fontSize: 9),
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
         if (widget.onToggleUiMode != null)
           _HeaderButton(
             icon: widget.uiModeOn ? Icons.public_off : Icons.phone_iphone,
@@ -948,43 +1072,57 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
               onPressed: () => _showCreateUiMenu(context),
             ),
           ),
+        // Making a thing and gathering things are different jobs; they
+        // used to sit in one undifferentiated cluster.
+        Container(
+          width: 1,
+          height: 14,
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          color: EditorTheme.border,
+        ),
         _HeaderButton(
           icon: Icons.folder_open_rounded,
           tooltip: 'Group the selection',
           onPressed: widget.entities.groupSelection,
         ),
-        _HeaderButton(
-          icon: Icons.add_rounded,
-          tooltip: 'Create an entity',
-          onPressed: widget.entities.createEntity,
-        ),
+        // A plain entity means nothing inside a HUD: it would sit in the
+        // interface tree carrying no interface and doing nothing.
+        if (widget.contents != TreeContents.ui)
+          _HeaderButton(
+            icon: Icons.add_rounded,
+            tooltip: 'Create an entity',
+            onPressed: widget.entities.createEntity,
+          ),
       ],
     ),
   );
 
   Widget _searchField() => Padding(
-    padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+    padding: const EdgeInsets.fromLTRB(10, 0, 10, 6),
     child: SizedBox(
-      height: 26,
+      height: InspectorField.height,
       child: TextField(
         controller: _search,
-        style: const TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
+        style: const TextStyle(
+          color: EditorTheme.textPrimary,
+          fontSize: InspectorField.fontSize,
+        ),
         decoration: InputDecoration(
           isDense: true,
           hintText: 'Search name or component',
           hintStyle: const TextStyle(
             color: EditorTheme.textMuted,
-            fontSize: 11,
+            fontSize: InspectorField.fontSize,
           ),
           prefixIcon: const Icon(
             Icons.search_rounded,
             size: 14,
             color: EditorTheme.textMuted,
           ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 26),
-          contentPadding: const EdgeInsets.symmetric(vertical: 4),
+          prefixIconConstraints: const BoxConstraints(minWidth: 28),
+          contentPadding: InspectorField.padding,
           filled: true,
-          fillColor: EditorTheme.inputBg,
+          fillColor: InspectorField.fill,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: const BorderSide(color: EditorTheme.border),
@@ -1085,6 +1223,16 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
           ),
         editorMenuDivider(),
       ],
+      if (widget.isLocked != null && widget.onToggleLocked != null)
+        editorMenuItem(
+          'pickLock',
+          widget.isLocked!(entity)
+              ? 'Let it be picked again'
+              : 'Lock against picking',
+          icon: widget.isLocked!(entity)
+              ? Icons.lock_open_outlined
+              : Icons.lock_outline,
+        ),
       editorMenuItem('color', 'Mark with a colour…', icon: Icons.palette),
       editorMenuItem('copyName', 'Copy its name', icon: Icons.abc),
     ]);
@@ -1117,6 +1265,10 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         ]);
       case 'showAll':
         widget.scope.view.showAll();
+      case 'pickLock':
+        for (final e in _dragSelection(entity)) {
+          widget.onToggleLocked?.call(e);
+        }
       case 'color':
         // The menu that was open has gone; this one opens where it was.
         if (!context.mounted) return;
@@ -1221,24 +1373,39 @@ class _HeaderButton extends StatelessWidget {
       icon: Icon(icon),
       iconSize: 16,
       color: bright ? EditorTheme.primaryBright : EditorTheme.primary,
-      splashRadius: 16,
-      padding: const EdgeInsets.all(4),
-      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+      splashRadius: 14,
+      padding: const EdgeInsets.all(3),
+      // 24 square: a pointer target that is still comfortable, and four
+      // of them fit the 264-wide panel the interface editor gives this.
+      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+      visualDensity: VisualDensity.compact,
     ),
   );
 }
 
 /// One filter in the bar under the search box.
+///
+/// A toggle, not a field: no fill of its own until it is on, so it does
+/// not read as another input two rows under the search box.
 class _FilterChip extends StatelessWidget {
   const _FilterChip({
     required this.label,
     required this.on,
     required this.onPressed,
+    this.count,
+    this.isMenu = true,
   });
 
   final String label;
   final bool on;
   final void Function(Offset at) onPressed;
+
+  /// How many things there are to pick from, or how many problems there
+  /// are — shown so the chip says whether it is worth opening.
+  final int? count;
+
+  /// Menus carry a chevron; a plain toggle does not.
+  final bool isMenu;
 
   @override
   Widget build(BuildContext context) => Builder(
@@ -1251,22 +1418,44 @@ class _FilterChip extends StatelessWidget {
               : box.localToGlobal(box.size.bottomLeft(Offset.zero)),
         );
       },
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(4),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.fromLTRB(8, 2, 4, 2),
         decoration: BoxDecoration(
-          color: on ? EditorTheme.selectionBg : EditorTheme.inputBg,
-          borderRadius: BorderRadius.circular(10),
+          color: on ? EditorTheme.selectionBg : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
           border: Border.all(
             color: on ? EditorTheme.primaryActive : EditorTheme.border,
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: on ? EditorTheme.textBright : EditorTheme.textMuted,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: on ? EditorTheme.textBright : EditorTheme.textSecondary,
+              ),
+            ),
+            if (count != null) ...[
+              const SizedBox(width: 4),
+              Text(
+                '$count',
+                style: const TextStyle(
+                  fontSize: 9,
+                  color: EditorTheme.textMuted,
+                ),
+              ),
+            ],
+            SizedBox(width: isMenu ? 0 : 4),
+            if (isMenu)
+              const Icon(
+                Icons.arrow_drop_down,
+                size: 13,
+                color: EditorTheme.textMuted,
+              ),
+          ],
         ),
       ),
     ),

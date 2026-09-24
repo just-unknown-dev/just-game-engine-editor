@@ -45,12 +45,17 @@ class SceneTreeRowTile extends StatelessWidget {
     this.onCommitRename,
     this.onCancelRename,
     this.isHidden = false,
-    this.isLocked = false,
+    this.isPinned = false,
+    this.onControlDown,
+    this.onToggleEnabled,
     this.onToggleHidden,
-    this.onToggleLocked,
+    this.onTogglePinned,
+    this.onPickColor,
+    this.onShowMenu,
     this.dropZone,
     this.icon,
     this.color,
+    this.hasKeyboardFocus = false,
     this.trailing = const [],
   });
 
@@ -68,15 +73,40 @@ class SceneTreeRowTile extends StatelessWidget {
   /// The swatch this row is marked with, if any.
   final Color? color;
 
+  /// Whether the tree has the keyboard and this is the row the arrows
+  /// would move from — drawn with an outline, because otherwise there is
+  /// no telling what the keys are about to act on.
+  final bool hasKeyboardFocus;
+
   final bool isRenaming;
   final String? renameError;
   final void Function(String name)? onCommitRename;
   final VoidCallback? onCancelRename;
 
+  /// Hidden in the viewport — the editor's own business, which the row
+  /// says by going faint rather than by carrying an icon for it.
   final bool isHidden;
-  final bool isLocked;
+
+  /// Whether the inspector is pinned to this row — it keeps showing
+  /// this entity's components while another is selected.
+  final bool isPinned;
+
+  /// Told as the pointer goes down on any of the row's own controls,
+  /// so the row does not read that press as picking it.
+  final VoidCallback? onControlDown;
+
+  /// Switches the entity on or off in the game — saved with the scene.
+  final VoidCallback? onToggleEnabled;
+
+  /// Hides it in the viewport while building. The editor's own state:
+  /// nothing about it is saved and the game never sees it.
   final VoidCallback? onToggleHidden;
-  final VoidCallback? onToggleLocked;
+
+  final VoidCallback? onTogglePinned;
+
+  /// Opens the swatches, and the row's menu, at the button pressed.
+  final void Function(Offset at)? onPickColor;
+  final void Function(Offset at)? onShowMenu;
 
   /// Where a drag hovering over this row would drop, or null when none is.
   final DropZone? dropZone;
@@ -101,15 +131,20 @@ class SceneTreeRowTile extends StatelessWidget {
     // The line that says "between these two" starts where the row's
     // content starts, so it shows what depth the thing would land at
     // rather than spanning the panel and meaning nothing in particular.
-    final indent = 8 + row.depth * 14.0;
+    final indent = 4 + row.depth * 12.0;
 
     return DecoratedBox(
-      decoration: BoxDecoration(color: background),
+      decoration: BoxDecoration(
+        color: background,
+        border: hasKeyboardFocus && isSelected
+            ? Border.all(color: EditorTheme.primaryActive, width: 1)
+            : null,
+      ),
       child: Stack(
         children: [
           if (zone == DropZone.above || zone == DropZone.below)
             Positioned(
-              left: indent,
+              left: indent + kSceneTreeRowTileHeight,
               right: 6,
               top: zone == DropZone.above ? 0 : null,
               bottom: zone == DropZone.below ? 0 : null,
@@ -124,7 +159,9 @@ class SceneTreeRowTile extends StatelessWidget {
               bottom: 2,
               child: Container(width: 3, color: color),
             ),
-          _content(name, indent),
+          isHidden
+              ? Opacity(opacity: 0.45, child: _content(name, indent))
+              : _content(name, indent),
         ],
       ),
     );
@@ -132,9 +169,23 @@ class SceneTreeRowTile extends StatelessWidget {
 
   Widget _content(String name, double indent) {
     return Padding(
-      padding: EdgeInsets.only(left: indent, right: 6),
+      padding: const EdgeInsets.only(right: 8),
       child: Row(
         children: [
+          // On in the game. In a column of its own at the far left,
+          // outside the indent, so every tick lines up whatever the
+          // depth and the column can be read — and clicked — down.
+          if (onToggleEnabled != null)
+            SceneTreeRowButton(
+              icon: entity.isActive
+                  ? Icons.check_box_rounded
+                  : Icons.check_box_outline_blank_rounded,
+              tooltip: entity.isActive ? 'On in the game' : 'Off in the game',
+              faded: !entity.isActive,
+              onPressed: onToggleEnabled!,
+              onDown: onControlDown,
+            ),
+          SizedBox(width: indent),
           if (row.hasChildren)
             GestureDetector(
               // Opaque and with room around it: a 14px glyph is not a
@@ -144,7 +195,7 @@ class SceneTreeRowTile extends StatelessWidget {
                 subtree: HardwareKeyboard.instance.isAltPressed,
               ),
               child: SizedBox(
-                width: 18,
+                width: kSceneTreeRowTileHeight,
                 height: kSceneTreeRowTileHeight,
                 child: Icon(
                   row.isExpanded
@@ -156,16 +207,22 @@ class SceneTreeRowTile extends StatelessWidget {
               ),
             )
           else
-            const SizedBox(width: 18),
+            const SizedBox(width: kSceneTreeRowTileHeight),
           const SizedBox(width: 2),
           Icon(
             icon ?? uiIconFor(entity) ?? _worldIcon(entity),
             size: 14,
-            color: isSelected
+            // The accent is for what the editor *knows*: a piece of
+            // interface, or something a module claimed as its own. A
+            // plain entity gets a plain colour, so the column carries
+            // something instead of being eleven pink glyphs.
+            color: !row.isMatch
+                ? EditorTheme.textMuted
+                : isSelected
                 ? EditorTheme.primaryBright
-                : row.isMatch
+                : (icon != null || uiIconFor(entity) != null)
                 ? EditorTheme.primaryMuted
-                : EditorTheme.textMuted,
+                : EditorTheme.textSecondary,
           ),
           const SizedBox(width: 6),
           Expanded(
@@ -195,26 +252,62 @@ class SceneTreeRowTile extends StatelessWidget {
                     ),
                   ),
           ),
+          // Between the name and what is drawn after it — a badge, the
+          // eye, the padlock — so they do not read as part of it.
+          if (trailing.isNotEmpty) const SizedBox(width: 6),
           ...trailing,
+          // The mark, then hidden, then locked, then everything else.
+          // The two that only *act* keep their place while they are
+          // invisible, so nothing shifts under the pointer.
+          if (onPickColor != null)
+            Builder(
+              builder: (context) => _ColorMark(
+                color: color,
+                onPressed: () => onPickColor!(_below(context)),
+                onDown: onControlDown,
+              ),
+            ),
           if (onToggleHidden != null)
-            _RowButton(
+            SceneTreeRowButton(
               icon: isHidden
                   ? Icons.visibility_off_outlined
                   : Icons.visibility_outlined,
-              tooltip: isHidden ? 'Show in the viewport' : 'Hide',
+              tooltip: isHidden ? 'Show it' : 'Hide it while building',
               faded: !isHidden,
               onPressed: onToggleHidden!,
+              onDown: onControlDown,
             ),
-          if (onToggleLocked != null)
-            _RowButton(
-              icon: isLocked ? Icons.lock_outline : Icons.lock_open_outlined,
-              tooltip: isLocked ? 'Unlock' : 'Lock against picking',
-              faded: !isLocked,
-              onPressed: onToggleLocked!,
+          if (onTogglePinned != null)
+            SceneTreeRowButton(
+              icon: isPinned ? Icons.lock_outline : Icons.lock_open_outlined,
+              tooltip: isPinned
+                  ? 'Unpin the inspector'
+                  : 'Keep the inspector on it',
+              faded: !isPinned,
+              onPressed: onTogglePinned!,
+              onDown: onControlDown,
+            ),
+          if (onShowMenu != null)
+            Builder(
+              builder: (context) => SceneTreeRowButton(
+                icon: Icons.more_vert,
+                tooltip: 'What can be done with it',
+                faded: true,
+                onPressed: () => onShowMenu!(_below(context)),
+                onDown: onControlDown,
+              ),
             ),
         ],
       ),
     );
+  }
+
+  /// Where a menu opened from [context]'s button should appear.
+  static Offset _below(BuildContext context) {
+    final box = context.findRenderObject() as RenderBox?;
+    return box == null
+        ? Offset.zero
+        : box.localToGlobal(box.size.bottomLeft(Offset.zero));
   }
 
   /// The icon for something in the world; a module can say better.
@@ -365,12 +458,15 @@ OutlineInputBorder _renameBorder(String? error, {bool focused = false}) =>
       ),
     );
 
-class _RowButton extends StatelessWidget {
-  const _RowButton({
+/// A small button at the end of a row: the eye, the padlock, the swatch.
+class SceneTreeRowButton extends StatelessWidget {
+  const SceneTreeRowButton({
+    super.key,
     required this.icon,
     required this.tooltip,
     required this.onPressed,
     this.faded = false,
+    this.onDown,
   });
 
   final IconData icon;
@@ -378,22 +474,62 @@ class _RowButton extends StatelessWidget {
   final VoidCallback onPressed;
   final bool faded;
 
+  /// Called as the pointer goes down on it, before the row's own
+  /// listener hears the same press. A press on a control is about the
+  /// control, not about picking the row it sits on.
+  final VoidCallback? onDown;
+
   @override
   Widget build(BuildContext context) => Tooltip(
     message: tooltip,
     waitDuration: const Duration(milliseconds: 600),
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onPressed,
-      child: SizedBox(
-        width: 20,
-        height: kSceneTreeRowTileHeight,
-        child: Icon(
-          icon,
-          size: 13,
-          color: faded
-              ? EditorTheme.textMuted.withValues(alpha: 0.45)
-              : EditorTheme.primaryBright,
+    child: Listener(
+      onPointerDown: (_) => onDown?.call(),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onPressed,
+        child: SizedBox(
+          width: kSceneTreeRowTileHeight,
+          height: kSceneTreeRowTileHeight,
+          child: Icon(
+            icon,
+            size: 13,
+            color: faded
+                ? EditorTheme.textMuted.withValues(alpha: 0.45)
+                : EditorTheme.primaryBright,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// The row's colour mark: a label, filled with the colour it carries
+/// and hollow when it carries none.
+class _ColorMark extends StatelessWidget {
+  const _ColorMark({required this.color, required this.onPressed, this.onDown});
+
+  final Color? color;
+  final VoidCallback onPressed;
+  final VoidCallback? onDown;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: color == null ? 'Mark with a colour' : 'Change the mark',
+    waitDuration: const Duration(milliseconds: 600),
+    child: Listener(
+      onPointerDown: (_) => onDown?.call(),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onPressed,
+        child: SizedBox(
+          width: kSceneTreeRowTileHeight,
+          height: kSceneTreeRowTileHeight,
+          child: Icon(
+            color == null ? Icons.label_outline : Icons.label,
+            size: 13,
+            color: color ?? EditorTheme.textMuted.withValues(alpha: 0.45),
+          ),
         ),
       ),
     ),

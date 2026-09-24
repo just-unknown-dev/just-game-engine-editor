@@ -540,6 +540,30 @@ void main() {
       expect(controller.colorOf(a.id), isNull);
     });
 
+    testWidgets('a chip is offered only when the scene can answer it', (
+      tester,
+    ) async {
+      node('Platform');
+      await pumpTree(tester);
+
+      // Every scene has components; this one has no tags and no layers,
+      // and a chip that opens an empty menu is a row saying nothing.
+      expect(find.text('Component'), findsOneWidget);
+      expect(find.text('Tag'), findsNothing);
+      expect(find.text('Layer'), findsNothing);
+
+      final tagged = scope.world.createEntityWithComponents([
+        TransformComponent(),
+        ChildrenComponent(),
+        TagComponent('coin'),
+      ], name: 'Coin');
+      scope.sceneState.registerEntity(tagged);
+      scope.sceneState.refresh();
+      await tester.pump();
+
+      expect(find.text('Tag'), findsOneWidget);
+    });
+
     testWidgets('the chips narrow the tree to one kind of entity', (
       tester,
     ) async {
@@ -566,6 +590,157 @@ void main() {
       await tester.tap(find.text('Clear'));
       await tester.pumpAndSettle();
       expect(find.text('Platform'), findsOneWidget);
+    });
+  });
+  group('what the panel tells you', () {
+    testWidgets('the header counts the scene, and the selection', (
+      tester,
+    ) async {
+      final a = node('A');
+      final b = node('B');
+      node('C');
+      await pumpTree(tester);
+
+      expect(find.text('3 entities'), findsOneWidget);
+
+      scope.sceneState
+        ..toggleMultiSelect(a)
+        ..toggleMultiSelect(b);
+      await tester.pump();
+      expect(find.text('2 selected'), findsOneWidget);
+    });
+
+    testWidgets('the chips say how much there is to pick from', (tester) async {
+      final tagged = scope.world.createEntityWithComponents([
+        TransformComponent(),
+        ChildrenComponent(),
+        TagComponent('coin'),
+      ], name: 'Coin');
+      scope.sceneState.registerEntity(tagged);
+      await pumpTree(tester);
+
+      // One tag in the scene, so the chip says 1 before it is opened.
+      expect(
+        find.descendant(of: find.text('Tag'), matching: find.text('1')),
+        findsNothing,
+      );
+      expect(find.text('Tag'), findsOneWidget);
+      expect(find.text('1'), findsWidgets);
+    });
+
+    testWidgets('the list has a scrollbar', (tester) async {
+      for (var i = 0; i < 40; i++) {
+        node('Entity_$i');
+      }
+      await pumpTree(tester);
+
+      expect(find.byType(Scrollbar), findsOneWidget);
+    });
+
+    testWidgets('the selected row offers the colour swatch', (tester) async {
+      final a = node('A');
+      node('B');
+      await pumpTree(tester);
+
+      scope.sceneState.selectEntity(a);
+      await tester.pump();
+
+      await tester.tap(
+        find
+            .descendant(
+              of: find.ancestor(
+                of: find.text('A'),
+                matching: find.byType(SceneTreeRowTile),
+              ),
+              matching: find.byTooltip('Mark with a colour'),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+
+      // Each swatch is drawn in the colour it stands for; they were all
+      // the menu's own grey, which made the list unreadable.
+      final swatches = tester
+          .widgetList<Icon>(find.byIcon(Icons.square_rounded))
+          .toList();
+      expect(swatches.length, SceneTreeController.swatches.length);
+      expect(swatches.first.color, SceneTreeController.swatches.first);
+      expect(swatches[3].color, SceneTreeController.swatches[3]);
+
+      await tester.tap(find.text('Green'));
+      await tester.pumpAndSettle();
+
+      expect(controller.colorOf(a.id), SceneTreeController.swatches[3]);
+    });
+  });
+  group('the row as redesigned', () {
+    testWidgets('name, then the tick, the mark, the padlock and the menu', (
+      tester,
+    ) async {
+      final a = node('A');
+      await pumpTree(tester);
+
+      // The tick is always there, in a column of its own at the far
+      // left. (The eye and the padlock need the view state this harness
+      // does not pass; they are checked in editor_view_state_test.)
+      expect(find.byIcon(Icons.check_box_rounded), findsOneWidget);
+
+      // Left of everything, including the row's indent: the ticks line
+      // up whatever the depth, so the column can be read down.
+      final tick = tester.getRect(find.byIcon(Icons.check_box_rounded));
+      expect(tick.left, lessThan(tester.getRect(find.text('A')).left));
+
+      // The tick is the saved flag, and it undoes.
+      await tester.tap(find.byIcon(Icons.check_box_rounded));
+      await tester.pump();
+      expect(a.isActive, isFalse);
+      expect(find.byIcon(Icons.check_box_outline_blank_rounded), findsWidgets);
+      scope.history.undo();
+      await tester.pump();
+      expect(a.isActive, isTrue);
+    });
+
+    testWidgets('a control does not pick the row it sits on', (tester) async {
+      final a = node('A');
+      final b = node('B');
+      await pumpTree(tester);
+      scope.sceneState.selectEntity(b);
+      await tester.pump();
+
+      // The tick belongs to the tick. Pressing it used to select the
+      // row on the way past, because the row's listener sits above the
+      // controls and hears the same press.
+      await tester.tap(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('A'),
+            matching: find.byType(SceneTreeRowTile),
+          ),
+          matching: find.byIcon(Icons.check_box_rounded),
+        ),
+      );
+      await tester.pump();
+
+      expect(a.isActive, isFalse, reason: 'the tick did its own job');
+      expect(
+        scope.sceneState.selectedEntity.value?.id,
+        b.id,
+        reason: 'and left the selection alone',
+      );
+    });
+
+    testWidgets('the menu button opens the row menu', (tester) async {
+      node('A');
+      await pumpTree(tester);
+      scope.sceneState.selectEntity(scope.world.findEntityByName('A')!);
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+
+      // The same menu the right button opens.
+      expect(find.text('Rename'), findsOneWidget);
+      expect(find.text('Mark with a colour…'), findsOneWidget);
     });
   });
 }

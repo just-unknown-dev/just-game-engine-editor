@@ -26,6 +26,25 @@ class EditorViewState {
     debugLabel: 'lockedEntities',
   );
 
+  /// The entity the inspector is pinned to, if any.
+  ///
+  /// Unity's inspector lock: what is *shown* stops following what is
+  /// *selected*, so a thing's components can be read while picking
+  /// something else. Editor-only and never saved, like the rest of this.
+  final Signal<jge.EntityId?> pinned = Signal<jge.EntityId?>(
+    null,
+    debugLabel: 'pinnedEntity',
+  );
+
+  bool isPinned(jge.EntityId id) => pinned.value == id;
+
+  /// Pins [id], or releases it when it is already the pinned one. Only
+  /// ever one: pinning another moves the pin rather than queueing.
+  void togglePinned(jge.EntityId id) =>
+      pinned.value = pinned.value == id ? null : id;
+
+  void unpin() => pinned.value = null;
+
   bool isHidden(jge.EntityId id) => hidden.value.contains(id);
   bool isLocked(jge.EntityId id) => locked.value.contains(id);
 
@@ -89,6 +108,7 @@ class EditorViewState {
   void unlockAll() => locked.value = <jge.EntityId>{};
 
   void dispose() {
+    pinned.dispose();
     hidden.dispose();
     locked.dispose();
   }

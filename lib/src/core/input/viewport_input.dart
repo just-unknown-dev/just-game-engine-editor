@@ -23,11 +23,17 @@ class ViewportInput {
     required this.gridSize,
     required this.isActive,
     required this.isAuthoring,
+    this.isPickable,
     GizmoHitTester? hitTester,
   }) : _worldOf = world,
        cameraOf = camera,
        designerOf = designer,
        hitTester = hitTester ?? GizmoHitTester();
+
+  /// Whether an entity can be picked at all. The padlock in the scene
+  /// tree answers false here; without it the lock did nothing outside
+  /// the Level Designer, whose tools asked their own question.
+  final bool Function(Entity entity)? isPickable;
 
   final World Function() _worldOf;
 
@@ -65,10 +71,14 @@ class ViewportInput {
   Entity? entityAt(Offset localPosition) {
     if (canvasSize == Size.zero) return null;
     final camera = cameraOf()..viewportSize = canvasSize;
+    final pickable = isPickable;
     final hit = hitTester.hitTest(
       localPosition,
       sceneState.selectedEntity.value,
-      world.query([TransformComponent]).where((e) => e.isActive).toList(),
+      world
+          .query([TransformComponent])
+          .where((e) => e.isActive && (pickable == null || pickable(e)))
+          .toList(),
       camera,
       canvasSize,
     );
@@ -133,9 +143,10 @@ class ViewportInput {
       }
     }
 
+    final pickable = isPickable;
     final entities = world
         .query([TransformComponent])
-        .where((e) => e.isActive)
+        .where((e) => e.isActive && (pickable == null || pickable(e)))
         .toList();
 
     final hit = hitTester.hitTest(

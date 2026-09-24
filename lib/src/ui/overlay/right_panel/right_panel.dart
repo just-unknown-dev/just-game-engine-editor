@@ -417,7 +417,6 @@ Widget _sceneTree(JustGameEditorPlugin plugin) {
       scope: plugin.scope,
       entities: plugin.entities,
       onFocusEntity: plugin.focusOn,
-      onCreateUi: plugin.entities.createUi,
       authored: plugin.playController.snapshot?.existing,
       isHidden: (e) => hidden.contains(e.id),
       isLocked: (e) => locked.contains(e.id),

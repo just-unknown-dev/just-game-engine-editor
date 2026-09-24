@@ -399,4 +399,40 @@ void main() {
       ]);
     });
   });
+
+  group('what each tree offers', () {
+    testWidgets('making interface belongs to the interface editor', (
+      tester,
+    ) async {
+      final hud = entity('Hud', [TransformComponent(), UiCanvasComponent()]);
+      entity('Coins', [UiSlotComponent()], under: hud);
+      await open(tester, onClose: () {});
+
+      // In here: Create UI, and grouping. Not "new entity" — a plain
+      // entity in a HUD carries no interface and does nothing.
+      expect(find.byIcon(Icons.widgets_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.folder_open_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.add_rounded), findsNothing);
+    });
+
+    testWidgets('the world tree does not offer Create UI', (tester) async {
+      entity('Platform', [TransformComponent()]);
+      tester.view.physicalSize = const Size(320, 600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SceneTreePanel(scope: scope, entities: scope.entities),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byIcon(Icons.widgets_outlined), findsNothing);
+      // The world's own two are still there.
+      expect(find.byIcon(Icons.add_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.folder_open_rounded), findsOneWidget);
+    });
+  });
 }
