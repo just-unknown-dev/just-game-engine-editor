@@ -182,6 +182,20 @@ class PlayControlsToolbar extends StatelessWidget {
                       color: accent,
                       clock: _clock(play.elapsedSeconds.value),
                     ),
+                  const SizedBox(width: 4),
+                  button(
+                    Icons.camera,
+                    _tip(
+                      plugin.showGamePreview.value
+                          ? 'Hide the game camera preview'
+                          : 'Show the game camera preview',
+                      'editor.togglePreview',
+                    ),
+                    EditorTheme.primaryBright,
+                    isActive: plugin.showGamePreview.value,
+                    onTap: () => plugin.showGamePreview.value =
+                        !plugin.showGamePreview.value,
+                  ),
                 ],
               ),
             ),
@@ -243,30 +257,6 @@ class PlayControlsToolbar extends StatelessWidget {
               ),
             ),
             // ── View toggles, then what the modules add ────────────────
-            Container(
-              decoration: BoxDecoration(
-                color: EditorTheme.statusBadgeBg,
-                borderRadius: BorderRadius.circular(settings.cornerRadius + 6),
-                border: Border.all(color: accent, width: running ? 1.5 : 1),
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: 5 * settings.compactness,
-                vertical: 3 * settings.compactness,
-              ),
-              child: button(
-                Icons.camera,
-                _tip(
-                  plugin.showGamePreview.value
-                      ? 'Hide the game camera preview'
-                      : 'Show the game camera preview',
-                  'editor.togglePreview',
-                ),
-                EditorTheme.primaryBright,
-                isActive: plugin.showGamePreview.value,
-                onTap: () => plugin.showGamePreview.value =
-                    !plugin.showGamePreview.value,
-              ),
-            ),
             for (final extra in plugin.scope.toolbarButtons)
               Container(
                 decoration: BoxDecoration(
