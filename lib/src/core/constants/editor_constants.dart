@@ -110,6 +110,12 @@ abstract final class GizmoConstants {
   static const double axisSquareHitRadius = 9.0;
   static const double moveHandleHitRadius = 11.0;
 
+  /// How near an arrow's shaft a press has to be to take it.
+  static const double axisHitWidth = 6.0;
+
+  /// How near the rotate ring a press has to be to take it.
+  static const double ringHitWidth = 8.0;
+
   // Colours.
   static const Color colX = Color(0xFFE54B4B);
   static const Color colY = Color(0xFF4BCC73);

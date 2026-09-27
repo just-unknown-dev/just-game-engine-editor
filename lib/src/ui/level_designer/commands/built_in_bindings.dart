@@ -46,7 +46,12 @@ abstract final class BuiltInBindings {
     const KeyBinding(LogicalKeyboardKey.keyH, 'designer.unhideAll', alt: true),
     const KeyBinding(LogicalKeyboardKey.keyL, 'designer.lock'),
     const KeyBinding(LogicalKeyboardKey.keyL, 'designer.unlockAll', alt: true),
-    const KeyBinding(LogicalKeyboardKey.keyR, 'designer.replace'),
+    // R is Rotate; replacing is the rarer act.
+    const KeyBinding(LogicalKeyboardKey.keyR, 'designer.replace', shift: true),
+    const KeyBinding(LogicalKeyboardKey.keyV, 'editor.transform.all'),
+    const KeyBinding(LogicalKeyboardKey.keyW, 'editor.transform.move'),
+    const KeyBinding(LogicalKeyboardKey.keyE, 'editor.transform.scale'),
+    const KeyBinding(LogicalKeyboardKey.keyR, 'editor.transform.rotate'),
     const KeyBinding(
       LogicalKeyboardKey.keyA,
       'designer.selectAll',

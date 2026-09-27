@@ -36,6 +36,7 @@ import 'tools/select_tool.dart';
 import 'tools/tiles/tile_brush_tools.dart';
 import 'tools/tiles/tile_select_tool.dart';
 import 'tools/tiles/tile_terrain_tool.dart';
+import 'tools/tiles/tile_tool_base.dart' show TileTools;
 import '../overlay/camera_rig_painter.dart';
 import 'tools/path_tool.dart';
 
@@ -202,6 +203,7 @@ class LevelDesignerSession {
         uniqueName: _uniqueName,
         codec: scope.codec,
         layout: scope.handleLayout,
+        mapDocs: scope.mapDocs,
       ),
       DrawRectTool(
         sceneState: sceneState,
@@ -510,6 +512,18 @@ class LevelDesignerSession {
   }
 
   /// Switches to whichever tool claims [shortcut], if any.
+  /// Takes up the Move, Scale or Rotate mode just chosen: those are the
+  /// select tool's gizmos, so it is picked up — unless tiles are selected
+  /// with Select tiles, whose selection takes the same gizmos.
+  void adoptTransformMode() {
+    final tool = controller.toolId.value;
+    if (tool == BuiltInTools.select) return;
+    if (tool == TileTools.select && scope.tiles.selection.value.isNotEmpty) {
+      return;
+    }
+    setTool(BuiltInTools.select);
+  }
+
   bool selectToolByShortcut(String shortcut) {
     final tool = tools.byShortcut(shortcut);
     if (tool == null) return false;
@@ -618,7 +632,7 @@ class LevelDesignerSession {
     }
   }
 
-  /// Replaces the selection with the active prefab (R).
+  /// Replaces the selection with the active prefab (Shift+R).
   void replaceSelection() {
     final prefab = controller.activePrefab;
     final entities = selectionEntities();

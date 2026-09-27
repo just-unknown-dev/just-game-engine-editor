@@ -1,6 +1,8 @@
 import '../../timeline/timeline_session.dart';
 import 'package:flutter/widgets.dart' show Offset;
 
+import '../../../core/state/transform_mode.dart';
+
 import 'designer_command.dart';
 
 /// What the designer and the editor can do from the keyboard out of the box.
@@ -303,6 +305,21 @@ abstract final class BuiltInCommands {
       isEnabled: (c) => c.plugin != null && c.plugin!.isAuthoring.value,
       run: (c) => c.plugin!.deleteSelection(),
     ),
+    // All, Move, Scale, Rotate: which gizmo the selection shows, in the
+    // editor and the designer alike — and in the designer, the select
+    // tool. Only while authoring: during a play-test the letters are the
+    // game's.
+    for (final mode in TransformMode.values)
+      DesignerCommand(
+        id: mode.commandId,
+        label: mode.label,
+        scope: CommandScope.editor,
+        isEnabled: (c) => c.plugin?.isAuthoring.value ?? true,
+        run: (c) {
+          c.scope.view.transformMode.value = mode;
+          c.session?.adoptTransformMode();
+        },
+      ),
   ];
 
   static DesignerCommand _d(

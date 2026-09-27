@@ -4,9 +4,12 @@ import 'package:just_signals/just_signals.dart';
 import '../../../core/constants/editor_constants.dart';
 import '../level_designer_session.dart';
 import '../tools/level_tool.dart';
+import '../tools/tool_registry.dart';
 import '../../widgets/editor_scrollbar.dart';
 
-/// The vertical tool strip down the left edge of the designer.
+/// The designer's tool strip, floating at the top right of the viewport
+/// under the All / Move / Scale / Rotate column — which is the select tool,
+/// so it is not listed again here.
 ///
 /// Tools stand under a caption per group — SELECT, SHAPES, TILES, MEASURE,
 /// and any group a module adds — each with its shortcut letter in the
@@ -19,8 +22,8 @@ class ToolPalette extends StatelessWidget {
   /// The designer session whose tool is being switched.
   final LevelDesignerSession session;
 
-  /// Width of the strip.
-  static const double width = 56;
+  /// Width of the strip, and of the transform column above it.
+  static const double width = 48;
 
   @override
   Widget build(BuildContext context) => SignalBuilder<String?>(
@@ -30,21 +33,18 @@ class ToolPalette extends StatelessWidget {
   );
 
   Widget _buildStrip(BuildContext context) {
-    return Container(
+    // Floats under the transform column, as tall as its tools and no
+    // taller — and scrolls when the window is shorter than that.
+    return SizedBox(
       width: width,
-      decoration: const BoxDecoration(
-        color: EditorTheme.panelBg,
-        border: Border(right: BorderSide(color: EditorTheme.border)),
-      ),
       // Renders whatever is registered, so a project's tool appears here
       // without the editor package knowing it exists.
       child: SignalBuilder<String>(
         signal: session.controller.toolId,
         builder: (context, activeId, _) => Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Scrolls: every group together is more than a short window can
-            // stack.
-            Expanded(
+            Flexible(
               child: EditorScrollbar(
                 builder: (_, scroll) => SingleChildScrollView(
                   controller: scroll,
@@ -56,26 +56,32 @@ class ToolPalette extends StatelessWidget {
             Container(height: 1, color: EditorTheme.border),
             const SizedBox(height: 4),
             _UndoButtons(session: session),
-            const SizedBox(height: 6),
           ],
         ),
       ),
     );
   }
 
-  /// A caption per group, then its tools.
+  /// A caption per group, then its tools. Not the select tool: the
+  /// transform column's All, Move, Scale and Rotate are it. A group left
+  /// with nothing is left out.
   List<Widget> _groups(String activeId) => [
-    for (final (group, tools) in session.tools.grouped) ...[
-      ToolGroupCaption(label: group.label),
-      for (final tool in tools)
-        ToolStripButton(
-          icon: tool.icon,
-          tooltip: _tooltipFor(tool),
-          shortcut: tool.shortcut,
-          isActive: tool.id == activeId,
-          onTap: () => session.setTool(tool.id),
-        ),
-    ],
+    for (final (group, all) in session.tools.grouped)
+      if ([
+            for (final t in all)
+              if (t.id != BuiltInTools.select) t,
+          ]
+          case final tools when tools.isNotEmpty) ...[
+        ToolGroupCaption(label: group.label),
+        for (final tool in tools)
+          ToolStripButton(
+            icon: tool.icon,
+            tooltip: _tooltipFor(tool),
+            shortcut: tool.shortcut,
+            isActive: tool.id == activeId,
+            onTap: () => session.setTool(tool.id),
+          ),
+      ],
   ];
 }
 

@@ -8,6 +8,7 @@ import '../../ui/level_designer/level_designer_session.dart';
 import '../../ui/level_designer/tools/level_tool.dart' show ToolButton;
 import '../../ui/overlay/gizmo_painter.dart';
 import '../state/editor_scene_state.dart';
+import '../state/transform_mode.dart';
 
 /// Turns pointer events on the game canvas into edits: gizmo drags, camera
 /// pan and zoom, and, when the Level Designer is open, its tools and chrome.
@@ -25,6 +26,8 @@ class ViewportInput {
     required this.isActive,
     required this.isAuthoring,
     this.isPickable,
+    this.transformMode,
+    this.transformModes,
     GizmoHitTester? hitTester,
   }) : _worldOf = world,
        cameraOf = camera,
@@ -35,6 +38,13 @@ class ViewportInput {
   /// tree answers false here; without it the lock did nothing outside
   /// the Level Designer, whose tools asked their own question.
   final bool Function(Entity entity)? isPickable;
+
+  /// Which gizmo the selection shows, so a press takes only its handles.
+  /// All when not given.
+  final TransformMode Function()? transformMode;
+
+  /// What the selection can take: All leaves off the handles of the rest.
+  final Set<TransformMode> Function()? transformModes;
 
   final World Function() _worldOf;
 
@@ -176,6 +186,8 @@ class ViewportInput {
       entities,
       camera,
       canvasSize,
+      mode: transformMode?.call() ?? TransformMode.all,
+      allows: transformModes?.call(),
     );
 
     if (hit.handle == GizmoHandle.none) {

@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../../../core/state/transform_mode.dart';
+import '../../overlay/transform_gizmo.dart';
+import '../painters/designer_canvas.dart';
 import '../state/designer_geometry.dart';
 import '../state/selection_handle_layout.dart';
 import '../tools/tool_registry.dart';
 import 'built_in_overlays.dart';
 import 'designer_overlay.dart';
 
-/// Resize handles and the rotate knob on the selection's bounds.
+/// The selection's gizmo, as the Move, Scale and Rotate toolbar says:
+/// arrows at its centre, the resize handles on its bounds, or a ring
+/// around it.
 ///
 /// Drawn only while the select tool is active — the only tool that responds
 /// to them — and at the positions [SelectTool] hit-tests, in screen pixels so
@@ -46,16 +51,59 @@ class SelectionHandlesOverlay extends DesignerOverlay {
       ..color = OverlayColors.selection;
     draw.canvas.drawRect(screen, stroke);
 
-    // Rotate knob, on a short stem above the top edge.
+    final centre = draw.toScreen(bounds.center);
+    final available = TransformModes.forEntities(context.world, entities);
+    final mode = TransformModes.shown(
+      context.controller.view.transformMode.value,
+      available,
+    );
     final unitsPerPixel = 1 / draw.camera.zoom;
-    final knob = draw.toScreen(layout.rotateKnobAt(bounds, unitsPerPixel));
-    draw.canvas
-      ..drawLine(Offset(screen.center.dx, screen.top), knob, stroke)
-      ..drawCircle(knob, 5, Paint()..color = Colors.white)
-      ..drawCircle(knob, 5, stroke);
+    switch (mode) {
+      case TransformMode.all:
+        // As it always was: a knob on a short stem above the top edge, and
+        // the resize handles — what the selection can take.
+        if (available.contains(TransformMode.rotate)) {
+          final knob = draw.toScreen(
+            layout.rotateKnobAt(bounds, unitsPerPixel),
+          );
+          draw.canvas
+            ..drawLine(Offset(screen.center.dx, screen.top), knob, stroke)
+            ..drawCircle(knob, 5, Paint()..color = Colors.white)
+            ..drawCircle(knob, 5, stroke);
+        }
+        if (!available.contains(TransformMode.scale) ||
+            bounds.width <= 0 ||
+            bounds.height <= 0) {
+          return;
+        }
+        _paintHandles(draw, bounds, stroke);
+      case TransformMode.move:
+        TransformGizmo.paintMove(draw.canvas, centre);
+      case TransformMode.scale:
+        // A point marker has nothing to resize.
+        if (bounds.width <= 0 || bounds.height <= 0) return;
+        _paintHandles(draw, bounds, stroke);
+      case TransformMode.rotate:
+        final zoom = draw.camera.zoom;
+        // One thing shows which way it is turned; several, no one way.
+        final angle = entities.length == 1
+            ? entities.single
+                      .getComponent<jge.TransformComponent>()
+                      ?.rotation ??
+                  0.0
+            : 0.0;
+        TransformGizmo.paintRotate(
+          draw.canvas,
+          centre,
+          layout.ringRadius(bounds, 1 / zoom) * zoom,
+          angle: angle,
+        );
+      case null:
+        break;
+    }
+  }
 
-    // A point marker has nothing to resize.
-    if (bounds.width <= 0 || bounds.height <= 0) return;
+  static void _paintHandles(DesignerCanvas draw, Rect bounds, Paint stroke) {
     final fill = Paint()..color = Colors.white;
     for (final handle in ResizeHandle.values) {
       final at = draw.toScreen(handle.on(bounds));

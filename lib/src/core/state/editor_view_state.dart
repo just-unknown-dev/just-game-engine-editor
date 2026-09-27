@@ -12,6 +12,8 @@ library;
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
+import 'transform_mode.dart';
+
 class EditorViewState {
   /// Entities hidden in the viewport (H, or everything else under
   /// isolate).
@@ -34,6 +36,14 @@ class EditorViewState {
   final Signal<jge.EntityId?> pinned = Signal<jge.EntityId?>(
     null,
     debugLabel: 'pinnedEntity',
+  );
+
+  /// Which gizmo the selection shows — All, Move, Scale or Rotate (V, W,
+  /// E, R). In the editor and the Level Designer alike, and kept between
+  /// them.
+  final Signal<TransformMode> transformMode = Signal(
+    TransformMode.all,
+    debugLabel: 'transformMode',
   );
 
   bool isPinned(jge.EntityId id) => pinned.value == id;
@@ -108,6 +118,7 @@ class EditorViewState {
   void unlockAll() => locked.value = <jge.EntityId>{};
 
   void dispose() {
+    transformMode.dispose();
     pinned.dispose();
     hidden.dispose();
     locked.dispose();

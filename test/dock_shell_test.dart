@@ -9,6 +9,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/compact_dock.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/shell/dock_panel.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/shared/transform_toolbar.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart'
     show GameCanvasArea;
 
@@ -497,11 +498,18 @@ void main() {
       expect(bar().bottom, strip().top, reason: 'the designer bar on it');
       final shut = bar().top;
 
-      // The game has the top of the window, beside the tool strip; the
+      // The game has the top of the window and its left edge — the tool
+      // strip floats at its top right, under the transform column; the
       // tool's options are in the designer bar at its foot.
       final canvas = tester.getRect(find.byType(GameCanvasArea));
       expect(canvas.top, window.top);
-      expect(canvas.left, window.left + ToolPalette.width);
+      expect(canvas.left, window.left);
+      final column = tester.getRect(find.byType(TransformToolbar));
+      final tools = tester.getRect(find.byType(ToolPalette));
+      expect(tools.top, greaterThan(column.bottom));
+      expect(tools.right, closeTo(column.right, 1));
+      expect(tools.right, lessThan(canvas.right));
+      expect(tools.left, greaterThan(canvas.center.dx));
       expect(
         find.descendant(
           of: find.byType(DesignerStatusBar),

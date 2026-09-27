@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
+import 'package:just_game_engine_editor/src/ui/scene_tree/map_item_row.dart';
 import 'package:just_tiled/just_tiled.dart' as tiled;
 
 import 'support/test_scope.dart';
@@ -239,6 +240,55 @@ void main() {
         ..undo()
         ..undo();
       expect((back.visible, back.locked), (true, false));
+    });
+
+    testWidgets('a layer row picked is the selection until something else '
+        'is; its layer stays painted', (tester) async {
+      controller.expand(map.id);
+      await pumpTree(tester);
+      Color? backgroundOf(String name) => tester
+          .widget<Container>(
+            find
+                .descendant(
+                  of: find.ancestor(
+                    of: find.text(name),
+                    matching: find.byType(MapItemRow),
+                  ),
+                  matching: find.byType(Container),
+                )
+                .first,
+          )
+          .color;
+
+      scope.sceneState.selectEntity(crate);
+      await tester.pump();
+      await tester.tap(find.text('Back'));
+      await tester.pump();
+      expect(scope.tiles.layerId.value, back.id);
+      expect(backgroundOf('Back'), EditorTheme.selectionBg);
+      expect(
+        scope.sceneState.hasAnySelection,
+        isFalse,
+        reason: 'one selection in the tree',
+      );
+
+      // An entity picked takes the selection off it — the bug was that
+      // nothing did.
+      await tester.tap(find.text('Crate'));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(scope.sceneState.selectedEntity.value, same(crate));
+      expect(backgroundOf('Back'), isNot(EditorTheme.selectionBg));
+      expect(scope.tiles.layerId.value, back.id, reason: 'still painted');
+
+      // So does a click on the empty part of the tree.
+      scope.sceneState.clearSelection();
+      controller.pickedLayer.value = (map.id, back.id);
+      await tester.pump();
+      expect(backgroundOf('Back'), EditorTheme.selectionBg);
+      await tester.tapAt(const Offset(160, 560));
+      await tester.pump();
+      expect(controller.pickedLayer.value, isNull);
+      expect(backgroundOf('Back'), isNot(EditorTheme.selectionBg));
     });
 
     testWidgets('the arrow keys walk the entities, past the map\'s rows', (

@@ -120,17 +120,17 @@ void main() {
   });
 
   test('keys reach the tool before the designer\'s commands', () {
-    // V would switch to the select tool; the tool takes it first.
+    // B would switch to the draw tool; the tool takes it first.
     session.onPointerHover(const Offset(64, 0), 32);
 
-    expect(session.handleKey(LogicalKeyboardKey.keyV, gridSize: 32), isTrue);
-    expect(probe.log.last, 'key V at 64');
+    expect(session.handleKey(LogicalKeyboardKey.keyB, gridSize: 32), isTrue);
+    expect(probe.log.last, 'key B at 64');
     expect(session.controller.toolId.value, probe.id);
 
     // A key the tool lets go of carries on to the designer.
     probe.takesKeys = false;
-    session.handleKey(LogicalKeyboardKey.keyV, gridSize: 32);
-    expect(session.controller.toolId.value, BuiltInTools.select);
+    session.handleKey(LogicalKeyboardKey.keyB, gridSize: 32);
+    expect(session.controller.toolId.value, BuiltInTools.draw);
   });
 
   group('the viewport', () {
@@ -210,7 +210,9 @@ void main() {
     expect(top('SHAPES'), lessThan(top('TILES')));
     expect(top('TILES'), lessThan(top('MEASURE')));
 
-    for (final key in ['V', 'B', 'P', 'I', 'S', 'G', 'T', 'D', 'W', 'M']) {
+    // Not V: the select tool is the transform column's, not the strip's.
+    expect(find.byIcon(Icons.near_me), findsNothing);
+    for (final key in ['B', 'P', 'I', 'S', 'G', 'T', 'D', 'Q', 'M']) {
       expect(find.text(key), findsOneWidget, reason: 'the $key badge');
     }
     final active = tester

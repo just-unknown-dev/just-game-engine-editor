@@ -170,16 +170,22 @@ void main() {
     test('tool shortcuts switch tools', () {
       key(LogicalKeyboardKey.keyB);
       expect(session.controller.toolId.value, BuiltInTools.draw);
-      key(LogicalKeyboardKey.keyV);
-      expect(session.controller.toolId.value, BuiltInTools.select);
+      key(LogicalKeyboardKey.keyM);
+      expect(session.controller.toolId.value, BuiltInTools.measure);
+      // V is the editor's All, which picks the select tool up: a command,
+      // not a tool's key (see transform_toolbar_test).
+      expect(session.tools.byShortcut('V'), isNull);
     });
 
-    test('R replaces with the active prefab, same place, size and layer', () {
+    test('Shift+R replaces with the active prefab, same place, size and '
+        'layer', () {
       final a = _block(world, 'A', 100, 50, w: 96, h: 32);
       a.getComponent<LayerComponent>()!.layer = 7;
       session.sceneState.selectEntity(a);
       session.controller.activePrefabId.value = BuiltInPrefabs.solidId;
+      keys.shift = true;
       key(LogicalKeyboardKey.keyR);
+      keys.shift = false;
 
       final replaced = world.query([TransformComponent]).single;
       expect(replaced.id, isNot(a.id));
@@ -196,6 +202,7 @@ void main() {
     test('a corner handle resizes the visual and the collider together', () {
       final a = _block(world, 'A', 32, 16); // bounds 0,0 -> 64,32
       session.sceneState.selectEntity(a);
+      session.scope.view.transformMode.value = TransformMode.scale;
       drag(const Offset(64, 32), const Offset(128, 64));
 
       final rect = a.components.whereType<RectangleComponent>().single;
@@ -259,14 +266,14 @@ void main() {
       expect(_pos(a), const Offset(39, 21));
     });
 
-    test('the rotate knob turns in 15 degree steps', () {
+    test('the rotate ring turns in 15 degree steps', () {
       final a = _block(world, 'A', 0, 0);
       session.sceneState.selectEntity(a);
+      session.scope.view.transformMode.value = TransformMode.rotate;
       final bounds = DesignerGeometry.worldBounds(a)!;
-      final knob = session.scope.handleLayout.rotateKnobAt(bounds, 1);
-      final r = (knob - bounds.center).distance;
+      final r = session.scope.handleLayout.ringRadius(bounds, 1);
       // From straight up to just past straight right: a quarter turn.
-      drag(knob, bounds.center + Offset(r, 3));
+      drag(bounds.center + Offset(0, -r), bounds.center + Offset(r, 3));
       expect(
         a.getComponent<TransformComponent>()!.rotation,
         closeTo(math.pi / 2, 1e-9),

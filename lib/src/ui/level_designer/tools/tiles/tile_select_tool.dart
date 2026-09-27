@@ -1,6 +1,13 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart';
+
+import '../../../../core/level_map/tile_turn.dart';
+import '../../../../core/state/transform_mode.dart';
+import '../../../overlay/gizmo_painter.dart' show GizmoHandle;
+import '../../../overlay/transform_gizmo.dart';
 
 import '../../../../core/level_map/tile_commands.dart';
 import '../../../../core/level_map/level_map_documents.dart';
@@ -11,11 +18,13 @@ import '../level_tool.dart';
 import 'tile_tool_base.dart';
 
 /// Selects cells of the layer being painted: a dragged box, the connected
-/// run of one tile (the wand), or every cell holding one tile. W again
+/// run of one tile (the wand), or every cell holding one tile. Q again
 /// cycles between them.
 ///
 /// Shift adds to the selection and Ctrl takes away. Dragging the selection
-/// moves its tiles. Ctrl+C copies, Ctrl+X cuts, Delete clears, Ctrl+A
+/// moves its tiles. The selection shows the Move or Rotate gizmo, as the
+/// toolbar says (W, R): an arrow moves the tiles along it, the ring turns
+/// them a quarter at a time. Tiles do not scale. Ctrl+C copies, Ctrl+X cuts, Delete clears, Ctrl+A
 /// selects every painted cell and Esc lets go. Enter — or *Make entity*,
 /// or the right-click menu while tiles are selected — cuts the selected
 /// tiles out into an entity of their own.
@@ -29,7 +38,8 @@ class TileSelectTool extends TileTool {
   @override
   IconData get icon => Icons.highlight_alt;
   @override
-  String? get shortcut => 'W';
+  // W, E and R are Move, Scale and Rotate.
+  String? get shortcut => 'Q';
   @override
   int get order => 240;
 
@@ -86,7 +96,7 @@ class TileSelectTool extends TileTool {
   @override
   String? get description =>
       'Select tiles: a box, the connected run of a tile, or every cell of a '
-      'tile (W again switches). Shift adds, Ctrl takes away, drag to move. '
+      'tile (Q again switches). Shift adds, Ctrl takes away, drag to move. '
       'Ctrl+C / Ctrl+X copy and cut, Delete clears, Enter makes an entity.';
 
   TileAim? _aim;
@@ -95,6 +105,137 @@ class TileSelectTool extends TileTool {
 
   TileStroke? _moving;
   TileCoord? _moveFrom;
+
+  /// An arrow of the move gizmo: the move keeps to its axis.
+  Axis? _axis;
+
+  /// Whether the move began on the gizmo, where a click is only a click.
+  bool _viaGizmo = false;
+
+  /// Set while a click that fell through the ring is replayed.
+  bool _throughGizmo = false;
+
+  // Turning the selection with the rotate ring.
+  TileStroke? _turning;
+  TileAim? _turnAim;
+  Set<TileCoord> _turnCells = const {};
+  TileCoord? _turnPivot;
+  Offset _turnCentre = Offset.zero;
+  double _turnFrom = 0;
+  int _turnSteps = 0;
+  bool _turnHeld = false;
+
+  /// The gizmo the selection shows: All (arrows and ring), Move or Rotate,
+  /// as the toolbar says — All when it says Scale.
+  TransformMode? _gizmo(ToolContext c) => TransformModes.shown(
+    c.controller.view.transformMode.value,
+    TransformModes.tiles,
+  );
+
+  /// Where [cells] of [layer] are drawn in the world now, with [camera]
+  /// where it is.
+  static Rect? cellsBounds(
+    LevelMapTarget target,
+    MapLayerData layer,
+    Iterable<TileCoord> cells,
+    Offset? camera,
+  ) {
+    final shift = target.layerShift(layer, camera);
+    final g = target.geometry;
+    double? l, t, r, b;
+    for (final c in cells) {
+      for (final p in g.cellPolygon(c.x, c.y)) {
+        final x = p.dx + shift.dx;
+        final y = p.dy + shift.dy;
+        l = l == null ? x : math.min(l, x);
+        t = t == null ? y : math.min(t, y);
+        r = r == null ? x : math.max(r, x);
+        b = b == null ? y : math.max(b, y);
+      }
+    }
+    return l == null ? null : Rect.fromLTRB(l, t!, r!, b!);
+  }
+
+  /// Starts what a press on the selection's gizmo means, when it is on it.
+  bool _onGizmo(ToolContext c, TileAim a) {
+    final cells = state.selection.value;
+    if (cells.isEmpty || c.isShiftDown || c.isCtrlDown) return false;
+    final bounds = cellsBounds(a.target, a.layer, cells, c.camera?.position);
+    if (bounds == null) return false;
+    final px = c.unitsPerPixel;
+    final mode = _gizmo(c);
+    if (mode == null) return false;
+    // All has both: the arrows, then the ring around them.
+    if (mode != TransformMode.rotate) {
+      final handle = TransformGizmo.moveHandleAt(
+        c.worldPosition,
+        bounds.center,
+        px: px,
+      );
+      if (handle != GizmoHandle.none) {
+        _lift(c, cellAt(a, c.worldPosition, c));
+        _viaGizmo = true;
+        _axis = switch (handle) {
+          GizmoHandle.translateX => Axis.horizontal,
+          GizmoHandle.translateY => Axis.vertical,
+          _ => null,
+        };
+        return true;
+      }
+    }
+    if (mode != TransformMode.rotate && mode != TransformMode.all) {
+      return false;
+    }
+    var radius = scope.handleLayout.ringRadius(bounds, px);
+    // All's ring stands out past the arrows, which would otherwise take
+    // its presses.
+    if (mode == TransformMode.all) {
+      radius = TransformGizmo.ringClearOfArrows(radius, px: px);
+    }
+    if (!TransformGizmo.onRing(
+      c.worldPosition,
+      bounds.center,
+      radius,
+      px: px,
+    )) {
+      return false;
+    }
+    final edit = aim(c);
+    if (edit == null) return true;
+    _turnHeld = true;
+    _turnAim = edit;
+    _turnCells = cells;
+    _turnPivot = TileTurn.pivotOf(edit.target.geometry, cells);
+    _turnCentre = bounds.center;
+    _turnFrom = _angle(_turnCentre, c.worldPosition);
+    _turnSteps = 0;
+    return true;
+  }
+
+  static double _angle(Offset centre, Offset at) =>
+      math.atan2(at.dy - centre.dy, at.dx - centre.dx);
+
+  /// Turns the selected tiles the whole steps the ring has been dragged
+  /// round, from where they started; the selection follows them.
+  void _turn(ToolContext c) {
+    final a = _turnAim!;
+    final g = a.target.geometry;
+    final steps =
+        ((_angle(_turnCentre, c.worldPosition) - _turnFrom) /
+                TileTurn.stepAngle(g))
+            .round();
+    if (steps == _turnSteps) return;
+    _turning?.revert();
+    _turnSteps = steps;
+    final stroke = strokeOn(a);
+    state.selection.value = Set.unmodifiable(
+      TileTurn.turn(stroke, g, _turnCells, steps, pivot: _turnPivot),
+    );
+    _turning = stroke;
+    c.controller.setStatus(
+      '${(steps * TileTurn.stepAngle(g) * 180 / math.pi).round()}°',
+    );
+  }
 
   // ── Choosing cells ───────────────────────────────────────────────────────
 
@@ -158,6 +299,7 @@ class TileSelectTool extends TileTool {
   bool onPaintDown(ToolContext c) {
     var a = aim(c, forEdit: false);
     if (a == null) return true;
+    if (!_throughGizmo && _onGizmo(c, a)) return true;
     var at = cellAt(a, c.worldPosition, c);
     _combine = (add: c.isShiftDown, subtract: c.isCtrlDown && !c.isShiftDown);
     final plain = !_combine.add && !_combine.subtract;
@@ -202,6 +344,10 @@ class TileSelectTool extends TileTool {
 
   @override
   void onPaintMove(ToolContext c) {
+    if (_turnHeld) {
+      _turn(c);
+      return;
+    }
     final a = _aim;
     if (a == null) return;
     final at = cellAt(a, c.worldPosition, c);
@@ -209,7 +355,10 @@ class TileSelectTool extends TileTool {
     if (_moving != null) {
       final g = a.target.geometry;
       final s = g.toStable(at);
-      state.floatOffset = TileCoord(s.x - _moveFrom!.x, s.y - _moveFrom!.y);
+      state.floatOffset = TileCoord(
+        _axis == Axis.vertical ? 0 : s.x - _moveFrom!.x,
+        _axis == Axis.horizontal ? 0 : s.y - _moveFrom!.y,
+      );
       return;
     }
     if (_start != null) state.dragArea = (_start!, at);
@@ -217,6 +366,25 @@ class TileSelectTool extends TileTool {
 
   @override
   void onPaintUp(ToolContext c) {
+    if (_turnHeld) {
+      final stroke = _turning;
+      if (_turnSteps != 0) {
+        commit(stroke, 'Rotate tiles');
+        _end();
+        return;
+      }
+      // A click on the ring, not a turn: what the click would have done
+      // without it there — the ring lies across the tiles round the
+      // selection, and picking one of those is the likelier aim.
+      stroke?.revert();
+      state.selection.value = Set.unmodifiable(_turnCells);
+      _end();
+      _throughGizmo = true;
+      onPaintDown(c);
+      _throughGizmo = false;
+      onPaintUp(c);
+      return;
+    }
     if (_moving != null) {
       _drop(c);
     } else {
@@ -231,6 +399,10 @@ class TileSelectTool extends TileTool {
   @override
   void onPaintCancel() {
     _moving?.revert();
+    if (_turning != null) {
+      _turning!.revert();
+      state.selection.value = Set.unmodifiable(_turnCells);
+    }
     _end();
   }
 
@@ -243,6 +415,14 @@ class TileSelectTool extends TileTool {
     _start = null;
     _moving = null;
     _moveFrom = null;
+    _axis = null;
+    _viaGizmo = false;
+    _turning = null;
+    _turnAim = null;
+    _turnCells = const {};
+    _turnPivot = null;
+    _turnSteps = 0;
+    _turnHeld = false;
   }
 
   // ── Moving ───────────────────────────────────────────────────────────────
@@ -274,9 +454,11 @@ class TileSelectTool extends TileTool {
     final g = a.target.geometry;
     final offset = state.floatOffset;
     if (offset.x == 0 && offset.y == 0) {
+      stroke.revert();
+      // A click on the gizmo, not a drag: nothing.
+      if (_viaGizmo) return;
       // A click inside the selection, not a drag: let go of it, as Tiled
       // does.
-      stroke.revert();
       state.selection.value = const {};
       c.controller.setStatus('No tiles selected');
       return;
@@ -297,7 +479,7 @@ class TileSelectTool extends TileTool {
     final c = context;
     final m = c.modifiers;
     final bare = !m.control && !m.alt && !m.shift;
-    if (key == LogicalKeyboardKey.keyW && bare) {
+    if (key == LogicalKeyboardKey.keyQ && bare) {
       final modes = TileSelectMode.values;
       final next = modes[(state.selectMode.value.index + 1) % modes.length];
       state.selectMode.value = next;

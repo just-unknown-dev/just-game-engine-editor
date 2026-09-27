@@ -16,7 +16,9 @@ import 'scene_tree_row.dart';
 
 /// A row of the scene tree that is part of a level map: one of its layers.
 ///
-/// Clicking it makes its layer the one painted; a second click renames it.
+/// Clicking it picks it — the tree's selection moves from any entity to it
+/// — and makes its layer the one painted; a second click renames it. The
+/// painted layer's icon stays lit after the pick has moved on.
 /// The eye and the padlock are the map's own, saved and undoable, and hide
 /// and lock what is on the layer too. The menu renames the layer, or
 /// deletes it with what is on it.
@@ -118,15 +120,25 @@ class _MapItemRowState extends State<MapItemRow> {
           id,
     ].length;
     final row = _frame(
-      selected: painted,
+      // Selected only while it is the tree's pick. Being painted is not
+      // being selected: there always is a painted layer, and drawing it as
+      // the selection left a row nothing could deselect.
+      selected:
+          painted && widget.controller.pickedLayer.value == (map.id, layer.id),
+      lit: painted,
       onPressed: (event) {
         if (_isSecondClick(event)) {
           setState(() => _renaming = true);
           return;
         }
+        // One selection in the tree: picking a layer lets go of the
+        // entities. The layer being painted does not follow the entity
+        // selection being emptied.
+        scope.sceneState.clearSelection();
         tiles
           ..selectMap(map)
           ..layerId.value = layer.id;
+        widget.controller.pickedLayer.value = (map.id, layer.id);
       },
       onMenu: (at) => _layerMenu(context, target, layer, at),
       expander: widget.row.hasChildren
@@ -250,6 +262,7 @@ class _MapItemRowState extends State<MapItemRow> {
 
   Widget _frame({
     required bool selected,
+    bool lit = false,
     required void Function(PointerDownEvent event) onPressed,
     required void Function(Offset globalPosition) onMenu,
     required IconData icon,
@@ -301,7 +314,7 @@ class _MapItemRowState extends State<MapItemRow> {
               Icon(
                 icon,
                 size: 13,
-                color: selected
+                color: selected || lit
                     ? EditorTheme.primaryBright
                     : EditorTheme.textMuted,
               ),

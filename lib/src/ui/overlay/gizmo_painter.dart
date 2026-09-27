@@ -6,7 +6,9 @@ import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../core/constants/editor_constants.dart';
+import '../../core/state/transform_mode.dart';
 import '../level_designer/grid/square_grid.dart';
+import 'transform_gizmo.dart';
 
 /// Gizmo handle identifier returned by [GizmoHitTester.hitTest].
 enum GizmoHandle {
@@ -46,26 +48,9 @@ class GizmoPainter {
   /// extent on its definition first, so it is the marquee's answer too.
   static Size? sizeOf(Component component) => _sizeFromComponent(component);
 
-  static const double _arrowLength = GizmoConstants.arrowLength;
-  static const double _arrowHeadLength = GizmoConstants.arrowHeadLength;
-  static const double _arrowHeadWidth = GizmoConstants.arrowHeadWidth;
   static const double _rotRadius = GizmoConstants.rotRadius;
-  static const double _rotSweep = GizmoConstants.rotSweep;
-  static const double _scaleHandle = GizmoConstants.scaleHandle;
-  static const double _dotRadius = GizmoConstants.dotRadius;
-  static const double _moveHandleRadius = GizmoConstants.moveHandleRadius;
-  // Axis-scale square: sits on the arrow shaft before the arrowhead
-  static const double _axisSquareOffset = GizmoConstants.axisSquareOffset;
-  static const double _axisSquareHalf = GizmoConstants.axisSquareHalf;
-
-  // Colours
-  static const Color _colX = GizmoConstants.colX;
-  static const Color _colY = GizmoConstants.colY;
-  static const Color _colRot = GizmoConstants.colRot;
-  static const Color _colScale = GizmoConstants.colScale;
   static const Color _colSel = GizmoConstants.colSel;
   static const Color _colOrigin = GizmoConstants.colOrigin;
-  static const Color _colMove = GizmoConstants.colMove;
 
   final Paint _paint = Paint()..isAntiAlias = true;
 
@@ -83,15 +68,20 @@ class GizmoPainter {
     cellSize: gridSize,
   );
 
-  /// Paints gizmos for [entity] using [camera] to convert positions.
+  /// Paints [mode]'s gizmo for [entity] using [camera] to convert
+  /// positions: all of them in one, arrows to move it, handles to scale it,
+  /// or a ring to turn it — as the toolbar says. [allows] is what [entity]
+  /// can take; All leaves the rest off.
   ///
   /// [canvasSize] is the full viewport size.
   void paintGizmos(
     Canvas canvas,
     Entity entity,
     Camera camera,
-    Size canvasSize,
-  ) {
+    Size canvasSize, {
+    TransformMode mode = TransformMode.all,
+    Set<TransformMode>? allows,
+  }) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
 
@@ -103,51 +93,28 @@ class GizmoPainter {
     // Selection outline
     _paintSelectionRect(canvas, bounds.corners);
 
-    // Translate arrows
-    _paintArrow(
-      canvas,
-      screenPos,
-      screenPos + const Offset(_arrowLength, 0),
-      _colX,
-    );
-    _paintArrow(
-      canvas,
-      screenPos,
-      screenPos + const Offset(0, -_arrowLength),
-      _colY,
-    );
-
-    // Axis-scale squares on the arrow shaft (resize width / height)
-    _paintAxisSquare(
-      canvas,
-      screenPos + const Offset(_axisSquareOffset, 0),
-      _colX,
-    );
-    _paintAxisSquare(
-      canvas,
-      screenPos + const Offset(0, -_axisSquareOffset),
-      _colY,
-    );
-
-    // Rotation arc
-    _paintRotationArc(canvas, screenPos, transform.rotation);
-
-    // Free-move center handle (drag in both X and Y)
-    _paintMoveHandle(canvas, screenPos);
-
-    // Scale handles at oriented bounds corners.
-    for (final corner in bounds.corners) {
-      _paint
-        ..style = PaintingStyle.fill
-        ..color = _colScale;
-      canvas.drawRect(
-        Rect.fromCenter(
-          center: corner,
-          width: _scaleHandle * 2,
-          height: _scaleHandle * 2,
-        ),
-        _paint,
-      );
+    switch (mode) {
+      case TransformMode.all:
+        TransformGizmo.paintAll(
+          canvas,
+          screenPos,
+          corners: bounds.corners,
+          rotation: transform.rotation,
+          scale: allows?.contains(TransformMode.scale) ?? true,
+          rotate: allows?.contains(TransformMode.rotate) ?? true,
+        );
+      case TransformMode.move:
+        TransformGizmo.paintMove(canvas, screenPos);
+      case TransformMode.scale:
+        TransformGizmo.paintScaleAxes(canvas, screenPos);
+        TransformGizmo.paintScaleCorners(canvas, bounds.corners);
+      case TransformMode.rotate:
+        TransformGizmo.paintRotate(
+          canvas,
+          screenPos,
+          _rotRadius,
+          angle: transform.rotation,
+        );
     }
 
     // Origin dot
@@ -264,34 +231,6 @@ class GizmoPainter {
 
   // ── Private helpers ───────────────────────────────────────────────────────
 
-  void _paintAxisSquare(Canvas canvas, Offset center, Color color) {
-    // Filled square
-    _paint
-      ..style = PaintingStyle.fill
-      ..color = color;
-    canvas.drawRect(
-      Rect.fromCenter(
-        center: center,
-        width: _axisSquareHalf * 2,
-        height: _axisSquareHalf * 2,
-      ),
-      _paint,
-    );
-    // Dark border so it pops over the arrow line
-    _paint
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0
-      ..color = const Color(0xFF000000).withValues(alpha: 0.4);
-    canvas.drawRect(
-      Rect.fromCenter(
-        center: center,
-        width: _axisSquareHalf * 2,
-        height: _axisSquareHalf * 2,
-      ),
-      _paint,
-    );
-  }
-
   void _paintSelectionRect(Canvas canvas, List<Offset> corners) {
     if (corners.length != 4) return;
     _paint
@@ -306,70 +245,6 @@ class GizmoPainter {
       ..lineTo(corners[3].dx, corners[3].dy)
       ..close();
     canvas.drawPath(path, _paint);
-  }
-
-  void _paintArrow(Canvas canvas, Offset from, Offset to, Color color) {
-    _paint
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..color = color;
-    canvas.drawLine(from, to, _paint);
-
-    // Arrowhead
-    final dir = (to - from);
-    final length = dir.distance;
-    if (length == 0) return;
-    final norm = dir / length;
-    final perp = Offset(-norm.dy, norm.dx);
-
-    final tip = to;
-    final base = to - norm * _arrowHeadLength;
-    final left = base + perp * (_arrowHeadWidth / 2);
-    final right = base - perp * (_arrowHeadWidth / 2);
-
-    final path = ui.Path()
-      ..moveTo(tip.dx, tip.dy)
-      ..lineTo(left.dx, left.dy)
-      ..lineTo(right.dx, right.dy)
-      ..close();
-
-    _paint
-      ..style = PaintingStyle.fill
-      ..color = color;
-    canvas.drawPath(path, _paint);
-  }
-
-  void _paintRotationArc(Canvas canvas, Offset center, double currentRotation) {
-    final rect = Rect.fromCircle(center: center, radius: _rotRadius);
-
-    _paint
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..color = _colRot.withValues(alpha: 0.6);
-    canvas.drawArc(rect, currentRotation, _rotSweep, false, _paint);
-
-    // Dot at arc end
-    final arcEnd = Offset(
-      center.dx + _rotRadius * math.cos(currentRotation + _rotSweep),
-      center.dy + _rotRadius * math.sin(currentRotation + _rotSweep),
-    );
-    _paint
-      ..style = PaintingStyle.fill
-      ..color = _colRot;
-    canvas.drawCircle(arcEnd, _dotRadius, _paint);
-  }
-
-  void _paintMoveHandle(Canvas canvas, Offset center) {
-    _paint
-      ..style = PaintingStyle.fill
-      ..color = _colMove.withValues(alpha: 0.9);
-    canvas.drawCircle(center, _moveHandleRadius, _paint);
-
-    _paint
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..color = const Color(0xFF000000).withValues(alpha: 0.45);
-    canvas.drawCircle(center, _moveHandleRadius, _paint);
   }
 }
 
@@ -621,31 +496,26 @@ bool _pointInOrientedRect(Offset point, _ScreenBounds bounds) {
 
 /// Hit-tests pointer events against gizmo handles and entity bodies.
 class GizmoHitTester {
-  static const double _arrowLength = GizmoConstants.arrowLength;
-  static const double _arrowTipRadius = GizmoConstants.arrowTipRadius;
   static const double _rotRadius = GizmoConstants.rotRadius;
-  static const double _rotDotRadius = GizmoConstants.rotDotRadius;
   static const double _scaleHandle = GizmoConstants.scaleHandle;
-  static const double _rotSweep = GizmoConstants.rotSweep;
-  static const double _axisSquareOffset = GizmoConstants.axisSquareOffset;
-  static const double _axisSquareHitRadius = GizmoConstants.axisSquareHitRadius;
-  static const double _moveHandleHitRadius = GizmoConstants.moveHandleHitRadius;
 
   /// Returns the [GizmoHitResult] for [screenPos].
   ///
-  /// Tests handles on [selected] first, then falls back to body hit-test
-  /// against all [entities] (last-added wins for overlaps).
+  /// Tests [mode]'s handles on [selected] first, then falls back to body
+  /// hit-test against all [entities] (last-added wins for overlaps).
   GizmoHitResult hitTest(
     Offset screenPos,
     Entity? selected,
     List<Entity> entities,
     Camera camera,
-    Size canvasSize,
-  ) {
+    Size canvasSize, {
+    TransformMode mode = TransformMode.all,
+    Set<TransformMode>? allows,
+  }) {
     camera.viewportSize = canvasSize;
 
     if (selected != null && selected.isActive) {
-      final result = _hitTestHandles(screenPos, selected, camera);
+      final result = _hitTestHandles(screenPos, selected, camera, mode, allows);
       if (!result.isNone) return result;
     }
 
@@ -664,7 +534,13 @@ class GizmoHitTester {
     return const GizmoHitResult(GizmoHandle.none, null);
   }
 
-  GizmoHitResult _hitTestHandles(Offset pos, Entity entity, Camera camera) {
+  GizmoHitResult _hitTestHandles(
+    Offset pos,
+    Entity entity,
+    Camera camera,
+    TransformMode mode,
+    Set<TransformMode>? allows,
+  ) {
     final transform = entity.getComponent<TransformComponent>();
     // A piece of interface is selected from the tree like anything else,
     // but it is nowhere in the world: it has no transform, and the world's
@@ -673,58 +549,45 @@ class GizmoHitTester {
     // threw on every pointer move over the viewport.
     if (transform == null) return const GizmoHitResult(GizmoHandle.none, null);
     final center = camera.worldToScreen(transform.position.toOffset());
-    final bounds = _computeScreenBounds(entity, transform, camera);
 
-    // Center free-move handle
-    if ((pos - center).distance < _moveHandleHitRadius) {
-      return GizmoHitResult(GizmoHandle.translateXY, entity);
+    switch (mode) {
+      case TransformMode.all:
+        final handle = TransformGizmo.allHandleAt(
+          pos,
+          center,
+          corners: _computeScreenBounds(entity, transform, camera).corners,
+          rotation: transform.rotation,
+          scale: allows?.contains(TransformMode.scale) ?? true,
+          rotate: allows?.contains(TransformMode.rotate) ?? true,
+        );
+        return handle == GizmoHandle.none
+            ? const GizmoHitResult(GizmoHandle.none, null)
+            : GizmoHitResult(handle, entity);
+      case TransformMode.move:
+        final handle = TransformGizmo.moveHandleAt(pos, center);
+        return handle == GizmoHandle.none
+            ? const GizmoHitResult(GizmoHandle.none, null)
+            : GizmoHitResult(handle, entity);
+      case TransformMode.scale:
+        final axis = TransformGizmo.scaleAxisAt(pos, center);
+        if (axis != GizmoHandle.none) return GizmoHitResult(axis, entity);
+        final bounds = _computeScreenBounds(entity, transform, camera);
+        final corners = <(Offset, GizmoHandle)>[
+          (bounds.corners[0], GizmoHandle.scaleNW),
+          (bounds.corners[1], GizmoHandle.scaleNE),
+          (bounds.corners[2], GizmoHandle.scaleSE),
+          (bounds.corners[3], GizmoHandle.scaleSW),
+        ];
+        for (final (corner, handle) in corners) {
+          if ((pos - corner).distance < _scaleHandle + 4) {
+            return GizmoHitResult(handle, entity);
+          }
+        }
+      case TransformMode.rotate:
+        if (TransformGizmo.onRing(pos, center, _rotRadius)) {
+          return GizmoHitResult(GizmoHandle.rotate, entity);
+        }
     }
-
-    // Scale corners
-    final corners = <(Offset, GizmoHandle)>[
-      (bounds.corners[0], GizmoHandle.scaleNW),
-      (bounds.corners[1], GizmoHandle.scaleNE),
-      (bounds.corners[2], GizmoHandle.scaleSE),
-      (bounds.corners[3], GizmoHandle.scaleSW),
-    ];
-    for (final (corner, handle) in corners) {
-      if ((pos - corner).distance < _scaleHandle + 4) {
-        return GizmoHitResult(handle, entity);
-      }
-    }
-
-    // Rotation arc dot
-    final rotSweepEnd = Offset(
-      center.dx + _rotRadius * math.cos(transform.rotation + _rotSweep),
-      center.dy + _rotRadius * math.sin(transform.rotation + _rotSweep),
-    );
-    if ((pos - rotSweepEnd).distance < _rotDotRadius) {
-      return GizmoHitResult(GizmoHandle.rotate, entity);
-    }
-
-    // Translate X tip
-    final xTip = center + const Offset(_arrowLength, 0);
-    if ((pos - xTip).distance < _arrowTipRadius) {
-      return GizmoHitResult(GizmoHandle.translateX, entity);
-    }
-
-    // Translate Y tip
-    final yTip = center + const Offset(0, -_arrowLength);
-    if ((pos - yTip).distance < _arrowTipRadius) {
-      return GizmoHitResult(GizmoHandle.translateY, entity);
-    }
-
-    // Axis-scale squares (test after tips so arrowhead wins over shaft overlap)
-    final xSquare = center + const Offset(_axisSquareOffset, 0);
-    if ((pos - xSquare).distance < _axisSquareHitRadius) {
-      return GizmoHitResult(GizmoHandle.scaleX, entity);
-    }
-
-    final ySquare = center + const Offset(0, -_axisSquareOffset);
-    if ((pos - ySquare).distance < _axisSquareHitRadius) {
-      return GizmoHitResult(GizmoHandle.scaleY, entity);
-    }
-
     return const GizmoHitResult(GizmoHandle.none, null);
   }
 }

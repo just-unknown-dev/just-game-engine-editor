@@ -10,6 +10,8 @@ class SelectionHandleLayout {
   const SelectionHandleLayout({
     this.handlePixels = 7,
     this.rotateKnobPixels = 28,
+    this.ringPadPixels = 16,
+    this.ringMinPixels = 40,
     this.snapPixels = 6,
     this.rotationStep = math.pi / 12,
   });
@@ -25,6 +27,21 @@ class SelectionHandleLayout {
 
   /// Rotation step while snapping, in radians.
   final double rotationStep;
+
+  /// How far the rotate ring stands clear of the selection's corners.
+  final double ringPadPixels;
+
+  /// The smallest the rotate ring gets, around a point or a small thing.
+  final double ringMinPixels;
+
+  /// The rotate ring's radius about [bounds]' centre, in world units, given
+  /// [unitsPerPixel]: clear of the corners, so it never sits where a resize
+  /// handle would.
+  double ringRadius(Rect bounds, double unitsPerPixel) => math.max(
+    math.sqrt(bounds.width * bounds.width + bounds.height * bounds.height) / 2 +
+        ringPadPixels * unitsPerPixel,
+    ringMinPixels * unitsPerPixel,
+  );
 
   /// Where the rotate knob sits for [bounds], given [unitsPerPixel].
   Offset rotateKnobAt(Rect bounds, double unitsPerPixel) =>

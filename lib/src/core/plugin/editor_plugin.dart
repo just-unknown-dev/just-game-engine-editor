@@ -22,6 +22,7 @@ import '../serialization/scene_manager.dart';
 import '../services/editor_log_service.dart';
 import '../state/editor_scene_state.dart';
 import '../state/play_snapshot.dart';
+import '../state/transform_mode.dart';
 import '../../ui/overlay/gizmo_painter.dart';
 import '../../ui/level_designer/commands/designer_command.dart';
 import '../../ui/level_designer/level_designer_session.dart';
@@ -274,6 +275,8 @@ class JustGameEditorPlugin implements EnginePlugin {
         !scope.view.isHidden(entity.id) &&
         !PlaySnapshot.isGenerated(entity) &&
         sceneState.canSelect(entity),
+    transformMode: () => shownTransformMode ?? TransformMode.all,
+    transformModes: () => transformModesAvailable,
   );
 
   // ── Focus nodes ───────────────────────────────────────────────────────────
@@ -470,6 +473,60 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Whether the Level Designer workspace is currently open.
   bool get isLevelDesignerOpen => designer.value != null;
+
+  // ── Move, Scale, Rotate ───────────────────────────────────────────────────
+
+  /// What the Move, Scale and Rotate toolbar can act on now. Nothing
+  /// during a play-test. With Select tiles in hand, the tiles it has
+  /// selected; otherwise what is selected — in the designer all of it, in
+  /// the editor the one entity its gizmo is on.
+  Set<TransformMode> get transformModesAvailable {
+    if (!isAuthoring.value) return TransformModes.none;
+    final session = designer.value;
+    if (session != null) {
+      if (session.controller.toolId.value == TileTools.select) {
+        return scope.tiles.selection.value.isEmpty
+            ? TransformModes.none
+            : TransformModes.tiles;
+      }
+      return TransformModes.forEntities(
+        engine.world,
+        session.selectionEntities(),
+      );
+    }
+    // A piece of a map turns its tiles, which only the designer does.
+    final selected = sceneState.selectedEntity.value;
+    return selected == null
+        ? TransformModes.none
+        : TransformModes.forEntities(engine.world, [
+            selected,
+          ], turnsPieces: false);
+  }
+
+  /// Whether the gizmos are in hand: always in the editor; in the designer
+  /// with the select tool — which All, Move, Scale and Rotate are — or with
+  /// Select tiles and tiles selected.
+  bool get isTransformToolInHand {
+    final session = designer.value;
+    if (session == null) return true;
+    final tool = session.controller.toolId.value;
+    return tool == BuiltInTools.select ||
+        (tool == TileTools.select && scope.tiles.selection.value.isNotEmpty);
+  }
+
+  /// The gizmo the selection shows: the mode chosen when it can take it,
+  /// else Move; null when nothing selected can take any.
+  TransformMode? get shownTransformMode => TransformModes.shown(
+    scope.view.transformMode.value,
+    transformModesAvailable,
+  );
+
+  /// Picks Move, Scale or Rotate — the toolbar's buttons, W, E and R. In
+  /// the designer the select tool comes with it, whose gizmos they are.
+  void chooseTransformMode(TransformMode mode) {
+    scope.view.transformMode.value = mode;
+    if (isAuthoring.value) designer.value?.adoptTransformMode();
+  }
 
   /// Whether only the Level Map can be worked on: the Level Designer is
   /// open and building, not play-testing, and no workspace — the
@@ -1140,7 +1197,16 @@ class JustGameEditorPlugin implements EnginePlugin {
         isAuthoring.value) {
       return;
     }
-    _gizmoPainter.paintGizmos(canvas, selected, camera, size);
+    final mode = shownTransformMode;
+    if (mode == null) return;
+    _gizmoPainter.paintGizmos(
+      canvas,
+      selected,
+      camera,
+      size,
+      mode: mode,
+      allows: transformModesAvailable,
+    );
   }
 
   /// The preview's top-left corner on the canvas. The chrome publishes it on

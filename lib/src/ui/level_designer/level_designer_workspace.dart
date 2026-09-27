@@ -9,7 +9,6 @@ import 'panels/designer_switch.dart';
 import 'panels/level_layers_panel.dart';
 import 'panels/prefab_palette_panel.dart';
 import 'panels/tileset_palette_panel.dart';
-import 'panels/tool_palette.dart';
 import 'tools/level_tool.dart';
 
 /// The Level Designer's chrome: tool strip on the left, prefab and layer
@@ -50,9 +49,9 @@ class LevelDesignerWorkspace extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        ToolPalette(session: session),
         // The viewport shows through here: the designer adds chrome at the
-        // edges and never covers the canvas.
+        // edges and never covers the canvas. Its tool strip floats over the
+        // top right of it, under the transform column (see the chrome).
         const Expanded(child: IgnorePointer(child: SizedBox.expand())),
         SizedBox(
           width: rightPanelWidth,

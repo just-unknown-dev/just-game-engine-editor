@@ -34,6 +34,15 @@ class SceneTreeController {
     debugLabel: 'treeExpandedLayers',
   );
 
+  /// The map layer row clicked last, as (map, layer id), drawn selected
+  /// the way an entity row is — until an entity is selected or the empty
+  /// part of the tree is clicked. The layer being painted is the
+  /// designer's, and outlasts it.
+  final Signal<(jge.EntityId, int)?> pickedLayer = Signal(
+    null,
+    debugLabel: 'treePickedLayer',
+  );
+
   final Signal<TreeFilter> filter = Signal(
     TreeFilter.none,
     debugLabel: 'treeFilter',
@@ -60,6 +69,7 @@ class SceneTreeController {
   void dispose() {
     expanded.dispose();
     expandedLayers.dispose();
+    pickedLayer.dispose();
     colors.dispose();
     filter.dispose();
     renaming.dispose();

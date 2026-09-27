@@ -16,6 +16,7 @@ import '../right_panel/right_panel.dart';
 import '../settings/overlay_ui_settings.dart';
 import '../shared/shared_widgets.dart';
 import '../shared/snackbar.dart';
+import '../shared/transform_toolbar.dart';
 
 /// Chrome shown when the full editor is closed but the compact status dock
 /// is pinned open. Sized against [MediaQuery]'s screen size since it now
@@ -94,8 +95,10 @@ EdgeInsets editorGameInsets({
                   designerBar -
                   OverlayLayout.compactDockPanelHeight,
             );
+  // Nothing on the left: the tool strip floats over the viewport, top
+  // right, under the transform column.
   return EdgeInsets.fromLTRB(
-    designing ? ToolPalette.width : 0,
+    0,
     0,
     rightPanelWidth + (designing ? designerRightPanelWidth(window) : 0),
     designerBar + docks,
@@ -171,9 +174,7 @@ class FullEditorChrome extends StatelessWidget {
         // the canvas — is told where that is.
         final controlsAt = designer != null
             ? const Offset(
-                ToolPalette.width +
-                    RulersOverlay.thickness +
-                    MinimapLayout.margin,
+                RulersOverlay.thickness + MinimapLayout.margin,
                 RulersOverlay.thickness + MinimapLayout.margin,
               )
             : const Offset(16, 16);
@@ -250,6 +251,32 @@ class FullEditorChrome extends StatelessWidget {
               left: controlsAt.dx,
               top: controlsAt.dy,
               child: PlayControlsToolbar(plugin: plugin, settings: settings),
+            ),
+            // All, Move, Scale, Rotate: the play controls' mirror, at the
+            // top right of the level — clear of the designer's panel and,
+            // at the top, of its ruler — and the designer's tool strip
+            // hanging below, as tall as the level lets it be.
+            Positioned(
+              right:
+                  gameInsets.right +
+                  (designer != null ? MinimapLayout.margin : 16),
+              top: controlsAt.dy,
+              bottom: gameInsets.bottom + 8,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  TransformToolbar(plugin: plugin, settings: settings),
+                  if (designer != null) ...[
+                    const SizedBox(height: 8),
+                    Flexible(
+                      child: FloatingToolFrame(
+                        settings: settings,
+                        child: ToolPalette(session: designer),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
             // Above whatever the foot of the window holds.
             Positioned(

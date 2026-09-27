@@ -3,7 +3,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../../../core/level_map/level_map_documents.dart';
+import '../../../core/level_map/tile_commands.dart';
+import '../../../core/level_map/tile_turn.dart';
 import '../../../core/state/editor_scene_state.dart';
+import '../../../core/state/transform_mode.dart';
+import '../../overlay/gizmo_painter.dart' show GizmoHandle;
+import '../../overlay/transform_gizmo.dart';
 import '../state/component_resizer.dart';
 import '../state/designer_geometry.dart';
 import '../../../core/entity/hierarchy_commands.dart';
@@ -22,11 +28,16 @@ enum _Gesture { none, marquee, move, resize, rotate }
 ///
 /// - Press empty space and drag: marquee. Ctrl adds to the selection.
 /// - Press an entity: select it; drag to move the whole selection. Alt at the start of the drag moves a copy instead.
-/// - Drag one of the eight handles on the selection's bounds: resize every
-///   selected thing in proportion. Shift keeps the aspect ratio, Alt resizes
-///   about the centre.
-/// - Drag the knob above the bounds: rotate about the selection's centre, in
-///   15 degree steps.
+/// - The selection shows one gizmo, as the Move, Scale and Rotate toolbar
+///   says (W, E, R):
+///   - Move: drag an arrow to move along it, the square to move freely.
+///   - Scale: drag one of the eight handles on the selection's bounds to
+///     resize every selected thing in proportion. Shift keeps the aspect
+///     ratio, Alt resizes about the centre.
+///   - Rotate: drag the ring to turn about the selection's centre, in 15
+///     degree steps. A piece of a map turns its tiles, a quarter at a time.
+///   - All (V), where it starts: the resize handles and the knob above the
+///     bounds that turns it, together.
 /// - Double-click open ground: the Level Map.
 ///
 /// Moving or turning a parent takes what is under it along.
@@ -39,8 +50,13 @@ class SelectTool extends LevelToolHandler {
     required this.history,
     required this.codec,
     this.layout = const SelectionHandleLayout(),
+    this.mapDocs,
     String Function(String prefix)? uniqueName,
   }) : _uniqueName = uniqueName ?? ((prefix) => prefix);
+
+  /// The maps being edited, for turning a piece of one's tiles. Without
+  /// them a piece does not turn.
+  final LevelMapDocuments? mapDocs;
 
   /// Encodes and decodes components; the scope's codec.
   final SceneCodec codec;
@@ -65,13 +81,15 @@ class SelectTool extends LevelToolHandler {
   @override
   IconData get icon => Icons.near_me;
 
+  /// None of its own: the transform toolbar's All, Move, Scale and Rotate
+  /// (V, W, E, R) are this tool, each with its gizmo.
   @override
-  String? get shortcut => 'V';
+  String? get shortcut => null;
 
   @override
   String? get description =>
-      'Marquee on empty space; drag to move, Alt+drag to copy; drag a handle '
-      'to resize or the knob to rotate';
+      'Marquee on empty space; drag to move, Alt+drag to copy. The '
+      'selection shows the Move (W), Scale (E) or Rotate (R) gizmo';
 
   @override
   int get order => 10;
@@ -99,8 +117,26 @@ class SelectTool extends LevelToolHandler {
   ResizeHandle? _handle;
   List<EntitySpec> _beforeSpecs = const [];
 
+  // Move along one axis: an arrow of the move gizmo.
+  Axis? _axis;
+
+  /// Whether the rotate gesture began on the ring, which lies across the
+  /// level round the selection: a click on it that turns nothing is a
+  /// click on whatever is under it.
+  bool _onRing = false;
+
+  /// Set while a click that fell through the ring is replayed.
+  bool _throughGizmo = false;
+
   // Rotate.
   double _startAngle = 0;
+
+  // Turning a piece of a map: its tiles, a step at a time.
+  LevelMapTarget? _piece;
+  List<(jge.MapLayerData, Set<jge.TileCoord>)> _pieceLayers = const [];
+  jge.TileCoord? _piecePivot;
+  List<TileStroke> _pieceStrokes = const [];
+  int _pieceSteps = 0;
 
   // Alt+drag duplicate.
   jge.World? _world;
@@ -113,25 +149,12 @@ class SelectTool extends LevelToolHandler {
     final selection = _selectionEntities(context.world);
     final bounds = _groupBounds(selection);
 
-    // Handles first: they sit on top of the selection they belong to.
-    if (bounds != null && !context.isCtrlDown) {
-      final reach = context.pixels(layout.handlePixels);
-      final knob = layout.rotateKnobAt(bounds, context.unitsPerPixel);
-      if ((context.worldPosition - knob).distance <= reach * 1.5) {
-        _begin(context, selection, bounds, _Gesture.rotate);
-        _startAngle = _angleFrom(bounds.center, context.worldPosition);
-        return true;
-      }
-      for (final handle in ResizeHandle.values) {
-        if ((context.worldPosition - handle.on(bounds)).distance <= reach) {
-          _begin(context, selection, bounds, _Gesture.resize);
-          _handle = handle;
-          _beforeSpecs = selection
-              .map((e) => EntitySpec.of(e, codec))
-              .toList(growable: false);
-          return true;
-        }
-      }
+    // The gizmo first: it sits on top of the selection it belongs to.
+    if (bounds != null &&
+        !context.isCtrlDown &&
+        !_throughGizmo &&
+        _onGizmo(context, selection, bounds)) {
+      return true;
     }
 
     final hit = _entityAt(context);
@@ -187,6 +210,107 @@ class SelectTool extends LevelToolHandler {
     return true;
   }
 
+  /// The mode the selection's gizmo is in: the toolbar's, when the
+  /// selection can take it.
+  static TransformMode? shownMode(
+    ToolContext context,
+    List<jge.Entity> selection,
+  ) => TransformModes.shown(
+    context.controller.view.transformMode.value,
+    TransformModes.forEntities(context.world, selection),
+  );
+
+  /// Starts what a press on [selection]'s gizmo means, when it is on it.
+  bool _onGizmo(ToolContext context, List<jge.Entity> selection, Rect bounds) {
+    final at = context.worldPosition;
+    final px = context.unitsPerPixel;
+    switch (shownMode(context, selection)) {
+      case TransformMode.all:
+        // As it always was: the knob above the bounds turns, the handles on
+        // them resize, and the body moves — what the selection can take.
+        final available = TransformModes.forEntities(context.world, selection);
+        final knob = layout.rotateKnobAt(bounds, px);
+        if (available.contains(TransformMode.rotate) &&
+            (at - knob).distance <= context.pixels(layout.handlePixels) * 1.5) {
+          _startRotate(context, selection, bounds);
+          return true;
+        }
+        return available.contains(TransformMode.scale) &&
+            _startResize(context, selection, bounds);
+      case TransformMode.move:
+        final handle = TransformGizmo.moveHandleAt(at, bounds.center, px: px);
+        if (handle == GizmoHandle.none) return false;
+        var targets = selection;
+        if (context.isAltDown) {
+          _originalSelection = targets;
+          targets = _duplicate(context.world, targets);
+          _select(targets);
+          _duplicating = true;
+        }
+        _begin(
+          context,
+          targets,
+          _groupBounds(targets) ?? bounds,
+          _Gesture.move,
+        );
+        _axis = switch (handle) {
+          GizmoHandle.translateX => Axis.horizontal,
+          GizmoHandle.translateY => Axis.vertical,
+          _ => null,
+        };
+        return true;
+      case TransformMode.scale:
+        return _startResize(context, selection, bounds);
+      case TransformMode.rotate:
+        final radius = layout.ringRadius(bounds, px);
+        if (!TransformGizmo.onRing(at, bounds.center, radius, px: px)) {
+          return false;
+        }
+        _startRotate(context, selection, bounds);
+        _onRing = true;
+        return true;
+      case null:
+        return false;
+    }
+  }
+
+  /// Starts a resize when the press is on one of the handles on [bounds].
+  bool _startResize(
+    ToolContext context,
+    List<jge.Entity> selection,
+    Rect bounds,
+  ) {
+    // A point marker has nothing to resize.
+    if (bounds.width <= 0 || bounds.height <= 0) return false;
+    final reach = context.pixels(layout.handlePixels);
+    for (final handle in ResizeHandle.values) {
+      if ((context.worldPosition - handle.on(bounds)).distance <= reach) {
+        _begin(context, selection, bounds, _Gesture.resize);
+        _handle = handle;
+        _beforeSpecs = selection
+            .map((e) => EntitySpec.of(e, codec))
+            .toList(growable: false);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Starts turning [selection] about the centre of [bounds] — or, for a
+  /// lone piece of a map, its tiles.
+  void _startRotate(
+    ToolContext context,
+    List<jge.Entity> selection,
+    Rect bounds,
+  ) {
+    _begin(context, selection, bounds, _Gesture.rotate);
+    _startAngle = _angleFrom(bounds.center, context.worldPosition);
+    if (selection.length == 1 &&
+        jge.LevelMaps.isPiece(context.world, selection.single)) {
+      _holdPiece(selection.single);
+    }
+  }
+
   @override
   void onPointerMove(ToolContext context) {
     switch (_gesture) {
@@ -208,6 +332,17 @@ class SelectTool extends LevelToolHandler {
 
   @override
   void onPointerUp(ToolContext context) {
+    final turned = _piece == null ? _anyTransformChanged() : _pieceSteps != 0;
+    if (_gesture == _Gesture.rotate && _onRing && !turned) {
+      // A click on the ring, not a turn: what the click would have done
+      // without it there — pick what is under it, or nothing.
+      onCancel();
+      _throughGizmo = true;
+      onPointerDown(context);
+      _throughGizmo = false;
+      onPointerUp(context);
+      return;
+    }
     switch (_gesture) {
       case _Gesture.marquee:
         _commitMarquee(context, _marqueeStart!);
@@ -216,7 +351,7 @@ class SelectTool extends LevelToolHandler {
       case _Gesture.resize:
         _commitResize(context);
       case _Gesture.rotate:
-        _commitTransform('Rotate');
+        _piece == null ? _commitTransform('Rotate') : _commitPieceTurn();
       case _Gesture.none:
         break;
     }
@@ -227,6 +362,9 @@ class SelectTool extends LevelToolHandler {
   void onCancel() {
     // Put everything back: an abandoned gesture must not leave a half-applied
     // edit behind.
+    for (final stroke in _pieceStrokes.reversed) {
+      stroke.revert();
+    }
     for (var i = 0; i < _carried.length; i++) {
       if (_carried[i].isAlive) _carriedBefore[i].applyTo(_carried[i]);
     }
@@ -302,6 +440,13 @@ class SelectTool extends LevelToolHandler {
     _beforeSpecs = const [];
     _snapRects = const [];
     _handle = null;
+    _axis = null;
+    _onRing = false;
+    _piece = null;
+    _pieceLayers = const [];
+    _piecePivot = null;
+    _pieceStrokes = const [];
+    _pieceSteps = 0;
     _duplicating = false;
     _originalSelection = const [];
   }
@@ -312,9 +457,16 @@ class SelectTool extends LevelToolHandler {
     var delta = context.worldPosition - _origin;
     var snapX = true;
     var snapY = true;
-    // Shift constrains to the dominant axis — the standard way to keep a row
-    // of platforms aligned while sliding it.
-    if (context.isShiftDown) {
+    // An arrow of the move gizmo holds the drag to its axis; otherwise Shift
+    // constrains to the dominant axis — the standard way to keep a row of
+    // platforms aligned while sliding it.
+    if (_axis == Axis.horizontal) {
+      delta = Offset(delta.dx, 0);
+      snapY = false;
+    } else if (_axis == Axis.vertical) {
+      delta = Offset(0, delta.dy);
+      snapX = false;
+    } else if (context.isShiftDown) {
       if (delta.dx.abs() >= delta.dy.abs()) {
         delta = Offset(delta.dx, 0);
         snapY = false;
@@ -541,6 +693,10 @@ class SelectTool extends LevelToolHandler {
   void _rotate(ToolContext context) {
     final pivot = _startBounds.center;
     var angle = _angleFrom(pivot, context.worldPosition) - _startAngle;
+    if (_piece != null) {
+      _turnPiece(context, angle);
+      return;
+    }
     if (context.snapping) {
       angle =
           (angle / layout.rotationStep).roundToDouble() * layout.rotationStep;
@@ -573,6 +729,61 @@ class SelectTool extends LevelToolHandler {
     }
     sceneState.refresh();
     context.controller.setStatus('${(angle * 180 / math.pi).round()}°');
+  }
+
+  // ── Turning a piece of a map ──────────────────────────────────────────────
+
+  /// Readies [piece] to turn. A map follows its position and nothing else,
+  /// so turning one means turning its tiles.
+  void _holdPiece(jge.Entity piece) {
+    final target = mapDocs?.resolve(piece);
+    if (target == null || target.isReadOnly) return;
+    final layers = [
+      for (final layer in target.data.layers)
+        (
+          layer,
+          {for (final (x, y, _) in layer.cells.cells) jge.TileCoord(x, y)},
+        ),
+    ];
+    final all = {for (final (_, cells) in layers) ...cells};
+    if (all.isEmpty) return;
+    _piece = target;
+    _pieceLayers = layers;
+    _piecePivot = TileTurn.pivotOf(target.geometry, all);
+  }
+
+  /// Turns the piece's tiles the whole steps [angle] comes to, from where
+  /// they started.
+  void _turnPiece(ToolContext context, double angle) {
+    final target = _piece!;
+    final g = target.geometry;
+    final steps = (angle / TileTurn.stepAngle(g)).round();
+    if (steps == _pieceSteps) return;
+    for (final stroke in _pieceStrokes.reversed) {
+      stroke.revert();
+    }
+    _pieceSteps = steps;
+    _pieceStrokes = [
+      for (final (layer, _) in _pieceLayers)
+        TileStroke(docs: mapDocs!, ref: target.ref, layer: layer),
+    ];
+    for (var i = 0; i < _pieceLayers.length; i++) {
+      TileTurn.turn(
+        _pieceStrokes[i],
+        g,
+        _pieceLayers[i].$2,
+        steps,
+        pivot: _piecePivot,
+      );
+    }
+    context.controller.setStatus(
+      '${(steps * TileTurn.stepAngle(g) * 180 / math.pi).round()}°',
+    );
+  }
+
+  void _commitPieceTurn() {
+    final label = _label('Rotate');
+    _push(label, [for (final stroke in _pieceStrokes) ?stroke.finish(label)]);
   }
 
   static double _angleFrom(Offset pivot, Offset point) =>

@@ -183,6 +183,9 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   void _onSelectionChanged() {
     final selected = _sceneState.selectedEntity.value;
     if (selected == null) return;
+    // An entity selected, anywhere, takes the tree's selection off a map
+    // layer row.
+    _tree.pickedLayer.value = null;
     _tree.reveal(selected.id);
   }
 
@@ -222,6 +225,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
               widget.scope.tiles.mapEntityId,
               _tree.expanded,
               _tree.expandedLayers,
+              _tree.pickedLayer,
               _tree.colors,
               _tree.filter,
               _tree.renaming,
@@ -306,6 +310,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
           if ((event.position - _emptyPressedAt).distance > kTouchSlop) return;
           _keys.requestFocus();
           if (_tree.renaming.value != null) return;
+          _tree.pickedLayer.value = null;
           _sceneState.clearSelection();
         },
         child: _rowList(tree),

@@ -7,8 +7,11 @@ import 'package:just_game_engine/just_game_engine.dart'
 
 import '../../../core/scope/editor_scope.dart';
 import '../../../core/level_map/tile_edit_state.dart';
+import '../../../core/state/transform_mode.dart';
+import '../../overlay/transform_gizmo.dart';
 import '../painters/designer_canvas.dart';
 import '../tools/level_tool.dart';
+import '../tools/tiles/tile_select_tool.dart';
 import '../tools/tiles/tile_tool_base.dart';
 import 'built_in_overlays.dart';
 import 'designer_overlay.dart';
@@ -390,6 +393,47 @@ class TileBrushOverlay extends DesignerOverlay {
         }
       }
     });
+    _paintGizmo(context);
+  }
+
+  /// The selection's gizmo, with Select tiles in hand: arrows to move it,
+  /// the ring to turn it, or both (All) — as the toolbar says. Not while its tiles
+  /// are being carried: they are not where it would be.
+  void _paintGizmo(OverlayPaintContext context) {
+    if (context.controller.toolId.value != TileTools.select) return;
+    final state = scope.tiles;
+    final cells = state.selection.value;
+    if (cells.isEmpty || state.floating.isNotEmpty) return;
+    final target = state.target(context.world);
+    final layer = target == null ? null : state.layerOf(target);
+    if (target == null || layer == null) return;
+    final draw = context.draw;
+    final bounds = TileSelectTool.cellsBounds(
+      target,
+      layer,
+      cells,
+      draw.camera.position,
+    );
+    if (bounds == null) return;
+    final centre = draw.toScreen(bounds.center);
+    final zoom = draw.camera.zoom;
+    final mode = TransformModes.shown(
+      context.controller.view.transformMode.value,
+      TransformModes.tiles,
+    );
+    if (mode == TransformMode.rotate || mode == TransformMode.all) {
+      final radius = scope.handleLayout.ringRadius(bounds, 1 / zoom) * zoom;
+      TransformGizmo.paintRotate(
+        draw.canvas,
+        centre,
+        mode == TransformMode.all
+            ? TransformGizmo.ringClearOfArrows(radius)
+            : radius,
+      );
+    }
+    if (mode == TransformMode.move || mode == TransformMode.all) {
+      TransformGizmo.paintMove(draw.canvas, centre);
+    }
   }
 
   void _paintSelection(

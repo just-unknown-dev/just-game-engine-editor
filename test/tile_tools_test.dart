@@ -447,19 +447,19 @@ void main() {
       });
     });
 
-    test('W cycles box, wand and same tile', () {
+    test('Q cycles box, wand and same tile', () {
       paint({
         const TileCoord(0, 0): a,
         const TileCoord(1, 0): a,
         const TileCoord(3, 0): a,
         const TileCoord(2, 0): b,
       });
-      expect(key(LogicalKeyboardKey.keyW), isTrue);
+      expect(key(LogicalKeyboardKey.keyQ), isTrue);
       expect(tiles().selectMode.value, TileSelectMode.wand);
       click(const TileCoord(0, 0));
       expect(selected(), {const TileCoord(0, 0), const TileCoord(1, 0)});
 
-      key(LogicalKeyboardKey.keyW);
+      key(LogicalKeyboardKey.keyQ);
       expect(tiles().selectMode.value, TileSelectMode.sameTile);
       click(const TileCoord(3, 0));
       expect(selected(), {
