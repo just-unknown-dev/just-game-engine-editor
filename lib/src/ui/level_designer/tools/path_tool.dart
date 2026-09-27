@@ -62,16 +62,18 @@ class PathTool extends LevelToolHandler {
     required this.binding,
     String id = 'path',
     String label = 'Path',
-    IconData icon = Icons.timeline,
+    IconData icon = Icons.route,
     String? shortcut = 'E',
     String? description,
     int order = 40,
+    String group = ToolGroups.select,
   }) : _id = id,
        _label = label,
        _icon = icon,
        _shortcut = shortcut,
        _description = description,
-       _order = order;
+       _order = order,
+       _group = group;
 
   /// Shared selection and dirty state.
   final EditorSceneState sceneState;
@@ -88,6 +90,7 @@ class PathTool extends LevelToolHandler {
   final String? _shortcut;
   final String? _description;
   final int _order;
+  final String _group;
 
   @override
   String get id => _id;
@@ -107,6 +110,9 @@ class PathTool extends LevelToolHandler {
 
   @override
   int get order => _order;
+
+  @override
+  String get group => _group;
 
   /// How close, in world units, a click must be to grab a waypoint.
   static const double grabRadius = 18.0;

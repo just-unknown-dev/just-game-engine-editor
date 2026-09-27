@@ -48,6 +48,9 @@ class EyedropperTool extends LevelToolHandler {
   @override
   int get order => 45;
 
+  @override
+  String get group => ToolGroups.shapes;
+
   /// Remembers which placing tool to go back to. Called by the session when
   /// the eyedropper is picked, with the tool that was active.
   void activatedFrom(String toolId) {

@@ -17,6 +17,7 @@ import '../ui/level_designer/state/snap_provider.dart';
 import 'designer_contributions.dart';
 import '../core/theme/editor_theme_data.dart';
 import 'editor_contributions.dart';
+import 'tiled_object_mapper.dart';
 import '../ui/level_designer/tools/level_tool.dart';
 
 /// What a module is handed when it registers.
@@ -190,6 +191,13 @@ abstract class EditorModule {
 
   /// What this module can do with a file in the Assets dock.
   List<AssetAction> get assetActions => const [];
+
+  /// Groups of the tool strip this module's tools go under, beside the
+  /// editor's own (`ToolGroups.builtIn`).
+  List<ToolGroup> get toolGroups => const [];
+
+  /// What objects of an imported Tiled map become: a spawn point, a coin.
+  List<TiledObjectMapper> get tiledObjectMappers => const [];
 
   /// Buttons after the built-in play controls.
   List<ToolbarButton> get toolbarButtons => const [];

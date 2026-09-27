@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../../core/level_map/tile_selection_ops.dart';
 import '../../core/plugin/editor_plugin.dart';
 import '../widgets/editor_menu.dart';
 
@@ -27,6 +28,13 @@ Future<void> showViewportMenu(
   if (!plugin.sceneState.hasScene) return;
   final scope = plugin.scope;
   final view = scope.view;
+
+  // Tiles selected with Select tiles, while designing: the menu is about
+  // them.
+  if (plugin.designer.value != null && scope.tiles.selection.value.isNotEmpty) {
+    await showTileSelectionMenu(context, plugin, globalPosition);
+    return;
+  }
 
   // Right-clicking something that is not in the selection selects it, so
   // the menu is never about something other than what was clicked.
@@ -169,4 +177,48 @@ Future<void> showViewportMenu(
 List<jge.Entity> _selection(JustGameEditorPlugin plugin, jge.Entity entity) {
   final selection = plugin.entities.selectionEntities;
   return selection.any((e) => e.id == entity.id) ? selection : [entity];
+}
+
+/// The right-click menu on the tiles selected with Select tiles: make them
+/// an entity, copy, cut, delete, or let them go.
+Future<void> showTileSelectionMenu(
+  BuildContext context,
+  JustGameEditorPlugin plugin,
+  Offset globalPosition,
+) async {
+  final scope = plugin.scope;
+  final world = plugin.engine.world;
+  final n = TileSelectionOps.tileCount(scope, world);
+  final layer = TileSelectionOps.layerOf(scope, world);
+  final chosen = await showEditorMenu<String>(context, globalPosition, [
+    editorMenuItem(
+      'entity',
+      n == 0
+          ? 'No tiles of ${layer?.name ?? 'the layer'} selected'
+          : 'Make ${n == 1 ? 'the tile' : 'the $n tiles'} an entity',
+      icon: Icons.open_in_new,
+      enabled: n > 0,
+    ),
+    editorMenuDivider(),
+    editorMenuItem('copy', 'Copy tiles', icon: Icons.content_copy_outlined),
+    editorMenuItem('cut', 'Cut tiles', icon: Icons.content_cut),
+    editorMenuItem('delete', 'Delete tiles', icon: Icons.delete_outline),
+    editorMenuDivider(),
+    editorMenuItem('none', 'Select none', icon: Icons.deselect),
+  ]);
+  if (chosen == null) return;
+  void say(String message) =>
+      plugin.designer.value?.controller.setStatus(message);
+  switch (chosen) {
+    case 'entity':
+      TileSelectionOps.makeEntity(scope, world, say);
+    case 'copy':
+      TileSelectionOps.copy(scope, world, say);
+    case 'cut':
+      TileSelectionOps.cut(scope, world, say);
+    case 'delete':
+      TileSelectionOps.delete(scope, world, say);
+    case 'none':
+      TileSelectionOps.deselect(scope, say);
+  }
 }

@@ -64,11 +64,11 @@ class _PaintModule extends EditorModule {
 void main() {
   test('a module lists workspaces; a file opens in the one that fits best', () {
     final scope = testScope(modules: [_PaintModule()]);
-    // The interface editor is the editor's own workspace and is always
-    // there; the module's come after it.
+    // The interface and tileset editors are the editor's own workspaces
+    // and are always there; the module's come after them.
     expect(
       [for (final w in scope.workspaces) w.id],
-      [BuiltInWorkspaces.ui, 'paint', 'graph'],
+      [BuiltInWorkspaces.ui, BuiltInWorkspaces.tileset, 'paint', 'graph'],
     );
     expect(scope.activeWorkspace.value, isNull);
 
@@ -98,16 +98,28 @@ void main() {
     scope.reload();
     expect(
       [for (final w in scope.workspaces) w.id],
-      [BuiltInWorkspaces.ui],
-      reason: "only the editor's own is left",
+      [BuiltInWorkspaces.ui, BuiltInWorkspaces.tileset],
+      reason: "only the editor's own are left",
     );
     expect(scope.activeWorkspace.value, isNull);
+  });
+
+  test("a reload leaves the editor's own workspace open", () {
+    final scope = testScope(modules: [_PaintModule()]);
+    expect(scope.openWorkspace(BuiltInWorkspaces.ui), isTrue);
+
+    scope.reload();
+
+    expect(scope.activeWorkspace.value?.definition.id, BuiltInWorkspaces.ui);
   });
 
   test('asset actions say which files they are for', () {
     final module = _PaintModule();
     final scope = testScope(modules: [module]);
-    final action = scope.assetActions.single;
+    // The module's, beside the editor's own for tile files.
+    final action = scope.assetActions.singleWhere(
+      (a) => a.id.startsWith('paint'),
+    );
     expect(action.appliesTo('assets/a.png', isDirectory: false), isTrue);
     expect(action.appliesTo('assets/a.json', isDirectory: false), isFalse);
     expect(action.appliesTo('assets/png', isDirectory: true), isFalse);

@@ -4,6 +4,7 @@ import 'package:just_signals/just_signals.dart';
 
 import '../dialogs/add_component_picker.dart';
 import '../../core/constants/editor_constants.dart';
+import '../../core/level_map/tile_selection_ops.dart';
 import '../../core/scope/editor_scope.dart';
 import '../inspector/definition_section.dart';
 import '../../core/state/editor_scene_state.dart';
@@ -37,46 +38,206 @@ class EntityInspectorPanel extends StatelessWidget {
         scope.view.pinned,
         // The notices at the top read these, so the panel follows them.
         scope.view.locked,
+        // Tiles selected with Select tiles, shown above the entity.
+        scope.tiles.selection,
+        scope.tiles.layerId,
       ],
-      builder: (context, _) {
-        // Pinned: what is shown stops following what is selected, so an
-        // entity's components can be read while picking something else.
-        final pinnedId = scope.view.pinned.value;
-        if (pinnedId != null) {
-          final pinned = world.getEntity(pinnedId);
-          if (pinned != null && pinned.isAlive) {
-            return _EntityInspector(
-              key: ValueKey('pinned:$pinnedId'),
-              scope: scope,
-              entity: pinned,
-              sceneState: sceneState,
-            );
-          }
-          // Pinned to something that has gone: let it go.
-          scope.view.unpin();
-        }
-        if (sceneState.hasMultiSelection) {
-          return _MultiSelectionPanel(
-            sceneState: sceneState,
-            onGroupSelection: onGroupSelection,
-          );
-        }
-        final entity = sceneState.selectedEntity.value;
-        if (entity == null) {
-          return const Center(
-            child: Text(
-              'No entity selected',
-              style: TextStyle(color: EditorTheme.textMuted, fontSize: 12),
-            ),
-          );
-        }
+      builder: (context, _) => _withTileSelection(_content()),
+    );
+  }
+
+  /// [content], under the tiles selected with Select tiles, when there are
+  /// any: what they are, and what can be done with them.
+  Widget _withTileSelection(Widget content) {
+    if (scope.tiles.selection.value.isEmpty) return content;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _TileSelectionCard(scope: scope, world: world),
+        const Divider(height: 1, color: EditorTheme.border),
+        Expanded(child: content),
+      ],
+    );
+  }
+
+  /// What the panel shows for what is selected.
+  Widget _content() {
+    // Pinned: what is shown stops following what is selected, so an
+    // entity's components can be read while picking something else.
+    final pinnedId = scope.view.pinned.value;
+    if (pinnedId != null) {
+      final pinned = world.getEntity(pinnedId);
+      if (pinned != null && pinned.isAlive) {
         return _EntityInspector(
-          key: ValueKey(entity.id),
+          key: ValueKey('pinned:$pinnedId'),
           scope: scope,
-          entity: entity,
+          entity: pinned,
           sceneState: sceneState,
         );
-      },
+      }
+      // Pinned to something that has gone: let it go.
+      scope.view.unpin();
+    }
+    if (sceneState.hasMultiSelection) {
+      return _MultiSelectionPanel(
+        sceneState: sceneState,
+        onGroupSelection: onGroupSelection,
+      );
+    }
+    final entity = sceneState.selectedEntity.value;
+    if (entity == null) {
+      return const Center(
+        child: Text(
+          'No entity selected',
+          style: TextStyle(color: EditorTheme.textMuted, fontSize: 12),
+        ),
+      );
+    }
+    return _EntityInspector(
+      key: ValueKey(entity.id),
+      scope: scope,
+      entity: entity,
+      sceneState: sceneState,
+    );
+  }
+}
+
+// ── Tiles selected ────────────────────────────────────────────────────────────
+
+/// The tiles selected with Select tiles: how many, on which layer, and
+/// what can be done with them — the same as the viewport's right-click
+/// menu and the tool's keys.
+class _TileSelectionCard extends StatelessWidget {
+  const _TileSelectionCard({required this.scope, required this.world});
+
+  final EditorScope scope;
+  final World world;
+
+  void _say(String message) =>
+      scope.log.log(message, source: 'tiles', mirrorToDebugger: false);
+
+  @override
+  Widget build(BuildContext context) => SignalBuilder<int>(
+    // Tiles painted or cleared change what is selected.
+    signal: scope.mapDocs.revision,
+    builder: (context, _, _) => _build(),
+  );
+
+  Widget _build() {
+    final cells = scope.tiles.selection.value.length;
+    final n = TileSelectionOps.tileCount(scope, world);
+    final target = scope.tiles.peek(world);
+    final layer = target == null ? null : scope.tiles.peekLayer(target);
+    Widget action(IconData icon, String tooltip, VoidCallback onTap) =>
+        IconButton(
+          tooltip: tooltip,
+          onPressed: onTap,
+          icon: Icon(icon, size: 15),
+          color: EditorTheme.textSecondary,
+          visualDensity: VisualDensity.compact,
+          splashRadius: 16,
+        );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.highlight_alt,
+                size: 14,
+                color: EditorTheme.primaryBright,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  n == 0
+                      ? '$cells empty cell${cells == 1 ? '' : 's'} selected'
+                      : n == cells
+                      ? '$n tile${n == 1 ? '' : 's'} selected'
+                      : '$n tile${n == 1 ? '' : 's'} in $cells cells selected',
+                  style: const TextStyle(
+                    color: EditorTheme.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (target != null && layer != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 20, top: 2),
+              child: Text(
+                '${target.entity.name ?? 'Map'} ▸ ${layer.name}',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: EditorTheme.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          if (n == 0 && layer != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 20, top: 6),
+              child: Text(
+                '${layer.name} has no tiles there. Choose the layer the '
+                'tiles are on in LAYERS, or start a selection on a tile: '
+                'it picks their layer.',
+                style: const TextStyle(
+                  color: EditorTheme.warning,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          const SizedBox(height: 10),
+          ElevatedButton.icon(
+            onPressed: n == 0
+                ? null
+                : () => TileSelectionOps.makeEntity(scope, world, _say),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: EditorTheme.buttonBg,
+              foregroundColor: EditorTheme.primary,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+            icon: const Icon(Icons.open_in_new, size: 14),
+            label: Text(
+              'Make ${n == 1 ? 'it' : 'them'} an entity',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              action(
+                Icons.content_copy_outlined,
+                'Copy tiles (Ctrl+C)',
+                () => TileSelectionOps.copy(scope, world, _say),
+              ),
+              action(
+                Icons.content_cut,
+                'Cut tiles (Ctrl+X)',
+                () => TileSelectionOps.cut(scope, world, _say),
+              ),
+              action(
+                Icons.delete_outline,
+                'Delete tiles (Delete)',
+                () => TileSelectionOps.delete(scope, world, _say),
+              ),
+              action(
+                Icons.deselect,
+                'Select none (Esc)',
+                () => TileSelectionOps.deselect(scope, _say),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

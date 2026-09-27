@@ -59,6 +59,17 @@ class EditorSceneState {
   /// changing any other signal. Watch it to redraw a view of the world.
   final Signal<int> revision = Signal(0, debugLabel: 'sceneRevision');
 
+  /// Which entities may be selected right now; null means any.
+  ///
+  /// The Level Designer narrows it to its Level Map while it is open, so
+  /// nothing else in the scene can be picked in the viewport, clicked in
+  /// the tree or reached with the keys. Set through [setSelectable], which
+  /// also lets go of whatever it no longer allows.
+  final Signal<bool Function(Entity entity)?> selectable = Signal(
+    null,
+    debugLabel: 'selectable',
+  );
+
   final Map<EntityId, SceneNode> _entityNodeMap = {};
 
   /// What order the scene's top-level entities are in.
@@ -86,6 +97,41 @@ class EditorSceneState {
   bool isInMultiSelection(EntityId id) => multiSelectedIds.value.contains(id);
 
   bool get hasClipboard => clipboard.value != null;
+
+  /// Whether anything at all is selected.
+  bool get hasAnySelection =>
+      selectedEntity.value != null || multiSelectedIds.value.isNotEmpty;
+
+  /// Whether [entity] may be selected right now; see [selectable].
+  bool canSelect(Entity entity) => selectable.value?.call(entity) ?? true;
+
+  /// Allows only what [test] passes to be selected from now on, or
+  /// anything when it is null, and deselects what it refuses.
+  void setSelectable(bool Function(Entity entity)? test) {
+    batch(() {
+      selectable.value = test;
+      if (test == null || !hasAnySelection) return;
+      final primary = selectedEntity.value;
+      final kept = <EntityId, Entity>{
+        if (primary != null && test(primary)) primary.id: primary,
+        for (final e in _multiSelectedEntities.values)
+          if (test(e)) e.id: e,
+      };
+      final unchanged =
+          (primary == null || kept.containsKey(primary.id)) &&
+          kept.length == multiSelectedIds.value.length;
+      if (unchanged) return;
+      final anchor = primary != null && kept.containsKey(primary.id)
+          ? primary
+          : kept.values.firstOrNull;
+      _multiSelectedEntities
+        ..clear()
+        ..addAll(kept);
+      selectedEntity.value = anchor;
+      selectedNode.value = anchor == null ? null : _entityNodeMap[anchor.id];
+      _setMultiSelection(kept.keys);
+    });
+  }
 
   void _setMultiSelection(Iterable<EntityId> ids) =>
       multiSelectedIds.value = Set.unmodifiable(ids);
@@ -133,7 +179,10 @@ class EditorSceneState {
   // ── Selection ────────────────────────────────────────────────────────────
 
   void selectEntity(Entity entity) {
-    if (selectedEntity.value?.id == entity.id && !hasMultiSelection) return;
+    if (!canSelect(entity)) return;
+    if (selectedEntity.value?.id == entity.id && !hasMultiSelection) {
+      return;
+    }
     batch(() {
       selectedEntity.value = entity;
       selectedNode.value = _entityNodeMap[entity.id];
@@ -149,6 +198,7 @@ class EditorSceneState {
   /// If nothing is selected, falls back to normal single selection.
   /// Removing the primary entity makes the next remaining entity the primary.
   void toggleMultiSelect(Entity entity) {
+    if (!canSelect(entity)) return;
     final ids = {...multiSelectedIds.value};
     if (ids.isEmpty) {
       // Nothing selected yet — behave like a normal single select.
@@ -195,7 +245,13 @@ class EditorSceneState {
   }
 
   /// Selects [entities] as a contiguous range, keeping [anchor] as primary.
+  /// What may not be selected right now is left out.
   void selectRange(List<Entity> entities, {required Entity anchor}) {
+    if (selectable.value != null) {
+      entities = entities.where(canSelect).toList();
+      if (entities.isEmpty) return;
+      if (!canSelect(anchor)) anchor = entities.first;
+    }
     if (entities.isEmpty) return;
     batch(() {
       _multiSelectedEntities
@@ -208,7 +264,7 @@ class EditorSceneState {
   }
 
   void clearSelection() {
-    if (selectedEntity.value == null && multiSelectedIds.value.isEmpty) return;
+    if (!hasAnySelection) return;
     batch(() {
       selectedEntity.value = null;
       selectedNode.value = null;
@@ -489,8 +545,9 @@ class EditorSceneState {
   // ── Clipboard ────────────────────────────────────────────────────────────
 
   /// Stores a snapshot of [components] in the clipboard for paste.
-  void setClipboard(List<Map<String, dynamic>> components) =>
-      clipboard.value = List.unmodifiable(List.of(components));
+  void setClipboard(List<Map<String, dynamic>> components) {
+    clipboard.value = List.unmodifiable(List.of(components));
+  }
 
   void dispose() {
     for (final s in [
@@ -503,6 +560,7 @@ class EditorSceneState {
       gridSize,
       clipboard,
       revision,
+      selectable,
     ]) {
       s.dispose();
     }

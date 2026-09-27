@@ -179,7 +179,9 @@ void main() {
       final designer = rectOf(tester, 'Open Level Designer  (F3)');
       final preview = rectOf(tester, 'Hide the game camera preview  (F4)');
       expect(designer.left - restart.right, greaterThan(14));
-      expect(preview.left - designer.right, greaterThan(14));
+      // The camera preview closes the play group, so the next boundary is
+      // between it and the designer's own group.
+      expect(designer.left - preview.right, greaterThan(14));
       done();
     });
 

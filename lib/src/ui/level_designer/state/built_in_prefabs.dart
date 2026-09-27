@@ -42,6 +42,14 @@ abstract final class BuiltInPrefabs {
   static const String spawnId = 'builtin.spawn';
   static const String markerId = 'builtin.marker';
 
+  /// A new map: [tileSize]-square cells and one layer, `Ground`, whose
+  /// tiles collide. What the scene's Level Map starts as.
+  static jge.LevelMapData newLevelMap({int tileSize = 32}) {
+    final map = jge.LevelMapData(tileWidth: tileSize, tileHeight: tileSize);
+    map.addLayer(name: 'Ground').collides = true;
+    return map;
+  }
+
   /// The palette groups the built-ins use, in display order.
   static const List<PrefabCategory> categories = [
     PrefabCategory(label: 'Shapes', order: 0),

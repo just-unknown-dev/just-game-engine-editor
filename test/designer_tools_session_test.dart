@@ -288,15 +288,14 @@ void main() {
         ..onPointerDown(const Offset(50, 48), 32)
         ..onPointerUp(const Offset(50, 48), 32);
 
-      final filled = world
-          .query([TransformComponent])
-          .where((e) => e.name!.startsWith('Solid'))
-          .toList();
+      // An entity under the Level Map, on its layer at this depth.
+      final filled = _members(world);
       expect(filled, hasLength(1), reason: 'the two cells merge into one');
       expect(
         DesignerGeometry.worldBounds(filled.single),
         const Rect.fromLTWH(32, 32, 64, 32),
       );
+      expect(filled.single.hasComponent<PhysicsBodyComponent>(), isTrue);
     });
 
     test('bucket fill refuses an open region', () {
@@ -317,7 +316,7 @@ void main() {
         ..controller.activePrefabId.value = BuiltInPrefabs.solidId
         ..onPointerDown(const Offset(48, 48), 32)
         ..onPointerUp(const Offset(48, 48), 32);
-      final painted = world.query([TransformComponent]).single;
+      final painted = _members(world).single;
       expect(DesignerGeometry.worldBounds(painted)!.size, const Size(96, 96));
     });
   });
@@ -358,3 +357,9 @@ void main() {
     expect(other.bookmarks[2]!.position, const Offset(10, 20));
   });
 }
+
+/// Every entity on a layer of a map in [world].
+List<Entity> _members(World world) => [
+  for (final e in world.query([LayerComponent]))
+    if (LevelMaps.memberLayer(world, e) != null) e,
+];

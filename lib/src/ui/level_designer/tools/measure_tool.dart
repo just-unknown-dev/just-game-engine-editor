@@ -29,6 +29,9 @@ class MeasureTool extends LevelToolHandler {
   @override
   int get order => 90;
 
+  @override
+  String get group => ToolGroups.measure;
+
   Offset? _start;
 
   /// The measurement currently being dragged, for the painter to draw.

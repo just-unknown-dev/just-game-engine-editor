@@ -74,12 +74,17 @@ class SceneIO {
   Future<void> _open(String sceneName) async {
     // Destroy any entities left over from a previously open scene.
     //
-    // Whatever a scene would have *saved*, which is more than the things
-    // with a transform: a HUD left behind by the last level would have
-    // piled up on top of this one's.
-    for (final e in authored(world)) {
+    // Everything alive, which is more than the things with a transform (a
+    // HUD left behind by the last level would have piled up on top of this
+    // one's) and more than a save writes: what a system generated from the
+    // last scene goes with it.
+    for (final e in world.entities.where((e) => e.isAlive).toList()) {
       world.destroyEntity(e);
     }
+    // Every step in the history is an edit of the scene being left: undoing
+    // one here would do nothing at best, and at worst write a file that
+    // scene uses. A new scene starts a new history, as in any editor.
+    scope.history.clear();
 
     var rawJson = await scope.scenes.loadRawSidecar(sceneName);
     // An older file is brought to the current format in memory; the file

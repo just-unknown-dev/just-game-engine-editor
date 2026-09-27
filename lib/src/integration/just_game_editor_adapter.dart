@@ -24,7 +24,7 @@ class JustGameEngineEditor extends StatefulWidget {
     required this.engine,
     required this.plugin,
     this.overlay,
-    this.showFPS = true,
+    this.showFPS = false,
     this.showDebug = false,
     this.showTerminal = false,
   });

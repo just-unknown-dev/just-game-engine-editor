@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../../../core/scope/editor_scope.dart';
 import '../../../core/serialization/scene_codec.dart';
 import '../../../core/state/editor_scene_state.dart';
+import '../controls/designer_controls.dart';
 import '../state/designer_geometry.dart';
 import '../state/editor_commands.dart';
+import '../state/map_placement.dart';
 import '../state/prefab_registry.dart';
 import '../state/editor_history.dart';
 import 'level_tool.dart';
@@ -21,7 +24,12 @@ class DrawRectTool extends LevelToolHandler {
     required this.history,
     required this.uniqueName,
     required this.codec,
+    this.scope,
   });
+
+  /// The editor, whose Level Map what is placed goes under — on the layer
+  /// at the depth being placed at; without it, an entity of its own.
+  final EditorScope? scope;
 
   /// Shared selection and dirty state.
   /// Encodes and decodes components; the scope's codec.
@@ -42,7 +50,7 @@ class DrawRectTool extends LevelToolHandler {
   String get label => 'Draw';
 
   @override
-  IconData get icon => Icons.crop_square;
+  IconData get icon => Icons.add_box_outlined;
 
   @override
   String? get shortcut => 'B';
@@ -53,6 +61,19 @@ class DrawRectTool extends LevelToolHandler {
 
   @override
   int get order => 20;
+
+  @override
+  String get group => ToolGroups.shapes;
+
+  @override
+  Widget? buildOptions(BuildContext context, ToolOptionsContext options) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      ActivePrefabChip(controller: options.controller),
+      const SizedBox(width: 6),
+      PlacementChip(options: options),
+    ],
+  );
 
   Offset? _start;
 
@@ -135,7 +156,20 @@ class DrawRectTool extends LevelToolHandler {
   }
 
   void _place(ToolContext context, PrefabDefinition prefab, Rect rect) {
+    final scope = this.scope;
     final components = prefab.build(rect.center, rect.size);
+    if (scope != null) {
+      // Into the level's map: a child of it, on a layer at this depth.
+      MapPlacement.place(
+        scope,
+        context.world,
+        [(uniqueName(prefab.namePrefix ?? prefab.id), components)],
+        depth: prefab.depth ?? context.controller.activeLayerId.value,
+        label: 'Place ${prefab.name}',
+        say: context.controller.setStatus,
+      );
+      return;
+    }
 
     // Stamp the designer's active layer onto whatever the prefab produced, so
     // "draw on the background layer" actually works without every prefab

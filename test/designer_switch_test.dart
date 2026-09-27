@@ -36,7 +36,10 @@ class _GenreModule extends EditorModule {
 
   @override
   List<StatusBarControl> get statusControls => [
-    StatusBarControl(id: 'genre.status', build: (_, _) => const Text('G')),
+    StatusBarControl(
+      id: 'genre.status',
+      build: (_, _) => const Text('Genre status'),
+    ),
   ];
 
   @override
@@ -192,6 +195,12 @@ void main() {
   testWidgets('the header shows a switch only when there is a choice', (
     tester,
   ) async {
+    // Tall enough for the module's prefab to be built in the palette, under
+    // the side panel's other sections.
+    tester.view
+      ..physicalSize = const Size(800, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     Future<void> pump(EditorScope scope) async {
       final session = _open(scope);
       await tester.pumpWidget(
@@ -230,6 +239,7 @@ void main() {
     expect(scope.activeDesigner.value, 'genre');
     expect(find.text('Genre'), findsOneWidget);
     expect(find.text('Thing'), findsOneWidget);
-    expect(find.text('G'), findsNothing); // the status bar is a separate strip
+    // The status bar is a separate strip.
+    expect(find.text('Genre status'), findsNothing);
   });
 }

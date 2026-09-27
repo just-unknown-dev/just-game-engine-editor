@@ -125,6 +125,34 @@ void detachEntity(
   entity.getComponent<jge.ParentComponent>()?.parentId = null;
 }
 
+/// Everything under [moving] — children, theirs, and so on — that is not
+/// moving itself: what goes along when a parent is moved or turned.
+///
+/// A transform is where an entity is in the world, not where it is from its
+/// parent, so a parent moved alone would leave its children behind.
+List<jge.Entity> carriedWith(
+  Iterable<jge.Entity> moving, {
+  required jge.World world,
+}) {
+  final skip = {for (final e in moving) e.id};
+  final out = <jge.Entity>[];
+  void walk(jge.Entity entity) {
+    final children = entity.getComponent<jge.ChildrenComponent>()?.childIds;
+    if (children == null) return;
+    for (final id in children) {
+      final child = world.getEntity(id);
+      if (child == null || !skip.add(id)) continue;
+      if (child.hasComponent<jge.TransformComponent>()) out.add(child);
+      walk(child);
+    }
+  }
+
+  for (final e in moving) {
+    walk(e);
+  }
+  return out;
+}
+
 /// Whether [candidate] is [entity] or somewhere under it.
 ///
 /// What stops a parent being dropped into its own child, which would make
@@ -149,6 +177,9 @@ bool isSelfOrDescendant(
 ///
 /// Takes a list so that dragging a selection is one command rather than
 /// one per entity, and so undo puts every one of them back at once.
+///
+/// Into a level map with a [mapLayer], they go on that layer of it; moved
+/// anywhere else, they leave the map layer they were on.
 class ReparentCommand extends EditorCommand {
   ReparentCommand({
     required this.label,
@@ -157,6 +188,7 @@ class ReparentCommand extends EditorCommand {
     required List<jge.Entity> entities,
     required this.parent,
     this.index,
+    this.mapLayer,
   }) : _entities = [
          // An entity whose own parent is also moving comes along with it;
          // moving both would take it out of its parent on the way.
@@ -170,6 +202,9 @@ class ReparentCommand extends EditorCommand {
     _before = [
       for (final e in _entities)
         HierarchySlot.of(e, world: world, sceneState: sceneState),
+    ];
+    _layerBefore = [
+      for (final e in _entities) e.getComponent<jge.LayerComponent>()?.mapLayer,
     ];
   }
 
@@ -186,7 +221,25 @@ class ReparentCommand extends EditorCommand {
   /// Where among that parent's children; null puts them last.
   final int? index;
 
+  /// The layer of [parent]'s map they go on, when [parent] is a level map.
+  final int? mapLayer;
+
   late final List<HierarchySlot> _before;
+  late final List<int?> _layerBefore;
+
+  /// Those given a layer component to say which map layer they are on.
+  final Set<jge.EntityId> _gaveLayer = {};
+
+  void _setMapLayer(jge.Entity entity, int? id) {
+    var layer = entity.getComponent<jge.LayerComponent>();
+    if (layer == null) {
+      if (id == null) return;
+      layer = jge.LayerComponent();
+      entity.addComponent(layer);
+      _gaveLayer.add(entity.id);
+    }
+    layer.mapLayer = id;
+  }
 
   /// Whether this would make a loop, or move something into itself.
   bool get isValid {
@@ -200,6 +253,7 @@ class ReparentCommand extends EditorCommand {
   void redo() {
     if (!isValid) return;
     var at = index;
+    final onMap = parent?.hasComponent<jge.LevelMapComponent>() ?? false;
     for (final entity in _entities) {
       placeEntity(
         entity,
@@ -207,6 +261,7 @@ class ReparentCommand extends EditorCommand {
         sceneState: sceneState,
         slot: HierarchySlot(parentId: parent?.id, index: at ?? -1),
       );
+      _setMapLayer(entity, onMap ? mapLayer : null);
       if (at != null) at++;
     }
     sceneState
@@ -219,12 +274,18 @@ class ReparentCommand extends EditorCommand {
     // Backwards, so each one lands on the index it had while the ones
     // after it are still to be put back.
     for (var i = _entities.length - 1; i >= 0; i--) {
+      final entity = _entities[i];
       placeEntity(
-        _entities[i],
+        entity,
         world: world,
         sceneState: sceneState,
         slot: _before[i],
       );
+      if (_gaveLayer.remove(entity.id)) {
+        entity.removeComponent<jge.LayerComponent>();
+      } else {
+        entity.getComponent<jge.LayerComponent>()?.mapLayer = _layerBefore[i];
+      }
     }
     sceneState
       ..markDirty()

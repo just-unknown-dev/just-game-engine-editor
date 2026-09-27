@@ -45,6 +45,7 @@ class SceneTreeRowTile extends StatelessWidget {
     this.onCommitRename,
     this.onCancelRename,
     this.isHidden = false,
+    this.isDisabled = false,
     this.isPinned = false,
     this.onControlDown,
     this.onToggleEnabled,
@@ -86,6 +87,13 @@ class SceneTreeRowTile extends StatelessWidget {
   /// Hidden in the viewport — the editor's own business, which the row
   /// says by going faint rather than by carrying an icon for it.
   final bool isHidden;
+
+  /// Out of reach right now — everything but the Level Map, while the
+  /// Level Designer is open. Drawn faint with its eye shut, since the
+  /// viewport does not draw it either, and only its chevron still
+  /// answers: a Level Map can sit inside a group, and the way to it is
+  /// through that group's row.
+  final bool isDisabled;
 
   /// Whether the inspector is pinned to this row — it keeps showing
   /// this entity's components while another is selected.
@@ -159,8 +167,11 @@ class SceneTreeRowTile extends StatelessWidget {
               bottom: 2,
               child: Container(width: 3, color: color),
             ),
-          isHidden
-              ? Opacity(opacity: 0.45, child: _content(name, indent))
+          isDisabled || isHidden
+              ? Opacity(
+                  opacity: isDisabled ? 0.35 : 0.45,
+                  child: _content(name, indent),
+                )
               : _content(name, indent),
         ],
       ),
@@ -176,14 +187,17 @@ class SceneTreeRowTile extends StatelessWidget {
           // outside the indent, so every tick lines up whatever the
           // depth and the column can be read — and clicked — down.
           if (onToggleEnabled != null)
-            SceneTreeRowButton(
-              icon: entity.isActive
-                  ? Icons.check_box_rounded
-                  : Icons.check_box_outline_blank_rounded,
-              tooltip: entity.isActive ? 'On in the game' : 'Off in the game',
-              faded: !entity.isActive,
-              onPressed: onToggleEnabled!,
-              onDown: onControlDown,
+            IgnorePointer(
+              ignoring: isDisabled,
+              child: SceneTreeRowButton(
+                icon: entity.isActive
+                    ? Icons.check_box_rounded
+                    : Icons.check_box_outline_blank_rounded,
+                tooltip: entity.isActive ? 'On in the game' : 'Off in the game',
+                faded: !entity.isActive,
+                onPressed: onToggleEnabled!,
+                onDown: onControlDown,
+              ),
             ),
           SizedBox(width: indent),
           if (row.hasChildren)
@@ -260,41 +274,59 @@ class SceneTreeRowTile extends StatelessWidget {
           // The two that only *act* keep their place while they are
           // invisible, so nothing shifts under the pointer.
           if (onPickColor != null)
-            Builder(
-              builder: (context) => _ColorMark(
-                color: color,
-                onPressed: () => onPickColor!(_below(context)),
-                onDown: onControlDown,
+            IgnorePointer(
+              ignoring: isDisabled,
+              child: Builder(
+                builder: (context) => _ColorMark(
+                  color: color,
+                  onPressed: () => onPickColor!(_below(context)),
+                  onDown: onControlDown,
+                ),
               ),
             ),
           if (onToggleHidden != null)
-            SceneTreeRowButton(
-              icon: isHidden
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              tooltip: isHidden ? 'Show it' : 'Hide it while building',
-              faded: !isHidden,
-              onPressed: onToggleHidden!,
-              onDown: onControlDown,
-            ),
+            isDisabled
+                // Hidden by the designer, not by this eye: shut, and it
+                // says so rather than offering to open.
+                ? SceneTreeRowButton(
+                    icon: Icons.visibility_off_outlined,
+                    tooltip: 'Hidden while the Level Designer is open',
+                    onPressed: () {},
+                    onDown: onControlDown,
+                  )
+                : SceneTreeRowButton(
+                    icon: isHidden
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    tooltip: isHidden ? 'Show it' : 'Hide it while building',
+                    faded: !isHidden,
+                    onPressed: onToggleHidden!,
+                    onDown: onControlDown,
+                  ),
           if (onTogglePinned != null)
-            SceneTreeRowButton(
-              icon: isPinned ? Icons.lock_outline : Icons.lock_open_outlined,
-              tooltip: isPinned
-                  ? 'Unpin the inspector'
-                  : 'Keep the inspector on it',
-              faded: !isPinned,
-              onPressed: onTogglePinned!,
-              onDown: onControlDown,
+            IgnorePointer(
+              ignoring: isDisabled,
+              child: SceneTreeRowButton(
+                icon: isPinned ? Icons.lock_outline : Icons.lock_open_outlined,
+                tooltip: isPinned
+                    ? 'Unpin the inspector'
+                    : 'Keep the inspector on it',
+                faded: !isPinned,
+                onPressed: onTogglePinned!,
+                onDown: onControlDown,
+              ),
             ),
           if (onShowMenu != null)
-            Builder(
-              builder: (context) => SceneTreeRowButton(
-                icon: Icons.more_vert,
-                tooltip: 'What can be done with it',
-                faded: true,
-                onPressed: () => onShowMenu!(_below(context)),
-                onDown: onControlDown,
+            IgnorePointer(
+              ignoring: isDisabled,
+              child: Builder(
+                builder: (context) => SceneTreeRowButton(
+                  icon: Icons.more_vert,
+                  tooltip: 'What can be done with it',
+                  faded: true,
+                  onPressed: () => onShowMenu!(_below(context)),
+                  onDown: onControlDown,
+                ),
               ),
             ),
         ],

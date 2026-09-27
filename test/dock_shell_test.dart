@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/docks/compact_dock.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/shell/dock_panel.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart'
     show GameCanvasArea;
@@ -475,6 +476,50 @@ void main() {
         collapsed - canvasHeight(),
         240,
         reason: 'the level is not hidden behind the panel',
+      );
+      plugin.closeLevelDesigner();
+      await done(tester);
+    });
+
+    testWidgets('the status strip is the bottom line: the designer bar '
+        'stands on it, and on any dock opened', (tester) async {
+      if (!kDebugMode) return;
+      await pump(tester);
+      plugin.sceneState.openScene(Scene(name: 'level'), const {});
+      plugin.openLevelDesigner();
+      await tester.pump();
+      await tester.pump();
+      final window = tester.getRect(find.byType(JustGameEditorOverlay));
+      Rect strip() => tester.getRect(find.byType(DockStatusStrip));
+      Rect bar() => tester.getRect(find.byType(DesignerStatusBar));
+
+      expect(strip().bottom, window.bottom);
+      expect(bar().bottom, strip().top, reason: 'the designer bar on it');
+      final shut = bar().top;
+
+      // The game has the top of the window, beside the tool strip; the
+      // tool's options are in the designer bar at its foot.
+      final canvas = tester.getRect(find.byType(GameCanvasArea));
+      expect(canvas.top, window.top);
+      expect(canvas.left, window.left + ToolPalette.width);
+      expect(
+        find.descendant(
+          of: find.byType(DesignerStatusBar),
+          matching: find.byType(ToolOptionsBar),
+        ),
+        findsOneWidget,
+      );
+      expect(canvas.bottom, bar().top, reason: 'down to the designer bar');
+
+      dock().open('test.waves');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(strip().bottom, window.bottom, reason: 'still the bottom line');
+      expect(shut - bar().top, 240, reason: 'raised by the open dock');
+      expect(
+        tester.getRect(find.byType(DockPanel)).top,
+        closeTo(bar().bottom, 1),
+        reason: 'the dock between the strip and the bar',
       );
       plugin.closeLevelDesigner();
       await done(tester);

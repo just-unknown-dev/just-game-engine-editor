@@ -37,6 +37,7 @@ export 'src/ui/scene_tree/scene_tree_panel.dart';
 export 'src/ui/scene_tree/scene_tree_row.dart';
 export 'src/ui/widgets/scrubbable_number_field.dart';
 export 'src/ui/widgets/editor_dropdown.dart';
+export 'src/ui/widgets/editor_scrollbar.dart';
 export 'src/core/ecs/systems/editor_log_capture_system.dart';
 export 'src/core/ecs/systems/physics_body_binding_system.dart';
 
@@ -62,6 +63,7 @@ export 'src/core/constants/editor_constants.dart'
 // adds to a component beyond its fields.
 export 'src/ui/inspector/field_editor.dart';
 export 'src/ui/inspector/field_rows.dart';
+export 'src/ui/inspector/property_table_editor.dart';
 export 'src/ui/inspector/component_extras.dart';
 export 'src/ui/inspector/definition_section.dart';
 export 'src/ui/inspector/physics_shape_editor.dart';
@@ -71,4 +73,22 @@ export 'src/ui/inspector/built_in_field_editors.dart';
 export 'src/ui/level_designer/level_designer.dart';
 export 'src/ui/overlay/camera_rig_painter.dart';
 export 'src/extension/built_in_camera_contributions.dart';
+export 'src/extension/built_in_tile_contributions.dart';
+export 'src/core/level_map/tile_commands.dart';
+export 'src/core/level_map/tile_edit_state.dart';
+export 'src/core/level_map/level_map_documents.dart';
+export 'src/core/level_map/level_map_focus.dart';
+export 'src/core/level_map/level_map_provision.dart';
+export 'src/core/level_map/tile_selection_ops.dart';
+export 'src/core/level_map/tiles_to_entity.dart';
+export 'src/core/level_map/tiled_export.dart';
+export 'src/core/level_map/tiled_import.dart';
+export 'src/extension/tiled_object_mapper.dart';
+export 'src/ui/tileset/collision_shape_editor.dart';
+export 'src/ui/tileset/create_tileset_dialog.dart';
+export 'src/ui/tileset/tile_animation_editor.dart';
+export 'src/ui/tileset/tile_properties_editor.dart';
+export 'src/ui/tileset/tileset_session.dart';
+export 'src/ui/tileset/tileset_workspace.dart';
+export 'src/ui/tileset/wang_set_editor.dart';
 export 'src/ui/inspector/collection_editor.dart';

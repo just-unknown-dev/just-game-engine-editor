@@ -259,7 +259,8 @@ class DefinitionSection extends StatelessWidget {
       for (final f in fields)
         if (jge.PropertyAccess.canAnimate(f)) f,
     ];
-    if (keyable.isEmpty || definition.type == 'TimelinePlayerComponent') {
+    if (keyable.isEmpty ||
+        TimelineSession.unrecorded.contains(definition.type)) {
       return row;
     }
     return Row(

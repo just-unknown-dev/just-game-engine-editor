@@ -25,16 +25,21 @@ abstract final class CameraRigPainter {
     DesignerCanvas draw,
     jge.World world, {
     required bool Function(jge.Entity entity) isSelected,
+    bool Function(jge.Entity entity)? isShown,
     jge.CameraBrain? brain,
     bool editingTrack = false,
   }) {
-    _paintBounds(draw, world);
-    _paintTriggers(draw, world, isSelected);
+    // What the viewport hides — by the eye, or by the Level Designer
+    // keeping to its map — takes its rig with it.
+    bool drawn(jge.Entity entity) =>
+        entity.isActive && (isShown == null || isShown(entity));
+    _paintBounds(draw, world, drawn);
+    _paintTriggers(draw, world, isSelected, drawn);
     for (final entity in world.query([
       jge.TransformComponent,
       jge.VirtualCameraComponent,
     ])) {
-      if (!entity.isActive) continue;
+      if (!drawn(entity)) continue;
       _paintCamera(
         draw,
         world,
@@ -48,7 +53,7 @@ abstract final class CameraRigPainter {
       jge.TransformComponent,
       jge.CameraTargetGroupComponent,
     ])) {
-      if (entity.isActive && isSelected(entity)) _paintGroup(draw, entity);
+      if (drawn(entity) && isSelected(entity)) _paintGroup(draw, entity);
     }
   }
 
@@ -188,12 +193,13 @@ abstract final class CameraRigPainter {
     DesignerCanvas draw,
     jge.World world,
     bool Function(jge.Entity) isSelected,
+    bool Function(jge.Entity) drawn,
   ) {
     for (final entity in world.query([
       jge.TransformComponent,
       jge.CameraTriggerComponent,
     ])) {
-      if (!entity.isActive) continue;
+      if (!drawn(entity)) continue;
       final zone = entity.getComponent<jge.CameraTriggerComponent>()!;
       final region = zone.regionAt(_at(entity));
       final strong = isSelected(entity) || zone.isInside;
@@ -210,12 +216,16 @@ abstract final class CameraRigPainter {
     }
   }
 
-  static void _paintBounds(DesignerCanvas draw, jge.World world) {
+  static void _paintBounds(
+    DesignerCanvas draw,
+    jge.World world,
+    bool Function(jge.Entity) drawn,
+  ) {
     for (final entity in world.query([
       jge.TransformComponent,
       jge.CameraBoundsComponent,
     ])) {
-      if (!entity.isActive) continue;
+      if (!drawn(entity)) continue;
       final area = _boundsOf(entity)!;
       draw
         ..dashWorldRect(area, bounds.withValues(alpha: 0.8))
@@ -281,6 +291,7 @@ class CameraRigOverlay extends DesignerOverlay {
     context.world,
     brain: brain(),
     isSelected: context.isSelected,
+    isShown: context.isShown,
     editingTrack: context.controller.toolId.value == BuiltInTools.dolly,
   );
 }

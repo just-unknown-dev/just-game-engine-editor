@@ -88,18 +88,21 @@ void main() {
     }
     session.onPointerUp(hex.cellCenter(cells.last, 32), 32);
 
-    final placed = scope.world
-        .query([TransformComponent])
-        .where((e) => e.isActive)
-        .toList();
+    // Entities under the Level Map, one per painted cell.
+    final map = LevelMaps.primaryEntity(scope.world)!;
+    final placed = [
+      for (final id in map.getComponent<ChildrenComponent>()!.childIds)
+        scope.world.getEntity(id)!,
+    ];
     expect(placed, hasLength(3));
     final centres = {for (final c in cells) hex.cellCenter(c, 32)};
     for (final e in placed) {
       final p = e.getComponent<TransformComponent>()!.position;
+      final at = Offset(p.x, p.y);
       expect(
-        centres.any((c) => (c - Offset(p.x, p.y)).distance < 1e-6),
+        centres.any((c) => (c - at).distance < 1e-6),
         isTrue,
-        reason: '$p',
+        reason: '$at',
       );
     }
   });

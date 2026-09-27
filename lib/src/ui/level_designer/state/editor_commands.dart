@@ -141,7 +141,8 @@ class TransformCommand extends EditorCommand {
 ///
 /// Holds JSON rather than live entities because undo destroys them: on redo
 /// there is nothing left to re-add, so the command has to be able to rebuild
-/// them from scratch.
+/// them from scratch. An entity whose spec names a parent goes back under
+/// it — found by name, as a scene file does, since ids are new each time.
 class CreateEntitiesCommand extends EditorCommand {
   CreateEntitiesCommand({
     required this.label,
@@ -187,7 +188,7 @@ class CreateEntitiesCommand extends EditorCommand {
       world: world,
       sceneState: sceneState,
       specs: entities
-          .map((e) => EntitySpec.of(e, codec))
+          .map((e) => EntitySpec.of(e, codec, world: world))
           .toList(growable: false),
       onCreated: onCreated,
     );
@@ -213,6 +214,18 @@ class CreateEntitiesCommand extends EditorCommand {
         name: spec.name,
       );
       sceneState.registerEntity(entity);
+      final parentName = spec.parentName;
+      final parent = parentName == null
+          ? null
+          : world.findEntityByName(parentName);
+      if (parent != null) {
+        placeEntity(
+          entity,
+          world: world,
+          sceneState: sceneState,
+          slot: HierarchySlot(parentId: parent.id, index: spec.siblingIndex),
+        );
+      }
       _createdIds.add(entity.id);
       created.add(entity);
     }
@@ -225,9 +238,11 @@ class CreateEntitiesCommand extends EditorCommand {
 
   @override
   void undo() {
-    for (final id in _createdIds) {
+    // Last made first, so a child leaves its parent before the parent goes.
+    for (final id in _createdIds.reversed) {
       final entity = world.getEntity(id);
       if (entity == null) continue;
+      detachEntity(entity, world: world, sceneState: sceneState);
       sceneState.removeEntityNode(id);
       world.destroyEntity(entity);
     }
@@ -239,26 +254,54 @@ class CreateEntitiesCommand extends EditorCommand {
   }
 }
 
-/// Name plus serialized components — enough to rebuild one entity.
+/// Name plus serialized components — enough to rebuild one entity — and
+/// where it goes in the tree.
 class EntitySpec {
   const EntitySpec({
     required this.name,
     required this.componentsJson,
     required this.codec,
+    this.parentName,
+    this.siblingIndex = -1,
   });
 
-  /// Captures [entity] as it currently stands, through [codec].
-  factory EntitySpec.of(jge.Entity entity, SceneCodec codec) {
+  /// Captures [entity] as it currently stands, through [codec]. With
+  /// [world], where it sits in the tree too: its parent, by name, and its
+  /// place among that parent's children.
+  factory EntitySpec.of(
+    jge.Entity entity,
+    SceneCodec codec, {
+    jge.World? world,
+  }) {
     final json = <Map<String, dynamic>>[];
     for (final component in entity.components) {
       final encoded = codec.encode(component);
       if (encoded != null) json.add(encoded);
     }
-    return EntitySpec(name: entity.name, componentsJson: json, codec: codec);
+    final parentId = entity.getComponent<jge.ParentComponent>()?.parentId;
+    final parent = parentId == null ? null : world?.getEntity(parentId);
+    return EntitySpec(
+      name: entity.name,
+      componentsJson: json,
+      codec: codec,
+      parentName: parent?.name,
+      siblingIndex:
+          parent?.getComponent<jge.ChildrenComponent>()?.childIds.indexOf(
+            entity.id,
+          ) ??
+          -1,
+    );
   }
 
   /// Entity name, or null for an unnamed entity.
   final String? name;
+
+  /// The name of the entity it goes under, or null for a root. By name,
+  /// because ids are handed out again when entities are rebuilt.
+  final String? parentName;
+
+  /// Its place among [parentName]'s children; -1 for after them all.
+  final int siblingIndex;
 
   /// Serialized components, in attachment order.
   final List<Map<String, dynamic>> componentsJson;
@@ -279,10 +322,19 @@ class EntitySpec {
   /// lacks are removed if they are part of the level format; runtime-only
   /// ones (the physics handle) are left to the systems that own them, which
   /// re-sync from what is written here.
+  ///
+  /// Where it is in the tree is not part of this: the entity's parent link
+  /// and its list of children are left as they are. Decoded, they would be
+  /// empty — they name entities by id — and a resize would cut a child
+  /// loose, or an edit to a parent drop all of its children.
   void applyTo(jge.Entity entity) {
-    final components = decode();
+    final components = [
+      for (final c in decode())
+        if (!_isLink(c)) c,
+    ];
     final kept = {for (final c in components) c.componentType};
     for (final c in entity.components.toList()) {
+      if (_isLink(c)) continue;
       if (!kept.contains(c.componentType) && codec.canEncode(c)) {
         entity.removeComponentByType(c.componentType);
       }
@@ -293,11 +345,29 @@ class EntitySpec {
     entity.name = name;
   }
 
-  /// A copy with a different name, for duplicate and array operations.
-  EntitySpec renamed(String? newName) =>
-      EntitySpec(name: newName, componentsJson: componentsJson, codec: codec);
+  static bool _isLink(jge.Component c) =>
+      c is jge.ParentComponent || c is jge.ChildrenComponent;
 
-  /// A copy shifted by [delta], for duplicate and array operations.
+  /// A copy with a different name, for duplicate and array operations.
+  EntitySpec renamed(String? newName) => EntitySpec(
+    name: newName,
+    componentsJson: componentsJson,
+    codec: codec,
+    parentName: parentName,
+    siblingIndex: siblingIndex,
+  );
+
+  /// A copy that goes under [parent] — by name — at [index], or at the end.
+  EntitySpec under(String? parent, {int index = -1}) => EntitySpec(
+    name: name,
+    componentsJson: componentsJson,
+    codec: codec,
+    parentName: parent,
+    siblingIndex: index,
+  );
+
+  /// A copy shifted by [delta], for duplicate and array operations: under
+  /// the same parent, just after the original.
   ///
   /// Decodes, moves the transform and re-encodes, so this knows nothing
   /// about how a position is spelled on disk — the codec does.
@@ -320,6 +390,8 @@ class EntitySpec {
       name: newName ?? name,
       componentsJson: shifted,
       codec: codec,
+      parentName: parentName,
+      siblingIndex: siblingIndex < 0 ? -1 : siblingIndex + 1,
     );
   }
 }

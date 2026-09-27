@@ -1272,10 +1272,13 @@ class TimelineSession {
   }
 
   /// The component types recording leaves alone: a timeline does not
-  /// animate its own player.
-  static const Set<String> _unrecorded = {
+  /// animate its own player, and a tile map's file path is not something
+  /// to key — a map moved into a file while Record is on would otherwise
+  /// become a key.
+  static const Set<String> unrecorded = {
     'TimelinePlayerComponent',
     'TimelineTriggerComponent',
+    'LevelMapComponent',
   };
 
   Iterable<(Component, ComponentDefinition, SchemaField)> _fieldsOf(
@@ -1283,7 +1286,7 @@ class TimelineSession {
   ) sync* {
     for (final component in entity.components) {
       final definition = scope.definitions.definitionFor(component);
-      if (definition == null || _unrecorded.contains(definition.type)) continue;
+      if (definition == null || unrecorded.contains(definition.type)) continue;
       for (final field in definition.fields) {
         if (PropertyAccess.canAnimate(field)) {
           yield (component, definition, field);

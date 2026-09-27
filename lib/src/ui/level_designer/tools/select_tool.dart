@@ -6,6 +6,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import '../../../core/state/editor_scene_state.dart';
 import '../state/component_resizer.dart';
 import '../state/designer_geometry.dart';
+import '../../../core/entity/hierarchy_commands.dart';
 import '../state/editor_commands.dart';
 import '../../../core/serialization/scene_codec.dart';
 import '../state/editor_history.dart';
@@ -20,16 +21,18 @@ enum _Gesture { none, marquee, move, resize, rotate }
 /// Select, move, resize and rotate — the tool most of a level is built with.
 ///
 /// - Press empty space and drag: marquee. Ctrl adds to the selection.
-/// - Press an entity: select it; drag to move the whole selection.
-///   Alt at the start of the drag moves a copy instead.
+/// - Press an entity: select it; drag to move the whole selection. Alt at the start of the drag moves a copy instead.
 /// - Drag one of the eight handles on the selection's bounds: resize every
-///   selected entity in proportion. Shift keeps the aspect ratio, Alt resizes
+///   selected thing in proportion. Shift keeps the aspect ratio, Alt resizes
 ///   about the centre.
 /// - Drag the knob above the bounds: rotate about the selection's centre, in
 ///   15 degree steps.
+/// - Double-click open ground: the Level Map.
 ///
-/// While dragging, edges and centres snap to other entities and ruler guides,
-/// then to the grid. Hold Ctrl to place freely.
+/// Moving or turning a parent takes what is under it along.
+///
+/// While dragging, edges and centres snap to other entities and ruler
+/// guides, then to the grid. Hold Ctrl to place freely.
 class SelectTool extends LevelToolHandler {
   SelectTool({
     required this.sceneState,
@@ -84,6 +87,10 @@ class SelectTool extends LevelToolHandler {
   List<jge.Entity> _targets = const [];
   List<TransformSnapshot> _before = const [];
   Rect _startBounds = Rect.zero;
+
+  // What is under the targets, moved and turned with them, and where it was.
+  List<jge.Entity> _carried = const [];
+  List<TransformSnapshot> _carriedBefore = const [];
   List<Rect> _snapRects = const [];
   List<double> _guideXs = const [];
   List<double> _guideYs = const [];
@@ -129,6 +136,15 @@ class SelectTool extends LevelToolHandler {
 
     final hit = _entityAt(context);
     if (hit == null) {
+      if (context.isDoubleClick && !context.isCtrlDown) {
+        // A double-click on open ground: the Level Map, whose ground it is.
+        final map = jge.LevelMaps.primaryEntity(context.world);
+        if (map != null) {
+          sceneState.selectEntity(map);
+          context.controller.setStatus('${map.name ?? 'The map'} selected');
+          return true;
+        }
+      }
       // Empty space: start a marquee. Ctrl keeps the existing selection so a
       // second sweep can add to the first.
       _gesture = _Gesture.marquee;
@@ -149,9 +165,9 @@ class SelectTool extends LevelToolHandler {
       return true;
     }
 
-    // Pressing an entity that is not part of the current selection replaces
-    // the selection; pressing one that *is* keeps it, so a multi-selection can
-    // be dragged as a unit rather than collapsing to whatever was grabbed.
+    // Pressing what is not part of the current selection replaces the
+    // selection; pressing what *is* keeps it, so a multi-selection can be
+    // dragged as a unit rather than collapsing to whatever was grabbed.
     if (!sceneState.isInMultiSelection(hit.id) &&
         sceneState.selectedEntity.value?.id != hit.id) {
       sceneState.selectEntity(hit);
@@ -211,6 +227,9 @@ class SelectTool extends LevelToolHandler {
   void onCancel() {
     // Put everything back: an abandoned gesture must not leave a half-applied
     // edit behind.
+    for (var i = 0; i < _carried.length; i++) {
+      if (_carried[i].isAlive) _carriedBefore[i].applyTo(_carried[i]);
+    }
     for (var i = 0; i < _targets.length; i++) {
       if (!_targets[i].isAlive) continue;
       if (_gesture == _Gesture.resize) {
@@ -236,10 +255,18 @@ class SelectTool extends LevelToolHandler {
     // Snapshotted up front so a commit restores exact starting transforms
     // rather than re-applying an inverted delta, which would drift.
     _before = targets.map(TransformSnapshot.of).toList(growable: false);
+    // A resize changes each target's own size; moving and turning take
+    // what is under them along.
+    _carried = gesture == _Gesture.resize
+        ? const []
+        : carriedWith(targets, world: context.world);
+    _carriedBefore = _carried.map(TransformSnapshot.of).toList(growable: false);
 
     // What the selection can snap to, fixed for the gesture: everything
-    // visible and pickable except the selection itself.
-    final moving = {for (final e in targets) e.id};
+    // visible and pickable except what moves.
+    final moving = {
+      for (final e in [...targets, ..._carried]) e.id,
+    };
     _snapRects = [
       for (final e in context.world.query([jge.TransformComponent]))
         if (e.isActive &&
@@ -270,6 +297,8 @@ class SelectTool extends LevelToolHandler {
     _additiveBase = const {};
     _targets = const [];
     _before = const [];
+    _carried = const [];
+    _carriedBefore = const [];
     _beforeSpecs = const [];
     _snapRects = const [];
     _handle = null;
@@ -309,6 +338,15 @@ class SelectTool extends LevelToolHandler {
       entity.getComponent<jge.TransformComponent>()?.setPositionXY(
         _before[i].x + moved.dx,
         _before[i].y + moved.dy,
+      );
+      sceneState.syncEntityNode(entity);
+    }
+    for (var i = 0; i < _carried.length; i++) {
+      final entity = _carried[i];
+      if (!entity.isAlive) continue;
+      entity.getComponent<jge.TransformComponent>()?.setPositionXY(
+        _carriedBefore[i].x + moved.dx,
+        _carriedBefore[i].y + moved.dy,
       );
       sceneState.syncEntityNode(entity);
     }
@@ -370,42 +408,56 @@ class SelectTool extends LevelToolHandler {
     }
     if (!_anyTransformChanged()) {
       // Alt-click without a drag: no copy was asked for.
-      _discardCopies();
+      onCancel();
       return;
     }
     final copies = _targets;
-    history.pushApplied(
+    final label = copies.length == 1
+        ? 'Duplicate ${_originalSelection.first.name ?? 'entity'}'
+        : 'Duplicate ${copies.length} entities';
+    _push(label, [
       CreateEntitiesCommand.adopting(
         codec: codec,
-        label: copies.length == 1
-            ? 'Duplicate ${_originalSelection.first.name ?? 'entity'}'
-            : 'Duplicate ${copies.length} entities',
+        label: label,
         world: context.world,
         sceneState: sceneState,
         entities: copies,
         onCreated: _select,
       ),
-    );
-    sceneState.markDirty();
+    ]);
   }
 
   /// Records a move or rotation as one undo step, if anything changed.
   void _commitTransform(String verb) {
-    if (_targets.isEmpty || !_anyTransformChanged()) return;
-    final after = [for (final e in _targets) TransformSnapshot.of(e)];
+    final label = _label(verb);
+    _push(label, [
+      if (_targets.isNotEmpty && _anyTransformChanged())
+        TransformCommand(
+          label: label,
+          entities: [..._targets, ..._carried],
+          before: [..._before, ..._carriedBefore],
+          after: [
+            for (final e in [..._targets, ..._carried]) TransformSnapshot.of(e),
+          ],
+          sceneState: sceneState,
+        ),
+    ]);
+  }
+
+  /// One undo step of [commands]: one gesture.
+  void _push(String label, List<EditorCommand> commands) {
+    if (commands.isEmpty) return;
     history.pushApplied(
-      TransformCommand(
-        label: _targets.length == 1
-            ? '$verb ${_targets.first.name ?? 'entity'}'
-            : '$verb ${_targets.length} entities',
-        entities: List.of(_targets),
-        before: List.of(_before),
-        after: after,
-        sceneState: sceneState,
-      ),
+      commands.length == 1
+          ? commands.single
+          : CompositeCommand(label: label, commands: commands),
     );
     sceneState.markDirty();
   }
+
+  String _label(String verb) => _targets.length == 1
+      ? '$verb ${_targets.single.name ?? 'entity'}'
+      : '$verb ${_targets.length} entities';
 
   bool _anyTransformChanged() {
     for (var i = 0; i < _targets.length; i++) {
@@ -470,19 +522,18 @@ class SelectTool extends LevelToolHandler {
   }
 
   void _commitResize(ToolContext context) {
-    final command = EntityStateCommand(
-      label: _targets.length == 1
-          ? 'Resize ${_targets.first.name ?? 'entity'}'
-          : 'Resize ${_targets.length} entities',
+    final label = _label('Resize');
+    final entities = EntityStateCommand(
+      label: label,
       world: context.world,
       sceneState: sceneState,
       ids: [for (final e in _targets) e.id],
       before: _beforeSpecs,
       after: [for (final e in _targets) EntitySpec.of(e, codec)],
     );
-    if (!command.changesAnything) return;
-    history.pushApplied(command);
-    sceneState.markDirty();
+    _push(label, [
+      if (_targets.isNotEmpty && entities.changesAnything) entities,
+    ]);
   }
 
   // ── Rotate ────────────────────────────────────────────────────────────────
@@ -496,19 +547,29 @@ class SelectTool extends LevelToolHandler {
     }
     final cos = math.cos(angle);
     final sin = math.sin(angle);
-    for (var i = 0; i < _targets.length; i++) {
-      final entity = _targets[i];
-      if (!entity.isAlive) continue;
-      final before = _before[i];
-      final dx = before.x - pivot.dx;
-      final dy = before.y - pivot.dy;
+    Offset turn(Offset p) {
+      final dx = p.dx - pivot.dx;
+      final dy = p.dy - pivot.dy;
+      return Offset(
+        pivot.dx + dx * cos - dy * sin,
+        pivot.dy + dx * sin + dy * cos,
+      );
+    }
+
+    void turnEntity(jge.Entity entity, TransformSnapshot before) {
+      if (!entity.isAlive) return;
+      final to = turn(Offset(before.x, before.y));
       entity.getComponent<jge.TransformComponent>()
-        ?..setPositionXY(
-          pivot.dx + dx * cos - dy * sin,
-          pivot.dy + dx * sin + dy * cos,
-        )
+        ?..setPositionXY(to.dx, to.dy)
         ..rotation = before.rotation + angle;
       sceneState.syncEntityNode(entity);
+    }
+
+    for (var i = 0; i < _targets.length; i++) {
+      turnEntity(_targets[i], _before[i]);
+    }
+    for (var i = 0; i < _carried.length; i++) {
+      turnEntity(_carried[i], _carriedBefore[i]);
     }
     sceneState.refresh();
     context.controller.setStatus('${(angle * 180 / math.pi).round()}°');
@@ -528,16 +589,25 @@ class SelectTool extends LevelToolHandler {
     // A click, not a sweep: treat it as "clear selection", which is what
     // clicking empty space should do.
     if (selection.width < 2 && selection.height < 2) {
-      if (_additiveBase.isEmpty) sceneState.clearSelection();
+      if (_additiveBase.isEmpty) {
+        sceneState.clearSelection();
+      }
       return;
     }
 
-    final hits = DesignerGeometry.entitiesIn(
-      selection,
-      context.world.query([jge.TransformComponent]),
-      pickable: context.controller.isPickable,
-    );
-
+    // A sweep takes what is on the level's map, never the map itself: it is
+    // under everything, and moving it moves all of it. A click, a
+    // double-click on its ground or the tree picks it.
+    final hits =
+        DesignerGeometry.entitiesIn(
+          selection,
+          context.world.query([jge.TransformComponent]),
+          pickable: context.controller.isPickable,
+        )..removeWhere(
+          (e) =>
+              e.hasComponent<jge.LevelMapComponent>() &&
+              !jge.LevelMaps.isPiece(context.world, e),
+        );
     if (hits.isEmpty && _additiveBase.isEmpty) {
       sceneState.clearSelection();
       return;
@@ -561,23 +631,40 @@ class SelectTool extends LevelToolHandler {
 
   // ── Duplicate ─────────────────────────────────────────────────────────────
 
+  /// Copies of [entities], each just after its original under the same
+  /// parent.
   List<jge.Entity> _duplicate(jge.World world, List<jge.Entity> entities) => [
     for (final entity in entities)
       () {
-        final copy = world.createEntityWithComponents(
-          EntitySpec.of(entity, codec).decode(),
-          name: _uniqueName(_baseName(entity.name)),
-        );
+        final copy = world.createEntityWithComponents([
+          for (final c in EntitySpec.of(entity, codec).decode())
+            if (c is! jge.ParentComponent && c is! jge.ChildrenComponent) c,
+        ], name: _uniqueName(_baseName(entity.name)));
         sceneState.registerEntity(copy);
+        final at = HierarchySlot.of(
+          entity,
+          world: world,
+          sceneState: sceneState,
+        );
+        if (at.parentId != null) {
+          placeEntity(
+            copy,
+            world: world,
+            sceneState: sceneState,
+            slot: HierarchySlot(parentId: at.parentId, index: at.index + 1),
+          );
+        }
         return copy;
       }(),
   ];
 
   void _discardCopies() {
+    final world = _world;
     for (final copy in _targets) {
-      if (!copy.isAlive) continue;
+      if (!copy.isAlive || world == null) continue;
+      detachEntity(copy, world: world, sceneState: sceneState);
       sceneState.removeEntityNode(copy.id);
-      _world?.destroyEntity(copy);
+      world.destroyEntity(copy);
     }
     _select(_originalSelection);
   }
@@ -623,7 +710,7 @@ class SelectTool extends LevelToolHandler {
       entity.getComponent<jge.TransformComponent>() != null;
 
   /// Combined bounds of [entities]; a sizeless marker counts as a point.
-  static Rect? _groupBounds(List<jge.Entity> entities) {
+  Rect? _groupBounds(List<jge.Entity> entities) {
     Rect? union;
     for (final entity in entities) {
       var bounds = DesignerGeometry.worldBounds(entity);

@@ -27,6 +27,13 @@ class SceneTreeController {
   );
 
   /// What the tree is narrowed to.
+  /// The map layers that are open, by map and layer: what is on them
+  /// listed.
+  final Signal<Set<(jge.EntityId, int)>> expandedLayers = Signal(
+    <(jge.EntityId, int)>{},
+    debugLabel: 'treeExpandedLayers',
+  );
+
   final Signal<TreeFilter> filter = Signal(
     TreeFilter.none,
     debugLabel: 'treeFilter',
@@ -52,6 +59,7 @@ class SceneTreeController {
 
   void dispose() {
     expanded.dispose();
+    expandedLayers.dispose();
     colors.dispose();
     filter.dispose();
     renaming.dispose();
@@ -88,7 +96,18 @@ class SceneTreeController {
     expanded.value = next;
   }
 
-  void collapseAll() => expanded.value = <jge.EntityId>{};
+  void collapseAll() {
+    expanded.value = <jge.EntityId>{};
+    expandedLayers.value = <(jge.EntityId, int)>{};
+  }
+
+  /// Opens or shuts [layerId] of the map on [mapId].
+  void toggleLayer(jge.EntityId mapId, int layerId) {
+    final key = (mapId, layerId);
+    final next = {...expandedLayers.value};
+    if (!next.remove(key)) next.add(key);
+    expandedLayers.value = next;
+  }
 
   void expandAll() {
     expanded.value = {
@@ -107,16 +126,32 @@ class SceneTreeController {
   /// selection makes the reader hunt for what they just clicked.
   void reveal(jge.EntityId id) {
     final next = {...expanded.value};
+    final layers = {...expandedLayers.value};
     var entity = world().getEntity(id);
     var guard = 0;
     while (entity != null && guard++ < 64) {
       final parentId = entity.getComponent<jge.ParentComponent>()?.parentId;
       if (parentId == null) break;
       next.add(parentId);
+      // On a layer of a map: that layer's row is opened too.
+      final onLayer = entity.getComponent<jge.LayerComponent>()?.mapLayer;
+      if (onLayer != null) layers.add((parentId, onLayer));
       entity = world().getEntity(parentId);
     }
     if (next.length != expanded.value.length) expanded.value = next;
+    if (layers.length != expandedLayers.value.length) {
+      expandedLayers.value = layers;
+    }
     _scrollTo = id;
+  }
+
+  /// Opens [layerId] of the map on [mapId], and the map.
+  void expandLayer(jge.EntityId mapId, int layerId) {
+    if (!expanded.value.contains(mapId)) expand(mapId);
+    final key = (mapId, layerId);
+    if (!expandedLayers.value.contains(key)) {
+      expandedLayers.value = {...expandedLayers.value, key};
+    }
   }
 
   /// The row a scroll is owed to, taken once the list has been built with

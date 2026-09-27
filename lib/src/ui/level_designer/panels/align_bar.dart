@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../../core/constants/editor_constants.dart';
+import '../../../core/entity/hierarchy_commands.dart';
 import '../level_designer_session.dart';
 import '../state/designer_geometry.dart';
 import '../state/editor_commands.dart';
@@ -216,12 +217,33 @@ class AlignBar extends StatelessWidget {
     List<TransformSnapshot> before,
     String label,
   ) {
+    // What is under each moved entity goes with it.
+    final world = session.world;
+    final carried = <jge.Entity>[];
+    final carriedBefore = <TransformSnapshot>[];
+    for (var i = 0; i < entities.length; i++) {
+      final now = TransformSnapshot.of(entities[i]);
+      final dx = now.x - before[i].x, dy = now.y - before[i].y;
+      final under = carriedWith(
+        [entities[i]],
+        world: world,
+      ).where((e) => !entities.contains(e) && !carried.contains(e));
+      for (final child in under) {
+        final t = child.getComponent<jge.TransformComponent>()!;
+        carried.add(child);
+        carriedBefore.add(TransformSnapshot.of(child));
+        if (dx == 0 && dy == 0) continue;
+        t.setPositionXY(t.position.x + dx, t.position.y + dy);
+        session.sceneState.syncEntityNode(child);
+      }
+    }
+    final all = [...entities, ...carried];
     session.history.pushApplied(
       TransformCommand(
         label: label,
-        entities: entities,
-        before: before,
-        after: entities.map(TransformSnapshot.of).toList(growable: false),
+        entities: all,
+        before: [...before, ...carriedBefore],
+        after: all.map(TransformSnapshot.of).toList(growable: false),
         sceneState: session.sceneState,
       ),
     );

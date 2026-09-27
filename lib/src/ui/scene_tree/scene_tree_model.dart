@@ -85,6 +85,27 @@ class TreeFilter {
   }
 }
 
+/// A row of the tree that is part of a level map rather than an entity:
+/// one of its layers.
+sealed class MapTreeItem {
+  const MapTreeItem(this.layerId);
+
+  /// The layer, by its id within the map.
+  final int layerId;
+}
+
+/// A layer of a level map.
+class MapLayerTreeItem extends MapTreeItem {
+  const MapLayerTreeItem(super.layerId);
+
+  @override
+  bool operator ==(Object other) =>
+      other is MapLayerTreeItem && other.layerId == layerId;
+
+  @override
+  int get hashCode => Object.hash('layer', layerId);
+}
+
 /// One line of the tree.
 class TreeRow {
   const TreeRow({
@@ -94,9 +115,16 @@ class TreeRow {
     required this.isExpanded,
     this.isMatch = true,
     this.isRuntime = false,
+    this.item,
   });
 
+  /// The entity — for a map's layer, the map's.
   final jge.Entity entity;
+
+  /// The map layer this row is, or null for the entity itself.
+  final MapTreeItem? item;
+
+  bool get isMapItem => item != null;
 
   /// How far in it is drawn.
   final int depth;
@@ -115,8 +143,9 @@ class TreeRow {
 
   @override
   String toString() =>
-      'TreeRow(${entity.name ?? entity.id}, depth: $depth'
-      '${isMatch ? '' : ', context'}${isRuntime ? ', runtime' : ''})';
+      'TreeRow(${entity.name ?? entity.id}${item == null ? '' : ' $item'}, '
+      'depth: $depth${isMatch ? '' : ', context'}'
+      '${isRuntime ? ', runtime' : ''})';
 }
 
 /// The divider between the scene's entities and the ones a running game
@@ -143,8 +172,13 @@ class SceneTree {
   bool get isEmpty => rows.isEmpty;
   int get length => rows.length;
 
-  /// Where [id] is in [rows], or -1.
-  int indexOf(jge.EntityId id) => rows.indexWhere((r) => r.id == id);
+  /// Where [id]'s own row is in [rows], or -1.
+  int indexOf(jge.EntityId id) =>
+      rows.indexWhere((r) => r.id == id && r.item == null);
+
+  /// Where the row of [item] of the map on [id] is, or -1.
+  int indexOfItem(jge.EntityId id, MapTreeItem item) =>
+      rows.indexWhere((r) => r.id == id && r.item == item);
 
   static const SceneTree empty = SceneTree(rows: []);
 }
@@ -165,12 +199,18 @@ abstract final class SceneTreeModel {
     Set<jge.EntityId>? authored,
     Set<jge.EntityId> withProblems = const {},
     TreeContents contents = TreeContents.world,
+    jge.LevelMapData? Function(jge.Entity entity)? mapOf,
+    Set<(jge.EntityId, int)> expandedLayers = const {},
   }) {
     final live = {
       for (final entity in world.entities)
         // Alive, not enabled: an entity switched off is still part of
-        // the scene, and is listed struck through.
-        if (entity.isAlive) entity.id: entity,
+        // the scene, and is listed struck through. What a system built
+        // from other data (a tile map's collision) is not listed at all:
+        // there can be hundreds, and none is anything to edit.
+        if (entity.isAlive &&
+            !entity.hasComponent<jge.GeneratedEntityComponent>())
+          entity.id: entity,
     };
 
     // Children by parent, in the order each parent lists them; anything a
@@ -239,10 +279,24 @@ abstract final class SceneTreeModel {
     }
 
     final filtering = !filter.isEmpty;
+    // A map's layers answer only to the words searched for.
+    final itemsFiltered =
+        filtering &&
+        filter.componentType.isEmpty &&
+        filter.tag.isEmpty &&
+        filter.layer.isEmpty &&
+        !filter.problems;
+    final words = filter.text.trim().toLowerCase();
+    bool layerNamed(jge.MapLayerData l) =>
+        itemsFiltered &&
+        words.isNotEmpty &&
+        l.name.toLowerCase().contains(words);
     final matches = <jge.EntityId>{};
     if (filtering) {
       for (final entity in live.values) {
         if (filter.matches(entity, withProblems: withProblems)) {
+          matches.add(entity.id);
+        } else if (mapOf?.call(entity)?.layers.any(layerNamed) ?? false) {
           matches.add(entity.id);
         }
       }
@@ -268,6 +322,31 @@ abstract final class SceneTreeModel {
                 if (matches.contains(child.id)) child,
             ]
           : kids;
+      // A map's layers, front first, as the Layers panel lists them, each
+      // with what is on it — and under a search, only those holding what
+      // was searched for, or named by it.
+      final map = mapOf?.call(entity);
+      final layerIds = {
+        for (final l in map?.layers ?? const <jge.MapLayerData>[]) l.id,
+      };
+      int? layerOf(jge.Entity child) =>
+          child.getComponent<jge.LayerComponent>()?.mapLayer;
+      List<jge.Entity> onLayer(int id) => [
+        for (final child in shown)
+          if (layerOf(child) == id) child,
+      ];
+      final loose = map == null
+          ? shown
+          : [
+              for (final child in shown)
+                if (!layerIds.contains(layerOf(child))) child,
+            ];
+      final layers = [
+        for (final layer
+            in (map?.layers ?? const <jge.MapLayerData>[]).reversed)
+          if (!filtering || onLayer(layer.id).isNotEmpty || layerNamed(layer))
+            layer,
+      ];
       // Under a filter everything is open: a match hidden inside a shut
       // parent is a search that found nothing as far as anyone can see.
       final isExpanded = filtering || expanded.contains(entity.id);
@@ -275,7 +354,7 @@ abstract final class SceneTreeModel {
         TreeRow(
           entity: entity,
           depth: depth,
-          hasChildren: shown.isNotEmpty,
+          hasChildren: shown.isNotEmpty || layers.isNotEmpty,
           isExpanded: isExpanded,
           isMatch:
               !filtering || filter.matches(entity, withProblems: withProblems),
@@ -283,7 +362,28 @@ abstract final class SceneTreeModel {
         ),
       );
       if (!isExpanded) return;
-      for (final child in shown) {
+      for (final layer in layers) {
+        final members = onLayer(layer.id);
+        final open =
+            filtering || expandedLayers.contains((entity.id, layer.id));
+        rows.add(
+          TreeRow(
+            entity: entity,
+            depth: depth + 1,
+            hasChildren: members.isNotEmpty,
+            isExpanded: open,
+            isMatch: !filtering || layerNamed(layer),
+            isRuntime: runtime,
+            item: MapLayerTreeItem(layer.id),
+          ),
+        );
+        if (!open) continue;
+        for (final member in members) {
+          walk(member, depth + 2, runtime);
+        }
+      }
+      // The map's children on none of its layers, after them.
+      for (final child in loose) {
         walk(child, depth + 1, runtime);
       }
     }

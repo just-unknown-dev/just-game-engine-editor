@@ -164,6 +164,10 @@ void main() {
       'PhysicsJointBindingSystem',
       'EditorLogCaptureSystem',
       'SpriteLoadSystem',
+      // Tile maps are drawn in the editor as in the game; their collision
+      // is built only while a play-test runs.
+      'LevelMapSystem',
+      'MapCollisionSystem',
       'SpriteAnimationSystem',
       'AnimatorSystem',
       'TimelineSystem',

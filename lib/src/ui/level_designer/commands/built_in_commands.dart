@@ -258,16 +258,17 @@ abstract final class BuiltInCommands {
     ),
     DesignerCommand(
       id: 'editor.copy',
-      label: 'Copy entity',
+      label: 'Copy',
       scope: CommandScope.editor,
       run: (c) {
-        final selected = c.plugin!.sceneState.selectedEntity.value;
-        if (selected != null) c.plugin!.entities.copyEntity(selected);
+        final plugin = c.plugin!;
+        final selected = plugin.sceneState.selectedEntity.value;
+        if (selected != null) plugin.entities.copyEntity(selected);
       },
     ),
     DesignerCommand(
       id: 'editor.paste',
-      label: 'Paste entity',
+      label: 'Paste',
       scope: CommandScope.editor,
       run: (c) => c.plugin!.entities.pasteEntity(),
     ),

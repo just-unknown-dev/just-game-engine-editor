@@ -27,6 +27,8 @@ class PrefabDefinition {
     this.defaultSize = const Size(128, 32),
     this.description,
     this.namePrefix,
+    this.aliases = const [],
+    this.depth,
   });
 
   /// Stable identifier, used by the palette selection and in saved designer
@@ -59,9 +61,19 @@ class PrefabDefinition {
   /// Base for generated entity names; defaults to [id] when unset.
   final String? namePrefix;
 
+  /// Other names its class goes by, besides its [id] and [name] — what a
+  /// Tiled map commonly calls it: `spikes`, `spring`. Importing a Tiled
+  /// map, an object whose class is one of them becomes this prefab. Any
+  /// case.
+  final List<String> aliases;
+
   /// Builds the components for one instance, sized to [size] and centred at
   /// [position].
   final List<jge.Component> Function(Offset position, Size size) build;
+
+  /// The depth it is placed at, whatever depth is active — a background
+  /// decoration's `background`; null for the one being placed at.
+  final String? depth;
 }
 
 /// The palette of prefabs available in the Level Designer.

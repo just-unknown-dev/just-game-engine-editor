@@ -5,6 +5,7 @@ import '../../../core/constants/editor_constants.dart';
 import '../level_designer_session.dart';
 import '../tools/tool_registry.dart';
 import '../state/prefab_registry.dart';
+import '../../widgets/editor_scrollbar.dart';
 
 /// The palette of entity types the draw and paint tools place.
 ///
@@ -41,40 +42,44 @@ class PrefabPalettePanel extends StatelessWidget {
 
     return SignalBuilder<String?>(
       signal: session.controller.activePrefabId,
-      builder: (context, activeId, _) => ListView(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        children: [
-          for (final entry in [
-            for (final c in categories) MapEntry(c, byCategory[c]!),
-          ]) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-              child: Text(
-                entry.key.toUpperCase(),
-                style: const TextStyle(
-                  color: EditorTheme.textMuted,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
+      builder: (context, activeId, _) => EditorScrollbar(
+        builder: (_, scroll) => ListView(
+          controller: scroll,
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          children: [
+            for (final entry in [
+              for (final c in categories) MapEntry(c, byCategory[c]!),
+            ]) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+                child: Text(
+                  entry.key.toUpperCase(),
+                  style: const TextStyle(
+                    color: EditorTheme.textMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  ),
                 ),
               ),
-            ),
-            for (final prefab in entry.value)
-              _PrefabTile(
-                prefab: prefab,
-                isActive: prefab.id == activeId,
-                onTap: () {
-                  session.controller.activePrefabId.value = prefab.id;
-                  // Selecting a prefab means you intend to place it, so switch
-                  // away from Select — otherwise the first click after picking
-                  // one silently does nothing.
-                  if (session.controller.toolId.value == BuiltInTools.select) {
-                    session.setTool(BuiltInTools.draw);
-                  }
-                },
-              ),
+              for (final prefab in entry.value)
+                _PrefabTile(
+                  prefab: prefab,
+                  isActive: prefab.id == activeId,
+                  onTap: () {
+                    session.controller.activePrefabId.value = prefab.id;
+                    // Selecting a prefab means you intend to place it, so switch
+                    // away from Select — otherwise the first click after picking
+                    // one silently does nothing.
+                    if (session.controller.toolId.value ==
+                        BuiltInTools.select) {
+                      session.setTool(BuiltInTools.draw);
+                    }
+                  },
+                ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

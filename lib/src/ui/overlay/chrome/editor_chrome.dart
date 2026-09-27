@@ -83,7 +83,8 @@ EdgeInsets editorGameInsets({
   required bool designing,
   required double rightPanelWidth,
 }) {
-  // The docks: the status bar, and the panel standing on it.
+  // Bottom up: the status strip, any dock panel open on it, and the
+  // designer's own status bar standing on those, against the level.
   final designerBar = designing ? DesignerStatusBar.height : 0.0;
   final docks = !plugin.isStatusPanelVisible.value
       ? 0.0
@@ -143,16 +144,17 @@ class FullEditorChrome extends StatelessWidget {
           designing: designer != null,
           rightPanelWidth: panelWidth,
         );
-        // What the docks occupy at the foot of the designer: the strip when
-        // it is showing, and the open panel above it.
+        // What the docks occupy at the foot of the window: the strip when it
+        // is showing, and the open panel above it. The designer's status
+        // bar stands on them, so the status strip is always the bottom line.
         final showDocks = plugin.isStatusPanelVisible.value;
-        final docksTop = designer == null ? 0.0 : DesignerStatusBar.height;
+        final designerBar = designer == null ? 0.0 : DesignerStatusBar.height;
         final docksHeight = !showDocks
             ? 0.0
             : OverlayLayout.compactDockPanelHeight +
                   plugin.scope.dockController.panelHeight(
                     size.height -
-                        docksTop -
+                        designerBar -
                         OverlayLayout.compactDockPanelHeight,
                   );
         designer?.controller
@@ -214,10 +216,11 @@ class FullEditorChrome extends StatelessWidget {
                   rightPanelWidth: designerPanelWidth,
                 ),
               ),
+              // On the docks, against the level it reports on.
               Positioned(
                 left: 0,
                 right: panelWidth,
-                bottom: 0,
+                bottom: docksHeight,
                 child: DesignerStatusBar(
                   session: designer,
                   gridSize: plugin.gridSize.value,
@@ -228,18 +231,19 @@ class FullEditorChrome extends StatelessWidget {
             // The interface editor is a workspace now — a dialog over the
             // editor, like the sprite editor — so nothing of it is mounted
             // here over the viewport.
-            // The docks are there while designing too — above the designer's
-            // own status bar — so assets, the console and the timeline are at
-            // hand exactly when a level is being built.
+            // The docks are there while designing too — at the foot of the
+            // window, under the designer's own status bar — so assets, the
+            // console and the timeline are at hand exactly when a level is
+            // being built.
             if (showDocks)
               Positioned(
                 left: 0,
                 right: panelWidth,
-                bottom: docksTop,
+                bottom: 0,
                 child: CompactStatusDock(
                   plugin: plugin,
                   maxDetailWidth: leftWidth,
-                  maxDetailHeight: size.height - docksTop,
+                  maxDetailHeight: size.height - designerBar,
                 ),
               ),
             Positioned(
@@ -247,8 +251,9 @@ class FullEditorChrome extends StatelessWidget {
               top: controlsAt.dy,
               child: PlayControlsToolbar(plugin: plugin, settings: settings),
             ),
+            // Above whatever the foot of the window holds.
             Positioned(
-              bottom: OverlayLayout.compactDockPanelHeight + 8,
+              bottom: gameInsets.bottom + 8,
               right: panelWidth + 8,
               child: const EditorSnackBarLayer(),
             ),

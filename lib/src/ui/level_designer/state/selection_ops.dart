@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../../../core/entity/hierarchy_commands.dart';
 import '../../../core/state/editor_scene_state.dart';
 import 'component_resizer.dart';
 import 'designer_geometry.dart';
@@ -63,9 +64,7 @@ class SelectionOps {
     final ids = [for (final e in entities) e.id]..sort();
     _transform(
       entities,
-      entities.length == 1
-          ? 'Nudge ${entities.first.name ?? 'entity'}'
-          : 'Nudge ${entities.length} entities',
+      'Nudge ${_describe(entities)}',
       (t) => t.setPositionXY(t.position.x + delta.dx, t.position.y + delta.dy),
       mergeKey: 'nudge:${ids.join(',')}',
     );
@@ -94,6 +93,7 @@ class SelectionOps {
     final bounds = boundsOf(entities);
     if (bounds == null || quarterTurns % 4 == 0) return;
     final pivot = bounds.center;
+    final turn = quarterTurns * math.pi / 2;
     _transform(entities, 'Rotate ${_describe(entities)}', (t) {
       final to = DesignerGeometry.rotateQuarter(
         Offset(t.position.x, t.position.y),
@@ -102,7 +102,7 @@ class SelectionOps {
       );
       t
         ..setPositionXY(to.dx, to.dy)
-        ..rotation = _normalise(t.rotation + quarterTurns * math.pi / 2);
+        ..rotation = _normalise(t.rotation + turn);
     });
   }
 
@@ -116,6 +116,8 @@ class SelectionOps {
     'Rotate ${_describe(entities)}',
     (t) => t.rotation = radians,
     mergeKey: mergeKey,
+    // An angle, not a turn: what is under them keeps its own.
+    carry: false,
   );
 
   void _transform(
@@ -123,31 +125,42 @@ class SelectionOps {
     String label,
     void Function(jge.TransformComponent t) change, {
     Object? mergeKey,
+    bool carry = true,
   }) {
     if (entities.isEmpty) return;
-    final before = entities.map(TransformSnapshot.of).toList(growable: false);
-    for (final e in entities) {
+    // A move or a turn takes what is under the entities along: [change] is
+    // the same for any point, so it is simply applied to them too.
+    final all = [
+      ...entities,
+      if (carry) ...carriedWith(entities, world: world),
+    ];
+    final before = all.map(TransformSnapshot.of).toList(growable: false);
+    for (final e in all) {
       final t = e.getComponent<jge.TransformComponent>();
       if (t == null) continue;
       change(t);
       sceneState.syncEntityNode(e);
     }
-    final after = entities.map(TransformSnapshot.of).toList(growable: false);
+    final after = all.map(TransformSnapshot.of).toList(growable: false);
     var changed = false;
     for (var i = 0; i < before.length; i++) {
       if (!before[i].matches(after[i])) changed = true;
     }
     if (!changed) return;
-    history.pushApplied(
+    _record(
       TransformCommand(
         label: label,
-        entities: List.of(entities),
+        entities: all,
         before: before,
         after: after,
         sceneState: sceneState,
         mergeKey: mergeKey,
       ),
     );
+  }
+
+  void _record(EditorCommand command) {
+    history.pushApplied(command);
     sceneState
       ..markDirty()
       ..refresh();
@@ -163,8 +176,21 @@ class SelectionOps {
   void flip(List<jge.Entity> entities, {required bool horizontal}) {
     final bounds = boundsOf(entities);
     if (bounds == null) return;
-    final pivot = bounds.center;
-    _edit(entities, 'Flip ${_describe(entities)}', (e) {
+    _flipEntities(
+      entities,
+      'Flip ${_describe(entities)}',
+      bounds.center,
+      horizontal: horizontal,
+    );
+  }
+
+  void _flipEntities(
+    List<jge.Entity> entities,
+    String label,
+    Offset pivot, {
+    required bool horizontal,
+  }) {
+    _edit(entities, label, (e) {
       final t = e.getComponent<jge.TransformComponent>();
       if (t != null) {
         final to = DesignerGeometry.mirror(
@@ -209,7 +235,8 @@ class SelectionOps {
   }
 
   /// Replaces each of [entities] with [prefab], built at the same place and
-  /// size, on the same layer. One undo step for the whole swap.
+  /// size, on the same layer, under the same parent. One undo step for the
+  /// whole swap.
   void replaceWith(List<jge.Entity> entities, PrefabDefinition prefab) {
     if (entities.isEmpty) return;
     final specs = <EntitySpec>[];
@@ -222,20 +249,32 @@ class SelectionOps {
           : Size(local.width * t.scale.x.abs(), local.height * t.scale.y.abs());
       final built = prefab.build(Offset(t.position.x, t.position.y), size);
       final oldLayer = e.getComponent<jge.LayerComponent>();
+      if (oldLayer?.mapLayer != null &&
+          !built.any((c) => c is jge.LayerComponent)) {
+        built.add(jge.LayerComponent());
+      }
       for (final c in built) {
         if (c is jge.TransformComponent) c.rotation = t.rotation;
         if (c is jge.LayerComponent && oldLayer != null) {
           c
             ..layerId = oldLayer.layerId
             ..layer = oldLayer.layer
-            ..zOrder = oldLayer.zOrder;
+            ..zOrder = oldLayer.zOrder
+            ..mapLayer = oldLayer.mapLayer;
         }
       }
+      final was = EntitySpec.of(e, codec, world: world);
       specs.add(
         EntitySpec(
           name: _uniqueName(prefab.namePrefix ?? prefab.id),
-          componentsJson: [for (final c in built) ?codec.encode(c)],
+          componentsJson: [
+            for (final c in built)
+              if (c is! jge.ParentComponent && c is! jge.ChildrenComponent)
+                ?codec.encode(c),
+          ],
           codec: codec,
+          parentName: was.parentName,
+          siblingIndex: was.siblingIndex,
         ),
       );
     }
@@ -263,6 +302,17 @@ class SelectionOps {
     );
   }
 
+  /// Puts [entities] at the depth [layerId]. One undo step.
+  void moveToLayer(List<jge.Entity> entities, String layerId) =>
+      _edit(entities, 'Move to $layerId', (e) {
+        final layer = e.getComponent<jge.LayerComponent>();
+        if (layer != null) {
+          layer.layerId = layerId;
+        } else {
+          e.addComponent(jge.LayerComponent(layerId: layerId));
+        }
+      });
+
   void _edit(
     List<jge.Entity> entities,
     String label,
@@ -289,10 +339,7 @@ class SelectionOps {
       mergeKey: mergeKey,
     );
     if (!command.changesAnything) return;
-    history.pushApplied(command);
-    sceneState
-      ..markDirty()
-      ..refresh();
+    _record(command);
   }
 
   void _select(List<jge.Entity> entities) {

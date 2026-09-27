@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -17,6 +18,9 @@ IconData assetIcon(AssetKind kind) => switch (kind) {
   AssetKind.sprite => Icons.brush_outlined,
   AssetKind.scene => Icons.map_outlined,
   AssetKind.animator => Icons.account_tree_outlined,
+  AssetKind.tileset => Icons.grid_view,
+  AssetKind.levelMap => Icons.grid_on,
+  AssetKind.tiled => Icons.layers_outlined,
   AssetKind.data => Icons.data_object_rounded,
   AssetKind.audio => Icons.graphic_eq_rounded,
   AssetKind.font => Icons.font_download_outlined,
@@ -28,6 +32,8 @@ Color assetColor(AssetKind kind) => switch (kind) {
   AssetKind.image || AssetKind.sprite => const Color(0xFF7DD8E0),
   AssetKind.scene => const Color(0xFF7DE6B1),
   AssetKind.animator => const Color(0xFFFFCA28),
+  AssetKind.tileset || AssetKind.levelMap => const Color(0xFF9CCC65),
+  AssetKind.tiled => const Color(0xFF80CBC4),
   AssetKind.audio => const Color(0xFFD9A7FF),
   _ => EditorTheme.textMuted,
 };
@@ -41,7 +47,29 @@ String? thumbnailOf(AssetIndex index, AssetEntry entry) {
     final sheet = '${entry.path.substring(0, dot)}.png';
     if (index.entryAt(sheet) != null) return sheet;
   }
+  if (entry.kind == AssetKind.tileset) return _tilesetImage(index, entry);
   return null;
+}
+
+/// A tileset's image, read from its file — remembered until the file
+/// changes, as the grid asks on every build.
+final Map<String, (DateTime?, String?)> _tilesetImages = {};
+
+String? _tilesetImage(AssetIndex index, AssetEntry entry) {
+  final known = _tilesetImages[entry.path];
+  if (known != null && known.$1 == entry.modified) return known.$2;
+  String? image;
+  try {
+    final json = jsonDecode(
+      File(index.absolute(entry.path)).readAsStringSync(),
+    );
+    final path = json is Map ? json['image'] : null;
+    if (path is String && index.entryAt(path) != null) image = path;
+  } catch (_) {
+    // Not readable as a tileset: an icon, then.
+  }
+  _tilesetImages[entry.path] = (entry.modified, image);
+  return image;
 }
 
 /// The asset browser: folders on the left, what is in the open one in the
@@ -177,6 +205,9 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
         }
       }
     }
+    // Tile maps name their tilesets, and tilesets their images, inside
+    // themselves rather than in a field.
+    changed += scope.mapDocs.renamed(from, to);
     if (changed > 0) {
       scope.sceneState
         ..markDirty()
@@ -534,6 +565,8 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
           AssetKind.image,
           AssetKind.sprite,
           AssetKind.scene,
+          AssetKind.tileset,
+          AssetKind.levelMap,
           AssetKind.audio,
         ])
           DockFilterChip(

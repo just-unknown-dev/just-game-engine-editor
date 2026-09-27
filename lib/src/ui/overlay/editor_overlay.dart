@@ -299,43 +299,51 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         _scheduleCanvasSizeUpdate(size);
 
-        return Listener(
-          onPointerDown: (event) {
-            // A press on the game view mid-play means "back to the game".
-            if (widget.plugin.playController.isRunning) {
-              widget.plugin.focusGame();
-            }
-            widget.plugin.viewport.onPointerDown(event);
-            if ((event.buttons & kSecondaryButton) != 0) {
-              _openMenu(context, event);
-            }
-          },
-          onPointerMove: widget.plugin.viewport.onPointerMove,
-          onPointerUp: widget.plugin.viewport.onPointerUp,
-          onPointerCancel: widget.plugin.viewport.onPointerCancel,
-          onPointerSignal: widget.plugin.viewport.onPointerScroll,
-          // An asset dragged out of the Assets dock lands here: an image
-          // becomes a sprite where it was dropped.
-          child: DragTarget<String>(
-            onWillAcceptWithDetails: (d) =>
-                widget.plugin.sceneState.hasScene &&
-                JustGameEditorPlugin.canDropAsset(d.data),
-            onAcceptWithDetails: (d) {
-              final box = context.findRenderObject() as RenderBox?;
-              if (box == null) return;
-              widget.plugin.dropAsset(d.data, box.globalToLocal(d.offset));
+        return MouseRegion(
+          onExit: (_) => widget.plugin.viewport.onPointerExit(),
+          child: Listener(
+            onPointerDown: (event) {
+              // A press on the game view mid-play means "back to the game".
+              if (widget.plugin.playController.isRunning) {
+                widget.plugin.focusGame();
+              }
+              final claimed = widget.plugin.viewport.onPointerDown(event);
+              // A right-press is the context menu's unless a tool took it —
+              // a tile brush picking tiles up.
+              if ((event.buttons & kSecondaryButton) != 0 && !claimed) {
+                _openMenu(context, event);
+              }
             },
-            builder: (context, incoming, _) => DecoratedBox(
-              position: DecorationPosition.foreground,
-              decoration: BoxDecoration(
-                border: incoming.isEmpty
-                    ? null
-                    : Border.all(
-                        color: EditorTheme.primaryBright.withValues(alpha: 0.7),
-                        width: 2,
-                      ),
+            onPointerHover: widget.plugin.viewport.onPointerHover,
+            onPointerMove: widget.plugin.viewport.onPointerMove,
+            onPointerUp: widget.plugin.viewport.onPointerUp,
+            onPointerCancel: widget.plugin.viewport.onPointerCancel,
+            onPointerSignal: widget.plugin.viewport.onPointerScroll,
+            // An asset dragged out of the Assets dock lands here: an image
+            // becomes a sprite where it was dropped.
+            child: DragTarget<String>(
+              onWillAcceptWithDetails: (d) =>
+                  widget.plugin.sceneState.hasScene &&
+                  JustGameEditorPlugin.canDropAsset(d.data),
+              onAcceptWithDetails: (d) {
+                final box = context.findRenderObject() as RenderBox?;
+                if (box == null) return;
+                widget.plugin.dropAsset(d.data, box.globalToLocal(d.offset));
+              },
+              builder: (context, incoming, _) => DecoratedBox(
+                position: DecorationPosition.foreground,
+                decoration: BoxDecoration(
+                  border: incoming.isEmpty
+                      ? null
+                      : Border.all(
+                          color: EditorTheme.primaryBright.withValues(
+                            alpha: 0.7,
+                          ),
+                          width: 2,
+                        ),
+                ),
+                child: AbsorbPointer(absorbing: true, child: widget.gameChild),
               ),
-              child: AbsorbPointer(absorbing: true, child: widget.gameChild),
             ),
           ),
         );

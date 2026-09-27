@@ -81,8 +81,11 @@ List<jge.Entity> _blocks(jge.World world) => world
   return (session: session, world: world);
 }
 
-int _entityCount(jge.World world) =>
-    world.query([jge.TransformComponent]).where((e) => e.isActive).length;
+/// What has been placed: every entity but the level's map they go under.
+int _entityCount(jge.World world) => world
+    .query([jge.TransformComponent])
+    .where((e) => e.isActive && !e.hasComponent<jge.LevelMapComponent>())
+    .length;
 
 void main() {
   group('draw tool', () {
@@ -307,7 +310,14 @@ void main() {
     test('locked layers are not pickable', () {
       final (:session, :world) = _session();
       placeRow(session, 3);
-      session.controller.setLayerLocked('main', locked: true);
+      // What is placed goes on a layer of the Level Map, locked there.
+      jge.LevelMaps.primaryEntity(world)!
+              .getComponent<jge.LevelMapComponent>()!
+              .inline!
+              .layers
+              .single
+              .locked =
+          true;
 
       session
         ..onPointerDown(const Offset(-50, -50), 32)

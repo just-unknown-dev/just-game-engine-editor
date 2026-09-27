@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
+import 'package:just_signals/just_signals.dart';
 
+import '../../../core/scope/editor_scope.dart';
 import '../../../core/serialization/scene_codec.dart';
 import '../../../core/state/editor_scene_state.dart';
+import '../controls/designer_controls.dart';
 import '../state/designer_geometry.dart';
 import '../state/editor_commands.dart';
+import '../state/map_placement.dart';
 import '../state/level_designer_controller.dart';
 import '../state/editor_history.dart';
 import 'level_tool.dart';
@@ -23,7 +27,12 @@ class PaintTool extends LevelToolHandler {
     required this.history,
     required this.uniqueName,
     required this.codec,
+    this.scope,
   });
+
+  /// The editor, whose Level Map what is painted goes under — on the layer
+  /// at the depth being painted at; without it, entities of their own.
+  final EditorScope? scope;
 
   /// Shared selection and dirty state.
   /// Encodes and decodes components; the scope's codec.
@@ -43,7 +52,7 @@ class PaintTool extends LevelToolHandler {
   String get label => 'Paint';
 
   @override
-  IconData get icon => Icons.brush;
+  IconData get icon => Icons.format_paint;
 
   @override
   String? get shortcut => 'P';
@@ -53,6 +62,58 @@ class PaintTool extends LevelToolHandler {
 
   @override
   int get order => 30;
+
+  @override
+  String get group => ToolGroups.shapes;
+
+  @override
+  Widget? buildOptions(BuildContext context, ToolOptionsContext options) {
+    final controller = options.controller;
+    return SignalBuilder<PaintMode>(
+      signal: controller.paintMode,
+      builder: (context, mode, _) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ActivePrefabChip(controller: controller),
+          const SizedBox(width: 6),
+          PlacementChip(options: options),
+          const OptionsDivider(),
+          ChoicePicker<PaintMode>(
+            signal: controller.paintMode,
+            options: const [
+              ToolChoice(
+                value: PaintMode.brush,
+                icon: Icons.brush,
+                label: 'Brush',
+              ),
+              ToolChoice(
+                value: PaintMode.rectangle,
+                icon: Icons.crop_square,
+                label: 'Rect',
+              ),
+              ToolChoice(
+                value: PaintMode.eraser,
+                icon: Icons.cleaning_services,
+                label: 'Erase',
+              ),
+              ToolChoice(
+                value: PaintMode.fill,
+                icon: Icons.format_color_fill,
+                label: 'Fill',
+                tooltip: 'Fill the enclosed empty region you click',
+              ),
+            ],
+          ),
+          // Brush width only affects the brush and the eraser.
+          if (mode == PaintMode.brush || mode == PaintMode.eraser) ...[
+            const OptionsDivider(),
+            const OptionsLabel('Size'),
+            BrushSizePicker(signal: controller.brushSize),
+          ],
+        ],
+      ),
+    );
+  }
 
   final Set<Point2> _stroke = {};
   Offset? _rectStart;
@@ -195,6 +256,31 @@ class PaintTool extends LevelToolHandler {
         grid.merge(_stroke, context.gridSize) ??
         [for (final c in _stroke) grid.cellBounds(c, context.gridSize)];
     final layerId = context.controller.activeLayerId.value;
+    final scope = this.scope;
+    if (scope != null) {
+      // Into the level's map: children of it, on a layer at this depth.
+      final placed = MapPlacement.place(
+        scope,
+        context.world,
+        [
+          for (final worldRect in merged)
+            (
+              uniqueName(prefab.namePrefix ?? prefab.id),
+              prefab.build(worldRect.center, worldRect.size),
+            ),
+        ],
+        depth: prefab.depth ?? layerId,
+        label: 'Paint ${prefab.name} (${merged.length})',
+        say: context.controller.setStatus,
+        select: false,
+      );
+      if (placed != null) {
+        context.controller.setStatus(
+          'Painted ${_stroke.length} cells as ${placed.length} entities',
+        );
+      }
+      return;
+    }
     final specs = <EntitySpec>[];
 
     for (final worldRect in merged) {
@@ -243,9 +329,10 @@ class PaintTool extends LevelToolHandler {
         ),
       );
     }
+    // The map itself is not erased with what is on it.
+    doomed.removeWhere((e) => e.hasComponent<jge.LevelMapComponent>());
 
     if (doomed.isEmpty) return;
-
     history.push(
       DeleteEntitiesCommand(
         label: 'Erase ${doomed.length} entities',

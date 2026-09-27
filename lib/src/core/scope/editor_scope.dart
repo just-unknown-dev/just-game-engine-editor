@@ -35,9 +35,14 @@ import '../state/editor_scene_state.dart';
 import '../../extension/built_in_row_decorations.dart';
 import '../entity/entity_ops.dart';
 import '../state/editor_view_state.dart';
+import '../level_map/tile_edit_state.dart';
+import '../level_map/level_map_documents.dart';
+import '../level_map/level_map_provision.dart';
 import '../../ui/level_designer/ui_mode/ui_mode_session.dart';
 import '../../ui/level_designer/ui_mode/ui_workspace.dart';
 import '../../extension/built_in_camera_contributions.dart';
+import '../../extension/tiled_object_mapper.dart';
+import '../../extension/built_in_tile_contributions.dart';
 
 /// Everything one editor owns: its registries, services and state, in a
 /// `just_di` container that is disposed with it.
@@ -138,9 +143,23 @@ class EditorScope {
       ..registerLazySingleton<UiModeSession>(
         () => UiModeSession(world: () => this.world),
         dispose: (u) => u.dispose(),
-      );
+      )
+      ..registerLazySingleton<LevelMapDocuments>(
+        () =>
+            LevelMapDocuments(world: () => this.world, sceneState: sceneState),
+        dispose: (d) => d.dispose(),
+      )
+      ..registerLazySingleton<TileEditState>(
+        () => TileEditState(sceneState: sceneState, docs: mapDocs),
+        dispose: (t) => t.dispose(),
+      )
+      ..registerLazySingleton<LevelMapProvision>(() => LevelMapProvision(this));
     this.modules.registerAll(modules);
     reload();
+    // Made now rather than when first asked for: it follows the selection
+    // and the scene from the start, so a map selected before any tile panel
+    // is opened is already the one to paint.
+    container.get<TileEditState>();
   }
 
   /// The container behind the typed accessors, for anything a module wants
@@ -219,6 +238,7 @@ class EditorScope {
   final List<ToolbarButton> _toolbarButtons = [];
   final List<WorkspaceDefinition> _workspaces = [];
   final List<AssetAction> _assetActions = [];
+  final List<TiledObjectMapper> _tiledObjectMappers = [];
   final List<SceneValidator> _validators = [];
   final List<SceneTreeAction> _sceneTreeActions = [];
   final List<SceneTreeRowDecoration> _rowDecorations = [];
@@ -254,6 +274,14 @@ class EditorScope {
 
   /// What modules offer to do with files in the Assets dock, by order.
   List<AssetAction> get assetActions => List.unmodifiable(_assetActions);
+
+  /// What modules make of the objects in an imported Tiled map, by order.
+  List<TiledObjectMapper> get tiledObjectMappers =>
+      List.unmodifiable(_tiledObjectMappers);
+
+  /// The camera the view is seen through; a bare one before the engine
+  /// has a viewport.
+  Camera get mainCamera => _mainCamera();
 
   /// The workspace that has the viewport, with the file it was opened on;
   /// null while the level has it.
@@ -291,7 +319,8 @@ class EditorScope {
   bool openInWorkspace(String path) {
     WorkspaceDefinition? best;
     var bestMatch = 0;
-    for (final w in _workspaces) {
+    // The editor's own workspaces open files too, not only the modules'.
+    for (final w in workspaces) {
       final match = w.matchOf(path);
       if (match > bestMatch) {
         best = w;
@@ -299,8 +328,7 @@ class EditorScope {
       }
     }
     if (best == null) return false;
-    activeWorkspace.value = OpenWorkspace(best, path);
-    return true;
+    return openWorkspace(best.id, path: path);
   }
 
   void closeWorkspace() {
@@ -462,6 +490,18 @@ class EditorScope {
   /// workspace is built from one: its builder gets nothing else.
   UiModeSession get uiMode => container.get<UiModeSession>();
 
+  /// The tile maps being edited: in the scene or in their own files, what
+  /// has changed, saving. On the scope because tools, panels, the inspector
+  /// and the save all reach it.
+  LevelMapDocuments get mapDocs => container.get<LevelMapDocuments>();
+
+  /// The tile tools' shared state: the map and layer being painted, the
+  /// brush, the modes.
+  TileEditState get tiles => container.get<TileEditState>();
+
+  /// Makes the scene's Level Map when something is first drawn on it.
+  LevelMapProvision get mapProvision => container.get<LevelMapProvision>();
+
   /// Rebuilds every scope-level registry from scratch: built-ins, then each
   /// module's contributions in registration order. Idempotent, so it is safe
   /// on every hot reload — and nothing a module stopped contributing survives.
@@ -471,6 +511,7 @@ class EditorScope {
     extras.clear();
     extras.registerAll(BuiltInExtras.all);
     extras.registerAll(BuiltInCameraContributions.extras);
+    extras.registerAll(BuiltInTileContributions.extras);
     commands.clear();
     commands.registerAll(BuiltInCommands.all);
     commands.bindAll(BuiltInBindings.of(config));
@@ -480,6 +521,7 @@ class EditorScope {
       _toolbarButtons,
       _workspaces,
       _assetActions,
+      _tiledObjectMappers,
       _validators,
       _sceneTreeActions,
       _rowDecorations,
@@ -493,6 +535,8 @@ class EditorScope {
     _sceneTreeActions.addAll(BuiltInCameraContributions.sceneTreeActions);
     _rowDecorations.addAll(BuiltInCameraContributions.rowDecorations);
     _rowDecorations.addAll(BuiltInRowDecorations.all);
+    _entityIcons.addAll(BuiltInTileContributions.entityIcons);
+    _assetActions.addAll(BuiltInTileContributions.assetActions);
     final context = EditorModuleContext(scope: this, isDebug: _isDebug);
     for (final module in modules.all) {
       fieldEditors.registerAll(module.fieldEditors, override: true);
@@ -504,6 +548,7 @@ class EditorScope {
       _toolbarButtons.addAll(module.toolbarButtons);
       _workspaces.addAll(module.workspaces);
       _assetActions.addAll(module.assetActions);
+      _tiledObjectMappers.addAll(module.tiledObjectMappers);
       _validators.addAll(module.validators);
       _sceneTreeActions.addAll(module.sceneTreeActions);
       _rowDecorations.addAll(module.rowDecorations);
@@ -518,9 +563,11 @@ class EditorScope {
     _toolbarButtons.sort((a, b) => a.order.compareTo(b.order));
     _workspaces.sort((a, b) => a.order.compareTo(b.order));
     _assetActions.sort((a, b) => a.order.compareTo(b.order));
-    // A workspace whose module went away gives the viewport back.
+    _tiledObjectMappers.sort((a, b) => a.order.compareTo(b.order));
+    // A workspace whose module went away gives the viewport back. The
+    // editor's own never go away: a reload must not shut one that is open.
     final open = activeWorkspace.value;
-    if (open != null && !_workspaces.any((w) => w.id == open.definition.id)) {
+    if (open != null && !workspaces.any((w) => w.id == open.definition.id)) {
       activeWorkspace.value = null;
     }
     _sceneTreeActions.sort((a, b) => a.order.compareTo(b.order));

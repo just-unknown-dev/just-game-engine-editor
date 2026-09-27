@@ -16,6 +16,7 @@ import 'overlays/built_in_overlays.dart';
 import 'overlays/designer_overlay.dart';
 import 'overlays/measurement_overlay.dart';
 import 'overlays/minimap_overlay.dart';
+import 'overlays/tile_overlays.dart';
 import 'overlays/transform_overlays.dart';
 import 'painters/level_designer_painter.dart';
 import 'state/built_in_prefabs.dart';
@@ -32,6 +33,9 @@ import 'tools/tool_registry.dart';
 import 'tools/measure_tool.dart';
 import 'tools/paint_tool.dart';
 import 'tools/select_tool.dart';
+import 'tools/tiles/tile_brush_tools.dart';
+import 'tools/tiles/tile_select_tool.dart';
+import 'tools/tiles/tile_terrain_tool.dart';
 import '../overlay/camera_rig_painter.dart';
 import 'tools/path_tool.dart';
 
@@ -61,7 +65,7 @@ class LevelDesignerSession {
       tools: tools,
       prefabs: scope.prefabs,
       sessionPrefabs: sessionPrefabs,
-    );
+    )..mapLayerOf = (entity) => jge.LevelMaps.memberLayer(world, entity);
 
     // Descriptors, prefabs and layers are the scope's: registered once,
     // rebuilt on reload. Tools and overlays are per session, because a tool
@@ -127,6 +131,7 @@ class LevelDesignerSession {
       GridSnapProvider(scope.grid),
     ];
     for (final module in scope.designerModules) {
+      module.toolGroups.forEach(tools.registerGroup);
       tools.registerAll(module.createTools(context));
       overlays.registerAll(module.overlays);
       providers.addAll(module.createSnapProviders(context));
@@ -178,6 +183,8 @@ class LevelDesignerSession {
       MinimapOverlay(),
       CameraRigOverlay(brain: () => scope.cameraBrain),
       MotionPathOverlay(() => TimelineSession.of(scope)),
+      TileGridOverlay(scope),
+      TileBrushOverlay(scope),
     ]);
   }
 
@@ -201,12 +208,14 @@ class LevelDesignerSession {
         history: history,
         uniqueName: _uniqueName,
         codec: scope.codec,
+        scope: scope,
       ),
       PaintTool(
         sceneState: sceneState,
         history: history,
         uniqueName: _uniqueName,
         codec: scope.codec,
+        scope: scope,
       ),
       _measureTool,
       _eyedropper,
@@ -231,8 +240,17 @@ class LevelDesignerSession {
           emptyMessage: 'Select a dolly camera to edit its track',
         ),
       ),
+      // The tile tools, after a divider.
+      StampTool(scope, switchTool: setTool),
+      TerrainTool(scope, switchTool: setTool),
+      TileFillTool(scope, switchTool: setTool),
+      TileEraseTool(scope, switchTool: setTool),
+      TileSelectTool(scope, switchTool: setTool),
     ]);
   }
+
+  /// A name starting [prefix] that no entity in the scene has yet.
+  String uniqueName(String prefix) => _uniqueName(prefix);
 
   /// Undo for every edit, shared with the rest of the editor.
   ///
@@ -323,15 +341,92 @@ class LevelDesignerSession {
     double gridSize, {
     Offset? screen,
     Size? canvasSize,
+    ToolButton button = ToolButton.primary,
+    Duration? time,
   }) {
     final handler = controller.activeTool;
     if (handler == null) return false;
+    if (button == ToolButton.secondary && !claimsSecondary()) return false;
 
+    _gestureButton = button;
+    _gestureClicks = _countClick(time, screen ?? worldPosition, button);
     final claimed = handler.onPointerDown(
       _context(worldPosition, gridSize, screen: screen, canvasSize: canvasSize),
     );
-    if (claimed) _activeGesture = handler;
+    if (claimed) {
+      _activeGesture = handler;
+    } else {
+      _gestureButton = ToolButton.primary;
+    }
     return claimed;
+  }
+
+  /// Whether a right-button press should go to the active tool rather than
+  /// open the context menu: only when the tool asks for it, and never with
+  /// Shift held, so the menu is always one chord away.
+  bool claimsSecondary() =>
+      (controller.activeTool?.acceptsSecondaryButton ?? false) &&
+      !_readModifiers().shift;
+
+  /// The button the gesture in progress began with.
+  ToolButton _gestureButton = ToolButton.primary;
+
+  /// Which press of a quick run the gesture began with.
+  int _gestureClicks = 1;
+
+  /// How soon a second press must follow the first to make a double-click.
+  static const Duration doubleClickTime = Duration(milliseconds: 350);
+
+  /// How far apart, in screen pixels, the two presses may be.
+  static const double doubleClickSlop = 6;
+
+  Duration? _lastPressAt;
+  Offset? _lastPressAt2;
+  ToolButton? _lastPressButton;
+
+  /// Counts [time]'s press into the run before it. Without a time — a
+  /// press made by code — every press is a first one.
+  int _countClick(Duration? time, Offset at, ToolButton button) {
+    final last = _lastPressAt;
+    final again =
+        time != null &&
+        last != null &&
+        button == _lastPressButton &&
+        time - last <= doubleClickTime &&
+        (at - (_lastPressAt2 ?? at)).distance <= doubleClickSlop;
+    final count = again ? _gestureClicks + 1 : 1;
+    _lastPressAt = time;
+    _lastPressAt2 = at;
+    _lastPressButton = button;
+    return count;
+  }
+
+  /// Where the pointer last was over the level, for keys pressed without a
+  /// click — a tool flipping its brush where the brush is shown.
+  Offset? _hoverWorld;
+  Offset? _hoverScreen;
+  double _hoverGrid = 0;
+
+  /// The pointer moved with no button down.
+  void onPointerHover(
+    Offset worldPosition,
+    double gridSize, {
+    Offset? screen,
+    Size? canvasSize,
+  }) {
+    _hoverWorld = worldPosition;
+    _hoverScreen = screen;
+    _hoverGrid = gridSize;
+    controller.activeTool?.onPointerHover(
+      _context(worldPosition, gridSize, screen: screen, canvasSize: canvasSize),
+    );
+  }
+
+  /// The pointer left the viewport.
+  void onPointerExit() {
+    _hoverWorld = null;
+    _hoverScreen = null;
+    controller.activeTool?.onPointerExit();
   }
 
   /// Forwards a pointer move to the tool that claimed the gesture.
@@ -356,6 +451,7 @@ class LevelDesignerSession {
     handler?.onPointerUp(
       _context(worldPosition, gridSize, screen: screen, canvasSize: canvasSize),
     );
+    _gestureButton = ToolButton.primary;
   }
 
   /// Abandons the gesture without committing.
@@ -364,6 +460,7 @@ class LevelDesignerSession {
     _chromeOverlay = null;
     _activeGesture?.onCancel();
     _activeGesture = null;
+    _gestureButton = ToolButton.primary;
     controller.dragRect.value = null;
   }
 
@@ -387,6 +484,8 @@ class LevelDesignerSession {
       snapper: snapper,
       stateOf: stateOf,
       grid: scope.grid,
+      button: _gestureButton,
+      clickCount: _gestureClicks,
     );
   }
 
@@ -405,7 +504,9 @@ class LevelDesignerSession {
     if (toolId == BuiltInTools.eyedropper) {
       _eyedropper.activatedFrom(controller.toolId.value);
     }
+    controller.activeTool?.onDeactivate();
     controller.toolId.value = toolId;
+    controller.activeTool?.onActivate();
   }
 
   /// Switches to whichever tool claims [shortcut], if any.
@@ -663,6 +764,20 @@ class LevelDesignerSession {
     bool isRepeat = false,
   }) {
     final mods = _readModifiers();
+    // The active tool first: a tile brush's X flips the brush, not the
+    // selected entities; its Ctrl+C copies tiles, not entities.
+    final tool = controller.activeTool;
+    if (tool != null &&
+        tool.onKey(
+          key,
+          _context(
+            _hoverWorld ?? camera.position,
+            _hoverWorld == null ? gridSize : _hoverGrid,
+            screen: _hoverScreen,
+          ),
+        )) {
+      return true;
+    }
     final context = CommandContext(
       scope: scope,
       session: this,

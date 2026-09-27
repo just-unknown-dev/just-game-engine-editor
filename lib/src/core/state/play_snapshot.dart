@@ -38,8 +38,15 @@ class PlaySnapshot {
   /// carried nothing but its text. The editor's world *is* the scene; a
   /// play-test's spawned entities are kept out by saving the snapshot
   /// taken when play began, not by guessing from components.
+  ///
+  /// Except what a system generated from other data (a tile map's
+  /// collision bodies): that is rebuilt from its source, never saved.
   static List<Entity> authored(World world) =>
-      world.entities.where((e) => e.isAlive).toList();
+      world.entities.where((e) => e.isAlive && !isGenerated(e)).toList();
+
+  /// Whether [entity] was built by a system rather than authored.
+  static bool isGenerated(Entity entity) =>
+      entity.hasComponent<GeneratedEntityComponent>();
 
   /// Ids of the authored entities, parallel to [entities].
   final List<EntityId> ids;

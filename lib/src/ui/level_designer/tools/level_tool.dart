@@ -1,11 +1,71 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../../../core/scope/editor_scope.dart';
 import '../grid/grid_topology.dart';
 import '../grid/square_grid.dart';
 import '../state/level_designer_controller.dart';
 import '../state/modifier_keys.dart';
 import '../state/snap_provider.dart';
+
+/// Which mouse button began a gesture.
+enum ToolButton { primary, secondary, middle }
+
+/// A part of the tool strip: the tools that do one kind of job, under a
+/// caption.
+class ToolGroup {
+  const ToolGroup({required this.id, required this.label, required this.order});
+
+  final String id;
+
+  /// The caption, e.g. `'TILES'`.
+  final String label;
+
+  /// Where the group sits in the strip. Lower is higher up.
+  final int order;
+}
+
+/// The groups the tool strip divides tools into.
+abstract final class ToolGroups {
+  /// Tools that pick, move and edit what is already there.
+  static const String select = 'select';
+
+  /// Tools that draw and paint shapes and prefabs.
+  static const String shapes = 'shapes';
+
+  /// Tools that paint tiles.
+  static const String tiles = 'tiles';
+
+  /// Tools that measure.
+  static const String measure = 'measure';
+
+  /// The editor's own groups, top to bottom.
+  static const List<ToolGroup> builtIn = [
+    ToolGroup(id: select, label: 'SELECT', order: 0),
+    ToolGroup(id: shapes, label: 'SHAPES', order: 10),
+    ToolGroup(id: tiles, label: 'TILES', order: 20),
+    ToolGroup(id: measure, label: 'MEASURE', order: 90),
+  ];
+}
+
+/// What a tool's options are built with, for the left of the designer's
+/// status bar.
+class ToolOptionsContext {
+  const ToolOptionsContext({
+    required this.scope,
+    required this.controller,
+    required this.world,
+    required this.setTool,
+  });
+
+  final EditorScope scope;
+  final LevelDesignerController controller;
+  final jge.World world;
+
+  /// Switches the designer's tool.
+  final void Function(String toolId) setTool;
+}
 
 /// Everything a tool needs to act, without reaching into the plugin.
 ///
@@ -29,6 +89,8 @@ class ToolContext {
     SnapResolver? snapper,
     T? Function<T extends Object>()? stateOf,
     this.grid = const SquareGrid(),
+    this.button = ToolButton.primary,
+    this.clickCount = 1,
   }) : modifiers =
            modifiers ??
            ModifierKeys(
@@ -70,6 +132,19 @@ class ToolContext {
 
   /// The shape of the cells: what painting, filling and grid snapping use.
   final GridTopology grid;
+
+  /// The button the gesture began with. Only a tool that
+  /// [LevelToolHandler.acceptsSecondaryButton] ever sees anything but
+  /// [ToolButton.primary].
+  final ToolButton button;
+
+  /// Which press of a quick run the gesture began with: 2 for the second of
+  /// a double-click. The session counts — the same button, pressed again
+  /// soon and close by.
+  final int clickCount;
+
+  /// The gesture began with the second press of a double-click, or later.
+  bool get isDoubleClick => clickCount >= 2;
 
   final T? Function<T extends Object>()? _stateOf;
 
@@ -144,6 +219,15 @@ abstract class LevelToolHandler {
   /// Palette ordering. Lower sorts first.
   int get order => 100;
 
+  /// Which part of the strip it sits in: one of [ToolGroups], or a group of
+  /// a module's own (`EditorModule.toolGroups`). The strip captions each
+  /// group.
+  String get group => ToolGroups.select;
+
+  /// Whether a right-button press is this tool's. Otherwise it opens the
+  /// viewport's context menu, which Shift+right-click always does.
+  bool get acceptsSecondaryButton => false;
+
   /// Pointer pressed. Return true to claim the gesture; returning false lets
   /// the default gizmo handling take over.
   bool onPointerDown(ToolContext context) => false;
@@ -157,4 +241,28 @@ abstract class LevelToolHandler {
   /// Gesture abandoned (pointer cancelled, tool switched). Discard any
   /// in-progress state without committing.
   void onCancel() {}
+
+  /// Pointer moved with no button down — for showing what a click would
+  /// do, like a brush under the cursor.
+  void onPointerHover(ToolContext context) {}
+
+  /// Pointer left the viewport.
+  void onPointerExit() {}
+
+  /// A key pressed while this tool is active, before the designer's own
+  /// commands and the editor's. Return true to keep it. [context] is at the
+  /// pointer's last position.
+  bool onKey(LogicalKeyboardKey key, ToolContext context) => false;
+
+  /// Became the active tool.
+  void onActivate() {}
+
+  /// Stopped being the active tool.
+  void onDeactivate() {}
+
+  /// The tool's settings — modes, sizes, switches — for the left of the
+  /// designer's status bar. Null when it has none; the bar then says what
+  /// the tool does.
+  Widget? buildOptions(BuildContext context, ToolOptionsContext options) =>
+      null;
 }

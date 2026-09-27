@@ -10,6 +10,7 @@ import 'package:just_signals/just_signals.dart';
 import '../../debugger/engine_debugger.dart';
 import '../../ui/level_designer/state/editor_commands.dart';
 import '../assets/file_sprite_asset_loader.dart';
+import '../../ui/level_designer/state/map_placement.dart';
 import '../ecs/systems/editor_log_capture_system.dart';
 import '../ecs/systems/physics_body_binding_system.dart';
 import '../entity/entity_ops.dart';
@@ -20,12 +21,21 @@ import '../scope/editor_scope.dart';
 import '../serialization/scene_manager.dart';
 import '../services/editor_log_service.dart';
 import '../state/editor_scene_state.dart';
+import '../state/play_snapshot.dart';
 import '../../ui/overlay/gizmo_painter.dart';
 import '../../ui/level_designer/commands/designer_command.dart';
 import '../../ui/level_designer/level_designer_session.dart';
+import '../level_map/tiled_import.dart';
+import '../../extension/built_in_tile_contributions.dart';
+import '../level_map/level_map_documents.dart';
+import '../level_map/level_map_focus.dart';
+import '../level_map/level_map_provision.dart';
+import '../level_map/tile_commands.dart';
 import '../../ui/level_designer/state/editor_history.dart';
 import '../../ui/level_designer/ui_mode/ui_mode_session.dart';
 import '../../ui/level_designer/ui_mode/ui_workspace.dart';
+import '../../ui/level_designer/tools/level_tool.dart';
+import '../../ui/level_designer/tools/tiles/tile_tool_base.dart';
 import '../../ui/level_designer/tools/tool_registry.dart';
 import '../../extension/editor_module.dart';
 import '../../ui/overlay/camera_rig_painter.dart';
@@ -258,8 +268,12 @@ class JustGameEditorPlugin implements EnginePlugin {
     isAuthoring: () => isAuthoring.value,
     // Locked in the tree, or hidden: neither can be picked in the
     // viewport, which is what the padlock is for.
+    // Nor can anything the Level Designer has put out of reach.
     isPickable: (entity) =>
-        !scope.view.isLocked(entity.id) && !scope.view.isHidden(entity.id),
+        !scope.view.isLocked(entity.id) &&
+        !scope.view.isHidden(entity.id) &&
+        !PlaySnapshot.isGenerated(entity) &&
+        sceneState.canSelect(entity),
   );
 
   // ── Focus nodes ───────────────────────────────────────────────────────────
@@ -347,6 +361,10 @@ class JustGameEditorPlugin implements EnginePlugin {
     TimelineAssets.loader = spriteAssets.loadTimeline;
     UiThemes.loader = spriteAssets.loadUiTheme;
     UiFonts.read = spriteAssets.loadFontData;
+    TileAssets.readText = spriteAssets.readText;
+    // Tile maps draw in the editor as in the game; their collision is built
+    // only in a play-test (see _syncRuntimeSystems).
+    registerLevelMapSystems(engine.world);
     // The fonts in the project, so the text-style editor can offer them by
     // name from the first inspector that opens.
     unawaited(reloadFonts());
@@ -355,6 +373,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     // keeps thinking but does not write to it. Play hands it over.
     isAuthoring.addListener(_syncCameraOwnership);
     _syncCameraOwnership();
+    keepsToLevelMap.addListener(_syncLevelMapFocus);
+    _syncLevelMapFocus();
     playController.state.addListener(_focusGameOnPlay);
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
@@ -451,6 +471,25 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// Whether the Level Designer workspace is currently open.
   bool get isLevelDesignerOpen => designer.value != null;
 
+  /// Whether only the Level Map can be worked on: the Level Designer is
+  /// open and building, not play-testing, and no workspace — the
+  /// interface editor, say, which works on the HUDs — is open over it.
+  late final Computed<bool> keepsToLevelMap = Computed(
+    () =>
+        designer.value != null &&
+        isAuthoring.value &&
+        scope.activeWorkspace.value == null,
+    debugLabel: 'keepsToLevelMap',
+  );
+
+  /// Puts everything but the Level Map out of reach while
+  /// [keepsToLevelMap], and back when not.
+  void _syncLevelMapFocus() => sceneState.setSelectable(
+    keepsToLevelMap.value
+        ? (entity) => LevelMapFocus.contains(engine.world, entity)
+        : null,
+  );
+
   /// Opens the Level Designer, creating its session if needed.
   void openLevelDesigner() {
     if (designer.value != null || !sceneState.hasScene) return;
@@ -476,12 +515,18 @@ class JustGameEditorPlugin implements EnginePlugin {
   void _updateRenderFilter() {
     final render = engine.world.getSystem<RenderSystem>();
     if (render == null) return;
-    render.shouldRender = (entity) {
-      if (!isAuthoring.value) return true;
-      if (scope.view.isHidden(entity.id)) return false;
-      final session = designer.value;
-      return session == null || session.controller.isShownInViewport(entity);
-    };
+    render.shouldRender = _isDrawn;
+  }
+
+  /// Whether [entity] is drawn in the viewport — its sprite, and the
+  /// markers and frames the editor draws for it. Everything is during a
+  /// play-test; while authoring, not what the eye hid, nor what the Level
+  /// Designer has hidden: its layers, and everything but its Level Map.
+  bool _isDrawn(Entity entity) {
+    if (!isAuthoring.value) return true;
+    if (scope.view.isHidden(entity.id)) return false;
+    final session = designer.value;
+    return session == null || session.controller.isShownInViewport(entity);
   }
 
   /// Closes the Level Designer and releases its state.
@@ -576,18 +621,41 @@ class JustGameEditorPlugin implements EnginePlugin {
     }
   }
 
+  /// The JSON files that are something other than a sprite atlas. Every
+  /// other `.json` in a project is taken to be an atlas — the one kind of
+  /// JSON that carries no suffix of its own.
+  static const List<String> dataJsonSuffixes = [
+    '.scene.json',
+    '.animator.json',
+    '.timeline.json',
+    '.uitheme.json',
+    '.tileset.json',
+    LevelMapFiles.suffix,
+    LevelMapFiles.legacySuffix,
+    '/scenes.json',
+  ];
+
+  /// Whether [path] is a sprite atlas: a `.json` that is none of the
+  /// editor's other data files.
+  static bool isSpriteAtlasPath(String path) {
+    final p = path.toLowerCase().replaceAll('\\', '/');
+    if (!p.endsWith('.json') || p == 'scenes.json') return false;
+    return !dataJsonSuffixes.any(p.endsWith);
+  }
+
   /// Whether dropping [path] on the viewport makes something: an image, a
   /// sprite project, or a sprite atlas.
   static bool canDropAsset(String path) {
     final p = path.toLowerCase();
-    return p.endsWith('.png') ||
+    return p.endsWith('.tileset.json') ||
+        LevelMapFiles.isMapFile(p) ||
+        TiledImporter.isTiledMap(path) ||
+        p.endsWith('.png') ||
         p.endsWith('.jpg') ||
         p.endsWith('.jpeg') ||
         p.endsWith('.webp') ||
         p.endsWith('.jsprite') ||
-        (p.endsWith('.json') &&
-            !p.endsWith('.scene.json') &&
-            !p.endsWith('.animator.json'));
+        isSpriteAtlasPath(path);
   }
 
   /// Makes an entity for the asset at [path], where it was dropped on the
@@ -599,10 +667,22 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (!sceneState.hasScene || !canDropAsset(path)) return null;
     final at = engine.cameraSystem.mainCamera.screenToWorld(canvasPosition);
     final lower = path.toLowerCase();
+    // What is dropped sits on the grid, as the Level Designer places it.
+    final grid = sceneState.gridSize.value;
+    double snap(double v) => grid > 0 ? (v / grid).round() * grid : v;
+    final onGrid = Offset(snap(at.dx), snap(at.dy));
+    if (lower.endsWith('.tileset.json')) return _dropTileset(path);
+    if (LevelMapFiles.isMapFile(lower)) return _dropMapFile(path);
+    if (TiledImporter.isTiledMap(path)) {
+      unawaited(
+        BuiltInTileContributions.importIntoScene(scope, path, at: onGrid),
+      );
+      return null;
+    }
     final dot = path.lastIndexOf('.');
     final stem = path.substring(path.lastIndexOf('/') + 1, dot);
     final isImage = !lower.endsWith('.json') && !lower.endsWith('.jsprite');
-    final entity = engine.world.createEntityWithComponents([
+    final components = <Component>[
       TransformComponent(position: Vector3(at.dx, at.dy, 0)),
       if (isImage)
         SpriteComponent(spritePath: path, pixelArt: true)
@@ -612,7 +692,27 @@ class JustGameEditorPlugin implements EnginePlugin {
               ? path
               : '${path.substring(0, dot)}.json',
         ),
-    ], name: stem);
+    ];
+    final session = designer.value;
+    if (session != null) {
+      // Designing a level: what is dropped goes under its map, on a layer
+      // at the depth being placed at.
+      final placed = MapPlacement.place(
+        scope,
+        engine.world,
+        [(stem, components)],
+        depth: session.controller.activeLayerId.value,
+        label: 'Place $stem',
+        say: (message) => logService.log(message, source: 'assets'),
+      );
+      if (placed == null || placed.isEmpty) return null;
+      logService.log('Placed $stem from $path.', source: 'assets');
+      return placed.single;
+    }
+    final entity = engine.world.createEntityWithComponents(
+      components,
+      name: stem,
+    );
     sceneState
       ..syncEntityNode(entity)
       ..markDirty()
@@ -631,6 +731,120 @@ class JustGameEditorPlugin implements EnginePlugin {
     return entity;
   }
 
+  /// Places an entity of [components] — named after [path], as a dropped
+  /// sprite is, unless [name] is given — selected, as one undo step.
+  Entity _place(String path, List<Component> components, {String? name}) {
+    final entity = engine.world.createEntityWithComponents(
+      components,
+      name: name ?? tiledStem(path),
+    );
+    sceneState
+      ..syncEntityNode(entity)
+      ..markDirty()
+      ..refresh()
+      ..selectEntity(entity);
+    history.pushApplied(
+      CreateEntitiesCommand.adopting(
+        label: 'Place ${entity.name}',
+        world: engine.world,
+        sceneState: sceneState,
+        entities: [entity],
+        codec: scope.codec,
+      ),
+    );
+    logService.log('Placed ${entity.name} from $path.', source: 'assets');
+    return entity;
+  }
+
+  /// A tileset dropped: the map being painted gets it, and the Tileset
+  /// panel shows it. With no map yet, the scene's Level Map is made to hold
+  /// it, its cells the tileset's size.
+  Entity? _dropTileset(String path) {
+    final tiles = scope.tiles;
+    final provision = scope.mapProvision;
+    final tileSize = TileAssets.loadedTileset(path)?.tileWidth;
+    final target = provision.ensure(engine.world, tileSize: tileSize);
+    if (target == null) {
+      logService.log('The Level Map is still loading.', source: 'assets');
+      return null;
+    }
+    if (target.isReadOnly) {
+      logService.log(
+        '${target.path} is a Tiled map: it cannot take another tileset.',
+        source: 'assets',
+      );
+      return null;
+    }
+    var slot = target.data.slotOf(path);
+    if (provision.isPending) {
+      // One undo step: the map, and the tileset in it.
+      slot = target.data.addTileset(path);
+      provision.keep('Add tileset');
+      logService.log(
+        'Made the ${LevelMaps.primaryName} to paint ${tiledStem(path)} on.',
+        source: 'assets',
+      );
+    } else if (slot < 0) {
+      final command = MapStructureCommand.record(
+        label: 'Add tileset',
+        docs: scope.mapDocs,
+        ref: target.ref,
+        change: (map) => slot = map.addTileset(path),
+      );
+      if (command != null) history.pushApplied(command);
+      logService.log(
+        'Added ${tiledStem(path)} to ${target.entity.name}.',
+        source: 'assets',
+      );
+    }
+    tiles.slot.value = slot;
+    return target.entity;
+  }
+
+  /// A map file dropped: it becomes the scene's Level Map — made for it, or
+  /// the empty one switched to it. A map with something painted on it is
+  /// kept, and the file is not used: a scene has one map.
+  Entity? _dropMapFile(String path) {
+    final existing = LevelMaps.primaryEntity(engine.world);
+    if (existing == null) {
+      final entity = _place(path, [
+        TransformComponent(),
+        LevelMapComponent(mapPath: path),
+      ], name: LevelMaps.primaryName);
+      scope.tiles.selectMap(entity);
+      return entity;
+    }
+    final c = existing.getComponent<LevelMapComponent>()!;
+    if (c.usesFile && c.mapPath.trim() == path) {
+      scope.tiles.selectMap(existing);
+      sceneState.selectEntity(existing);
+      return existing;
+    }
+    final inline = c.usesFile ? null : c.inline;
+    if (inline != null && LevelMapProvision.isBlank(inline)) {
+      history.pushApplied(
+        MapSourceCommand(
+          label: 'Use ${tiledStem(path)}',
+          docs: scope.mapDocs,
+          entityId: existing.id,
+          before: (path: '', inline: inline.toJson()),
+          after: (path: path, inline: null),
+        )..redo(),
+      );
+      scope.tiles.selectMap(existing);
+      sceneState.selectEntity(existing);
+      logService.log('${existing.name} is $path now.', source: 'assets');
+      return existing;
+    }
+    logService.log(
+      'The scene already has a map, ${existing.name}, with something on it: '
+      'a scene has one. $path was not used.',
+      level: DebuggerLogLevel.warning,
+      source: 'assets',
+    );
+    return null;
+  }
+
   /// A file a tool wrote changed: whatever in the level shows it, shows the
   /// new version.
   void reloadAsset(String path) {
@@ -641,12 +855,21 @@ class JustGameEditorPlugin implements EnginePlugin {
       reloadTimelines(path);
     } else if (lower.endsWith('.uitheme.json')) {
       reloadUiThemes(path);
+    } else if (lower.endsWith('.tileset.json') ||
+        LevelMapFiles.isMapFile(lower) ||
+        lower.endsWith('.tmx') ||
+        lower.endsWith('.tmj') ||
+        lower.endsWith('.tsx') ||
+        lower.endsWith('.tsj')) {
+      reloadLevelMaps(path);
     } else if (lower.endsWith('.ttf') ||
         lower.endsWith('.otf') ||
         lower.endsWith('.ttc')) {
       reloadFonts(path);
-    } else if (lower.endsWith('.json')) {
+    } else if (isSpriteAtlasPath(path)) {
       reloadSprites(path);
+    } else if (lower.endsWith('.json')) {
+      // Some other data file: nothing a sprite shows.
     } else {
       reloadSprites();
     }
@@ -658,6 +881,22 @@ class JustGameEditorPlugin implements EnginePlugin {
     for (final system in engine.world.systems) {
       if (system is AnimatorSystem) system.reload(graphPath);
     }
+  }
+
+  /// A tileset or map file changed on disk: every map using it reads it
+  /// again. A Tiled `.tsx` could belong to any `.tmx`, so it reloads all.
+  void reloadLevelMaps([String? path]) {
+    final lower = path?.toLowerCase() ?? '';
+    final all =
+        path == null || lower.endsWith('.tsx') || lower.endsWith('.tsj');
+    // A map file being edited here is the document: re-reading it would
+    // throw the edits away. It is written by a save, not read back.
+    if (!all && scope.mapDocs.dirtyPaths.value.contains(path)) return;
+    for (final system in engine.world.systems) {
+      if (system is LevelMapSystem) system.reload(all ? null : path);
+    }
+    // A tileset's images may have changed with it.
+    if (all || lower.endsWith('.tileset.json')) spriteAssets.clear();
   }
 
   /// A timeline changed on disk: players of it start over with the new one.
@@ -698,15 +937,41 @@ class JustGameEditorPlugin implements EnginePlugin {
     );
   }
 
-  // A timeline writes to the fields it animates. While authoring those
-  // fields are the scene being edited, so timelines only run in a play-test
-  // (whose changes are thrown away) — the Timeline dock previews by itself.
-  void _syncTimelinePlayback() {
+  // Systems that must not run on the scene being edited:
+  //
+  // * A timeline writes to the fields it animates. While authoring those
+  //   fields are the scene being edited, so timelines only run in a
+  //   play-test (whose changes are thrown away) — the Timeline dock
+  //   previews by itself.
+  // * Tile collision builds bodies from the maps. While authoring they
+  //   would be rebuilt on every stroke for nothing; they are built when
+  //   play starts, and destroyed with the play-test.
+  //
+  // Tile animation runs either way — on the game's clock in a play-test,
+  // on the wall clock while authoring, when the game's time stands still.
+  void _syncRuntimeSystems(double dt) {
     if (!engine.isInitialized) return;
     final run = !isAuthoring.value;
     for (final system in engine.world.systems) {
       if (system is TimelineSystem) system.isActive = run;
+      if (system is MapCollisionSystem && system.isActive != run) {
+        system.isActive = run;
+        if (!run) system.clearGenerated();
+      }
+      if (system is LevelMapSystem) {
+        system.advanceClock = run;
+        if (!run) system.clockMs += dt * 1000;
+      }
     }
+    scope.mapDocs.pollAssets();
+    // Only the layer being painted at full strength, while painting.
+    scope.tiles.syncHighlight(
+      engine.world,
+      active:
+          !run &&
+          scope.activeWorkspace.value == null &&
+          designer.value?.controller.activeTool?.group == ToolGroups.tiles,
+    );
   }
 
   void _focusGameOnPlay() {
@@ -752,7 +1017,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     _attachDebuggerIfReady();
     // After the frame's game update: play time, and the end of a stepped frame.
     if (_isInitialized) playController.tick(dt);
-    if (_isInitialized) _syncTimelinePlayback();
+    if (_isInitialized) _syncRuntimeSystems(dt);
     if (!_isInitialized || !isVisible.value) return;
     _syncTimeScaleForPreview();
     // The game is frozen while authoring, so the brain is asked directly:
@@ -840,19 +1105,26 @@ class JustGameEditorPlugin implements EnginePlugin {
         isSelected: (entity) =>
             sceneState.selectedEntity.value?.id == entity.id ||
             sceneState.isInMultiSelection(entity.id),
+        isShown: _isDrawn,
       );
     }
 
     _gizmoPainter.paintCameraMarkers(
       canvas,
-      engine.world.query([TransformComponent, VirtualCameraComponent]),
+      engine.world
+          .query([TransformComponent, VirtualCameraComponent])
+          .where(_isDrawn)
+          .toList(),
       camera,
       size,
     );
 
     _gizmoPainter.paintSpawnMarkers(
       canvas,
-      engine.world.query([TransformComponent, SpawnComponent]),
+      engine.world
+          .query([TransformComponent, SpawnComponent])
+          .where(_isDrawn)
+          .toList(),
       camera,
       size,
     );
@@ -1103,6 +1375,10 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// the door to it: a canvas sits in the world and has a transform, but
   /// putting the camera on it would show nothing worth seeing.
   void focusOn(Entity entity) {
+    if (entity.hasComponent<LevelMapComponent>()) {
+      designLevelMap(entity);
+      return;
+    }
     if (entity.getComponent<UiCanvasComponent>() != null) {
       scope.openWorkspace(BuiltInWorkspaces.ui);
       sceneState.selectEntity(entity);
@@ -1121,6 +1397,32 @@ class JustGameEditorPlugin implements EnginePlugin {
       transform.position.y,
     );
     sceneState.selectEntity(entity);
+  }
+
+  /// Opens the Level Designer on the map on [entity], ready to paint: the
+  /// map selected and painted, the Stamp in hand unless a tile tool already
+  /// is, and the view on what is painted — what double-clicking the Level
+  /// Map in the scene tree does.
+  void designLevelMap(Entity entity) {
+    sceneState.selectEntity(entity);
+    openLevelDesigner();
+    scope.tiles.selectMap(entity);
+    final session = designer.value;
+    if (session != null && session.controller.activeGroup != ToolGroups.tiles) {
+      session.setTool(TileTools.stamp);
+    }
+    final target = scope.mapDocs.resolve(entity);
+    if (target == null) return;
+    var centre = target.origin;
+    final layer = scope.tiles.peekLayer(target);
+    final used = layer?.cells.usedBounds;
+    if (layer != null && used != null) {
+      final g = target.geometry;
+      final a = g.cellCenter(used.left.toInt(), used.top.toInt());
+      final b = g.cellCenter(used.right.toInt() - 1, used.bottom.toInt() - 1);
+      centre += Offset(layer.offsetX, layer.offsetY) + Offset.lerp(a, b, 0.5)!;
+    }
+    engine.cameraSystem.mainCamera.position = centre;
   }
 
   /// Deletes everything selected, as one undoable action.
@@ -1148,10 +1450,16 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Saves the active scene. During a play-test the level is saved as it was
   /// authored, not as the simulation has left it.
-  Future<void> saveScene() => sceneIO.save(
-    asAuthored: playController.snapshot?.entities,
-    editorData: designer.value?.editorData() ?? sceneIO.editorData,
-  );
+  ///
+  /// Map files edited alongside it are saved too: one save, one unsaved
+  /// mark, for the scene and the maps it uses.
+  Future<void> saveScene() async {
+    await scope.mapDocs.saveDirty();
+    await sceneIO.save(
+      asAuthored: playController.snapshot?.entities,
+      editorData: designer.value?.editorData() ?? sceneIO.editorData,
+    );
+  }
 
   // ── Play / Pause / Stop ────────────────────────────────────────────────────
 
@@ -1237,11 +1545,13 @@ class JustGameEditorPlugin implements EnginePlugin {
   void dispose() {
     closeLevelDesigner();
     isAuthoring.removeListener(_syncCameraOwnership);
+    keepsToLevelMap.removeListener(_syncLevelMapFocus);
     playController.state.removeListener(_focusGameOnPlay);
     if (identical(SpriteAssets.loader, spriteAssets)) {
       SpriteAssets.loader = _previousSpriteLoader ?? BundleSpriteAssetLoader();
       AnimatorAssets.useBundle();
       TimelineAssets.useBundle();
+      TileAssets.useBundle();
     }
     if (engine.isInitialized && engine.cameraSystem.isInitialized) {
       engine.cameraSystem.brain.driveOutput = true;

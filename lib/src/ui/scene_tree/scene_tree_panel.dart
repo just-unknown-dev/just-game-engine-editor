@@ -22,9 +22,11 @@ import '../overlay/docks/extra/extra_docks.dart';
 import '../../core/entity/hierarchy_commands.dart';
 import '../inspector/field_style.dart';
 import '../widgets/editor_menu.dart';
+import 'map_item_row.dart';
 import 'scene_tree_controller.dart';
 import 'scene_tree_model.dart';
 import 'scene_tree_row.dart';
+import '../widgets/editor_scrollbar.dart';
 
 class SceneTreePanel extends StatefulWidget {
   const SceneTreePanel({
@@ -191,6 +193,10 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
       children: [
         _header(),
         _searchField(),
+        SignalConsumer(
+          signals: [_sceneState.selectable],
+          builder: (context, _) => _reachNote(),
+        ),
         // Its own builder: the chips say what is being filtered by and
         // what this scene can be filtered *on*, so they follow both the
         // filter and the scene.
@@ -209,8 +215,13 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
               _sceneState.selectedEntity,
               _sceneState.multiSelectedIds,
               _sceneState.revision,
+              _sceneState.selectable,
               widget.scope.view.pinned,
+              widget.scope.mapDocs.revision,
+              widget.scope.tiles.layerId,
+              widget.scope.tiles.mapEntityId,
               _tree.expanded,
+              _tree.expandedLayers,
               _tree.colors,
               _tree.filter,
               _tree.renaming,
@@ -231,6 +242,13 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
       filter: _tree.filter.value,
       authored: widget.authored,
       contents: widget.contents,
+      // A level map's layers and shapes, under it — the world's tree only.
+      mapOf: widget.contents == TreeContents.world
+          ? (entity) => entity.hasComponent<jge.LevelMapComponent>()
+                ? widget.scope.mapDocs.resolve(entity)?.data
+                : null
+          : null,
+      expandedLayers: _tree.expandedLayers.value,
       withProblems: _tree.filter.value.problems
           ? {
               for (final problem in ProblemScan.of(widget.scope).problems)
@@ -300,7 +318,10 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
       // Dropped past the last row: out of everything, to the top level —
       // which in the interface tree is no place at all, so there a drop
       // on nothing does nothing.
-      onWillAcceptWithDetails: (_) => widget.contents != TreeContents.ui,
+      // Nor while the Level Designer keeps to its Level Map: the top level
+      // is outside it.
+      onWillAcceptWithDetails: (_) =>
+          widget.contents != TreeContents.ui && _reaches(null),
       onAcceptWithDetails: (details) {
         if (_dragOver != null) return;
         widget.entities.reparentAll(details.data, null);
@@ -308,9 +329,9 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
       builder: (context, candidates, _) => Stack(
         children: [
           Positioned.fill(
-            child: Scrollbar(
+            child: EditorScrollbar(
               controller: _tree.scroll,
-              child: ListView.builder(
+              builder: (_, _) => ListView.builder(
                 key: _listKey,
                 controller: _tree.scroll,
                 padding: EdgeInsets.zero,
@@ -354,11 +375,26 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
 
   Widget _row(SceneTree tree, int index) {
     final row = tree.rows[index];
+    if (row.isMapItem) {
+      return MapItemRow(
+        key: ValueKey(('mapItem', row.id, row.item)),
+        row: row,
+        scope: widget.scope,
+        controller: _tree,
+        onClaim: () => _rowTookIt = true,
+        onDropEntities: (dragged, map, layerId) {
+          widget.entities.reparentAll(dragged, map, mapLayer: layerId);
+          _tree.expandLayer(map.id, layerId);
+        },
+      );
+    }
     final entity = row.entity;
     final selected = _sceneState.selectedEntity.value?.id == entity.id;
+    final reachable = _sceneState.canSelect(entity);
 
     SceneTreeRowTile tileFor(DropZone? zone) => SceneTreeRowTile(
       row: row,
+      isDisabled: !reachable,
       isSelected: selected,
       isMultiSelected: _sceneState.isInMultiSelection(entity.id),
       icon: widget.scope.iconFor(entity),
@@ -406,7 +442,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     return _Draggable(
       entity: entity,
       selection: selection,
-      enabled: _canDrag(selection),
+      enabled: reachable && _canDrag(selection),
       onEnded: () => setState(() {
         _cancelPendingRename();
         _dragOver = null;
@@ -439,8 +475,9 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         onPointerUp: (event) => _onRowPointerUp(event, entity, tree),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onSecondaryTapUp: (details) =>
-              _showMenu(context, entity, details.globalPosition),
+          onSecondaryTapUp: reachable
+              ? (details) => _showMenu(context, entity, details.globalPosition)
+              : null,
           // The row's own context. `_row` has none of its own, so
           // `context` here was the panel's: every drop was measured
           // against the whole list, which put the pointer far below the
@@ -546,6 +583,9 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     if (_pressedOn != entity.id || !_pressedPrimary) return;
     _pressedOn = null;
     _rowTookIt = true;
+    // Out of reach: not selected, renamed or focused. Nor is the click
+    // one on empty space — the selection stays as it was.
+    if (!_sceneState.canSelect(entity)) return;
     // A drag that happens to end here is not a click.
     // Only a press that wandered right off the row is not a click.
     // Dragging takes a deliberate hold now, so nothing else here needs
@@ -670,7 +710,9 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   /// Whether this row could take [dragged] at all, wherever on it the
   /// pointer happens to be.
   bool _canAccept(List<jge.Entity> dragged, jge.Entity onto) =>
-      !dragged.any((e) => e.id == onto.id) && _canDrag(dragged);
+      !dragged.any((e) => e.id == onto.id) &&
+      _canDrag(dragged) &&
+      _sceneState.canSelect(onto);
 
   /// What a drop at [zone] on [onto] actually means.
   ///
@@ -678,10 +720,30 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   /// interface out of every screen there is — so in the interface tree
   /// the edges of a HUD's row mean *into* it, which is the only thing
   /// they could sensibly mean.
-  DropZone _zoneFor(jge.Entity onto, DropZone zone) =>
-      widget.contents == TreeContents.ui && _isCanvas(onto)
-      ? DropZone.onto
-      : zone;
+  ///
+  /// And beside something whose parent is out of reach would take what
+  /// is dropped out of reach too — beside the Level Map, while designing,
+  /// is the top level, outside it — so there the edges mean into it.
+  DropZone _zoneFor(jge.Entity onto, DropZone zone) {
+    if (widget.contents == TreeContents.ui && _isCanvas(onto)) {
+      return DropZone.onto;
+    }
+    if (zone != DropZone.onto && !_reaches(_parentOf(onto))) {
+      return DropZone.onto;
+    }
+    return zone;
+  }
+
+  jge.Entity? _parentOf(jge.Entity entity) {
+    final id = entity.getComponent<jge.ParentComponent>()?.parentId;
+    return id == null ? null : _world.getEntity(id);
+  }
+
+  /// Whether what is put under [parent] — or at the top level, for none —
+  /// is still within reach.
+  bool _reaches(jge.Entity? parent) => parent == null
+      ? _sceneState.selectable.value == null
+      : _sceneState.canSelect(parent);
 
   /// Whether [dragged] may land on [onto] the way the pointer is over it.
   bool _canDrop(List<jge.Entity> dragged, jge.Entity onto, DropZone zone) =>
@@ -703,9 +765,13 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
               const <jge.EntityId>[];
     // Nothing in the interface tree belongs at the world's top level.
     if (parent == null && widget.contents == TreeContents.ui) return;
+    // Beside something on a map layer is on that layer too.
+    final mapLayer = parent?.hasComponent<jge.LevelMapComponent>() ?? false
+        ? onto.getComponent<jge.LayerComponent>()?.mapLayer
+        : null;
     var at = siblings.indexOf(onto.id);
     if (at < 0) {
-      widget.entities.reparentAll(dragged, parent);
+      widget.entities.reparentAll(dragged, parent, mapLayer: mapLayer);
       return;
     }
     if (zone == DropZone.below) at++;
@@ -715,7 +781,12 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
       final index = siblings.indexOf(e.id);
       return index >= 0 && index < at;
     }).length;
-    widget.entities.reparentAll(dragged, parent, index: at - above);
+    widget.entities.reparentAll(
+      dragged,
+      parent,
+      index: at - above,
+      mapLayer: mapLayer,
+    );
   }
 
   /// The swatches, and the way back to no mark at all.
@@ -920,6 +991,16 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     final control = HardwareKeyboard.instance.isControlPressed;
 
     void moveTo(int at) {
+      if (at < 0 || at >= tree.length) return;
+      // Past a level map's layer rows and what is out of reach: the
+      // keys walk the entities that can be selected.
+      final step = at > index ? 1 : -1;
+      while (at >= 0 &&
+          at < tree.length &&
+          (tree.rows[at].isMapItem ||
+              !_sceneState.canSelect(tree.rows[at].entity))) {
+        at += step;
+      }
       if (at < 0 || at >= tree.length) return;
       _sceneState
         ..clearMultiSelection()
@@ -1133,6 +1214,31 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
       ),
     ),
   );
+
+  /// Why most of the tree has gone faint: the Level Designer is open and
+  /// only its Level Map can be worked on. Nothing when all of it can.
+  Widget _reachNote() {
+    if (_sceneState.selectable.value == null ||
+        widget.contents != TreeContents.world) {
+      return const SizedBox.shrink();
+    }
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(10, 0, 10, 6),
+      child: Row(
+        children: [
+          Icon(Icons.grid_on_rounded, size: 12, color: EditorTheme.textMuted),
+          SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Level Designer open: only the Level Map can be edited',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _showCreateUiMenu(BuildContext context) async {
     final box = context.findRenderObject() as RenderBox?;

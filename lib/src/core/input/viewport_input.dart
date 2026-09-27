@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../ui/level_designer/level_designer_session.dart';
+import '../../ui/level_designer/tools/level_tool.dart' show ToolButton;
 import '../../ui/overlay/gizmo_painter.dart';
 import '../state/editor_scene_state.dart';
 
@@ -96,12 +97,31 @@ class ViewportInput {
     canvasSize = size;
   }
 
-  void onPointerDown(PointerDownEvent event) {
-    if (!isActive()) return;
-    if (canvasSize == Size.zero) return;
+  /// Handles a press on the canvas. Returns whether something took it — a
+  /// right-button press nothing took opens the context menu.
+  bool onPointerDown(PointerDownEvent event) {
+    if (!isActive()) return false;
+    if (canvasSize == Size.zero) return false;
     // The right button belongs to the context menu, which the overlay
-    // opens: selecting and dragging are the left button's business.
-    if ((event.buttons & kSecondaryButton) != 0) return;
+    // opens — unless the Level Designer's tool asks for it: a tile brush
+    // picks up tiles with a right-drag, as in Tiled.
+    if ((event.buttons & kSecondaryButton) != 0) {
+      final designer = designerOf();
+      if (designer == null || !isAuthoring() || !designer.claimsSecondary()) {
+        return false;
+      }
+      final camera = cameraOf()..viewportSize = canvasSize;
+      final claimed = designer.onPointerDown(
+        camera.screenToWorld(event.localPosition),
+        gridSize(),
+        screen: event.localPosition,
+        canvasSize: canvasSize,
+        button: ToolButton.secondary,
+        time: event.timeStamp,
+      );
+      if (claimed) _activeHandle = null;
+      return claimed;
+    }
 
     // Middle-mouse-drag pans the camera — only while pure-authoring (Play
     // not pressed): during Play the camera brain owns the output camera and
@@ -109,7 +129,7 @@ class ViewportInput {
     if ((event.buttons & kMiddleMouseButton) != 0 && isAuthoring()) {
       _isPanningCamera = true;
       _activeHandle = null;
-      return;
+      return true;
     }
 
     final camera = cameraOf();
@@ -129,7 +149,7 @@ class ViewportInput {
         gridSize: gridSize(),
       )) {
         _activeHandle = null;
-        return;
+        return true;
       }
       final worldPoint = camera.screenToWorld(event.localPosition);
       if (designer.onPointerDown(
@@ -137,9 +157,10 @@ class ViewportInput {
         gridSize(),
         screen: event.localPosition,
         canvasSize: canvasSize,
+        time: event.timeStamp,
       )) {
         _activeHandle = null;
-        return;
+        return true;
       }
     }
 
@@ -160,7 +181,7 @@ class ViewportInput {
     if (hit.handle == GizmoHandle.none) {
       sceneState.clearSelection();
       _activeHandle = null;
-      return;
+      return false;
     }
 
     if (hit.handle == GizmoHandle.body) {
@@ -172,11 +193,11 @@ class ViewportInput {
         if (wasSelected) {
           _activeHandle = GizmoHandle.translateXY;
           _dragStartScreen = event.localPosition;
-          return;
+          return true;
         }
       }
       _activeHandle = null;
-      return;
+      return true;
     }
 
     {
@@ -184,7 +205,26 @@ class ViewportInput {
       _activeHandle = hit.handle;
       _dragStartScreen = event.localPosition;
     }
+    return true;
   }
+
+  /// The pointer moved over the canvas with no button down: the Level
+  /// Designer's tool may show what a click would do.
+  void onPointerHover(PointerHoverEvent event) {
+    if (!isActive() || canvasSize == Size.zero || !isAuthoring()) return;
+    final designer = designerOf();
+    if (designer == null || designer.hasActiveGesture) return;
+    final camera = cameraOf()..viewportSize = canvasSize;
+    designer.onPointerHover(
+      camera.screenToWorld(event.localPosition),
+      gridSize(),
+      screen: event.localPosition,
+      canvasSize: canvasSize,
+    );
+  }
+
+  /// The pointer left the canvas.
+  void onPointerExit() => designerOf()?.onPointerExit();
 
   void onPointerMove(PointerMoveEvent event) {
     final designer = designerOf();

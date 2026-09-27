@@ -11,6 +11,8 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'support/test_scope.dart';
 
 void main() {
+  _tileControlTests();
+
   testWidgets('the grid size picker opens at the bottom edge and changes '
       'the grid', (tester) async {
     final world = World()..initialize();
@@ -44,6 +46,8 @@ void main() {
       ),
     );
 
+    // After the tool's options, which may push it along.
+    await tester.ensureVisible(find.text('32px'));
     await tester.tap(find.text('32px'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -124,4 +128,59 @@ class _Blank extends DesignerOverlay {
 
   @override
   void paint(OverlayPaintContext context) {}
+}
+
+void _tileControlTests() {
+  testWidgets('with a tile tool the bar shows the cell under the pointer, '
+      'and the tool\'s settings at its left', (tester) async {
+    final world = World()..initialize();
+    addTearDown(world.dispose);
+    final scope = testScope(world: world);
+    final session = LevelDesignerSession(
+      scope: scope,
+      uniqueName: (p) => p,
+      onDuplicate: () {},
+      onDelete: () {},
+      onArray: (_, _) {},
+      readModifiers: () => const ModifierKeys(),
+    );
+    addTearDown(session.dispose);
+    final data = BuiltInPrefabs.newLevelMap();
+    data.layers.single.cells.setCell(1, 2, TileCell.make(0, 7, TileCell.flipH));
+    final map = world.createEntityWithComponents([
+      TransformComponent(),
+      LevelMapComponent(inline: data),
+    ], name: 'Map');
+    scope.tiles.selectMap(map);
+    scope.tiles.hoverCell = const TileCoord(1, 2);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: DesignerStatusBar.height,
+            child: DesignerStatusBar(
+              session: session,
+              gridSize: 32,
+              onGridSizeChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    final readout = find.textContaining('1, 2 · missing tileset #7 (H)');
+    expect(readout, findsNothing, reason: 'no tile tool yet');
+
+    session.setTool(TileTools.fill);
+    await tester.pump();
+    expect(readout, findsOneWidget);
+    expect(find.text('Ground'), findsOneWidget, reason: 'the layer painted');
+    expect(find.text('Bucket'), findsOneWidget);
+
+    session.setTool(BuiltInTools.paint);
+    await tester.pump();
+    expect(readout, findsNothing);
+    expect(find.text('Brush'), findsOneWidget, reason: 'Paint\'s modes');
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -24,9 +24,10 @@ void main() {
       readModifiers: () => const ModifierKeys(),
     );
     session.camera.viewportSize = canvas;
-    // As the overlay would: a 44px palette on the left, panels on the right.
+    // As the overlay would: the tool strip on the left, panels on the
+    // right, the status bar along the bottom.
     session.controller.viewportInsets = const EdgeInsets.fromLTRB(
-      44,
+      ToolPalette.width,
       0,
       300,
       30,

@@ -102,6 +102,15 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
     return UiTheme.parse(await file.readAsString());
   }
 
+  /// A text file — a tileset, a tile map, a Tiled map — from the project's
+  /// files, or the bundle when it is not one of them. What `TileAssets`
+  /// reads through while the editor runs.
+  Future<String> readText(String path) async {
+    final file = _file(path);
+    if (!await file.exists()) return rootBundle.loadString(path, cache: false);
+    return file.readAsString();
+  }
+
   /// A font file, from the project's files — so a font dropped into
   /// `assets/fonts` works without a rebuild or a line in pubspec.yaml.
   Future<ByteData> loadFontData(String path) async {

@@ -83,6 +83,25 @@ class _Module extends EditorModule {
   ];
   @override
   List<DesignerOverlay> get overlays => [_ClaimingOverlay()];
+  @override
+  List<ToolGroup> get toolGroups => const [
+    ToolGroup(id: 'test.wiring', label: 'WIRING', order: 15),
+  ];
+  @override
+  List<LevelToolHandler> createTools(DesignerToolContext context) => [
+    _WireTool(),
+  ];
+}
+
+class _WireTool extends LevelToolHandler {
+  @override
+  String get id => 'test.wire';
+  @override
+  String get label => 'Wire';
+  @override
+  IconData get icon => Icons.cable;
+  @override
+  String get group => 'test.wiring';
 }
 
 LevelDesignerSession _open(EditorScope scope) {
@@ -118,6 +137,16 @@ void main() {
     );
     expect(result.dx, 7);
     expect(result.dy, 11);
+  });
+
+  test("a module's tool group is captioned in the strip, where it asks", () {
+    final session = _open(testScope(modules: [_Module()]));
+    List<String> captions() => [
+      for (final (group, _) in session.tools.grouped) group.label,
+    ];
+    expect(captions(), ['SELECT', 'SHAPES', 'WIRING', 'TILES', 'MEASURE']);
+    session.reloadModules();
+    expect(captions(), contains('WIRING'), reason: 'kept across a reload');
   });
 
   test('session state survives a module reload', () {

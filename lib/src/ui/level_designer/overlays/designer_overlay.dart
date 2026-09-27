@@ -30,6 +30,11 @@ class OverlayPaintContext {
   bool isSelected(jge.Entity entity) =>
       controller.sceneState.selectedEntity.value?.id == entity.id ||
       controller.sceneState.isInMultiSelection(entity.id);
+
+  /// Whether [entity] is drawn in the viewport — not hidden by its eye, its
+  /// layer, or the designer keeping to the Level Map. An overlay about an
+  /// entity draws nothing for one that is not.
+  bool isShown(jge.Entity entity) => controller.isShownInViewport(entity);
 }
 
 /// Something drawn over the level in the designer viewport.

@@ -98,6 +98,33 @@ class LevelDesignerController {
   /// The active tool handler, resolved from [toolId].
   LevelToolHandler? get activeTool => tools.byId(toolId.value);
 
+  /// The group of the tool in hand: one of [ToolGroups], or a module's own.
+  String get activeGroup => activeTool?.group ?? ToolGroups.select;
+
+  /// Side-panel sections the author opened or closed, by tool group and
+  /// section id. A section otherwise follows the tools in hand: the tile
+  /// sections open with a tile tool, the prefab ones with the others.
+  final Signal<Map<String, Map<String, bool>>> sectionsOpen = Signal(
+    const {},
+    debugLabel: 'sectionsOpen',
+  );
+
+  /// Whether side-panel [section] is open with the tools in hand; when the
+  /// author has not said, whether it belongs to them — [groups] null means
+  /// every group.
+  bool isSectionOpen(String section, {Set<String>? groups}) =>
+      sectionsOpen.value[activeGroup]?[section] ??
+      (groups == null || groups.contains(activeGroup));
+
+  /// Opens or closes [section] for the tools in hand, remembered for them.
+  void setSectionOpen(String section, {required bool open}) {
+    final group = activeGroup;
+    sectionsOpen.value = {
+      ...sectionsOpen.value,
+      group: {...?sectionsOpen.value[group], section: open},
+    };
+  }
+
   /// Active paint mode, when [tool] is [LevelTool.paint].
   final Signal<PaintMode> paintMode = Signal(
     PaintMode.brush,
@@ -162,11 +189,19 @@ class LevelDesignerController {
     lockedLayers.value = next;
   }
 
+  /// The layer of its parent's map [entity] is on, if it is on one: set by
+  /// the session, which knows the world. An entity on a map layer is hidden
+  /// and locked with that layer, not with its depth.
+  jge.MapLayerData? Function(jge.Entity entity)? mapLayerOf;
+
   /// Whether [entity] can be picked in the viewport right now.
   bool isPickable(jge.Entity entity) {
     if (!isShownInViewport(entity)) return false;
     if (lockedEntities.value.contains(entity.id)) return false;
     final layer = entity.getComponent<jge.LayerComponent>();
+    if (layer?.mapLayer != null) {
+      return !(mapLayerOf?.call(entity)?.locked ?? false);
+    }
     return layer == null || !isLayerLocked(layer.layerId);
   }
 
@@ -228,10 +263,16 @@ class LevelDesignerController {
       view.setLocked(ids, locked: locked);
 
   /// Whether [entity] is drawn in the viewport while authoring — neither it
-  /// nor its layer is hidden.
+  /// nor its layer is hidden, and it is within the designer's reach.
   bool isShownInViewport(jge.Entity entity) {
     if (hiddenEntities.value.contains(entity.id)) return false;
+    // Everything but the Level Map, while designing: out of reach, and out
+    // of sight with it.
+    if (!sceneState.canSelect(entity)) return false;
     final layer = entity.getComponent<jge.LayerComponent>();
+    if (layer?.mapLayer != null) {
+      return mapLayerOf?.call(entity)?.visible ?? true;
+    }
     return layer == null || !isLayerHidden(layer.layerId);
   }
 
@@ -305,6 +346,7 @@ class LevelDesignerController {
     guides.dispose();
     showRulers.dispose();
     hiddenOverlays.dispose();
+    sectionsOpen.dispose();
     snapEnabled.dispose();
     smartSnap.dispose();
     brushSize.dispose();

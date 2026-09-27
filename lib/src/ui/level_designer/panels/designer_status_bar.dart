@@ -1,15 +1,20 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
 import '../../../core/constants/editor_constants.dart';
+import '../controls/designer_controls.dart';
 import '../level_designer_session.dart';
 import '../state/level_designer_controller.dart';
-import '../tools/tool_registry.dart';
+import '../tools/level_tool.dart';
+import 'tool_options_bar.dart';
 
-/// The strip along the bottom of the designer: snapping options, overlay
-/// toggles, and whatever the active tool is currently reporting.
+/// The strip along the bottom of the designer: at its left the tool in hand
+/// and its settings ([ToolOptionsBar]), then snapping options, overlay
+/// toggles, the cell under the pointer while painting tiles, and whatever the
+/// active tool is currently reporting.
 class DesignerStatusBar extends StatelessWidget {
   const DesignerStatusBar({
     super.key,
@@ -46,8 +51,8 @@ class DesignerStatusBar extends StatelessWidget {
       color: EditorTheme.surfaceDark,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       // The controls scroll rather than overflow — extensions add overlays
-      // and the paint tool adds its modes, so how much there is to show is
-      // not the editor's to decide. The status message keeps a fixed share on
+      // and status controls, so how much there is to show is not the
+      // editor's to decide. The status message keeps a fixed share on
       // the right and truncates.
       child: LayoutBuilder(
         builder: (context, constraints) => Row(
@@ -57,10 +62,12 @@ class DesignerStatusBar extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
+                    ToolOptionsBar(session: session),
+                    const _SectionDivider(),
                     ..._snapControls(controller),
                     const SizedBox(width: 12),
                     _overlayToggles(controller),
-                    _paintControls(controller),
+                    _tileReadout(controller),
                     // What the modules add, after the built-ins.
                     for (final control in session.scope.statusControls) ...[
                       const SizedBox(width: 8),
@@ -99,7 +106,7 @@ class DesignerStatusBar extends StatelessWidget {
   List<Widget> _snapControls(LevelDesignerController controller) => [
     SignalBuilder<bool>(
       signal: controller.snapEnabled,
-      builder: (context, enabled, _) => _Toggle(
+      builder: (context, enabled, _) => DesignerToggle(
         icon: Icons.grid_4x4,
         label: 'Snap',
         isOn: enabled,
@@ -109,7 +116,7 @@ class DesignerStatusBar extends StatelessWidget {
     ),
     SignalBuilder<bool>(
       signal: controller.smartSnap,
-      builder: (context, enabled, _) => _Toggle(
+      builder: (context, enabled, _) => DesignerToggle(
         icon: Icons.align_horizontal_left,
         label: 'Smart',
         isOn: enabled,
@@ -134,7 +141,7 @@ class DesignerStatusBar extends StatelessWidget {
         builder: (context, hidden, _) => Row(
           children: [
             for (final overlay in session.overlays.all)
-              _Toggle(
+              DesignerToggle(
                 icon: overlay.icon,
                 isOn: !hidden.contains(overlay.id),
                 tooltip: overlay.description == null
@@ -149,121 +156,74 @@ class DesignerStatusBar extends StatelessWidget {
         ),
       );
 
-  /// Paint modes and brush size, shown only while painting — the rest of the
-  /// time they would be clutter that implies they do something.
-  Widget _paintControls(LevelDesignerController controller) =>
-      SignalBuilder2<String, PaintMode>(
-        signal1: controller.toolId,
-        signal2: controller.paintMode,
-        builder: (context, toolId, mode, _) {
-          if (toolId != BuiltInTools.paint) return const SizedBox.shrink();
-          return Row(
-            children: [
-              const SizedBox(width: 12),
-              for (final entry in const [
-                (mode: PaintMode.brush, icon: Icons.brush, label: 'Brush'),
-                (
-                  mode: PaintMode.rectangle,
-                  icon: Icons.crop_square,
-                  label: 'Rect',
-                ),
-                (
-                  mode: PaintMode.eraser,
-                  icon: Icons.cleaning_services,
-                  label: 'Erase',
-                ),
-                (
-                  mode: PaintMode.fill,
-                  icon: Icons.format_color_fill,
-                  label: 'Fill',
-                ),
-              ])
-                _Toggle(
-                  icon: entry.icon,
-                  label: entry.label,
-                  isOn: mode == entry.mode,
-                  tooltip: entry.mode == PaintMode.fill
-                      ? 'Fill the enclosed empty region you click'
-                      : entry.label,
-                  onTap: () => controller.paintMode.value = entry.mode,
-                ),
-              // Brush width only affects the brush and the eraser.
-              if (mode == PaintMode.brush || mode == PaintMode.eraser)
-                SignalBuilder<int>(
-                  signal: controller.brushSize,
-                  builder: (context, size, _) => Row(
-                    children: [
-                      const SizedBox(width: 8),
-                      for (final option in const [1, 3, 5])
-                        _Toggle(
-                          icon: Icons.grid_on,
-                          label: '$option',
-                          isOn: size == option,
-                          tooltip: '$option × $option brush  ([ and ])',
-                          onTap: () => controller.brushSize.value = option,
-                        ),
-                    ],
-                  ),
-                ),
-            ],
-          );
-        },
+  /// The cell under the pointer and what it holds, while a tile tool is in
+  /// hand.
+  Widget _tileReadout(LevelDesignerController controller) =>
+      SignalBuilder<String>(
+        signal: controller.toolId,
+        builder: (context, _, _) => controller.activeGroup != ToolGroups.tiles
+            ? const SizedBox.shrink()
+            : Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: _TileHoverReadout(session: session),
+              ),
       );
 }
 
-class _Toggle extends StatelessWidget {
-  const _Toggle({
-    required this.icon,
-    required this.isOn,
-    required this.tooltip,
-    required this.onTap,
-    this.label,
-  });
-
-  final IconData icon;
-
-  /// Shown beside the icon; null for an icon-only toggle, whose name is then
-  /// in the tooltip.
-  final String? label;
-  final bool isOn;
-  final String tooltip;
-  final VoidCallback onTap;
+/// Between the tool's own settings and the designer's.
+class _SectionDivider extends StatelessWidget {
+  const _SectionDivider();
 
   @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 13,
-                color: isOn ? EditorTheme.primaryBright : EditorTheme.textMuted,
-              ),
-              if (label != null) ...[
-                const SizedBox(width: 4),
-                Text(
-                  label!,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isOn
-                        ? EditorTheme.textBright
-                        : EditorTheme.textMuted,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
+  Widget build(BuildContext context) => Container(
+    width: 1,
+    height: 20,
+    margin: const EdgeInsets.symmetric(horizontal: 10),
+    color: EditorTheme.border,
+  );
+}
+
+/// The cell under the pointer and what it holds.
+class _TileHoverReadout extends StatelessWidget {
+  const _TileHoverReadout({required this.session});
+
+  final LevelDesignerSession session;
+
+  /// What [session]'s painted layer holds at [cell], for the status bar.
+  static String describe(LevelDesignerSession session, jge.TileCoord cell) {
+    final tiles = session.scope.tiles;
+    final target = tiles.peek(session.world);
+    final layer = target == null ? null : tiles.peekLayer(target);
+    final where = '${cell.x}, ${cell.y}';
+    if (target == null || layer == null) return where;
+    final value = layer.cells.cellAt(cell.x, cell.y);
+    if (jge.TileCell.isEmpty(value)) return '$where · empty';
+    final ts = target.tilesetAt(jge.TileCell.slotOf(value));
+    final id = jge.TileCell.localIdOf(value);
+    final turned = [
+      if (jge.TileCell.isFlippedH(value)) 'H',
+      if (jge.TileCell.isFlippedV(value)) 'V',
+      if (jge.TileCell.isFlippedD(value)) 'D',
+      if (jge.TileCell.isRotated120(value)) 'R',
+    ].join();
+    return '$where · ${ts?.name ?? 'missing tileset'} #$id'
+        '${turned.isEmpty ? '' : ' ($turned)'}';
   }
+
+  @override
+  Widget build(BuildContext context) => SignalBuilder<jge.TileCoord?>(
+    signal: session.scope.tiles.hover,
+    builder: (context, cell, _) => cell == null
+        ? const SizedBox.shrink()
+        : Text(
+            describe(session, cell),
+            style: const TextStyle(
+              color: EditorTheme.textSecondary,
+              fontSize: 11,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+  );
 }
 
 /// Steps the grid size through the usual power-of-two sizes.
@@ -289,8 +249,9 @@ class _GridSizeField extends StatelessWidget {
     final current = sizes.contains(value)
         ? value
         : (sizes.isEmpty ? 32.0 : sizes.first);
-    // A popup menu rather than a DropdownButton. The status bar is flush with
-    // the bottom of the window, and a DropdownButton there fails an assertion
+    // A popup menu rather than a DropdownButton. The status bar sits at the
+    // foot of the window — flush with it when the status strip is hidden —
+    // and a DropdownButton there fails an assertion
     // as it opens: it centres the selected item over a button shorter than
     // an item, pushing the menu past the bottom edge. A popup menu is kept on
     // screen and opens upward when there is no room below.

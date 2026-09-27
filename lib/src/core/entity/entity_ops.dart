@@ -278,16 +278,17 @@ class EntityOps {
     return selected == null ? const [] : [selected];
   }
 
-  /// Deletes everything selected, as one undoable action.
+  static String _describe(List<Entity> entities) => entities.length == 1
+      ? entities.single.name ?? 'entity'
+      : '${entities.length} entities';
+
+  /// Deletes everything selected as one undoable action.
   void deleteSelection(EditorHistory history) {
     final targets = selectionEntities;
     if (targets.isEmpty) return;
-
     history.push(
       DeleteEntitiesCommand(
-        label: targets.length == 1
-            ? 'Delete ${targets.first.name ?? 'entity'}'
-            : 'Delete ${targets.length} entities',
+        label: 'Delete ${_describe(targets)}',
         world: world,
         sceneState: sceneState,
         entities: targets,
@@ -308,6 +309,7 @@ class EntityOps {
           (entity) => EntitySpec.of(
             entity,
             scope.codec,
+            world: world,
           ).translated(offset, newName: uniqueName(_baseName(entity.name))),
         )
         .toList();
@@ -347,7 +349,7 @@ class EntityOps {
     for (var i = 1; i <= count; i++) {
       for (final entity in targets) {
         specs.add(
-          EntitySpec.of(entity, scope.codec).translated(
+          EntitySpec.of(entity, scope.codec, world: world).translated(
             step * i.toDouble(),
             newName: uniqueName(_baseName(entity.name)),
           ),
@@ -539,8 +541,14 @@ class EntityOps {
   }
 
   /// Moves [entities] under [parent] — or to the top level when it is
-  /// null — as one undoable step.
-  void reparentAll(List<Entity> entities, Entity? parent, {int? index}) {
+  /// null — as one undoable step. Into a level map with [mapLayer], onto
+  /// that layer of it.
+  void reparentAll(
+    List<Entity> entities,
+    Entity? parent, {
+    int? index,
+    int? mapLayer,
+  }) {
     if (entities.isEmpty) return;
     final command = ReparentCommand(
       label: entities.length == 1
@@ -551,6 +559,7 @@ class EntityOps {
       entities: entities,
       parent: parent,
       index: index,
+      mapLayer: mapLayer,
     );
     if (!command.isValid) return;
     scope.history.push(command);
