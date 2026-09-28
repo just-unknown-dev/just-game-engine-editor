@@ -19,9 +19,6 @@ class EditorChromeState {
     OverlayLayout.rightPanelDefaultWidth,
   );
 
-  /// Whether the centred Input Setup panel is open.
-  final Signal<bool> inputSetupOpen = Signal<bool>(false);
-
   /// Performance samples, kept across dock open/close.
   final List<PerfHistorySample> perfHistory = <PerfHistorySample>[];
 
@@ -51,7 +48,6 @@ class EditorChromeState {
 
   void dispose() {
     rightPanelWidth.dispose();
-    inputSetupOpen.dispose();
   }
 }
 

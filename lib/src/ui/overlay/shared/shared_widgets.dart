@@ -81,6 +81,9 @@ class PlayControlsToolbar extends StatelessWidget {
         plugin.sceneState.activeScene,
         plugin.uiMode.enabled,
         plugin.showGamePreview,
+        // A module button lit while its workspace is open (`isActive`) has
+        // to hear the workspace open and close.
+        plugin.scope.activeWorkspace,
       ],
       builder: (context, _) {
         final state = play.state.value;

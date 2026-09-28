@@ -10,7 +10,6 @@ import '../../../core/constants/editor_constants.dart';
 import '../../../core/plugin/editor_plugin.dart';
 import '../../../core/prefs/editor_prefs.dart';
 import '../../../extension/editor_contributions.dart';
-import '../input_setup/input_setup_panel.dart';
 import '../settings/overlay_ui_settings.dart';
 import '../settings/settings_dialog.dart';
 import '../shared/snackbar.dart';
@@ -202,14 +201,6 @@ class _CompactStatusDockState extends State<CompactStatusDock> {
                     trailing: <Widget>[
                       const _MinimizedSnackChip(),
                       const SizedBox(width: 8),
-                      InputSetupButton(
-                        settings: settings,
-                        onPressed: () {
-                          final open =
-                              widget.plugin.scope.chrome.inputSetupOpen;
-                          open.value = !open.value;
-                        },
-                      ),
                       _EditorSettingsButton(
                         anchorKey: _settingsAnchorKey,
                         settings: settings,

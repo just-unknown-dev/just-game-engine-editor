@@ -29,7 +29,6 @@ export 'src/ui/overlay/viewport_menu.dart' show showViewportMenu;
 export 'src/core/serialization/scene_codec.dart';
 export 'src/core/serialization/scene_store.dart';
 export 'src/core/serialization/scene_manager.dart';
-export 'src/core/serialization/input_bindings_file_generator.dart';
 export 'src/core/serialization/scene_name_validator.dart';
 export 'src/core/services/editor_log_service.dart';
 export 'src/ui/panels/scene_picker_panel.dart';

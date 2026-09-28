@@ -11,7 +11,6 @@ import '../../level_designer/level_designer.dart';
 import '../docks/compact_dock.dart';
 import '../docks/shell/dock_popouts.dart';
 import '../editor_overlay.dart';
-import '../input_setup/input_setup_panel.dart';
 import '../right_panel/right_panel.dart';
 import '../settings/overlay_ui_settings.dart';
 import '../shared/shared_widgets.dart';
@@ -47,18 +46,6 @@ class CompactChrome extends StatelessWidget {
           bottom: OverlayLayout.compactDockPanelHeight + 8,
           right: 8,
           child: EditorSnackBarLayer(),
-        ),
-        Positioned.fill(
-          child: SignalBuilder<bool>(
-            signal: plugin.scope.chrome.inputSetupOpen,
-            builder: (context, open, _) => open
-                ? InputSetupOverlay(
-                    plugin: plugin,
-                    onClose: () =>
-                        plugin.scope.chrome.inputSetupOpen.value = false,
-                  )
-                : const SizedBox.shrink(),
-          ),
         ),
       ],
     );
@@ -307,18 +294,6 @@ class FullEditorChrome extends StatelessWidget {
                               plugin.scope.toggleWorkspaceFullScreen,
                         ),
                       ),
-              ),
-            ),
-            Positioned.fill(
-              child: SignalBuilder<bool>(
-                signal: plugin.scope.chrome.inputSetupOpen,
-                builder: (context, open, _) => open
-                    ? InputSetupOverlay(
-                        plugin: plugin,
-                        onClose: () =>
-                            plugin.scope.chrome.inputSetupOpen.value = false,
-                      )
-                    : const SizedBox.shrink(),
               ),
             ),
           ],
