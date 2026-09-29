@@ -37,32 +37,44 @@ class DesignerToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
-      child: InkWell(
-        onTap: onTap,
+      // Lit when on — a fill, not only a brighter icon — and never a
+      // smaller target than 24 px.
+      child: Material(
+        color: isOn
+            ? EditorTheme.primaryBright.withValues(alpha: 0.12)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 13,
-                color: isOn ? EditorTheme.primaryBright : EditorTheme.textMuted,
-              ),
-              if (label != null) ...[
-                const SizedBox(width: 4),
-                Text(
-                  label!,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isOn
-                        ? EditorTheme.textBright
-                        : EditorTheme.textMuted,
-                  ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 13,
+                  color: isOn
+                      ? EditorTheme.primaryBright
+                      : EditorTheme.textMuted,
                 ),
+                if (label != null) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    label!,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isOn
+                          ? EditorTheme.textBright
+                          : EditorTheme.textMuted,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -199,7 +211,7 @@ class OptionsLabel extends StatelessWidget {
     padding: const EdgeInsets.only(left: 2, right: 4),
     child: Text(
       text,
-      style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+      style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
     ),
   );
 }
@@ -237,7 +249,7 @@ class ActivePrefabChip extends StatelessWidget {
               const SizedBox(width: 5),
               Text(
                 prefab?.name ?? 'No prefab',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   color: EditorTheme.textSecondary,
                 ),
@@ -278,10 +290,7 @@ class PlacementChip extends StatelessWidget {
                 'at the depth being placed at',
             child: Text(
               text,
-              style: const TextStyle(
-                fontSize: 11,
-                color: EditorTheme.textMuted,
-              ),
+              style: TextStyle(fontSize: 11, color: EditorTheme.textMuted),
             ),
           );
         },
@@ -358,20 +367,16 @@ class MapLayerPicker extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.layers,
-                  size: 13,
-                  color: EditorTheme.textMuted,
-                ),
+                Icon(Icons.layers, size: 13, color: EditorTheme.textMuted),
                 const SizedBox(width: 4),
                 Text(
                   text,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     color: EditorTheme.textSecondary,
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.arrow_drop_down,
                   size: 16,
                   color: EditorTheme.textSecondary,
@@ -401,7 +406,7 @@ class TilePanelMessage extends StatelessWidget {
       children: [
         Text(
           text,
-          style: const TextStyle(fontSize: 11, color: EditorTheme.textMuted),
+          style: TextStyle(fontSize: 11, color: EditorTheme.textMuted),
         ),
         if (action != null) ...[
           const SizedBox(height: 8),

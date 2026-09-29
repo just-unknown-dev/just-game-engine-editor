@@ -432,11 +432,16 @@ void main() {
 
       // The call to action states the editor's own colours: the ambient
       // Material theme is the light default, whose primary is not ours.
-      final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton));
+      final button = tester.widget<TextButton>(
+        find.ancestor(
+          of: find.text('Add a Timeline Player'),
+          matching: find.byWidgetPredicate((w) => w is TextButton),
+        ),
+      );
       final style = button.style!;
       const dark = <WidgetState>{};
       expect(style.backgroundColor!.resolve(dark), EditorTheme.buttonBg);
-      expect(style.foregroundColor!.resolve(dark), EditorTheme.primary);
+      expect(style.foregroundColor!.resolve(dark), EditorTheme.primaryBright);
 
       await tester.tap(find.text('Add a Timeline Player'));
       await tester.pump();

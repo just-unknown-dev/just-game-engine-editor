@@ -343,7 +343,7 @@ class CurveViewState extends State<CurveView> {
           onPointerSignal: _scroll,
           child: ClipRect(
             child: tracks.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
                       'No number tracks with keys to draw.',
                       style: TextStyle(
@@ -391,7 +391,7 @@ class _CurvePainter extends CustomPainter {
       final label = TextPainter(
         text: TextSpan(
           text: v.abs() < 1e-9 ? '0' : v.toStringAsFixed(step < 1 ? 2 : 0),
-          style: const TextStyle(color: EditorTheme.textMuted, fontSize: 9),
+          style: TextStyle(color: EditorTheme.textMuted, fontSize: 9),
         ),
         textDirection: TextDirection.ltr,
       )..layout();

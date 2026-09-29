@@ -85,7 +85,12 @@ class EditorScope {
       ..registerLazySingleton<CommandRegistry>(CommandRegistry.new)
       ..registerLazySingleton<EditorPrefs>(
         () => EditorPrefs(
-          store: settingsStore ?? OverlaySettingsStore(JustStorage.standard()),
+          // A store that cannot be reached — no platform to ask where, in a
+          // test — is reported where it is read, not as an error no one
+          // handled the moment the scope is made.
+          store:
+              settingsStore ??
+              OverlaySettingsStore(JustStorage.standard()..ignore()),
         ),
         dispose: (p) => p.dispose(),
       )
@@ -162,6 +167,27 @@ class EditorScope {
     container.get<TileEditState>();
   }
 
+  VoidCallback? _stopFollowingSettings;
+  bool _following = false;
+  Map<String, List<String>>? _appliedShortcuts;
+
+  /// What the editor's services take from the settings: how much undo and
+  /// how many log lines are kept, the steps snapping moves in, and the keys
+  /// that were changed.
+  void _followSettings() {
+    final s = prefs.settings.value;
+    history.capacity = s.undoLimit;
+    log.maxEntries = s.consoleMaxEntries;
+    sceneState
+      ..moveStep = s.moveStep
+      ..scaleStep = s.scaleStep
+      ..rotationStep = s.rotationStepRadians;
+    if (!identical(s.shortcuts, _appliedShortcuts)) {
+      _appliedShortcuts = s.shortcuts;
+      commands.applyShortcuts(s.shortcuts);
+    }
+  }
+
   /// The container behind the typed accessors, for anything a module wants
   /// to register alongside.
   final DiContainer container;
@@ -182,6 +208,14 @@ class EditorScope {
   /// Ways of putting the world back to the scene as authored, for whatever
   /// shows something else in it for a while — a timeline being previewed.
   final List<void Function()> authoredStateGuards = [];
+
+  /// Whether the world is, right now, something other than the scene as
+  /// authored — a timeline preview showing a moment of it. An autosave
+  /// waits rather than end it. Whoever adds a guard can add a test here.
+  final List<bool Function()> authoredStateHeld = [];
+
+  /// True while anything in [authoredStateHeld] says so.
+  bool get isAuthoredStateHeld => authoredStateHeld.any((held) => held());
 
   /// Called by whoever is about to read the scene as authored: a save, the
   /// snapshot a play-test starts from.
@@ -219,7 +253,18 @@ class EditorScope {
   GridTopology get grid => _grid;
 
   /// Persisted overlay settings, built-in and module-declared.
-  EditorPrefs get prefs => container.get<EditorPrefs>();
+  ///
+  /// Made when first asked for — reading the store is the platform's
+  /// business — and from then on the services follow them.
+  EditorPrefs get prefs {
+    final prefs = container.get<EditorPrefs>();
+    if (!_following) {
+      _following = true;
+      _stopFollowingSettings = prefs.settings.watch(_followSettings);
+      _followSettings();
+    }
+    return prefs;
+  }
 
   /// Transient overlay chrome state: panel widths, open dialogs.
   EditorChromeState get chrome => container.get<EditorChromeState>();
@@ -558,6 +603,14 @@ class EditorScope {
       module.themePresets.forEach(theme.register);
       module.onRegister(context);
     }
+    // The bindings are as built: the keys changed in the settings go over
+    // them, on this and every later rebuild.
+    commands.markBuilt();
+    if (_following) {
+      final shortcuts = prefs.settings.value.shortcuts;
+      commands.applyShortcuts(shortcuts);
+      _appliedShortcuts = shortcuts;
+    }
     _settingsSections.sort((a, b) => a.order.compareTo(b.order));
     _docks.sort((a, b) => a.order.compareTo(b.order));
     _toolbarButtons.sort((a, b) => a.order.compareTo(b.order));
@@ -615,6 +668,7 @@ class EditorScope {
 
   /// Disposes every service this scope owns, in reverse registration order.
   void dispose() {
+    _stopFollowingSettings?.call();
     activeDesigner.dispose();
     activeWorkspace.dispose();
     workspaceFullScreen.dispose();

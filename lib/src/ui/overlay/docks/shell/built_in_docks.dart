@@ -49,7 +49,6 @@ abstract final class BuiltInDocks {
   static ProblemScan problemScanOf(JustGameEditorPlugin plugin) =>
       ProblemScan.of(plugin.scope);
 
-  /// The Level Designer's undo history, or null while it is shut.
   /// The editor's undo stack.
   ///
   /// It used to follow the designer in and out of existence, so the dock
@@ -234,14 +233,8 @@ abstract final class BuiltInDocks {
           capture: frameCaptureOf(plugin),
           // The runtime counters and history charts the panel had before.
           details: (context) => withSettings(
-            (settings) => DockPerformancePanel(
-              embedded: true,
-              controller: debugger,
-              height: dock.height,
-              onResize: dock.onResize,
-              onClose: dock.onClose,
-              settings: settings,
-            ),
+            (settings) =>
+                DockPerformancePanel(controller: debugger, settings: settings),
           ),
         ),
       ),

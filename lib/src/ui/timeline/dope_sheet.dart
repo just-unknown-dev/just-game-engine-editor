@@ -315,7 +315,7 @@ class _RulerPainter extends CustomPainter {
       final label = TextPainter(
         text: TextSpan(
           text: frames ? '$f' : (f / fps).toStringAsFixed(f % fps == 0 ? 0 : 2),
-          style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+          style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
@@ -414,7 +414,7 @@ class _RulerPainter extends CustomPainter {
       final label = TextPainter(
         text: TextSpan(
           text: m.name,
-          style: const TextStyle(color: EditorTheme.warning, fontSize: 9),
+          style: TextStyle(color: EditorTheme.warning, fontSize: 9),
         ),
         textDirection: TextDirection.ltr,
       )..layout();

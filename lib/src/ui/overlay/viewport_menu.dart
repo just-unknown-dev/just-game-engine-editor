@@ -47,23 +47,50 @@ Future<void> showViewportMenu(
   final hasHidden = view.hidden.value.isNotEmpty;
   final hasLocked = view.locked.value.isNotEmpty;
 
+  // The key that does the same, beside each item. The designer's keys
+  // work only while it is open, so they show only then.
+  String? key(String commandId) {
+    final bound = scope.commands.bindingsFor(commandId);
+    return bound.isEmpty ? null : bound.first.shortcut;
+  }
+
+  String? designerKey(String commandId) =>
+      plugin.designer.value == null ? null : key(commandId);
+
   final chosen = await showEditorMenu<String>(context, globalPosition, [
     if (entity != null) ...[
       editorMenuItem(
         'focus',
         'Focus',
         icon: Icons.center_focus_strong_outlined,
+        shortcut: designerKey('designer.frameSelection'),
       ),
-      editorMenuItem('duplicate', 'Duplicate', icon: Icons.copy_outlined),
-      editorMenuItem('delete', 'Delete', icon: Icons.delete_outline),
+      editorMenuItem(
+        'duplicate',
+        'Duplicate',
+        icon: Icons.copy_outlined,
+        shortcut: key('editor.duplicate'),
+      ),
+      editorMenuItem(
+        'delete',
+        'Delete',
+        icon: Icons.delete_outline,
+        shortcut: key('editor.delete'),
+      ),
       editorMenuDivider(),
-      editorMenuItem('copy', 'Copy', icon: Icons.content_copy_outlined),
+      editorMenuItem(
+        'copy',
+        'Copy',
+        icon: Icons.content_copy_outlined,
+        shortcut: key('editor.copy'),
+      ),
     ],
     editorMenuItem(
       'paste',
       'Paste here',
       icon: Icons.content_paste_outlined,
       enabled: plugin.sceneState.hasClipboard,
+      shortcut: key('editor.paste'),
     ),
     if (entity == null)
       editorMenuItem('create', 'New entity here', icon: Icons.add_box_outlined),
@@ -85,6 +112,7 @@ Future<void> showViewportMenu(
         icon: view.isHidden(entity.id)
             ? Icons.visibility
             : Icons.visibility_off_outlined,
+        shortcut: designerKey('designer.hide'),
       ),
       editorMenuItem(
         'lock',
@@ -92,6 +120,7 @@ Future<void> showViewportMenu(
         icon: view.isLocked(entity.id)
             ? Icons.lock_open_outlined
             : Icons.lock_outline,
+        shortcut: designerKey('designer.lock'),
       ),
     ],
     if (hasHidden || entity != null)
@@ -99,12 +128,16 @@ Future<void> showViewportMenu(
         hasHidden ? 'showAll' : 'isolate',
         hasHidden ? 'Show everything again' : 'Isolate: hide everything else',
         icon: hasHidden ? Icons.visibility : Icons.visibility_outlined,
+        shortcut: designerKey(
+          hasHidden ? 'designer.unhideAll' : 'designer.isolate',
+        ),
       ),
     if (hasLocked)
       editorMenuItem(
         'unlockAll',
         'Unlock everything',
         icon: Icons.lock_open_outlined,
+        shortcut: designerKey('designer.unlockAll'),
       ),
     // What the modules add to an entity's tree menu, offered here too:
     // it is the same entity and the same question.

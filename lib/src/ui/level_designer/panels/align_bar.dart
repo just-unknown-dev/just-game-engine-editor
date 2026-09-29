@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:just_signals/just_signals.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../../core/constants/editor_constants.dart';
+import '../../kit/kit.dart';
 import '../../../core/entity/hierarchy_commands.dart';
 import '../level_designer_session.dart';
 import '../state/designer_geometry.dart';
@@ -43,86 +45,112 @@ class AlignBar extends StatelessWidget {
   final double gridSize;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => SignalConsumer(
+    signals: [
+      session.sceneState.selectedEntity,
+      session.sceneState.multiSelectedIds,
+    ],
+    builder: (context, _) => _bar(session.selectionEntities().length),
+  );
+
+  /// Only with something selected: there is nothing to align otherwise. A
+  /// button that cannot act yet says what it waits for.
+  Widget _bar(int n) {
+    if (n == 0) return const SizedBox.shrink();
+    Widget button(
+      IconData icon,
+      String tooltip,
+      VoidCallback onTap, {
+      int needs = 1,
+      String? shortcut,
+    }) => EditorIconButton(
+      icon: icon,
+      tooltip: n >= needs ? tooltip : '$tooltip — select $needs or more',
+      shortcut: shortcut,
+      onTap: n >= needs ? onTap : null,
+    );
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: const BoxDecoration(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: EditorTheme.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'ALIGN',
-            style: TextStyle(
-              color: EditorTheme.textMuted,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
-            ),
+          EditorSectionHeader(
+            n == 1 ? 'Selection' : 'Selection · $n',
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 2),
           ),
-          const SizedBox(height: 4),
           Wrap(
             children: [
-              _Button(
-                icon: Icons.align_horizontal_left,
-                tooltip: 'Align left edges',
-                onTap: () => _align(AlignEdge.left),
+              button(
+                Icons.align_horizontal_left,
+                'Align left edges',
+                () => _align(AlignEdge.left),
+                needs: 2,
               ),
-              _Button(
-                icon: Icons.align_horizontal_center,
-                tooltip: 'Align horizontal centres',
-                onTap: () => _align(AlignEdge.centerX),
+              button(
+                Icons.align_horizontal_center,
+                'Align horizontal centres',
+                () => _align(AlignEdge.centerX),
+                needs: 2,
               ),
-              _Button(
-                icon: Icons.align_horizontal_right,
-                tooltip: 'Align right edges',
-                onTap: () => _align(AlignEdge.right),
+              button(
+                Icons.align_horizontal_right,
+                'Align right edges',
+                () => _align(AlignEdge.right),
+                needs: 2,
               ),
-              _Button(
-                icon: Icons.align_vertical_top,
-                tooltip: 'Align top edges',
-                onTap: () => _align(AlignEdge.top),
+              button(
+                Icons.align_vertical_top,
+                'Align top edges',
+                () => _align(AlignEdge.top),
+                needs: 2,
               ),
-              _Button(
-                icon: Icons.align_vertical_center,
-                tooltip: 'Align vertical centres',
-                onTap: () => _align(AlignEdge.centerY),
+              button(
+                Icons.align_vertical_center,
+                'Align vertical centres',
+                () => _align(AlignEdge.centerY),
+                needs: 2,
               ),
-              _Button(
-                icon: Icons.align_vertical_bottom,
-                tooltip: 'Align bottom edges',
-                onTap: () => _align(AlignEdge.bottom),
+              button(
+                Icons.align_vertical_bottom,
+                'Align bottom edges',
+                () => _align(AlignEdge.bottom),
+                needs: 2,
               ),
-              _Button(
-                icon: Icons.horizontal_distribute,
-                tooltip: 'Distribute horizontally',
-                onTap: () => _distribute(horizontal: true),
+              button(
+                Icons.horizontal_distribute,
+                'Distribute horizontally',
+                () => _distribute(horizontal: true),
+                needs: 3,
               ),
-              _Button(
-                icon: Icons.vertical_distribute,
-                tooltip: 'Distribute vertically',
-                onTap: () => _distribute(horizontal: false),
+              button(
+                Icons.vertical_distribute,
+                'Distribute vertically',
+                () => _distribute(horizontal: false),
+                needs: 3,
               ),
             ],
           ),
-          const SizedBox(height: 6),
           Row(
             children: [
-              _Button(
-                icon: Icons.content_copy,
-                tooltip: 'Duplicate selection  (Ctrl+D)',
-                onTap: session.onDuplicate,
+              button(
+                Icons.content_copy,
+                'Duplicate the selection',
+                session.onDuplicate,
+                shortcut: 'Ctrl+D',
               ),
-              _Button(
-                icon: Icons.grid_on,
-                tooltip: 'Repeat selection 4x to the right',
-                onTap: () => session.onArray(4, Offset(gridSize * 4, 0)),
+              button(
+                Icons.grid_on,
+                'Repeat the selection 4 times to the right',
+                () => session.onArray(4, Offset(gridSize * 4, 0)),
               ),
-              _Button(
-                icon: Icons.delete_outline,
-                tooltip: 'Delete selection  (Del)',
-                onTap: session.onDelete,
+              button(
+                Icons.delete_outline,
+                'Delete the selection',
+                session.onDelete,
+                shortcut: 'Delete',
               ),
             ],
           ),
@@ -250,32 +278,5 @@ class AlignBar extends StatelessWidget {
     session.sceneState
       ..markDirty()
       ..refresh();
-  }
-}
-
-class _Button extends StatelessWidget {
-  const _Button({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Icon(icon, size: 16, color: EditorTheme.textSecondary),
-        ),
-      ),
-    );
   }
 }

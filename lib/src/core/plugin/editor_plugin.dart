@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -23,7 +24,9 @@ import '../services/editor_log_service.dart';
 import '../state/editor_scene_state.dart';
 import '../state/play_snapshot.dart';
 import '../state/transform_mode.dart';
+import '../../ui/overlay/chrome_state.dart';
 import '../../ui/overlay/gizmo_painter.dart';
+import '../../ui/overlay/settings/settings_dialog.dart';
 import '../../ui/level_designer/commands/designer_command.dart';
 import '../../ui/level_designer/level_designer_session.dart';
 import '../level_map/tiled_import.dart';
@@ -42,6 +45,9 @@ import '../../extension/editor_module.dart';
 import '../../ui/overlay/camera_rig_painter.dart';
 import '../../ui/level_designer/painters/designer_canvas.dart';
 import '../constants/editor_constants.dart';
+import '../theme/viewport_look.dart';
+import '../prefs/editor_prefs.dart';
+import '../../ui/overlay/settings/overlay_ui_settings.dart';
 
 export '../play/play_controller.dart' show EditorPlayState, EntitySpawner;
 
@@ -392,6 +398,17 @@ class JustGameEditorPlugin implements EnginePlugin {
     // From the start, not only once a designer has been opened: the eye
     // in the scene tree works whether or not one ever is.
     _updateRenderFilter();
+    // The settings the viewport's look and the play-test follow, and where
+    // this session is left, for the next to start from.
+    scope.chrome.reservedKeys = {_toggleKey, _statusPanelToggleKey};
+    _stopFollowing
+      ..add(scope.prefs.settings.watch(_followSettings))
+      ..add(logService.onError((_) => _pauseOnError()))
+      ..add(sceneState.activeScene.watch(_rememberScene))
+      ..add(designer.watch(_rememberDesigner))
+      ..add(designer.watch(_syncDesignerSnap));
+    isAuthoring.addListener(_syncBackdrop);
+    _followSettings();
     // Launching the editor entry point is asking for the editor: open it and
     // its status panel straight away rather than waiting for F1.
     if (_startVisible) setVisible(true);
@@ -447,13 +464,18 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Changes the grid size from the Level Designer.
   ///
-  /// Writes through to [sceneState] as well as the plugin's own copy, so the
-  /// designer's control and the overlay settings dialog never disagree about
-  /// what the grid is.
+  /// Writes through to [sceneState], the plugin's own copy and the saved
+  /// settings, so the designer's control and the settings dialog never
+  /// disagree about what the grid is — and the next settings change does not
+  /// put the old size back.
   void setGridSize(double size) {
     if (size <= 0 || size == gridSize.value) return;
     gridSize.value = size;
     sceneState.setGridSnapping(enabled: _gridSnappingEnabled, gridSize: size);
+    final prefs = scope.prefs;
+    if (prefs.settings.value.gridSize != size) {
+      prefs.update(prefs.settings.value.copyWith(gridSize: size));
+    }
   }
 
   /// Whether the authoring grid should be drawn right now.
@@ -558,6 +580,8 @@ class JustGameEditorPlugin implements EnginePlugin {
       onDelete: deleteSelection,
       onArray: (count, step) => arraySelection(count: count, step: step),
     )..restoreEditorData(sceneIO.editorData);
+    // Its panel is a tab of the right panel: the one to see on opening.
+    scope.chrome.rightPanelTab.value = EditorChromeState.levelTab;
     _updateRenderFilter();
   }
 
@@ -596,6 +620,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (session == null) return;
     sceneIO.editorData = session.editorData();
     designer.value = null;
+    scope.chrome.rightPanelTab.value = EditorChromeState.inspectorTab;
     _updateRenderFilter();
     session.dispose();
   }
@@ -606,6 +631,8 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   bool _onHardwareKey(KeyEvent event) {
     if (!_isInitialized) return false;
+    // A chord being bound in the settings: every key is for that.
+    if (scope.chrome.capturingKeys) return false;
     // Holding a key keeps nudging; nothing else acts on a repeat.
     if (event is KeyRepeatEvent) {
       return scope.activeWorkspace.value == null &&
@@ -624,6 +651,21 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (key == _toggleKey) {
       toggleVisibility();
       return true;
+    }
+    // The settings dialog is modal: Esc or its own chord shuts it, and every
+    // other key is the dialog's — typing in its search must not pick a tool
+    // or delete the selection behind it.
+    final settingsOpen = scope.chrome.settingsOpen;
+    if (settingsOpen.value) {
+      final modifiers = ModifierKeys.fromHardwareKeyboard();
+      if (key == LogicalKeyboardKey.escape ||
+          scope.commands
+              .bindingsFor(EditorSettingsDialog.commandId)
+              .any((b) => b.matches(key, modifiers))) {
+        settingsOpen.value = false;
+        return true;
+      }
+      return false;
     }
     // F2: the dock panel. The status bar itself comes and goes with the
     // editor, so there is nothing else for this key to switch.
@@ -1074,6 +1116,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     _attachDebuggerIfReady();
     // After the frame's game update: play time, and the end of a stepped frame.
     if (_isInitialized) playController.tick(dt);
+    if (_isInitialized) _autosaveTick();
     if (_isInitialized) _syncRuntimeSystems(dt);
     if (!_isInitialized || !isVisible.value) return;
     _syncTimeScaleForPreview();
@@ -1214,6 +1257,11 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// wherever they are.
   Offset gamePreviewOrigin = const Offset(16, 56);
 
+  /// How much of the canvas's foot the preview must stay clear of — the
+  /// settings gear, and while designing the minimap standing on it. The
+  /// chrome publishes it with the origin.
+  double gamePreviewBottomReserve = 0;
+
   /// How the preview's panel is drawn. The chrome publishes it with the
   /// origin, from the same settings the play toolbar is drawn with, so the
   /// two read as one piece of UI.
@@ -1225,21 +1273,25 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// The whole preview **panel** on a canvas of [canvasSize], with its corner
   /// at [origin]: a fraction of the canvas wide, and as tall as its header
   /// plus a game view of the game's own aspect.
+  ///
+  /// On a canvas too short for that above [bottomReserve], it is narrower —
+  /// the same shape, smaller — rather than run into what is at the foot.
   static Rect gamePreviewRect(
     Size canvasSize, {
     Offset origin = const Offset(16, 56),
     GamePreviewStyle style = const GamePreviewStyle(),
+    double bottomReserve = 0,
   }) {
-    final width = (canvasSize.width * 0.24).clamp(180.0, 420.0);
-    final viewWidth = width - style.padding * 2;
-    return Rect.fromLTWH(
-      origin.dx,
-      origin.dy,
-      width,
-      style.padding * 2 +
-          gamePreviewHeaderHeight +
-          viewWidth * canvasSize.height / canvasSize.width,
-    );
+    final aspect = canvasSize.height / canvasSize.width;
+    final chrome = style.padding * 2 + gamePreviewHeaderHeight;
+    double heightFor(double width) =>
+        chrome + (width - style.padding * 2) * aspect;
+    var width = (canvasSize.width * 0.24).clamp(180.0, 420.0).toDouble();
+    final room = canvasSize.height - bottomReserve - origin.dy;
+    if (heightFor(width) > room) {
+      width = math.max(96.0, (room - chrome) / aspect + style.padding * 2);
+    }
+    return Rect.fromLTWH(origin.dx, origin.dy, width, heightFor(width));
   }
 
   /// The game view inside [panel]: below the header, inset by the padding.
@@ -1272,6 +1324,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       size,
       origin: gamePreviewOrigin,
       style: style,
+      bottomReserve: gamePreviewBottomReserve,
     );
     final frame = RRect.fromRectAndRadius(
       panel,
@@ -1285,7 +1338,7 @@ class JustGameEditorPlugin implements EnginePlugin {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1
-          ..color = style.borderColor,
+          ..color = style.borderColor ?? EditorTheme.accent,
       );
 
     final viewRect = gamePreviewViewRect(panel, style: style);
@@ -1383,7 +1436,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     final blending = isBlending
         ? text(
             'blending',
-            const TextStyle(
+            TextStyle(
               color: EditorTheme.textMuted,
               fontSize: 9,
               fontStyle: FontStyle.italic,
@@ -1393,7 +1446,7 @@ class JustGameEditorPlugin implements EnginePlugin {
         : null;
     final label = text(
       name,
-      const TextStyle(
+      TextStyle(
         color: EditorTheme.textBright,
         fontSize: 10,
         fontWeight: FontWeight.w600,
@@ -1503,15 +1556,194 @@ class JustGameEditorPlugin implements EnginePlugin {
   void arraySelection({required int count, required Offset step}) =>
       entities.arraySelection(history, count: count, step: step);
 
+  /// Asks whether to open [sceneName] from a backup of changes that were
+  /// never saved, made at [when]: true recovers them, false opens the file
+  /// and sets the backup aside, null opens the file and asks again next
+  /// time. Set by the overlay, which has somewhere to ask; without it the
+  /// file opens.
+  Future<bool?> Function(String sceneName, DateTime when)? askToRecover;
+
   /// Opens [sceneName] through [sceneIO], closing the Level Designer first:
   /// its undo commands hold entities of the scene being left, and it reopens
-  /// cleanly on the new one.
+  /// cleanly on the new one. A backup with changes never saved is offered
+  /// first.
   Future<void> openScene(String sceneName) async {
     if (sceneIO.isBusy) return;
     final wasDesignerOpen = isLevelDesignerOpen;
+    Map<String, dynamic>? recovered;
+    final ask = askToRecover;
+    final backup = ask == null ? null : scope.scenes.unsavedBackupOf(sceneName);
+    if (ask != null && backup != null) {
+      final recover = await ask(sceneName, backup.lastModifiedSync());
+      if (recover == true) {
+        recovered = await scope.scenes.readBackup(backup);
+      } else if (recover == false) {
+        await scope.scenes.setAside(backup);
+      }
+    }
     closeLevelDesigner();
-    if (!await sceneIO.open(sceneName)) return;
+    final opened = recovered != null
+        ? await sceneIO.openFrom(sceneName, recovered)
+        : await sceneIO.open(sceneName);
+    if (!opened) return;
     if (wasDesignerOpen) openLevelDesigner();
+  }
+
+  // ── Autosave ───────────────────────────────────────────────────────────
+
+  DateTime? _nextAutosave;
+  bool _autosaving = false;
+
+  /// Autosaves when the settings' interval has gone by. Timed by the clock
+  /// on each update rather than a timer: nothing to cancel, and nothing
+  /// runs while the editor is not.
+  void _autosaveTick() {
+    final interval = scope.prefs.settings.value.autosaveInterval;
+    if (interval == null) {
+      _nextAutosave = null;
+      return;
+    }
+    final now = DateTime.now();
+    final due = _nextAutosave ??= now.add(interval);
+    if (now.isBefore(due)) return;
+    _nextAutosave = now.add(interval);
+    unawaited(autosave());
+  }
+
+  /// Autosaves the open scene as the settings say — a backup, or the scene
+  /// saved — if it has unsaved changes. Waits, returning false, while a
+  /// timeline preview shows or an open or save is under way. True when
+  /// something was written.
+  Future<bool> autosave() async {
+    if (_autosaving ||
+        !sceneState.hasScene ||
+        !sceneState.isDirty.value ||
+        sceneIO.isBusy ||
+        scope.isAuthoredStateHeld) {
+      return false;
+    }
+    _autosaving = true;
+    try {
+      final settings = scope.prefs.settings.value;
+      if (settings.autosaveMode == AutosaveMode.save) {
+        await saveScene();
+        return true;
+      }
+      return await sceneIO.backup(
+        asAuthored: playController.snapshot?.entities,
+        editorData: designer.value?.editorData() ?? sceneIO.editorData,
+        keep: settings.backupsToKeep,
+      );
+    } catch (error) {
+      scope.log.log(
+        'Autosave failed: $error',
+        source: 'editor',
+        category: 'scene',
+        level: DebuggerLogLevel.warning,
+      );
+      return false;
+    } finally {
+      _autosaving = false;
+    }
+  }
+
+  // ── Where the session is left ──────────────────────────────────────────
+
+  static final SettingPref<String> _lastScenePref = SettingPref.text(
+    OverlaySettingsPrefKeys.sessionLastScene,
+    '',
+  );
+  static final SettingPref<bool> _designerOpenPref = SettingPref.boolean(
+    OverlaySettingsPrefKeys.sessionDesignerOpen,
+    false,
+  );
+
+  void _rememberScene() => unawaited(
+    scope.prefs.set(_lastScenePref, sceneState.activeScene.value?.name ?? ''),
+  );
+
+  // Opening another scene shuts the designer and opens it again: it ends
+  // as it was, and so does what is remembered.
+  void _rememberDesigner() =>
+      unawaited(scope.prefs.set(_designerOpenPref, isLevelDesignerOpen));
+
+  bool _reopened = false;
+
+  /// Opens the scene that was open when the editor was last closed — and
+  /// the Level Designer, if it was open on it — as the settings ask. Once,
+  /// after the settings are loaded, and only with no scene open yet.
+  Future<void> reopenLastSession() async {
+    if (_reopened) return;
+    _reopened = true;
+    final settings = scope.prefs.settings.value;
+    if (!settings.reopenLastScene || sceneState.hasScene) return;
+    final name = scope.prefs.get(_lastScenePref);
+    final designerWasOpen = scope.prefs.get(_designerOpenPref);
+    if (name.isEmpty || !scope.scenes.listSceneNames().contains(name)) return;
+    await openScene(name);
+    if (settings.reopenDesigner &&
+        designerWasOpen &&
+        sceneState.activeScene.value?.name == name &&
+        !isLevelDesignerOpen) {
+      openLevelDesigner();
+    }
+  }
+
+  // ── Settings the plugin follows ────────────────────────────────────────
+
+  final List<void Function()> _stopFollowing = [];
+
+  void _followSettings() {
+    ViewportLook.apply(scope.prefs.settings.value);
+    _syncBackdrop();
+    _syncDesignerSnap();
+  }
+
+  /// The designer's Snap and Smart are the settings': one switch, wherever
+  /// it is flipped — the magnet over the viewport, the Settings, or the
+  /// designer's own status bar.
+  void _syncDesignerSnap() {
+    final controller = designer.value?.controller;
+    if (controller == null) return;
+    final settings = scope.prefs.settings.value;
+    controller.snapEnabled.value = settings.gridSnappingEnabled;
+    controller.smartSnap.value = settings.smartSnap;
+  }
+
+  /// A logged error pauses a running play-test, when the settings ask.
+  void _pauseOnError() {
+    if (!scope.prefs.settings.value.pauseOnError) return;
+    if (playController.state.value != EditorPlayState.playing) return;
+    // Not from inside the log call that brought it.
+    scheduleMicrotask(() {
+      if (playController.state.value != EditorPlayState.playing) return;
+      playController.pause();
+      logService.log(
+        'Paused the play-test: an error was logged.',
+        source: 'editor',
+        category: 'play',
+        level: DebuggerLogLevel.warning,
+      );
+    });
+  }
+
+  Color? _gameBackdrop;
+
+  /// While authoring, the viewport clears to the settings' backdrop; the
+  /// game gets its own back to play in.
+  void _syncBackdrop() {
+    if (!engine.isInitialized) return;
+    final rendering = engine.rendering;
+    final wanted = isAuthoring.value
+        ? scope.prefs.settings.value.backdrop
+        : null;
+    if (wanted != null) {
+      _gameBackdrop ??= rendering.backgroundColor;
+      rendering.backgroundColor = wanted;
+    } else if (_gameBackdrop != null) {
+      rendering.backgroundColor = _gameBackdrop!;
+      _gameBackdrop = null;
+    }
   }
 
   /// Saves the active scene. During a play-test the level is saved as it was
@@ -1609,6 +1841,14 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   void dispose() {
+    for (final stop in _stopFollowing) {
+      stop();
+    }
+    isAuthoring.removeListener(_syncBackdrop);
+    if (_gameBackdrop != null && engine.isInitialized) {
+      engine.rendering.backgroundColor = _gameBackdrop!;
+      _gameBackdrop = null;
+    }
     closeLevelDesigner();
     isAuthoring.removeListener(_syncCameraOwnership);
     keepsToLevelMap.removeListener(_syncLevelMapFocus);
@@ -1652,7 +1892,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 class GamePreviewStyle {
   const GamePreviewStyle({
     this.cornerRadius = 12,
-    this.borderColor = const Color(0xFFF5736F),
+    this.borderColor,
     this.padding = 5,
   });
 
@@ -1660,7 +1900,7 @@ class GamePreviewStyle {
   final double cornerRadius;
 
   /// Border colour — the overlay's theme colour, as on the toolbar.
-  final Color borderColor;
+  final Color? borderColor;
 
   /// Space between the panel's edge and what is in it.
   final double padding;

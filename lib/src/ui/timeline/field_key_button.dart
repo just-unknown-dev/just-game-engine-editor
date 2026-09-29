@@ -84,7 +84,6 @@ class _FieldKeyButtonState extends State<FieldKeyButton> {
     };
     return Tooltip(
       message: message,
-      waitDuration: const Duration(milliseconds: 500),
       child: InkWell(
         borderRadius: BorderRadius.circular(3),
         onTap: () =>

@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:just_debugger/just_debugger.dart';
 
 import '../../../core/constants/editor_constants.dart';
-import '../docks/logs_dock.dart';
+import '../../kit/kit.dart';
+import '../../../core/theme/editor_metrics.dart';
+import '../docks/panel_parts.dart';
 import '../../../core/scope/editor_scope.dart';
 import '../chrome_state.dart';
 import '../settings/overlay_ui_settings.dart';
@@ -79,7 +81,7 @@ class _DetailSectionCardState extends State<DetailSectionCard> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: EditorTheme.surfaceDark,
-        borderRadius: BorderRadius.circular(widget.settings.cornerRadius),
+        borderRadius: BorderRadius.circular(EditorMetrics.radiusSm),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
@@ -87,14 +89,14 @@ class _DetailSectionCardState extends State<DetailSectionCard> {
         children: <Widget>[
           InkWell(
             onTap: _toggleCollapsed,
-            borderRadius: BorderRadius.circular(widget.settings.cornerRadius),
+            borderRadius: BorderRadius.circular(EditorMetrics.radiusSm),
             child: Row(
               children: <Widget>[
                 Expanded(
                   child: Text(
                     widget.title,
                     style: TextStyle(
-                      fontSize: 10 * widget.settings.effectiveTextScale,
+                      fontSize: 10,
                       fontWeight: FontWeight.w700,
                       color: EditorTheme.textPrimary,
                     ),
@@ -122,25 +124,17 @@ class _DetailSectionCardState extends State<DetailSectionCard> {
 
 enum _PerformanceTab { performance, runtime, profiling }
 
+/// The Profiler's Details view: performance, runtime and profiling, one at a
+/// time, picked with a segmented switch like any other choice in the editor.
+/// It lives inside the dock panel, which gives it its frame and its height.
 class DockPerformancePanel extends StatefulWidget {
   const DockPerformancePanel({
     super.key,
     required this.controller,
-    required this.height,
-    required this.onResize,
-    required this.onClose,
     required this.settings,
-    this.embedded = false,
   });
 
-  /// Inside the tabbed dock panel: it supplies the frame, the height and
-  /// the close button, so this draws only its content.
-  final bool embedded;
-
   final JustDebuggerController controller;
-  final double height;
-  final ValueChanged<double> onResize;
-  final VoidCallback onClose;
   final OverlayUiSettings settings;
 
   @override
@@ -151,181 +145,48 @@ class _DockPerformancePanelState extends State<DockPerformancePanel> {
   _PerformanceTab _tab = _PerformanceTab.performance;
 
   @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: widget.controller,
-      builder: (context, _) {
-        return SizedBox(
-          height: widget.embedded ? null : widget.height,
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xF41B1B1B),
-                border: Border(
-                  left: BorderSide(color: Colors.white.withValues(alpha: 0.04)),
-                  right: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.04),
-                  ),
-                ),
-                boxShadow: const <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x55000000),
-                    blurRadius: 12,
-                    offset: Offset(0, -4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: <Widget>[
-                  if (!widget.embedded)
-                    PanelResizeHandle(onDrag: widget.onResize),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 2, 4, 2),
-                    child: Row(
-                      children: <Widget>[
-                        Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: widget.settings.themeColor.withValues(
-                              alpha: 0.1,
-                            ),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Icon(
-                            Icons.bolt_rounded,
-                            size: 11,
-                            color: widget.settings.themeColor,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Performance',
-                          style: TextStyle(
-                            fontSize: 11 * widget.settings.effectiveTextScale,
-                            fontWeight: FontWeight.w600,
-                            color: EditorTheme.textPrimary,
-                          ),
-                        ),
-                        const Spacer(),
-                        if (!widget.embedded)
-                          IconButton(
-                            onPressed: widget.onClose,
-                            icon: const Icon(Icons.close_rounded),
-                            color: EditorTheme.textSecondary,
-                            iconSize: 14,
-                            splashRadius: 14,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                              minWidth: 28,
-                              minHeight: 28,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  _buildTabStrip(),
-                  Divider(
-                    height: 1,
-                    color: Colors.white.withValues(alpha: 0.06),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(10),
-                      child: switch (_tab) {
-                        _PerformanceTab.performance =>
-                          _PerformanceDetailContent(
-                            controller: widget.controller,
-                            settings: widget.settings,
-                          ),
-                        _PerformanceTab.runtime => _RuntimeDetailContent(
-                          controller: widget.controller,
-                          settings: widget.settings,
-                        ),
-                        _PerformanceTab.profiling => _ProfilingDetailContent(
-                          controller: widget.controller,
-                          settings: widget.settings,
-                        ),
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTabStrip() {
-    return Container(
-      height: 28,
-      color: const Color(0xFF141414),
-      child: Row(
-        children: [
-          _buildTab(
-            _PerformanceTab.performance,
-            Icons.bolt_rounded,
-            'Performance',
-          ),
-          _buildTab(
-            _PerformanceTab.runtime,
-            Icons.monitor_heart_rounded,
-            'Runtime',
-          ),
-          _buildTab(
-            _PerformanceTab.profiling,
-            Icons.insights_rounded,
-            'Profiling',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTab(_PerformanceTab tab, IconData icon, String label) {
-    final isActive = _tab == tab;
-    return GestureDetector(
-      onTap: () => setState(() => _tab = tab),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: isActive ? EditorTheme.primaryMuted : Colors.transparent,
-              width: 2,
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: widget.controller,
+    builder: (context, _) => Column(
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: EditorSegmented<_PerformanceTab>(
+              value: _tab,
+              options: const [
+                (_PerformanceTab.performance, 'Performance'),
+                (_PerformanceTab.runtime, 'Runtime'),
+                (_PerformanceTab.profiling, 'Profiling'),
+              ],
+              onChanged: (tab) => setState(() => _tab = tab),
             ),
           ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 11,
-              color: isActive
-                  ? EditorTheme.primaryMuted
-                  : EditorTheme.textMuted,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                color: isActive
-                    ? EditorTheme.textPrimary
-                    : EditorTheme.textMuted,
+        Divider(height: 1, color: EditorTheme.border),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(10),
+            child: switch (_tab) {
+              _PerformanceTab.performance => _PerformanceDetailContent(
+                controller: widget.controller,
+                settings: widget.settings,
               ),
-            ),
-          ],
+              _PerformanceTab.runtime => _RuntimeDetailContent(
+                controller: widget.controller,
+                settings: widget.settings,
+              ),
+              _PerformanceTab.profiling => _ProfilingDetailContent(
+                controller: widget.controller,
+                settings: widget.settings,
+              ),
+            },
+          ),
         ),
-      ),
-    );
-  }
+      ],
+    ),
+  );
 }
 
 class _PerformanceDetailContent extends StatelessWidget {
@@ -388,7 +249,7 @@ class _PerformanceDetailContent extends StatelessWidget {
                         Expanded(
                           child: Text(
                             entry.key,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 10,
                               color: EditorTheme.textSecondary,
                             ),
@@ -396,7 +257,7 @@ class _PerformanceDetailContent extends StatelessWidget {
                         ),
                         Text(
                           '${entry.value.toStringAsFixed(2)} ms',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 10,
                             color: EditorTheme.textPrimary,
                             fontWeight: FontWeight.w600,
@@ -478,7 +339,7 @@ class _RuntimeDetailContent extends StatelessWidget {
                     ),
                     child: Text(
                       '${entry.key}: ${entry.value}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: EditorTheme.textSecondary,
                         fontSize: 10,
                       ),
@@ -503,7 +364,7 @@ class _RuntimeDetailContent extends StatelessWidget {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            const Padding(
+                            Padding(
                               padding: EdgeInsets.only(top: 2),
                               child: Icon(
                                 Icons.warning_amber_rounded,
@@ -515,7 +376,7 @@ class _RuntimeDetailContent extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 message,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
                                   color: EditorTheme.textSecondary,
                                 ),
@@ -581,7 +442,7 @@ class _RuntimeDetailContent extends StatelessWidget {
                         ),
                       ),
                   ]
-                : const <Widget>[
+                : <Widget>[
                     Text(
                       'No active warnings. Runtime metrics look stable.',
                       style: TextStyle(
@@ -675,7 +536,7 @@ class _ProfilingDetailContent extends StatelessWidget {
                     values: fpsValues
                         .map((v) => v.toDouble())
                         .toList(growable: false),
-                    color: settings.themeColor,
+                    color: EditorTheme.accent,
                   ),
                 ),
               ),
@@ -805,7 +666,7 @@ class _ProfilingDetailContent extends StatelessWidget {
           title: 'All System Timings',
           settings: settings,
           child: allTimings.isEmpty
-              ? const Text(
+              ? Text(
                   'No system timing data reported.',
                   style: TextStyle(
                     fontSize: 10,
@@ -828,7 +689,7 @@ class _ProfilingDetailContent extends StatelessWidget {
                                   Expanded(
                                     child: Text(
                                       entry.key,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 10,
                                         color: EditorTheme.textSecondary,
                                       ),
@@ -836,7 +697,7 @@ class _ProfilingDetailContent extends StatelessWidget {
                                   ),
                                   Text(
                                     '${entry.value.toStringAsFixed(2)} ms',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 10,
                                       color: EditorTheme.textPrimary,
                                       fontWeight: FontWeight.w600,
@@ -854,7 +715,7 @@ class _ProfilingDetailContent extends StatelessWidget {
                                     alpha: 0.06,
                                   ),
                                   valueColor: AlwaysStoppedAnimation(
-                                    settings.themeColor,
+                                    EditorTheme.accent,
                                   ),
                                 ),
                               ),
@@ -917,7 +778,7 @@ class _ProfilingDetailContent extends StatelessWidget {
                     ),
                   ],
                 )
-              : const Text(
+              : Text(
                   'System-wide memory stats are not available on this platform.',
                   style: TextStyle(
                     fontSize: 10,
@@ -1012,7 +873,7 @@ class _HistoryLineChartPainter extends CustomPainter {
 
   void _drawEmptyState(Canvas canvas, Size size) {
     final tp = TextPainter(
-      text: const TextSpan(
+      text: TextSpan(
         text: 'Collecting samples…',
         style: TextStyle(fontSize: 10, color: EditorTheme.textMuted),
       ),

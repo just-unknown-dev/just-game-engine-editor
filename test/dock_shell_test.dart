@@ -120,11 +120,21 @@ void main() {
       expect(c.activeDock, isNull);
       c.togglePanel();
       expect(c.activeDock, 'b');
-      c
-        ..open(DockController.settingsId)
-        ..togglePanel();
-      expect(c.activeDock, 'b', reason: 'settings is not a dock');
     });
+
+    test(
+      'a state saved with the old settings slot open restores collapsed',
+      () {
+        c.restore('{"open":"settings","order":["a","b"]}');
+        expect(c.activeDock, isNull);
+        c.togglePanel();
+        expect(
+          c.activeDock,
+          'a',
+          reason: 'settings is not a dock to go back to',
+        );
+      },
+    );
 
     test('height: resized, clamped, reset, and all of it when maximised', () {
       c.open('a');
@@ -200,6 +210,13 @@ void main() {
       expect(next.memoryOf('b').read<double>('zoom'), 2.0);
       expect(next.memoryOf('a').read<String>('filter'), isNull);
 
+      // A dock left in a window of its own opens in it again.
+      c.popOut('b');
+      c.flush();
+      final again = DockController()..attach(saved: stored!, store: (_) {});
+      addTearDown(again.dispose);
+      expect(again.poppedOut.value, {'b'});
+
       // A damaged preference is ignored, not fatal.
       final broken = DockController()..attach(saved: '{oops', store: (_) {});
       addTearDown(broken.dispose);
@@ -272,13 +289,12 @@ void main() {
         'test.waves',
       ]);
       expect(find.byType(DockPanel), findsNothing, reason: 'collapsed');
-      // Its readout is a fact on the status bar. The bar is one button: a
-      // click anywhere opens the panel, and the tab picks the dock.
+      // Its readout is a fact on the status bar, and a button to its dock.
       expect(find.text('Waves  3 left'), findsOneWidget);
       await tester.tap(find.text('Waves  3 left'));
       await settle(tester);
       expect(find.byType(DockPanel), findsOneWidget);
-      expect(dock().activeDock, 'logs', reason: 'the first tab, not Waves');
+      expect(dock().activeDock, 'test.waves', reason: "the readout's dock");
       await tester.tap(
         find.descendant(
           of: find.byType(DockPanel),
@@ -288,8 +304,10 @@ void main() {
       await tester.pump();
       expect(find.textContaining('WAVES BODY'), findsOneWidget);
 
-      // Another click on the bar shuts it; F2 is the same switch.
-      await tester.tap(find.text('Waves  3 left'));
+      // A click on the bar, away from its facts, shuts it; F2 is the same
+      // switch.
+      final strip = tester.getRect(find.byType(DockStatusStrip));
+      await tester.tapAt(strip.centerRight - const Offset(10, 0));
       await settle(tester);
       expect(dock().activeDock, isNull);
       await tester.sendKeyEvent(LogicalKeyboardKey.f2);

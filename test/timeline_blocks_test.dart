@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
-import 'package:just_game_engine_editor/src/ui/overlay/docks/shared/dock_widgets.dart';
 import 'package:just_game_engine_editor/src/ui/timeline/dope_sheet.dart';
 import 'package:just_game_engine_editor/src/ui/timeline/timeline_dock.dart';
 import 'package:just_game_engine_editor/src/ui/timeline/timeline_item_bar.dart';
@@ -255,7 +254,7 @@ void main() {
     // to the right when there is room to spare.
     expect(
       tester.getRect(find.textContaining('Inline ·')).left -
-          tester.getRect(find.byType(DockToolbar)).left,
+          tester.getRect(find.byType(EditorToolbar)).left,
       lessThan(20),
     );
 

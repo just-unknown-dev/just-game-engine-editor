@@ -1,1144 +1,1223 @@
-import 'dart:async';
-import 'dart:math' as math;
+import 'dart:io';
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
+import 'package:just_signals/just_signals.dart';
 
 import '../../../core/constants/editor_constants.dart';
-import '../docks/detail_cards.dart';
+import '../../../core/theme/editor_metrics.dart';
 import '../../../core/prefs/editor_prefs.dart';
+import '../../../core/scope/editor_scope.dart';
 import '../../../extension/editor_contributions.dart';
-import '../settings/overlay_ui_settings.dart';
-import '../../widgets/editor_dropdown.dart';
+import '../../level_designer/commands/designer_command.dart';
+import '../shared/shared_widgets.dart';
+import '../shared/transform_toolbar.dart';
+import 'overlay_settings_store.dart';
+import 'overlay_ui_settings.dart';
+import '../../kit/kit.dart';
+import '../../widgets/editor_menu.dart';
+import 'settings_controls.dart';
+import 'shortcut_row.dart';
+import '../shared/quick_snap_bar.dart';
 
-enum _EditorSettingsTab {
-  presets,
-  appearance,
-  runtime,
-  logsWarnings,
-  accessibility,
-  modules,
-}
+part 'settings_catalog.dart';
 
-extension _EditorSettingsTabX on _EditorSettingsTab {
-  String get label => switch (this) {
-    _EditorSettingsTab.presets => 'Presets',
-    _EditorSettingsTab.appearance => 'Appearance',
-    _EditorSettingsTab.runtime => 'Runtime',
-    _EditorSettingsTab.logsWarnings => 'Logs & Warnings',
-    _EditorSettingsTab.accessibility => 'Accessibility',
-    _EditorSettingsTab.modules => 'Modules',
-  };
-
-  IconData get icon => switch (this) {
-    _EditorSettingsTab.presets => Icons.auto_awesome_rounded,
-    _EditorSettingsTab.appearance => Icons.palette_outlined,
-    _EditorSettingsTab.runtime => Icons.tune_rounded,
-    _EditorSettingsTab.logsWarnings => Icons.article_outlined,
-    _EditorSettingsTab.accessibility => Icons.accessibility_new_rounded,
-    _EditorSettingsTab.modules => Icons.extension_rounded,
-  };
-}
-
-class EditorSettingsPanel extends StatefulWidget {
-  const EditorSettingsPanel({
+/// The gear at the foot of the viewport, bottom right, that opens the
+/// settings — framed like the play controls and the transform column above
+/// it.
+class SettingsGearButton extends StatelessWidget {
+  const SettingsGearButton({
     super.key,
-    required this.initial,
-    required this.onChanged,
-    required this.onClose,
-    required this.maxHeight,
-    required this.prefs,
-    this.sections = const [],
+    required this.scope,
+    required this.settings,
   });
 
-  /// Where the last-open tab is remembered, and what module sections edit.
-  final EditorPrefs prefs;
+  final EditorScope scope;
+  final OverlayUiSettings settings;
 
-  /// Sections the modules add, on a Modules tab shown only when there are
-  /// any.
-  final List<SettingsSection> sections;
-
-  final OverlayUiSettings initial;
-  final ValueChanged<OverlayUiSettings> onChanged;
-  final VoidCallback onClose;
-  final double maxHeight;
+  /// How tall it stands, for what has to clear it: the messages above it
+  /// and the tool strip.
+  static double heightFor(OverlayUiSettings settings) =>
+      PlayControlsToolbar.heightFor(settings);
 
   @override
-  State<EditorSettingsPanel> createState() => _EditorSettingsPanelState();
+  Widget build(BuildContext context) {
+    final bound = scope.commands.bindingsFor(EditorSettingsDialog.commandId);
+    final side = PlayControlsToolbar.buttonSize(settings);
+    return SignalBuilder<bool>(
+      signal: scope.chrome.settingsOpen,
+      builder: (context, open, _) => FloatingToolFrame(
+        settings: settings,
+        horizontalPadding: EditorMetrics.space(3),
+        child: EditorToolButton(
+          icon: Icons.settings_outlined,
+          tooltip: 'Editor settings',
+          shortcut: bound.isEmpty ? null : bound.first.shortcut,
+          showShortcut: false,
+          activeBar: false,
+          isActive: open,
+          onTap: scope.chrome.toggleSettings,
+          width: side,
+          height: side,
+          iconSize: 16 * settings.effectiveTextScale,
+        ),
+      ),
+    );
+  }
 }
 
-class _EditorSettingsPanelState extends State<EditorSettingsPanel>
-    with SingleTickerProviderStateMixin {
-  static const String _lastTabPrefKey = 'editor.overlay.settings.activeTab';
+/// Puts the settings dialog over the editor while it is open, in the frame
+/// the sprite editor's dialog has. A click on the dim closes it: nothing in
+/// it is ever unsaved.
+class EditorSettingsHost extends StatelessWidget {
+  const EditorSettingsHost({super.key, required this.scope});
 
-  late OverlayUiSettings _draft;
-  late final TabController _tabController;
+  final EditorScope scope;
 
-  /// The Modules tab exists only when a module contributed a section.
-  List<_EditorSettingsTab> get _tabs => [
-    for (final t in _EditorSettingsTab.values)
-      if (t != _EditorSettingsTab.modules || widget.sections.isNotEmpty) t,
+  static const Key scrimKey = Key('settingsScrim');
+
+  @override
+  Widget build(BuildContext context) => SignalBuilder2<bool, OverlayUiSettings>(
+    signal1: scope.chrome.settingsOpen,
+    signal2: scope.prefs.settings,
+    builder: (context, open, settings, _) {
+      if (!open) return const SizedBox.shrink();
+      void close() => scope.chrome.settingsOpen.value = false;
+      return EditorDialogFrame(
+        cornerRadius: settings.cornerRadius + 6,
+        borderColor: settings.themeColor,
+        onDismiss: close,
+        scrimKey: scrimKey,
+        child: EditorSettingsDialog(scope: scope, onClose: close),
+      );
+    },
+  );
+}
+
+/// The editor's settings: a page per subject down the left, the settings of
+/// the one picked on the right, and a search over all of them.
+///
+/// Every change applies at once and is saved; a slider previews while it is
+/// dragged and saves when it is let go.
+class EditorSettingsDialog extends StatefulWidget {
+  const EditorSettingsDialog({
+    super.key,
+    required this.scope,
+    required this.onClose,
+  });
+
+  final EditorScope scope;
+  final VoidCallback onClose;
+
+  /// The command that opens and shuts it: Ctrl+, unless a module rebinds
+  /// it.
+  static const String commandId = 'editor.settings';
+
+  @override
+  State<EditorSettingsDialog> createState() => _EditorSettingsDialogState();
+}
+
+/// A page in the list on the left.
+class _Page {
+  const _Page(this.id, this.label, this.icon, this.description, {this.section});
+
+  final String id;
+  final String label;
+  final IconData icon;
+  final String description;
+
+  /// The module section the page shows, for a module's page.
+  final SettingsSection? section;
+}
+
+/// One of the editor's own settings: where it lives, what it is called,
+/// what it does, whether it has moved, and its control.
+class _Setting {
+  const _Setting({
+    required this.page,
+    required this.label,
+    required this.hint,
+    required this.isDefault,
+    required this.reset,
+    required this.control,
+    this.keywords = '',
+    this.group,
+  });
+
+  final String page;
+  final String label;
+  final String hint;
+
+  /// The heading it sits under within its page, when the page has them.
+  final String? group;
+
+  /// More words to be found by, beyond the label and hint.
+  final String keywords;
+  final bool isDefault;
+  final OverlayUiSettings Function(OverlayUiSettings s) reset;
+  final Widget control;
+
+  bool matches(String query) =>
+      '$label $hint $keywords'.toLowerCase().contains(query);
+}
+
+/// A command and the keys bound to it, for the Keyboard page.
+typedef _Shortcut = ({
+  String group,
+  DesignerCommand command,
+  List<String> keys,
+});
+
+class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
+  static final SettingPref<String> _lastPage = SettingPref.text(
+    'editor.settings.page',
+    _appearance,
+  );
+
+  final TextEditingController _search = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  late String _pageId = widget.scope.prefs.get(_lastPage);
+  bool _confirmingReset = false;
+
+  /// What the last export or import did, said in the footer until the next
+  /// change of page.
+  String? _note;
+  bool _noteIsError = false;
+
+  EditorScope get _scope => widget.scope;
+  String get _query => _search.text.trim().toLowerCase();
+
+  @override
+  void initState() {
+    super.initState();
+    _search.addListener(_onSearch);
+    // Typing goes straight to the search, as in any settings window.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _searchFocus.requestFocus();
+    });
+  }
+
+  void _onSearch() => setState(() {
+    _confirmingReset = false;
+    _note = null;
+  });
+
+  @override
+  void dispose() {
+    _search
+      ..removeListener(_onSearch)
+      ..dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  List<_Page> get _pages => [
+    const _Page(
+      _appearance,
+      'Appearance',
+      Icons.palette_outlined,
+      'How the editor looks: its accent, spacing, corners and motion.',
+    ),
+    const _Page(
+      _accessibility,
+      'Accessibility',
+      Icons.accessibility_new_rounded,
+      'Reading, seeing, moving and pointing: the editor made to suit you. '
+          'The sprite and input editors follow it too.',
+    ),
+    const _Page(
+      _editing,
+      'Editing',
+      Icons.edit_note_rounded,
+      'How far undo reaches, and what asks first.',
+    ),
+    const _Page(
+      _snapping,
+      'Snapping',
+      Icons.straighten_rounded,
+      'What moving, turning and scaling snap to, and in what steps.',
+    ),
+    const _Page(
+      _viewport,
+      'Viewport',
+      Icons.grid_4x4_rounded,
+      'The grid the level is built on, and how the editor draws over the '
+          'game.',
+    ),
+    const _Page(
+      _saving,
+      'Saving',
+      Icons.save_outlined,
+      'Keeping your work safe, and where the editor starts.',
+    ),
+    const _Page(
+      _playing,
+      'Play-testing',
+      Icons.play_circle_outline_rounded,
+      'What happens while the game runs inside the editor.',
+    ),
+    const _Page(
+      _console,
+      'Console & messages',
+      Icons.terminal_rounded,
+      'What the Console keeps and shows, and which messages appear over '
+          'the editor.',
+    ),
+    const _Page(
+      _performance,
+      'Performance',
+      Icons.speed_rounded,
+      'The frame rate the game is measured against, and what the editor '
+          'spends keeping its readouts live.',
+    ),
+    const _Page(
+      _keyboard,
+      'Keyboard',
+      Icons.keyboard_outlined,
+      'Every command, and the keys that run it. Click a command\'s keys to '
+          'change them.',
+    ),
+    for (final section in _scope.settingsSections)
+      _Page(
+        'module:${section.id}',
+        section.title,
+        Icons.extension_outlined,
+        'Settings a module adds.',
+        section: section,
+      ),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _draft = widget.initial;
-    _tabController = TabController(length: _tabs.length, vsync: this);
-    _tabController.addListener(_handleTabChanged);
-    _loadStoredTab();
-  }
-
-  @override
-  void didUpdateWidget(covariant EditorSettingsPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.initial != widget.initial) {
-      _draft = widget.initial;
-    }
-  }
-
-  @override
-  void dispose() {
-    _tabController.removeListener(_handleTabChanged);
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadStoredTab() async {
-    final savedIndex = await widget.prefs.readInt(_lastTabPrefKey, fallback: 0);
-    if (!mounted) {
-      return;
-    }
-
-    _tabController.index = savedIndex.clamp(0, _tabs.length - 1);
-  }
-
-  void _handleTabChanged() {
-    if (_tabController.indexIsChanging) {
-      widget.prefs.writeInt(_lastTabPrefKey, _tabController.index);
-    }
-  }
-
-  void _updateDraft(OverlayUiSettings next) {
+  void _open(String id) {
+    _search.clear();
     setState(() {
-      _draft = next;
+      _pageId = id;
+      _confirmingReset = false;
+      _note = null;
     });
-    widget.onChanged(next);
+    _scope.prefs.set(_lastPage, id);
   }
 
-  void _applyProfile(OverlayProfilePreset preset) {
-    final next = switch (preset) {
-      OverlayProfilePreset.compact => _draft.copyWith(
-        textScale: 0.9,
-        compactness: 0.85,
-        cornerRadius: 2,
-        metricRefreshMs: 250,
-        logLineClamp: 8,
-        logsAutoScroll: true,
-        accessibilityMode: AccessibilityMode.off,
-      ),
-      OverlayProfilePreset.defaultProfile => const OverlayUiSettings.defaults(),
-      OverlayProfilePreset.readable => _draft.copyWith(
-        textScale: 1.1,
-        compactness: 1.0,
-        cornerRadius: 8,
-        metricRefreshMs: 150,
-        logLineClamp: 12,
-        logsAutoScroll: true,
-        accessibilityMode: AccessibilityMode.readable,
-      ),
-      OverlayProfilePreset.streaming => _draft.copyWith(
-        textScale: 1.0,
-        compactness: 0.95,
-        cornerRadius: 6,
-        metricRefreshMs: 500,
-        logLineClamp: 20,
-        logsAutoScroll: true,
-        accessibilityMode: AccessibilityMode.highContrast,
-      ),
+  // ── Changing settings ────────────────────────────────────────────────────
+
+  /// Shows [next] without saving it: a slider mid-drag.
+  void _preview(OverlayUiSettings next) => _scope.prefs.settings.value = next;
+
+  void _save(OverlayUiSettings next) {
+    _scope.prefs.update(next);
+    _scope.theme.select(next.themeId);
+  }
+
+  Widget _slider(
+    OverlayUiSettings s,
+    double value,
+    SettingRange range,
+    double step,
+    OverlayUiSettings Function(double v) apply, {
+    double displayScale = 1,
+    int decimals = 0,
+    String unit = '',
+  }) => EditorSlider(
+    value: value,
+    min: range.min,
+    max: range.max,
+    step: step,
+    accent: s.themeColor,
+    displayScale: displayScale,
+    decimals: decimals,
+    unit: unit,
+    onChanged: (v) => _preview(apply(v)),
+    onChangeEnd: (v) => _save(apply(v)),
+  );
+
+  _Setting _toggleSetting(
+    OverlayUiSettings s, {
+    required String page,
+    required String label,
+    required String hint,
+    required bool value,
+    required OverlayUiSettings Function(bool v) apply,
+    bool fallback = false,
+    String keywords = '',
+    String? group,
+  }) => _Setting(
+    page: page,
+    group: group,
+    label: label,
+    hint: hint,
+    keywords: keywords,
+    isDefault: value == fallback,
+    reset: (_) => apply(fallback),
+    control: EditorToggle(
+      value: value,
+      label: label,
+      accent: s.themeColor,
+      onChanged: (v) => _save(apply(v)),
+    ),
+  );
+
+  // ── The Keyboard page ────────────────────────────────────────────────────
+
+  static String _groupOf(String commandId) {
+    final prefix = commandId.split('.').first;
+    return switch (prefix) {
+      'editor' => 'Editor',
+      'designer' => 'Level Designer',
+      'dock' => 'Docks',
+      'timeline' => 'Timeline',
+      '' => 'Other',
+      _ => '${prefix[0].toUpperCase()}${prefix.substring(1)}',
     };
-    _updateDraft(next);
   }
 
-  Widget _tabView(Widget child) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
-      child: child,
-    );
+  List<_Shortcut> _shortcuts() {
+    final registry = _scope.commands;
+    final all = [
+      for (final command in registry.all)
+        (
+          group: _groupOf(command.id),
+          command: command,
+          keys: [for (final b in registry.bindingsFor(command.id)) b.shortcut],
+        ),
+    ];
+    all.sort((a, b) {
+      final byGroup = a.group.compareTo(b.group);
+      return byGroup != 0
+          ? byGroup
+          : a.command.label.toLowerCase().compareTo(
+              b.command.label.toLowerCase(),
+            );
+    });
+    return all;
   }
+
+  /// [chords] now run [commandId]. With [takeFrom], that command gives up
+  /// [chord]. A command back at the keys it was built with is no longer a
+  /// change.
+  void _setShortcut(
+    OverlayUiSettings s,
+    String commandId,
+    List<String> chords, {
+    String? takeFrom,
+    String? chord,
+  }) {
+    final registry = _scope.commands;
+    final next = {...s.shortcuts};
+    void put(String id, List<String> keys) {
+      final built = [for (final b in registry.builtBindingsFor(id)) b.shortcut];
+      if (listEquals(built, keys)) {
+        next.remove(id);
+      } else {
+        next[id] = keys;
+      }
+    }
+
+    if (takeFrom != null) {
+      put(takeFrom, [
+        for (final b in registry.bindingsFor(takeFrom))
+          if (b.shortcut != chord) b.shortcut,
+      ]);
+    }
+    put(commandId, chords);
+    // Laid over the registry now, so the page shows it as it rebuilds.
+    registry.applyShortcuts(next);
+    _save(s.copyWith(shortcuts: next));
+  }
+
+  void _resetShortcut(OverlayUiSettings s, String commandId) {
+    final next = {...s.shortcuts}..remove(commandId);
+    _scope.commands.applyShortcuts(next);
+    _save(s.copyWith(shortcuts: next));
+  }
+
+  static bool _shortcutMatches(_Shortcut s, String query) =>
+      s.command.label.toLowerCase().contains(query) ||
+      s.group.toLowerCase().contains(query) ||
+      s.keys.any((k) => k.toLowerCase().contains(query));
+
+  // ── Build ────────────────────────────────────────────────────────────────
 
   @override
-  Widget build(BuildContext context) {
-    final accent = _draft.themeColor;
-    final panelHeight = widget.maxHeight.clamp(260.0, 460.0).toDouble();
+  Widget build(BuildContext context) => SignalBuilder<OverlayUiSettings>(
+    signal: _scope.prefs.settings,
+    builder: (context, s, _) => _dialog(context, s),
+  );
 
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        height: panelHeight,
-        decoration: BoxDecoration(
-          color: const Color(0xF41B1B1B),
-          borderRadius: BorderRadius.circular(_draft.cornerRadius),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
-          boxShadow: const <BoxShadow>[
-            BoxShadow(
-              color: Color(0x66000000),
-              blurRadius: 18,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
+  Widget _dialog(BuildContext context, OverlayUiSettings s) {
+    final accent = s.themeColor;
+    final pages = _pages;
+    final page = pages.firstWhere(
+      (p) => p.id == _pageId,
+      orElse: () => pages.first,
+    );
+    final settings = _settingsFor(s);
+    final query = _query;
+    final searching = query.isNotEmpty;
+
+    // What the list on the left marks: a page with a moved setting, and
+    // while searching, how many hits each page has.
+    final modifiedPages = {
+      for (final def in settings)
+        if (!def.isDefault) def.page,
+      if (s.shortcuts.isNotEmpty) _keyboard,
+    };
+    final hits = <String, int>{};
+    if (searching) {
+      for (final def in settings) {
+        if (def.matches(query)) hits[def.page] = (hits[def.page] ?? 0) + 1;
+      }
+      final keys = _shortcuts().where((x) => _shortcutMatches(x, query));
+      if (keys.isNotEmpty) hits[_keyboard] = keys.length;
+      for (final p in pages) {
+        if (p.section != null && p.label.toLowerCase().contains(query)) {
+          hits[p.id] = 1;
+        }
+      }
+    }
+
+    // Its text is the chrome's: the look over the chrome shows the size and
+    // weight being picked as they change.
+    return EditorLook(
+      child: Material(
+        color: EditorTheme.dialogBg,
         child: Column(
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-              child: Row(
-                children: <Widget>[
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(Icons.tune_rounded, size: 12, color: accent),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          'Editor Settings',
-                          style: TextStyle(
-                            fontSize: 12 * _draft.effectiveTextScale,
-                            fontWeight: FontWeight.w500,
-                            color: EditorTheme.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 1),
-                        Text(
-                          'Live preview enabled. Changes apply immediately.',
-                          style: TextStyle(
-                            fontSize: 9 * _draft.effectiveTextScale,
-                            color: EditorTheme.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () =>
-                        _updateDraft(const OverlayUiSettings.defaults()),
-                    style: TextButton.styleFrom(
-                      foregroundColor: accent,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: const Size(0, 28),
-                    ),
-                    child: const Text('Reset'),
-                  ),
-                  IconButton(
-                    onPressed: widget.onClose,
-                    icon: const Icon(Icons.close_rounded),
-                    color: EditorTheme.textSecondary,
-                    iconSize: 16,
-                    splashRadius: 16,
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: _EditorSettingsSummary(
-                settings: _draft,
-                activeTab: _EditorSettingsTab.values.elementAt(
-                  _tabController.index,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              indicatorColor: accent,
-              labelColor: EditorTheme.textPrimary,
-              labelStyle: TextStyle(
-                fontSize: 10 * _draft.effectiveTextScale,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelColor: EditorTheme.textMuted,
-              dividerColor: Colors.white.withValues(alpha: 0.06),
-              tabs: _tabs
-                  .map(
-                    (tab) =>
-                        Tab(icon: Icon(tab.icon, size: 16), text: tab.label),
-                  )
-                  .toList(growable: false),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _TopBar(
+              accent: accent,
+              search: _search,
+              searchFocus: _searchFocus,
+              onClose: widget.onClose,
             ),
             Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: <Widget>[
-                  _tabView(
-                    _EditorSettingsPresetsTab(
-                      settings: _draft,
-                      onPresetSelected: _applyProfile,
-                    ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Sidebar(
+                    pages: pages,
+                    selectedId: searching ? null : page.id,
+                    modified: modifiedPages,
+                    hits: searching ? hits : null,
+                    accent: accent,
+                    onSelect: _open,
                   ),
-                  _tabView(
-                    _EditorSettingsAppearanceTab(
-                      settings: _draft,
-                      onChanged: _updateDraft,
-                    ),
+                  Expanded(
+                    child: searching
+                        ? _results(s, settings, pages, query)
+                        : _page(s, page, settings),
                   ),
-                  _tabView(
-                    _EditorSettingsRuntimeTab(
-                      settings: _draft,
-                      onChanged: _updateDraft,
-                    ),
-                  ),
-                  _tabView(
-                    _EditorSettingsLogsTab(
-                      settings: _draft,
-                      onChanged: _updateDraft,
-                    ),
-                  ),
-                  _tabView(
-                    _EditorSettingsAccessibilityTab(
-                      settings: _draft,
-                      onChanged: _updateDraft,
-                    ),
-                  ),
-                  if (widget.sections.isNotEmpty)
-                    _tabView(
-                      _ModulesTab(
-                        sections: widget.sections,
-                        prefs: widget.prefs,
-                      ),
-                    ),
                 ],
               ),
             ),
+            _footer(s, page, settings, searching),
           ],
         ),
       ),
     );
   }
-}
 
-class _EditorSettingsSummary extends StatelessWidget {
-  const _EditorSettingsSummary({
-    required this.settings,
-    required this.activeTab,
-  });
+  Widget _page(OverlayUiSettings s, _Page page, List<_Setting> settings) {
+    final section = page.section;
+    final List<Widget> body;
+    if (section != null) {
+      body = [_ModuleCard(section: section, prefs: _scope.prefs)];
+    } else if (page.id == _keyboard) {
+      body = _keyboardRows(s, _shortcuts());
+    } else {
+      body = _rows(s, [
+        for (final def in settings)
+          if (def.page == page.id) def,
+      ]);
+    }
+    return _PageBody(
+      key: ValueKey(page.id),
+      title: page.label,
+      description: page.description,
+      children: body,
+    );
+  }
 
-  final OverlayUiSettings settings;
-  final _EditorSettingsTab activeTab;
+  Widget _results(
+    OverlayUiSettings s,
+    List<_Setting> settings,
+    List<_Page> pages,
+    String query,
+  ) {
+    final children = <Widget>[];
+    for (final p in pages) {
+      final section = p.section;
+      if (section != null) {
+        if (p.label.toLowerCase().contains(query)) {
+          children
+            ..add(_Caption(p.label))
+            ..add(_ModuleCard(section: section, prefs: _scope.prefs));
+        }
+      } else if (p.id == _keyboard) {
+        final keys = [
+          for (final x in _shortcuts())
+            if (_shortcutMatches(x, query)) x,
+        ];
+        if (keys.isNotEmpty) {
+          children
+            ..add(_Caption(p.label))
+            ..addAll(_keyboardRows(s, keys, grouped: false));
+        }
+      } else {
+        final defs = [
+          for (final def in settings)
+            if (def.page == p.id && def.matches(query)) def,
+        ];
+        if (defs.isNotEmpty) {
+          children
+            ..add(_Caption(p.label))
+            ..addAll(_rows(s, defs, headings: false));
+        }
+      }
+    }
+    return _PageBody(
+      key: const ValueKey('search'),
+      title: 'Search',
+      description: children.isEmpty
+          ? 'Nothing matches “${_search.text.trim()}”.'
+          : 'Everything that matches “${_search.text.trim()}”.',
+      children: children,
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: EditorTheme.surfaceBg,
-        borderRadius: BorderRadius.circular(settings.cornerRadius),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+  List<Widget> _rows(
+    OverlayUiSettings s,
+    List<_Setting> defs, {
+    bool headings = true,
+  }) => [
+    for (var i = 0; i < defs.length; i++) ...[
+      // A page's own headings: a new one wherever the group changes.
+      if (headings &&
+          defs[i].group != null &&
+          (i == 0 || defs[i].group != defs[i - 1].group))
+        _Caption(defs[i].group!)
+      else if (i > 0)
+        const _RowDivider(),
+      SettingRow(
+        label: defs[i].label,
+        hint: defs[i].hint,
+        control: defs[i].control,
+        accent: s.themeColor,
+        isModified: !defs[i].isDefault,
+        onReset: () => _save(defs[i].reset(s)),
       ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: <Widget>[
-          _SettingsInfoChip(label: 'Theme', value: settings.themePreset.label),
-          _SettingsInfoChip(
-            label: 'Metrics',
-            value: '${settings.metricRefreshMs.round()} ms',
-          ),
-          _SettingsInfoChip(
-            label: 'Logs',
-            value: settings.logsAutoScroll ? 'Auto-scroll' : 'Static',
-          ),
-          _SettingsInfoChip(
-            label: 'Accessibility',
-            value: settings.accessibilityMode.label,
-          ),
-          _SettingsInfoChip(
-            label: 'Grid',
-            value: settings.showGrid
-                ? '${settings.gridSize.toStringAsFixed(0)}u'
-                : 'Hidden',
-          ),
-          _SettingsInfoChip(
-            label: 'Snap',
-            value: settings.gridSnappingEnabled ? 'Enabled' : 'Disabled',
-          ),
-          _SettingsInfoChip(label: 'View', value: activeTab.label),
-        ],
+    ],
+  ];
+
+  List<Widget> _keyboardRows(
+    OverlayUiSettings s,
+    List<_Shortcut> shortcuts, {
+    bool grouped = true,
+  }) {
+    final rows = <Widget>[];
+    String? group;
+    for (final x in shortcuts) {
+      if (grouped && x.group != group) {
+        group = x.group;
+        rows.add(_Caption(group));
+      }
+      final id = x.command.id;
+      rows.add(
+        ShortcutRow(
+          key: ValueKey('shortcut:$id'),
+          scope: _scope,
+          command: x.command,
+          keys: x.keys,
+          isModified: s.shortcuts.containsKey(id),
+          accent: s.themeColor,
+          onChanged: (chords, {takeFrom, chord}) =>
+              _setShortcut(s, id, chords, takeFrom: takeFrom, chord: chord),
+          onReset: () => _resetShortcut(s, id),
+        ),
+      );
+    }
+    return rows;
+  }
+
+  // ── Export and import ─────────────────────────────────────────────────
+
+  /// The project's settings file: shared with whoever works on it, or
+  /// carried to another machine.
+  static const String settingsFilePath = '.editor/settings.json';
+
+  File get _settingsFile => File('${Directory.current.path}/$settingsFilePath');
+
+  void _say(String note, {bool error = false}) {
+    if (!mounted) return;
+    setState(() {
+      _note = note;
+      _noteIsError = error;
+    });
+  }
+
+  Future<void> _exportToProject() async {
+    try {
+      final file = _settingsFile;
+      await file.parent.create(recursive: true);
+      await file.writeAsString(
+        OverlaySettingsStore.export(_scope.prefs.settings.value),
+      );
+      _say('Saved to $settingsFilePath.');
+    } catch (error) {
+      _say('Could not save $settingsFilePath: $error', error: true);
+    }
+  }
+
+  Future<void> _exportToClipboard() async {
+    await Clipboard.setData(
+      ClipboardData(
+        text: OverlaySettingsStore.export(_scope.prefs.settings.value),
       ),
     );
+    _say('Copied to the clipboard.');
   }
-}
 
-class _EditorSettingsPresetsTab extends StatelessWidget {
-  const _EditorSettingsPresetsTab({
-    required this.settings,
-    required this.onPresetSelected,
-  });
+  Future<void> _importFromProject() async {
+    final file = _settingsFile;
+    if (!file.existsSync()) {
+      _say('There is no $settingsFilePath in the project.', error: true);
+      return;
+    }
+    try {
+      _import(await file.readAsString(), from: settingsFilePath);
+    } catch (error) {
+      _say('Could not read $settingsFilePath: $error', error: true);
+    }
+  }
 
-  final OverlayUiSettings settings;
-  final ValueChanged<OverlayProfilePreset> onPresetSelected;
+  Future<void> _importFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    _import(data?.text ?? '', from: 'the clipboard');
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        DetailSectionCard(
-          sectionId: 'editor_settings_profiles',
-          title: 'Profile Presets',
-          settings: settings,
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: OverlayProfilePreset.values
-                .map(
-                  (preset) => _SettingsChoiceChip(
-                    label: preset.label,
-                    color: settings.themeColor,
-                    isSelected: false,
-                    onTap: () => onPresetSelected(preset),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-        ),
-        const SizedBox(height: 8),
-        DetailSectionCard(
-          sectionId: 'editor_settings_profiles_notes',
-          title: 'Preset Notes',
-          settings: settings,
-          child: const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _SettingsNoteLine(
-                title: 'Compact',
-                body: 'Tighter spacing and faster scanning for small screens.',
-              ),
-              _SettingsNoteLine(
-                title: 'Default',
-                body: 'Balanced values for general editing.',
-              ),
-              _SettingsNoteLine(
-                title: 'Readable',
-                body: 'Larger text and gentler spacing for extended sessions.',
-              ),
-              _SettingsNoteLine(
-                title: 'Streaming',
-                body: 'Higher contrast and longer log buffers for demos.',
-              ),
-            ],
-          ),
-        ),
-      ],
+  void _import(String text, {required String from}) {
+    final current = _scope.prefs.settings.value;
+    final imported = OverlaySettingsStore.import(text, current);
+    if (imported == null) {
+      _say('Nothing in $from is a settings export.', error: true);
+      return;
+    }
+    _scope.commands.applyShortcuts(imported.shortcuts);
+    _save(imported);
+    _say(
+      imported == current
+          ? 'Imported from $from: it was all as it is.'
+          : 'Imported from $from.',
     );
   }
-}
 
-class _EditorSettingsAppearanceTab extends StatelessWidget {
-  const _EditorSettingsAppearanceTab({
-    required this.settings,
-    required this.onChanged,
-  });
+  Widget _footer(
+    OverlayUiSettings s,
+    _Page page,
+    List<_Setting> settings,
+    bool searching,
+  ) {
+    final accent = s.themeColor;
+    final onPage = [
+      for (final def in settings)
+        if (def.page == page.id && !def.isDefault) def,
+    ];
+    final anyMoved = s != const OverlayUiSettings.defaults();
+    final onKeyboard = !searching && page.id == _keyboard;
 
-  final OverlayUiSettings settings;
-  final ValueChanged<OverlayUiSettings> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        DetailSectionCard(
-          sectionId: 'editor_settings_appearance_layout',
-          title: 'Layout & Motion',
-          settings: settings,
-          child: Column(
-            children: <Widget>[
-              _SettingsSliderRow(
-                label: 'Text Size',
-                value: settings.textScale,
-                min: 0.85,
-                max: 1.35,
-                onChanged: (value) =>
-                    onChanged(settings.copyWith(textScale: value)),
-              ),
-              _SettingsSliderRow(
-                label: 'Corner Radius',
-                value: settings.cornerRadius,
-                min: 0,
-                max: 14,
-                onChanged: (value) =>
-                    onChanged(settings.copyWith(cornerRadius: value)),
-              ),
-              _SettingsSliderRow(
-                label: 'Compactness',
-                value: settings.compactness,
-                min: 0.8,
-                max: 1.2,
-                onChanged: (value) =>
-                    onChanged(settings.copyWith(compactness: value)),
-              ),
-              _SettingsSliderRow(
-                label: 'Animation Speed',
-                value: settings.animationSpeed,
-                min: 0.6,
-                max: 1.8,
-                onChanged: (value) =>
-                    onChanged(settings.copyWith(animationSpeed: value)),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        DetailSectionCard(
-          sectionId: 'editor_settings_appearance_theme',
-          title: 'Theme Accent',
-          settings: settings,
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: SettingsThemePreset.values
-                .map(
-                  (preset) => _SettingsChoiceChip(
-                    label: preset.label,
-                    color: preset.color,
-                    isSelected: settings.themePreset == preset,
-                    onTap: () =>
-                        onChanged(settings.copyWith(themePreset: preset)),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _EditorSettingsRuntimeTab extends StatelessWidget {
-  const _EditorSettingsRuntimeTab({
-    required this.settings,
-    required this.onChanged,
-  });
-
-  final OverlayUiSettings settings;
-  final ValueChanged<OverlayUiSettings> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        DetailSectionCard(
-          sectionId: 'editor_settings_runtime_metrics',
-          title: 'Metric Sampling',
-          settings: settings,
-          child: Column(
-            children: <Widget>[
-              _SettingsSliderRow(
-                label: 'Metric Refresh',
-                value: settings.metricRefreshMs,
-                min: 33,
-                max: 1000,
-                suffix: 'ms',
-                onChanged: (value) =>
-                    onChanged(settings.copyWith(metricRefreshMs: value)),
-              ),
-              _SettingsEnumDropdown<WarningSeverityMode>(
-                label: 'Warning Severity',
-                value: settings.warningSeverity,
-                items: WarningSeverityMode.values,
-                itemLabel: (mode) => mode.label,
-                onChanged: (value) =>
-                    onChanged(settings.copyWith(warningSeverity: value)),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        DetailSectionCard(
-          sectionId: 'editor_settings_runtime_ecs',
-          title: 'ECS Warning Rules',
-          settings: settings,
-          child: Column(
-            children: <Widget>[
-              _SettingsSwitchRow(
-                title: 'Warn when no systems are registered',
-                value: settings.ecsWarnOnNoSystems,
-                onChanged: (value) =>
-                    onChanged(settings.copyWith(ecsWarnOnNoSystems: value)),
-              ),
-              _SettingsSwitchRow(
-                title: 'Warn on inactive entity ratio',
-                value: settings.ecsWarnOnInactive,
-                onChanged: (value) =>
-                    onChanged(settings.copyWith(ecsWarnOnInactive: value)),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        DetailSectionCard(
-          sectionId: 'editor_settings_runtime_grid',
-          title: 'Grid & Snapping',
-          settings: settings,
-          child: Column(
-            children: <Widget>[
-              _SettingsSwitchRow(
-                title: 'Show infinite grid on canvas',
-                value: settings.showGrid,
-                onChanged: (value) =>
-                    onChanged(settings.copyWith(showGrid: value)),
-              ),
-              _SettingsSwitchRow(
-                title: 'Snap movement and scale to grid',
-                value: settings.gridSnappingEnabled,
-                onChanged: (value) =>
-                    onChanged(settings.copyWith(gridSnappingEnabled: value)),
-              ),
-              _SettingsSliderRow(
-                label: 'Grid Size',
-                value: settings.gridSize,
-                min: 4,
-                max: 256,
-                digits: 0,
-                suffix: 'u',
-                onChanged: (value) => onChanged(
-                  settings.copyWith(gridSize: value.roundToDouble()),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _EditorSettingsLogsTab extends StatelessWidget {
-  const _EditorSettingsLogsTab({
-    required this.settings,
-    required this.onChanged,
-  });
-
-  final OverlayUiSettings settings;
-  final ValueChanged<OverlayUiSettings> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        DetailSectionCard(
-          sectionId: 'editor_settings_logs_display',
-          title: 'Log Display',
-          settings: settings,
-          child: Column(
-            children: <Widget>[
-              _SettingsSliderRow(
-                label: 'Visible Log Lines',
-                value: settings.logLineClamp.toDouble(),
-                min: 3,
-                max: 40,
-                digits: 0,
-                onChanged: (value) =>
-                    onChanged(settings.copyWith(logLineClamp: value.round())),
-              ),
-              _SettingsSwitchRow(
-                title: 'Auto-scroll to newest entries',
-                value: settings.logsAutoScroll,
-                onChanged: (value) =>
-                    onChanged(settings.copyWith(logsAutoScroll: value)),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        DetailSectionCard(
-          sectionId: 'editor_settings_logs_guidance',
-          title: 'Behavior',
-          settings: settings,
+    final List<Widget> children;
+    if (_confirmingReset) {
+      children = [
+        Icon(Icons.warning_amber_rounded, size: 15, color: EditorTheme.warning),
+        const SizedBox(width: 8),
+        Expanded(
           child: Text(
-            settings.logsAutoScroll
-                ? 'Newest entries stay visible automatically. Increase the line clamp for debugging sessions.'
-                : 'Log ordering stays fixed. Use a smaller line clamp when you want tighter dock spacing.',
-            style: const TextStyle(
-              fontSize: 10,
-              color: EditorTheme.textSecondary,
-            ),
+            'Put every editor setting and key back to its default? A '
+            'module’s own settings stay as they are.',
+            style: TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _EditorSettingsAccessibilityTab extends StatelessWidget {
-  const _EditorSettingsAccessibilityTab({
-    required this.settings,
-    required this.onChanged,
-  });
-
-  final OverlayUiSettings settings;
-  final ValueChanged<OverlayUiSettings> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        DetailSectionCard(
-          sectionId: 'editor_settings_accessibility_mode',
-          title: 'Accessibility Mode',
-          settings: settings,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _SettingsEnumDropdown<AccessibilityMode>(
-                label: 'Mode',
-                value: settings.accessibilityMode,
-                items: AccessibilityMode.values,
-                itemLabel: (mode) => mode.label,
-                onChanged: (value) =>
-                    onChanged(settings.copyWith(accessibilityMode: value)),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: <Widget>[
-                  _SettingsInfoChip(
-                    label: 'Text Scale',
-                    value: settings.effectiveTextScale.toStringAsFixed(2),
-                  ),
-                  _SettingsInfoChip(
-                    label: 'Separator',
-                    value: settings.accessibilityMode.separatorThickness
-                        .toStringAsFixed(1),
-                  ),
-                  _SettingsInfoChip(
-                    label: 'Alpha',
-                    value: settings.accessibilityMode.separatorAlpha
-                        .toStringAsFixed(2),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        DetailSectionCard(
-          sectionId: 'editor_settings_accessibility_notes',
-          title: 'Mode Notes',
-          settings: settings,
-          child: const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _SettingsNoteLine(
-                title: 'Off',
-                body: 'Uses the base visual density and separator contrast.',
-              ),
-              _SettingsNoteLine(
-                title: 'Readable',
-                body: 'Adds moderate size and contrast adjustments.',
-              ),
-              _SettingsNoteLine(
-                title: 'High Contrast',
-                body: 'Pushes readability for presentations and long sessions.',
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SettingsChoiceChip extends StatelessWidget {
-  const _SettingsChoiceChip({
-    required this.label,
-    required this.color,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final String label;
-  final Color color;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? color.withValues(alpha: 0.16)
-              : Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: isSelected ? color : Colors.white.withValues(alpha: 0.08),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: const TextStyle(
-                color: EditorTheme.textSecondary,
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsInfoChip extends StatelessWidget {
-  const _SettingsInfoChip({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Text(
-        '$label: $value',
-        style: const TextStyle(
-          fontSize: 10,
+        _FooterButton(
+          label: 'Cancel',
           color: EditorTheme.textSecondary,
-          fontWeight: FontWeight.w500,
+          onPressed: () => setState(() => _confirmingReset = false),
         ),
-      ),
-    );
-  }
-}
-
-class _SettingsNoteLine extends StatelessWidget {
-  const _SettingsNoteLine({required this.title, required this.body});
-
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text.rich(
-        TextSpan(
-          children: <InlineSpan>[
-            TextSpan(
-              text: '$title: ',
-              style: const TextStyle(
-                fontSize: 10,
-                color: EditorTheme.textPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            TextSpan(
-              text: body,
-              style: const TextStyle(
-                fontSize: 10,
-                color: EditorTheme.textSecondary,
-              ),
+        const SizedBox(width: 6),
+        _FooterButton(
+          label: 'Reset all',
+          color: EditorTheme.error,
+          filled: true,
+          onPressed: () {
+            setState(() => _confirmingReset = false);
+            _save(const OverlayUiSettings.defaults());
+          },
+        ),
+      ];
+    } else {
+      children = [
+        _FooterMenu(
+          label: 'Export…',
+          color: EditorTheme.textSecondary,
+          items: [
+            ('Save to the project', Icons.save_alt_rounded, _exportToProject),
+            ('Copy to the clipboard', Icons.copy_rounded, _exportToClipboard),
+          ],
+        ),
+        const SizedBox(width: 2),
+        _FooterMenu(
+          label: 'Import…',
+          color: EditorTheme.textSecondary,
+          items: [
+            ('From the project', Icons.file_open_outlined, _importFromProject),
+            (
+              'Paste from the clipboard',
+              Icons.content_paste_rounded,
+              _importFromClipboard,
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SettingsEnumDropdown<T> extends StatelessWidget {
-  const _SettingsEnumDropdown({
-    required this.label,
-    required this.value,
-    required this.items,
-    required this.itemLabel,
-    required this.onChanged,
-  });
-
-  final String label;
-  final T value;
-  final List<T> items;
-  final String Function(T value) itemLabel;
-  final ValueChanged<T> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    // The label sits above rather than floating inside the field: the field
-    // is the editor's own dropdown, the same one the inspector uses.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 10, color: EditorTheme.textMuted),
-        ),
-        const SizedBox(height: 4),
-        EditorDropdown<T>(
-          value: value,
-          height: 30,
-          options: [
-            for (final item in items)
-              EditorDropdownOption(value: item, label: itemLabel(item)),
-          ],
-          onChanged: onChanged,
-        ),
-      ],
-    );
-  }
-}
-
-class _SettingsSwitchRow extends StatelessWidget {
-  const _SettingsSwitchRow({
-    required this.title,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String title;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                color: EditorTheme.textSecondary,
-                fontSize: 11,
-              ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            _note ??
+                'Changes apply as you make them, and are kept for next time.',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: _note == null
+                  ? EditorTheme.textMuted
+                  : _noteIsError
+                  ? EditorTheme.warning
+                  : EditorTheme.textSecondary,
+              fontSize: 10.5,
             ),
           ),
-          Transform.scale(
-            scale: 0.6,
-            child: Switch.adaptive(value: value, onChanged: onChanged),
+        ),
+        if (onKeyboard) ...[
+          _FooterButton(
+            label: 'Reset keys',
+            color: accent,
+            onPressed: s.shortcuts.isEmpty
+                ? null
+                : () {
+                    _scope.commands.applyShortcuts(const {});
+                    _save(s.copyWith(shortcuts: const {}));
+                  },
           ),
+          const SizedBox(width: 6),
         ],
+        if (!searching && page.section == null && page.id != _keyboard) ...[
+          _FooterButton(
+            label: 'Reset page',
+            color: accent,
+            onPressed: onPage.isEmpty
+                ? null
+                : () {
+                    var next = s;
+                    for (final def in onPage) {
+                      next = def.reset(next);
+                    }
+                    _save(next);
+                  },
+          ),
+          const SizedBox(width: 6),
+        ],
+        _FooterButton(
+          label: 'Reset all…',
+          color: EditorTheme.textSecondary,
+          onPressed: anyMoved
+              ? () => setState(() => _confirmingReset = true)
+              : null,
+        ),
+      ];
+    }
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: EditorTheme.menuBg,
+        border: Border(
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+        ),
       ),
+      child: Row(children: children),
     );
   }
 }
 
-class _SettingsSliderRow extends StatefulWidget {
-  const _SettingsSliderRow({
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
-    this.digits = 2,
-    this.suffix = '',
+// ── Pieces ─────────────────────────────────────────────────────────────────
+
+/// Title, search and close, in the sprite editor's 34 px bar.
+class _TopBar extends StatelessWidget {
+  const _TopBar({
+    required this.accent,
+    required this.search,
+    required this.searchFocus,
+    required this.onClose,
   });
 
-  final String label;
-  final double value;
-  final double min;
-  final double max;
-  final ValueChanged<double> onChanged;
-  final int digits;
-  final String suffix;
+  final Color accent;
+  final TextEditingController search;
+  final FocusNode searchFocus;
+  final VoidCallback onClose;
 
   @override
-  State<_SettingsSliderRow> createState() => _SettingsSliderRowState();
-}
-
-class _SettingsSliderRowState extends State<_SettingsSliderRow> {
-  late final TextEditingController _controller;
-  late final FocusNode _focusNode;
-
-  double get _step => widget.digits == 0 ? 1.0 : 0.05;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: _formatValue(widget.value));
-    _focusNode = FocusNode();
-  }
-
-  @override
-  void didUpdateWidget(covariant _SettingsSliderRow oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.value != widget.value && !_focusNode.hasFocus) {
-      _controller.text = _formatValue(widget.value);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  String _formatValue(double value) => value.toStringAsFixed(widget.digits);
-
-  double _clampAndRound(double value) {
-    final clamped = value.clamp(widget.min, widget.max).toDouble();
-    if (widget.digits <= 0) {
-      return clamped.roundToDouble();
-    }
-    final scale = math.pow(10, widget.digits).toDouble();
-    return (clamped * scale).round() / scale;
-  }
-
-  void _commitFromText() {
-    final parsed = double.tryParse(_controller.text.trim());
-    final next = _clampAndRound(parsed ?? widget.value);
-    _controller.text = _formatValue(next);
-    widget.onChanged(next);
-  }
-
-  void _nudge(double delta) {
-    final next = _clampAndRound(widget.value + delta);
-    _controller.text = _formatValue(next);
-    widget.onChanged(next);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final displayValue = widget.value.toStringAsFixed(widget.digits);
-    final suffixText = widget.suffix.isEmpty ? '' : ' ${widget.suffix}';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
+  Widget build(BuildContext context) => Container(
+    height: 34,
+    padding: const EdgeInsets.symmetric(horizontal: 8),
+    decoration: BoxDecoration(
+      color: EditorTheme.menuBg,
+      border: Border(
+        bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.settings_outlined, size: 15, color: accent),
+        const SizedBox(width: 6),
         Text(
-          '${widget.label} ($displayValue$suffixText)',
-          style: const TextStyle(
-            color: EditorTheme.textMuted,
+          'Editor Settings',
+          style: TextStyle(
+            color: EditorTheme.textPrimary,
             fontSize: 11,
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.03),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          ),
-          child: Row(
-            children: <Widget>[
-              IconButton(
-                onPressed: widget.value <= widget.min
-                    ? null
-                    : () => _nudge(-_step),
-                icon: const Icon(Icons.remove_rounded, size: 16),
-                color: EditorTheme.textSecondary,
-                disabledColor: EditorTheme.border,
-                splashRadius: 16,
-              ),
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: EditorTheme.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    hintText: _formatValue(widget.value),
-                    suffixText: widget.suffix.isEmpty ? null : widget.suffix,
-                    suffixStyle: const TextStyle(
-                      fontSize: 10,
-                      color: EditorTheme.textMuted,
-                    ),
-                  ),
-                  onSubmitted: (_) => _commitFromText(),
-                  onEditingComplete: _commitFromText,
-                ),
-              ),
-              IconButton(
-                onPressed: widget.value >= widget.max
-                    ? null
-                    : () => _nudge(_step),
-                icon: const Icon(Icons.add_rounded, size: 16),
-                color: EditorTheme.textSecondary,
-                disabledColor: EditorTheme.border,
-                splashRadius: 16,
-              ),
-            ],
-          ),
+        const SizedBox(width: 16),
+        EditorSearchField(
+          controller: search,
+          focusNode: searchFocus,
+          width: 260,
+          hint: 'Search settings and shortcuts',
+          onChanged: (_) {},
+        ),
+        const Spacer(),
+        EditorIconButton(
+          icon: Icons.close_rounded,
+          tooltip: 'Close',
+          shortcut: 'Esc',
+          activeColor: accent,
+          onTap: onClose,
         ),
       ],
+    ),
+  );
+}
+
+/// The pages, down the left; the modules' under a caption of their own.
+class _Sidebar extends StatelessWidget {
+  const _Sidebar({
+    required this.pages,
+    required this.selectedId,
+    required this.modified,
+    required this.hits,
+    required this.accent,
+    required this.onSelect,
+  });
+
+  final List<_Page> pages;
+
+  /// Null while searching: the results are not one page.
+  final String? selectedId;
+  final Set<String> modified;
+
+  /// Hits per page while searching, else null.
+  final Map<String, int>? hits;
+  final Color accent;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final builtIn = [
+      for (final p in pages)
+        if (p.section == null) p,
+    ];
+    final modules = [
+      for (final p in pages)
+        if (p.section != null) p,
+    ];
+    Widget item(_Page p) => _SidebarItem(
+      page: p,
+      selected: p.id == selectedId,
+      modified: modified.contains(p.id),
+      hits: hits == null ? null : hits![p.id] ?? 0,
+      accent: accent,
+      onTap: () => onSelect(p.id),
+    );
+    return Container(
+      width: 208,
+      decoration: BoxDecoration(
+        color: EditorTheme.menuBg,
+        border: Border(
+          right: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+      ),
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: [
+          for (final p in builtIn) item(p),
+          if (modules.isNotEmpty) ...[
+            Padding(
+              padding: EdgeInsets.fromLTRB(20, 14, 12, 4),
+              child: Text(
+                'MODULES',
+                style: TextStyle(
+                  color: EditorTheme.textMuted,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ),
+            for (final p in modules) item(p),
+          ],
+        ],
+      ),
     );
   }
 }
 
-/// The modules' own settings, one titled block each.
-class _ModulesTab extends StatelessWidget {
-  const _ModulesTab({required this.sections, required this.prefs});
+class _SidebarItem extends StatelessWidget {
+  const _SidebarItem({
+    required this.page,
+    required this.selected,
+    required this.modified,
+    required this.hits,
+    required this.accent,
+    required this.onTap,
+  });
 
-  final List<SettingsSection> sections;
-  final EditorPrefs prefs;
+  final _Page page;
+  final bool selected;
+  final bool modified;
+  final int? hits;
+  final Color accent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dimmed = hits == 0;
+    final tone = selected
+        ? EditorTheme.textPrimary
+        : dimmed
+        ? EditorTheme.textMuted.withValues(alpha: 0.5)
+        : EditorTheme.textSecondary;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      child: Material(
+        color: selected ? accent.withValues(alpha: 0.14) : Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          hoverColor: accent.withValues(alpha: 0.08),
+          child: Container(
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(
+                  color: selected ? accent : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(page.icon, size: 15, color: selected ? accent : tone),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    page.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: tone,
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ),
+                if (hits != null && hits! > 0)
+                  Text(
+                    '$hits',
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                else if (hits == null && modified)
+                  Tooltip(
+                    message: 'Something here is not at its default',
+                    child: Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: accent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A page's title, what it is for, and its rows, no wider than reads well.
+class _PageBody extends StatelessWidget {
+  const _PageBody({
+    super.key,
+    required this.title,
+    required this.description,
+    required this.children,
+  });
+
+  final String title;
+  final String description;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.fromLTRB(28, 22, 28, 28),
+    children: [
+      Align(
+        alignment: Alignment.topLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: EditorTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
+              ),
+              const SizedBox(height: 12),
+              ...children,
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+class _Caption extends StatelessWidget {
+  const _Caption(this.text);
+
+  final String text;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final section in sections) ...[
-          Text(
-            section.title.toUpperCase(),
-            style: const TextStyle(
-              color: EditorTheme.primaryMuted,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.6,
-            ),
-          ),
-          const SizedBox(height: 6),
-          section.build(context, prefs),
-          const SizedBox(height: 16),
-        ],
-      ],
+    padding: const EdgeInsets.only(top: 18, bottom: 4),
+    child: Semantics(
+      header: true,
+      child: Text(
+        text.toUpperCase(),
+        style: TextStyle(
+          color: EditorTheme.textMuted,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.6,
+        ),
+      ),
     ),
+  );
+}
+
+class _RowDivider extends StatelessWidget {
+  const _RowDivider();
+
+  @override
+  Widget build(BuildContext context) =>
+      Container(height: 1, color: Colors.white.withValues(alpha: 0.05));
+}
+
+/// What a module put on the settings, in a card of its own.
+class _ModuleCard extends StatelessWidget {
+  const _ModuleCard({required this.section, required this.prefs});
+
+  final SettingsSection section;
+  final EditorPrefs prefs;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(top: 4),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: EditorTheme.surfaceBg,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+    ),
+    child: section.build(context, prefs),
+  );
+}
+
+/// A footer button whose choices open in a menu above it.
+class _FooterMenu extends StatelessWidget {
+  const _FooterMenu({
+    required this.label,
+    required this.color,
+    required this.items,
+  });
+
+  final String label;
+  final Color color;
+  final List<(String, IconData, Future<void> Function())> items;
+
+  @override
+  Widget build(BuildContext context) => _FooterButton(
+    label: label,
+    color: color,
+    onPressed: () async {
+      final box = context.findRenderObject()! as RenderBox;
+      final at = box.localToGlobal(Offset(0, -8.0 * items.length - 24));
+      final run = await showEditorMenu<Future<void> Function()>(context, at, [
+        for (final (text, icon, action) in items)
+          editorMenuItem(action, text, icon: icon),
+      ]);
+      await run?.call();
+    },
+  );
+}
+
+class _FooterButton extends StatelessWidget {
+  const _FooterButton({
+    required this.label,
+    required this.color,
+    required this.onPressed,
+    this.filled = false,
+  });
+
+  final String label;
+  final Color color;
+  final VoidCallback? onPressed;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+    onPressed: onPressed,
+    style: TextButton.styleFrom(
+      foregroundColor: filled ? Colors.white : color,
+      backgroundColor: filled ? color.withValues(alpha: 0.85) : null,
+      disabledForegroundColor: EditorTheme.textMuted.withValues(alpha: 0.5),
+      minimumSize: const Size(0, 28),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+    ),
+    child: Text(label),
   );
 }

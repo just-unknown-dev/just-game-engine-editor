@@ -100,7 +100,7 @@ class _WangSetEditorState extends State<WangSetEditor> {
                     child: Text(text, style: _value),
                   ),
               ],
-              child: const Padding(
+              child: Padding(
                 padding: EdgeInsets.all(4),
                 child: Icon(
                   Icons.add,
@@ -112,7 +112,7 @@ class _WangSetEditorState extends State<WangSetEditor> {
           ],
         ),
         if (sets.isEmpty)
-          const Text(
+          Text(
             'None yet. A terrain set says which tiles show which terrain at '
             'their corners or edges, so the Terrain tool can join them.',
             style: TextStyle(fontSize: 11, color: EditorTheme.textMuted),
@@ -193,7 +193,7 @@ class _WangSetEditorState extends State<WangSetEditor> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(set.type.name, style: _value),
-                const Icon(
+                Icon(
                   Icons.arrow_drop_down,
                   size: 16,
                   color: EditorTheme.textSecondary,
@@ -235,7 +235,7 @@ class _WangSetEditorState extends State<WangSetEditor> {
               : Colors.transparent,
           child: InkWell(
             onTap: () => widget.onColor(0),
-            child: const Padding(
+            child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 4, vertical: 5),
               child: Row(
                 children: [
@@ -271,7 +271,7 @@ class _WangSetEditorState extends State<WangSetEditor> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(_templateLabel(_template), style: _value),
-                const Icon(
+                Icon(
                   Icons.arrow_drop_down,
                   size: 16,
                   color: EditorTheme.textSecondary,
@@ -282,7 +282,7 @@ class _WangSetEditorState extends State<WangSetEditor> {
         ),
         Row(
           children: [
-            const Text('from tile', style: _muted),
+            Text('from tile', style: _muted),
             const SizedBox(width: 4),
             SizedBox(
               width: 44,
@@ -308,11 +308,11 @@ class _WangSetEditorState extends State<WangSetEditor> {
           style:
               coverage.possible != null &&
                   coverage.combinations < coverage.possible!
-              ? const TextStyle(fontSize: 11, color: Color(0xFFFFB74D))
+              ? TextStyle(fontSize: 11, color: EditorTheme.warning)
               : _muted,
         ),
         const SizedBox(height: 6),
-        const Text(
+        Text(
           'Click a tile\'s corner or edge to give it the chosen terrain. '
           'Alt+click clears it; Shift+click gives the whole tile.',
           style: TextStyle(fontSize: 10, color: EditorTheme.textMuted),
@@ -327,11 +327,11 @@ class _WangSetEditorState extends State<WangSetEditor> {
   };
 }
 
-const TextStyle _value = TextStyle(
+final TextStyle _value = TextStyle(
   fontSize: 11,
   color: EditorTheme.textPrimary,
 );
-const TextStyle _muted = TextStyle(fontSize: 11, color: EditorTheme.textMuted);
+final TextStyle _muted = TextStyle(fontSize: 11, color: EditorTheme.textMuted);
 
 class _Heading extends StatelessWidget {
   const _Heading(this.text);
@@ -343,7 +343,7 @@ class _Heading extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: 4),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 10,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.8,

@@ -78,6 +78,7 @@ class ToolContext {
     required this.controller,
     required this.worldPosition,
     required this.gridSize,
+    this.snapStep = 0,
     ModifierKeys? modifiers,
     bool isShiftDown = false,
     bool isAltDown = false,
@@ -115,8 +116,18 @@ class ToolContext {
   /// Pointer position on the canvas, when the event came from one.
   final Offset? screenPosition;
 
-  /// Current grid size, for snapping and painting.
+  /// Current grid size, for painting cells — and for snapping, unless
+  /// [snapStep] says otherwise.
   final double gridSize;
+
+  /// What moving snaps in, when not the grid: the settings' move step. 0 is
+  /// the grid's own size.
+  final double snapStep;
+
+  /// What moving snaps in now: [snapStep] on a square grid, the cells on
+  /// any other.
+  double get moveStep =>
+      snapStep > 0 && grid is SquareGrid ? snapStep : gridSize;
 
   /// The modifier keys held.
   final ModifierKeys modifiers;
@@ -178,13 +189,13 @@ class ToolContext {
 
   /// Snaps [value] to the grid when snapping is active.
   double snap(double value) {
-    if (!snapping || gridSize <= 0) return value;
-    return grid.snapValue(value, gridSize);
+    if (!snapping || moveStep <= 0) return value;
+    return grid.snapValue(value, moveStep);
   }
 
   /// Snaps a point to the grid when snapping is active.
   Offset snapPoint(Offset point) =>
-      snapping && gridSize > 0 ? grid.snapPoint(point, gridSize) : point;
+      snapping && moveStep > 0 ? grid.snapPoint(point, moveStep) : point;
 }
 
 /// A viewport tool: something that interprets pointer drags as an edit.

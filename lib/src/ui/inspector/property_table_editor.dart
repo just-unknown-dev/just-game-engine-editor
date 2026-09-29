@@ -96,7 +96,7 @@ class _PropertyTableEditorState extends State<PropertyTableEditor> {
               iconSize: 13,
               visualDensity: VisualDensity.compact,
               onPressed: () => widget.onRemove(name),
-              icon: const Icon(Icons.close, color: EditorTheme.textMuted),
+              icon: Icon(Icons.close, color: EditorTheme.textMuted),
             ),
             child: props.typeOf(name) == TilePropertyType.bool
                 ? Align(
@@ -126,11 +126,8 @@ class _PropertyTableEditorState extends State<PropertyTableEditor> {
             Expanded(
               child: TextField(
                 controller: _newName,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: EditorTheme.textPrimary,
-                ),
-                decoration: const InputDecoration(
+                style: TextStyle(fontSize: 11, color: EditorTheme.textPrimary),
+                decoration: InputDecoration(
                   isDense: true,
                   hintText: 'New property',
                   hintStyle: TextStyle(
@@ -153,7 +150,7 @@ class _PropertyTableEditorState extends State<PropertyTableEditor> {
                     height: 26,
                     child: Text(
                       t.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: EditorTheme.textSecondary,
                       ),
@@ -162,7 +159,7 @@ class _PropertyTableEditorState extends State<PropertyTableEditor> {
               ],
               child: Text(
                 _newType.name,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   color: EditorTheme.textSecondary,
                 ),
@@ -173,7 +170,7 @@ class _PropertyTableEditorState extends State<PropertyTableEditor> {
               iconSize: 15,
               visualDensity: VisualDensity.compact,
               onPressed: _add,
-              icon: const Icon(Icons.add, color: EditorTheme.textSecondary),
+              icon: Icon(Icons.add, color: EditorTheme.textSecondary),
             ),
           ],
         ),
@@ -205,10 +202,7 @@ class _Row extends StatelessWidget {
           child: Text(
             label,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 11,
-              color: EditorTheme.textSecondary,
-            ),
+            style: TextStyle(fontSize: 11, color: EditorTheme.textSecondary),
           ),
         ),
         Expanded(child: child),

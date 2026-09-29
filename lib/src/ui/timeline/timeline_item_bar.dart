@@ -352,7 +352,7 @@ class _Suggest extends StatelessWidget {
         ]);
         if (picked != null) onPicked(picked);
       },
-      child: const Padding(
+      child: Padding(
         padding: EdgeInsets.all(3),
         child: Icon(
           Icons.arrow_drop_down_circle_outlined,
@@ -364,8 +364,8 @@ class _Suggest extends StatelessWidget {
   );
 }
 
-const _label = TextStyle(color: EditorTheme.textMuted, fontSize: 10);
-const _value = TextStyle(
+final _label = TextStyle(color: EditorTheme.textMuted, fontSize: 10);
+final _value = TextStyle(
   color: EditorTheme.textPrimary,
   fontSize: 11,
   fontFeatures: [FontFeature.tabularFigures()],
@@ -431,7 +431,6 @@ class _TimelineFieldState extends State<TimelineField> {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: widget.tooltip,
-    waitDuration: const Duration(milliseconds: 600),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [

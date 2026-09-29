@@ -123,17 +123,114 @@ class SceneStore {
     Map<String, dynamic>? editor,
   }) async {
     await _ensureRoot();
-    await File(_jsonPath(sceneName)).writeAsString(
-      _pretty.convert({
-        'version': SceneFormat.current,
-        ...scene.toJson(),
-        'entities': entities,
-        'editor': ?editor,
-      }),
-    );
+    await File(
+      _jsonPath(sceneName),
+    ).writeAsString(encodeScene(scene, entities, editor: editor));
     await _editManifest((names) {
       if (!names.contains(sceneName)) names.add(sceneName);
     });
+  }
+
+  /// [scene] with [entities] — and [editor], the section the game ignores
+  /// — exactly as its file holds them.
+  String encodeScene(
+    Scene scene,
+    List<Map<String, dynamic>> entities, {
+    Map<String, dynamic>? editor,
+  }) => _pretty.convert({
+    'version': SceneFormat.current,
+    ...scene.toJson(),
+    'entities': entities,
+    'editor': ?editor,
+  });
+
+  // ── Backups ─────────────────────────────────────────────────────────────
+
+  /// Where backups go: `.editor_backups/` in the project, never under
+  /// `assets/`, which ships with the game — or `.backups` under a test's
+  /// root. A folder per scene, a file per backup, named by when.
+  String get backupsRoot => _root != null
+      ? '$_root/.backups'
+      : '${Directory.current.path}/.editor_backups';
+
+  static const String _backupSuffix = '.scene.json';
+
+  /// Writes [text] as a backup of [sceneName] and deletes all but the
+  /// newest [keep].
+  Future<File> writeBackup(
+    String sceneName,
+    String text, {
+    required int keep,
+  }) async {
+    final dir = Directory('$backupsRoot/$sceneName');
+    await dir.create(recursive: true);
+    final t = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final stamp =
+        '${t.year}${two(t.month)}${two(t.day)}-'
+        '${two(t.hour)}${two(t.minute)}${two(t.second)}-'
+        '${t.millisecond.toString().padLeft(3, '0')}';
+    final file = File('${dir.path}/$stamp$_backupSuffix');
+    await file.writeAsString(text);
+    // Newest first by name, which is by time; a backup set aside counts.
+    final all = dir.listSync().whereType<File>().toList()
+      ..sort((a, b) => b.path.compareTo(a.path));
+    for (final old in all.skip(keep < 1 ? 1 : keep)) {
+      try {
+        await old.delete();
+      } on FileSystemException {
+        // Open elsewhere: it goes next time.
+      }
+    }
+    return file;
+  }
+
+  /// The backups of [sceneName] that can be recovered, newest first.
+  List<File> backupsOf(String sceneName) {
+    final dir = Directory('$backupsRoot/$sceneName');
+    if (!dir.existsSync()) return const [];
+    return dir
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.endsWith(_backupSuffix))
+        .toList()
+      ..sort((a, b) => b.path.compareTo(a.path));
+  }
+
+  /// The newest backup of [sceneName] holding changes that were never
+  /// saved: made after the scene file was last written, and not the same.
+  /// Null when there is none.
+  File? unsavedBackupOf(String sceneName) {
+    final backups = backupsOf(sceneName);
+    if (backups.isEmpty) return null;
+    final latest = backups.first;
+    final saved = File(_jsonPath(sceneName));
+    if (saved.existsSync()) {
+      if (!latest.lastModifiedSync().isAfter(saved.lastModifiedSync())) {
+        return null;
+      }
+      if (latest.readAsStringSync() == saved.readAsStringSync()) return null;
+    }
+    return latest;
+  }
+
+  /// [backup]'s scene, or null when it cannot be read.
+  Future<Map<String, dynamic>?> readBackup(File backup) async {
+    try {
+      final decoded = jsonDecode(await backup.readAsString());
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Sets [backup] aside: kept on disk, and never offered again.
+  Future<void> setAside(File backup) async {
+    try {
+      await backup.rename('${backup.path}.declined');
+    } on FileSystemException {
+      // Gone already.
+    }
   }
 
   // ── Delete / rename / duplicate ─────────────────────────────────────────

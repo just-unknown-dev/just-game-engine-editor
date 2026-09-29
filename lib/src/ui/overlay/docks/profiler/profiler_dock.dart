@@ -58,8 +58,10 @@ class _ProfilerDockState extends State<ProfilerDock> {
   void initState() {
     super.initState();
     _capture.addListener(_changed);
-    final budget = widget.dock.memory?.read<double>('budgetMs');
-    if (budget != null) _capture.budgetMs = budget;
+    // One picked here stays; otherwise the settings' target rate.
+    _capture.budgetMs =
+        widget.dock.memory?.read<double>('budgetMs') ??
+        widget.scope.prefs.settings.value.frameBudgetMs;
   }
 
   @override
@@ -103,9 +105,9 @@ class _ProfilerDockState extends State<ProfilerDock> {
     final selected = _capture.selected;
     return Column(
       children: [
-        DockToolbar(
+        EditorToolbar(
           children: [
-            DockIconButton(
+            EditorIconButton(
               icon: _capture.paused
                   ? Icons.play_arrow_rounded
                   : Icons.pause_rounded,
@@ -116,18 +118,22 @@ class _ProfilerDockState extends State<ProfilerDock> {
               color: EditorTheme.warning,
               onTap: () => _capture.paused = !_capture.paused,
             ),
-            DockIconButton(
+            EditorIconButton(
               icon: Icons.delete_outline_rounded,
               tooltip: 'Clear the capture',
               onTap: samples.isEmpty ? null : _capture.clear,
             ),
             const SizedBox(width: 6),
-            const Text(
+            Text(
               'Budget',
               style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
             ),
-            for (final fps in const [60, 30])
-              DockFilterChip(
+            for (final fps in {
+              widget.scope.prefs.settings.value.targetFps.round(),
+              60,
+              30,
+            }.toList()..sort((a, b) => b.compareTo(a)))
+              EditorChip(
                 label: '$fps fps',
                 selected: (_capture.budgetMs - 1000 / fps).abs() < 0.01,
                 onTap: () => _setBudget(1000 / fps),
@@ -143,13 +149,13 @@ class _ProfilerDockState extends State<ProfilerDock> {
             _Stat('frames', '${samples.length}'),
             const Spacer(),
             if (widget.details != null)
-              DockFilterChip(
+              EditorChip(
                 label: 'Details',
                 icon: Icons.insights_rounded,
                 selected: _showDetails,
                 onTap: () => setState(() => _showDetails = !_showDetails),
               ),
-            DockIconButton(
+            EditorIconButton(
               icon: Icons.save_alt_rounded,
               tooltip: 'Export the capture to .editor_logs/',
               onTap: samples.isEmpty ? null : _export,
@@ -160,7 +166,7 @@ class _ProfilerDockState extends State<ProfilerDock> {
           Expanded(child: widget.details!(context))
         else if (samples.isEmpty)
           const Expanded(
-            child: DockEmptyState(
+            child: EditorEmptyState(
               icon: Icons.speed_rounded,
               title: 'No frames yet',
               hint:
@@ -274,7 +280,7 @@ class _ProfilerDockState extends State<ProfilerDock> {
               child: SizedBox(
                 height: 12,
                 child: total <= 0
-                    ? const ColoredBox(color: EditorTheme.surfaceDarker)
+                    ? ColoredBox(color: EditorTheme.surfaceDarker)
                     : Row(
                         children: [
                           for (final e in systems)
@@ -316,7 +322,7 @@ class _Stat extends StatelessWidget {
         children: [
           TextSpan(
             text: '$label ',
-            style: const TextStyle(color: EditorTheme.textMuted),
+            style: TextStyle(color: EditorTheme.textMuted),
           ),
           TextSpan(
             text: value,
@@ -377,7 +383,7 @@ class _FrameGraphPainter extends CustomPainter {
               ? EditorTheme.error
               : s.ms > budgetMs * 0.75
               ? EditorTheme.warning
-              : const Color(0xFF7DE6B1).withValues(alpha: 0.8),
+              : EditorTheme.success.withValues(alpha: 0.8),
       );
     }
 
@@ -390,7 +396,7 @@ class _FrameGraphPainter extends CustomPainter {
       final label = TextPainter(
         text: TextSpan(
           text: '${ms.toStringAsFixed(1)} ms',
-          style: const TextStyle(color: EditorTheme.textMuted, fontSize: 9),
+          style: TextStyle(color: EditorTheme.textMuted, fontSize: 9),
         ),
         textDirection: TextDirection.ltr,
       )..layout();

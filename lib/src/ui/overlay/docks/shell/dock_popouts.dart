@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../../../core/constants/editor_constants.dart';
+import '../../../../ui/kit/kit.dart';
+import '../../../../core/theme/editor_metrics.dart';
 import '../../../../core/plugin/editor_plugin.dart';
 import '../../../../extension/editor_contributions.dart';
 import '../../settings/overlay_ui_settings.dart';
 import '../dock_controller.dart';
 import 'built_in_docks.dart';
-import 'dock_panel.dart';
 
 /// Docks that were popped out of the panel, each in a small window of its
 /// own floating over the editor: drag it by its title, close it to put the
@@ -70,6 +71,28 @@ class _DockPopoutsState extends State<DockPopouts> {
     Size area, {
     required int index,
   }) {
+    // Where it was left last time, if it was moved or sized.
+    final memory = controller.memoryOf(dock.id);
+    final kept = memory.read<Map<Object?, Object?>>('window');
+    double? keptValue(String key) => (kept?[key] as num?)?.toDouble();
+    if (kept != null && !_positions.containsKey(dock.id)) {
+      final x = keptValue('x'), y = keptValue('y');
+      if (x != null && y != null) _positions[dock.id] = Offset(x, y);
+    }
+    if (kept != null && !_sizes.containsKey(dock.id)) {
+      final w = keptValue('w'), h = keptValue('h');
+      if (w != null && h != null) _sizes[dock.id] = Size(w, h);
+    }
+    void keep() {
+      final p = _positions[dock.id], z = _sizes[dock.id];
+      memory.write('window', {
+        if (p != null) 'x': p.dx,
+        if (p != null) 'y': p.dy,
+        if (z != null) 'w': z.width,
+        if (z != null) 'h': z.height,
+      });
+    }
+
     final size = _sizes[dock.id] ?? _defaultSize;
     final width = size.width.clamp(_minSize.width, area.width).toDouble();
     final height = size.height.clamp(_minSize.height, area.height).toDouble();
@@ -80,8 +103,8 @@ class _DockPopoutsState extends State<DockPopouts> {
       wanted.dx.clamp(0.0, (area.width - width).clamp(0.0, area.width)),
       wanted.dy.clamp(0.0, (area.height - 40).clamp(0.0, area.height)),
     );
-    final accent = settings.themeColor;
-    final radius = settings.cornerRadius + 4;
+    final accent = EditorTheme.accent;
+    final radius = EditorMetrics.radiusLg;
 
     return Positioned(
       left: at.dx,
@@ -111,6 +134,7 @@ class _DockPopoutsState extends State<DockPopouts> {
                   behavior: HitTestBehavior.opaque,
                   onPanUpdate: (d) =>
                       setState(() => _positions[dock.id] = at + d.delta),
+                  onPanEnd: (_) => keep(),
                   child: Container(
                     height: 28,
                     color: EditorTheme.surfaceDarker,
@@ -124,15 +148,15 @@ class _DockPopoutsState extends State<DockPopouts> {
                             dock.label,
                             style: TextStyle(
                               color: EditorTheme.textPrimary,
-                              fontSize: 11 * settings.effectiveTextScale,
+                              fontSize: 11,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                        DockHeaderButton(
+                        EditorIconButton(
                           icon: Icons.vertical_align_bottom_rounded,
                           tooltip: 'Put it back in the panel',
-                          accent: accent,
+                          activeColor: accent,
                           onTap: () => controller.popIn(dock.id),
                         ),
                       ],
@@ -168,7 +192,8 @@ class _DockPopoutsState extends State<DockPopouts> {
                                 height + d.delta.dy,
                               ),
                             ),
-                            child: const SizedBox.square(
+                            onPanEnd: (_) => keep(),
+                            child: SizedBox.square(
                               dimension: 14,
                               child: Icon(
                                 Icons.south_east_rounded,

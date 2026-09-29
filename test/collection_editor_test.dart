@@ -38,11 +38,11 @@ void main() {
       ),
     );
     expect(find.textContaining('['), findsNothing, reason: 'no JSON');
-    expect(find.byType(TextFormField), findsNWidgets(3));
+    expect(find.byType(TextField), findsNWidgets(3));
     // The count, and the third row's number.
     expect(find.text('3'), findsNWidgets(2));
 
-    await _type(tester, find.byType(TextFormField).at(1), '42');
+    await _type(tester, find.byType(TextField).at(1), '42');
     expect(out, [8, 42, 9]);
     expect((out! as List)[1], isA<int>());
 
@@ -72,7 +72,7 @@ void main() {
     for (final key in ['child', 'hold', 'blend']) {
       expect(find.text(key), findsOneWidget);
     }
-    await _type(tester, find.widgetWithText(TextFormField, '2.0'), '3');
+    await _type(tester, find.widgetWithText(TextField, '2.0'), '3');
     expect(out, [
       {'child': 'Wide', 'hold': 3.0, 'blend': 0.0},
     ]);
@@ -113,14 +113,14 @@ void main() {
         onChanged: (v) => out = v,
       ),
     );
-    await _type(tester, find.widgetWithText(TextFormField, 'grounded'), 'idle');
+    await _type(tester, find.widgetWithText(TextField, 'grounded'), 'idle');
     expect((out! as Map).keys, ['idle', 'falling'], reason: 'order kept');
     expect((out! as Map)['idle'], 'Ground');
 
     // A name already taken is refused rather than merging two entries.
     out = null;
     // (The field still reads what was just typed; the entry is 'grounded'.)
-    await _type(tester, find.widgetWithText(TextFormField, 'idle'), 'falling');
+    await _type(tester, find.widgetWithText(TextField, 'idle'), 'falling');
     expect(out, isNull);
 
     await tester.tap(find.byTooltip('Add an entry'));
@@ -141,7 +141,7 @@ void main() {
         onChanged: (_) => fail('read-only'),
       ),
     );
-    expect(find.byType(TextFormField), findsNothing);
+    expect(find.byType(TextField), findsNothing);
     expect(find.byTooltip('Add an item'), findsNothing);
     expect(find.byTooltip('Remove'), findsNothing);
     expect(find.text('1'), findsWidgets);

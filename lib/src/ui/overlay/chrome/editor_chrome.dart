@@ -1,9 +1,8 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../../core/constants/editor_constants.dart';
+import '../../../core/theme/editor_metrics.dart';
 import '../../../core/plugin/editor_plugin.dart';
 import '../../../core/scope/editor_scope.dart';
 import '../../../extension/editor_contributions.dart';
@@ -13,13 +12,17 @@ import '../docks/shell/dock_popouts.dart';
 import '../editor_overlay.dart';
 import '../right_panel/right_panel.dart';
 import '../settings/overlay_ui_settings.dart';
+import '../settings/settings_dialog.dart';
+import '../shared/dialog_frame.dart';
 import '../shared/shared_widgets.dart';
 import '../shared/snackbar.dart';
 import '../shared/transform_toolbar.dart';
+import '../shared/quick_snap_bar.dart';
 
 /// Chrome shown when the full editor is closed but the compact status dock
-/// is pinned open. Sized against [MediaQuery]'s screen size since it now
-/// paints in the root [Overlay] rather than inline with [JustGameEditorOverlay],
+/// is pinned open: the dock over the game, and the settings gear standing on
+/// it at the right, with any messages above the gear. Sized against [MediaQuery]'s screen size since it paints
+/// in the root [Overlay] rather than inline with [JustGameEditorOverlay],
 /// which — for this package's expected full-bleed usage — matches the size
 /// the dock would have received locally.
 class CompactChrome extends StatelessWidget {
@@ -36,25 +39,42 @@ class CompactChrome extends StatelessWidget {
           left: 0,
           right: 0,
           bottom: 0,
-          child: CompactStatusDock(
-            plugin: plugin,
-            maxDetailWidth: size.width,
-            maxDetailHeight: size.height,
+          // One column, so the gear and the messages above it ride up with
+          // the dock panel.
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: EdgeInsets.only(right: 8, bottom: 8),
+                  child: EditorSnackBarLayer(),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 16, bottom: 16),
+                  child: SignalBuilder<OverlayUiSettings>(
+                    signal: plugin.scope.prefs.settings,
+                    builder: (context, settings, _) => SettingsGearButton(
+                      scope: plugin.scope,
+                      settings: settings,
+                    ),
+                  ),
+                ),
+              ),
+              CompactStatusDock(plugin: plugin, maxDetailHeight: size.height),
+            ],
           ),
         ),
-        const Positioned(
-          bottom: OverlayLayout.compactDockPanelHeight + 8,
-          right: 8,
-          child: EditorSnackBarLayer(),
-        ),
+        Positioned.fill(child: EditorSettingsHost(scope: plugin.scope)),
       ],
     );
   }
 }
 
-/// Chrome shown while the full editor is open: right inspector panel, the
-/// compact dock confined to the canvas column, the status badge, and
-/// snackbars. See [CompactChrome] for the sizing assumption.
 /// How much of the window the editor's chrome takes from the game.
 ///
 /// The game is laid out inside what is left, so the world is never hidden
@@ -83,19 +103,17 @@ EdgeInsets editorGameInsets({
                   OverlayLayout.compactDockPanelHeight,
             );
   // Nothing on the left: the tool strip floats over the viewport, top
-  // right, under the transform column.
-  return EdgeInsets.fromLTRB(
-    0,
-    0,
-    rightPanelWidth + (designing ? designerRightPanelWidth(window) : 0),
-    designerBar + docks,
-  );
+  // right, under the transform column. The designer's panel is a tab of
+  // the right panel, so it takes no width of its own.
+  return EdgeInsets.fromLTRB(0, 0, rightPanelWidth, designerBar + docks);
 }
 
-/// The designer's own panel, beside the editor's.
-double designerRightPanelWidth(Size window) =>
-    math.min(260.0, window.width / 3);
-
+/// Chrome shown while the full editor is open: the right panel, the docks
+/// along the foot of the canvas column, the controls floating over the
+/// viewport's corners — play top left, transform top right, the settings
+/// gear bottom right with messages above it, the designer's minimap bottom
+/// left — and the dialogs over it all.
+/// See [CompactChrome] for the sizing assumption.
 class FullEditorChrome extends StatelessWidget {
   const FullEditorChrome({
     super.key,
@@ -124,10 +142,8 @@ class FullEditorChrome extends StatelessWidget {
       ],
       builder: (context, _) {
         final panelWidth = plugin.scope.chrome.rightPanelWidth.value;
-        final leftWidth = math.max(0.0, size.width - panelWidth);
 
         final designer = plugin.designer.value;
-        final designerPanelWidth = designerRightPanelWidth(size);
         final gameInsets = editorGameInsets(
           window: size,
           plugin: plugin,
@@ -152,7 +168,8 @@ class FullEditorChrome extends StatelessWidget {
           // is visible: rulers, the minimap and anything else drawn in
           // screen space have the whole of it.
           ?..viewportInsets = EdgeInsets.zero
-          // The play controls sit top-left now; nothing is under the minimap.
+          // The settings gear is in the other corner: the minimap has
+          // its own.
           ..minimapBottomReserve = 0;
 
         // Top-left of the viewport: clear of the tool strip and the rulers
@@ -169,11 +186,27 @@ class FullEditorChrome extends StatelessWidget {
             controlsAt +
             Offset(0, PlayControlsToolbar.heightFor(settings) + 8) -
             Offset(gameInsets.left, gameInsets.top);
+        // Clear of the minimap, bottom left, while designing; of the canvas's
+        // edge otherwise. The gear is at the other corner.
+        plugin.gamePreviewBottomReserve = designer != null
+            ? MinimapLayout.margin * 2 + MinimapLayout.size.height
+            : controlsAt.dy;
+        // What stands in the bottom right corner: the gear, snapping at hand
+        // on it while editing, and above them the messages; the transform
+        // column and tool strip stop short of them.
+        final gearMargin = designer != null ? MinimapLayout.margin : 16.0;
+        final quickSnap = !plugin.playController.isRunning;
+        final aboveGear =
+            gameInsets.bottom +
+            gearMargin +
+            SettingsGearButton.heightFor(settings) +
+            (quickSnap ? QuickSnapBar.heightFor(settings) + 6 : 0) +
+            8;
         // The same frame as the toolbar above it: radius, border, padding.
         plugin.gamePreviewStyle = GamePreviewStyle(
-          cornerRadius: settings.cornerRadius + 6,
-          borderColor: settings.themeColor,
-          padding: 5 * settings.compactness,
+          cornerRadius: EditorMetrics.radiusLg,
+          borderColor: EditorTheme.accent,
+          padding: EditorMetrics.space(5),
         );
 
         return Stack(
@@ -186,24 +219,9 @@ class FullEditorChrome extends StatelessWidget {
               child: EditorRightPanel(plugin: plugin, settings: settings),
             ),
 
-            // The Level Designer's chrome sits to the left of the existing
-            // right panel rather than replacing it: the scene tree and
-            // inspector are as useful while designing a level as at any other
-            // time, and taking them away to make room would be a downgrade.
+            // The Level Designer's panel is the right panel's Level tab;
+            // here, only its status bar, along the foot of the level.
             if (designer != null) ...[
-              Positioned(
-                top: 0,
-                left: 0,
-                bottom: DesignerStatusBar.height + docksHeight,
-                right: panelWidth,
-                child: LevelDesignerWorkspace(
-                  session: designer,
-                  gridSize: plugin.gridSize.value,
-                  onGridSizeChanged: plugin.setGridSize,
-                  onClose: plugin.closeLevelDesigner,
-                  rightPanelWidth: designerPanelWidth,
-                ),
-              ),
               // On the docks, against the level it reports on.
               Positioned(
                 left: 0,
@@ -230,14 +248,43 @@ class FullEditorChrome extends StatelessWidget {
                 bottom: 0,
                 child: CompactStatusDock(
                   plugin: plugin,
-                  maxDetailWidth: leftWidth,
                   maxDetailHeight: size.height - designerBar,
                 ),
               ),
             Positioned(
               left: controlsAt.dx,
               top: controlsAt.dy,
-              child: PlayControlsToolbar(plugin: plugin, settings: settings),
+              child: PlayControlsToolbar(
+                plugin: plugin,
+                settings: settings,
+                // Up to the transform column at the top right, and no
+                // further: past that, the row scrolls.
+                maxWidth:
+                    size.width -
+                    gameInsets.right -
+                    controlsAt.dx -
+                    ToolPalette.width -
+                    (designer != null ? MinimapLayout.margin : 16) -
+                    12,
+              ),
+            ),
+            // The settings, bottom right, under the transform column: the
+            // corner the minimap leaves free while designing. Snapping
+            // stands on the gear while editing — not in a play-test.
+            Positioned(
+              right: gameInsets.right + gearMargin,
+              bottom: gameInsets.bottom + gearMargin,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (quickSnap) ...[
+                    QuickSnapBar(scope: plugin.scope, settings: settings),
+                    const SizedBox(height: 6),
+                  ],
+                  SettingsGearButton(scope: plugin.scope, settings: settings),
+                ],
+              ),
             ),
             // All, Move, Scale, Rotate: the play controls' mirror, at the
             // top right of the level — clear of the designer's panel and,
@@ -248,7 +295,7 @@ class FullEditorChrome extends StatelessWidget {
                   gameInsets.right +
                   (designer != null ? MinimapLayout.margin : 16),
               top: controlsAt.dy,
-              bottom: gameInsets.bottom + 8,
+              bottom: aboveGear,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -265,12 +312,6 @@ class FullEditorChrome extends StatelessWidget {
                 ],
               ),
             ),
-            // Above whatever the foot of the window holds.
-            Positioned(
-              bottom: gameInsets.bottom + 8,
-              right: panelWidth + 8,
-              child: const EditorSnackBarLayer(),
-            ),
             // Docks popped out of the panel float over the editor.
             Positioned.fill(child: DockPopouts(plugin: plugin)),
             // A module's workspace, over the level and its panels; the
@@ -282,8 +323,8 @@ class FullEditorChrome extends StatelessWidget {
                     ? const SizedBox.shrink()
                     : WorkspaceHost(
                         open: open,
-                        cornerRadius: settings.cornerRadius + 6,
-                        borderColor: settings.themeColor,
+                        cornerRadius: EditorMetrics.radiusLg,
+                        borderColor: EditorTheme.accent,
                         workspace: WorkspaceContext(
                           scope: plugin.scope,
                           path: open.path,
@@ -296,14 +337,22 @@ class FullEditorChrome extends StatelessWidget {
                       ),
               ),
             ),
+            // Over everything, the settings, while they are open.
+            Positioned.fill(child: EditorSettingsHost(scope: plugin.scope)),
+            // Messages last, so a dialog never hides one: in the canvas's
+            // own corner, standing on the gear, clear of the panels and of
+            // whatever the foot of the window holds.
+            Positioned(
+              bottom: aboveGear,
+              right: gameInsets.right + 8,
+              child: const EditorSnackBarLayer(),
+            ),
           ],
         );
       },
     );
   }
 }
-
-// ── Enums & data classes ──────────────────────────────────────────────────────
 
 /// Shows an open workspace the way its definition asks: as a dialog over the
 /// editor — the level dimmed but still there behind it, so opening a tool
@@ -314,25 +363,24 @@ class WorkspaceHost extends StatelessWidget {
     required this.open,
     required this.workspace,
     this.cornerRadius = 12,
-    this.borderColor = EditorTheme.border,
+    this.borderColor,
   });
 
   final OpenWorkspace open;
   final WorkspaceContext workspace;
   final double cornerRadius;
-  final Color borderColor;
+
+  /// The frame's line; the editor's faint border when null.
+  final Color? borderColor;
 
   /// The dim over the editor behind a dialog.
   static const Key scrimKey = Key('workspaceScrim');
 
   /// Room left around a dialog, so the editor shows at its edges.
-  static const EdgeInsets dialogMargin = EdgeInsets.symmetric(
-    horizontal: 40,
-    vertical: 28,
-  );
+  static const EdgeInsets dialogMargin = EditorDialogFrame.margin;
 
   /// Below this there is no room to spare for a margin: the dialog fills.
-  static const Size roomyEnough = Size(1100, 640);
+  static const Size roomyEnough = EditorDialogFrame.roomyEnough;
 
   @override
   Widget build(BuildContext context) {
@@ -349,63 +397,48 @@ class WorkspaceHost extends StatelessWidget {
     );
   }
 
-  Widget _present(Widget body, bool filled) {
-    return LayoutBuilder(
-      builder: (context, box) {
-        final asDialog =
-            !filled &&
-            open.definition.presentation == WorkspacePresentation.dialog &&
-            box.maxWidth >= roomyEnough.width &&
-            box.maxHeight >= roomyEnough.height;
-        if (!asDialog) {
-          return ColoredBox(color: EditorTheme.dialogBg, child: body);
-        }
-        return Stack(
-          children: [
-            // The scrim takes clicks, so nothing behind is pressed by
-            // accident — and does nothing with them: closing is the
-            // workspace's own button, which can ask about unsaved work.
-            const Positioned.fill(
-              child: ModalBarrier(
-                key: scrimKey,
-                dismissible: false,
-                color: Color(0x99000000),
-              ),
-            ),
-            Positioned.fill(
-              child: Padding(
-                padding: dialogMargin,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(cornerRadius),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0xAA000000),
-                        blurRadius: 32,
-                        offset: Offset(0, 12),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(cornerRadius),
-                    child: DecoratedBox(
-                      position: DecorationPosition.foreground,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(cornerRadius),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: ColoredBox(
-                        color: EditorTheme.dialogBg,
-                        child: body,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  // The dim does nothing with a click: closing is the workspace's own
+  // button, which can ask about unsaved work.
+  Widget _present(Widget body, bool filled) => EditorDialogFrame(
+    filled:
+        filled || open.definition.presentation != WorkspacePresentation.dialog,
+    cornerRadius: cornerRadius,
+    borderColor: borderColor,
+    scrimKey: scrimKey,
+    child: body,
+  );
+}
+
+/// The chrome while a play-test runs with the editor stepped aside, as the
+/// settings ask: the game has the window, with the play controls in a small
+/// bar at the top — Pause brings the editor back, Stop ends the test — and
+/// any messages at the corner.
+class PlayTestChrome extends StatelessWidget {
+  const PlayTestChrome({
+    super.key,
+    required this.plugin,
+    required this.settings,
+  });
+
+  final JustGameEditorPlugin plugin;
+  final OverlayUiSettings settings;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    children: [
+      Positioned(
+        top: 8,
+        left: 0,
+        right: 0,
+        child: Center(
+          child: PlayControlsToolbar(
+            plugin: plugin,
+            settings: settings,
+            maxWidth: 560,
+          ),
+        ),
+      ),
+      const Positioned(bottom: 8, right: 8, child: EditorSnackBarLayer()),
+    ],
+  );
 }

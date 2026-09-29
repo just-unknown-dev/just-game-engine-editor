@@ -60,7 +60,7 @@ class DesignerSwitch extends StatelessWidget {
                 child: Text(
                   active?.name ?? defaultLabel,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: EditorTheme.textBright,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -68,7 +68,7 @@ class DesignerSwitch extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 2),
-              const Icon(
+              Icon(
                 Icons.arrow_drop_down,
                 size: 16,
                 color: EditorTheme.textMuted,

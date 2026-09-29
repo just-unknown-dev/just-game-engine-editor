@@ -34,8 +34,8 @@ class DockBadge {
 }
 
 /// A fact a module's dock puts on the status bar: a live value that is
-/// always in view — `Waves  3 left`. The bar is one button that opens the
-/// dock panel, so a readout informs; it does not open its dock by itself.
+/// always in view — `Waves  3 left` — and a button to its dock, opened with
+/// [openArgs].
 class DockReadout {
   const DockReadout({
     required this.value,

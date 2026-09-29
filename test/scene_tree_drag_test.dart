@@ -40,7 +40,7 @@ void main() {
 
   group('what a drop on a row means', () {
     // A tree row is this tall.
-    const height = kSceneTreeRowTileHeight;
+    final height = kSceneTreeRowTileHeight;
 
     test('the body of a row means inside it', () {
       expect(dropZoneFor(height / 2, height), DropZone.onto);
@@ -220,9 +220,10 @@ void main() {
       WidgetTester tester,
       String from,
       String to, {
-      double dy = kSceneTreeRowTileHeight / 2,
+      double? dy,
     }) async {
-      // The whole 22-pixel row, not the text sitting in the middle of it.
+      dy ??= kSceneTreeRowTileHeight / 2;
+      // The whole row, not the text sitting in the middle of it.
       final target = tester.getRect(
         find.ancestor(
           of: find.text(to),

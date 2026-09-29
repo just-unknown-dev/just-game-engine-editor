@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
@@ -6,12 +8,18 @@ import 'package:just_signals/just_signals.dart';
 
 import '../../core/constants/editor_constants.dart';
 import '../../core/plugin/editor_plugin.dart';
+import '../../core/entity/entity_ops.dart';
 import '../../core/scope/editor_scope.dart';
+import '../../core/theme/editor_metrics.dart';
+import '../../core/theme/editor_theme_data.dart';
 import '../../core/theme/theme_controller.dart';
+import '../kit/look.dart';
 import 'chrome/editor_chrome.dart';
+import 'chrome_state.dart';
 import 'settings/overlay_ui_settings.dart';
 import 'viewport_menu.dart';
 import 'shared/snackbar.dart';
+import '../kit/dialogs.dart';
 
 // ─ Frame-safe overlay settings watcher ────────────────────────────────────
 
@@ -77,8 +85,9 @@ class _OverlayUiSettingsWatcherState extends State<OverlayUiSettingsWatcher> {
 /// shown independently. When visible it switches to a split layout: game
 /// canvas on the left, editor panel on the right.
 ///
-/// The dock/panel/badge/snackbar "chrome" is projected into the ambient
-/// [Overlay] via [OverlayPortal] rather than painted inline. Apps typically
+/// The docks, panels, floating controls and messages — the "chrome" — are
+/// projected into the ambient [Overlay] via [OverlayPortal] rather than
+/// painted inline. Apps typically
 /// stack pause/game-over dialogs above this widget (see just_zombies'
 /// GameScreen); painting chrome inline would put it underneath those
 /// dialogs. Routing it through the Overlay makes the editor — a developer
@@ -102,12 +111,161 @@ class JustGameEditorOverlay extends StatefulWidget {
 
 class JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
   final OverlayPortalController _chromeController = OverlayPortalController();
+  final List<void Function()> _stop = [];
 
   @override
   void initState() {
     super.initState();
-    if (kDebugMode) _chromeController.show();
+    if (!kDebugMode) return;
+    _chromeController.show();
+    final scope = widget.plugin.scope;
+    _stop
+      ..add(scope.prefs.settings.watch(_syncTheme))
+      ..add(scope.theme.current.watch(() => _applyTheme()));
+    // The questions only the editor's window can ask.
+    widget.plugin.askToRecover = _askToRecover;
+    _entities = scope.entities..confirmDelete = _confirmDelete;
+    scope.prefs.load().then((_) {
+      if (!mounted) return;
+      scope.chrome.rightPanelWidth.value = scope.prefs
+          .get(EditorChromeState.rightPanelWidthPref)
+          .clamp(
+            OverlayLayout.rightPanelMinWidth,
+            OverlayLayout.rightPanelMaxWidth,
+          );
+      // Where the last session left off, as the settings ask.
+      unawaited(widget.plugin.reopenLastSession());
+    });
+    _syncTheme();
+    _applyTheme();
   }
+
+  EntityOps? _entities;
+
+  Future<bool?> _askToRecover(String sceneName, DateTime when) {
+    if (!mounted) return Future.value();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final at = '${two(when.hour)}:${two(when.minute)}';
+    return askToRecover(
+      context,
+      title: 'Recover unsaved changes to $sceneName?',
+      message:
+          'A backup from $at holds changes to $sceneName that were never '
+          'saved. Recover them, or open the scene as it was last saved; '
+          'the backup stays in .editor_backups either way.',
+    );
+  }
+
+  Future<bool> _confirmDelete(String what) {
+    if (!mounted) return Future.value(false);
+    return showEditorConfirm(
+      context,
+      title: 'Delete $what?',
+      message: 'Undo brings it back.',
+      confirmLabel: 'Delete',
+    );
+  }
+
+  @override
+  void dispose() {
+    if (widget.plugin.askToRecover == _askToRecover) {
+      widget.plugin.askToRecover = null;
+    }
+    // Held from the start: the scope may already be closed by now.
+    final entities = _entities;
+    if (entities != null && entities.confirmDelete == _confirmDelete) {
+      entities.confirmDelete = null;
+    }
+    for (final stop in _stop) {
+      stop();
+    }
+    // The focus outlines were the editor's setting: give the app back its
+    // own way of showing them.
+    if (_focusStrategySet) {
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.automatic;
+    }
+    super.dispose();
+  }
+
+  bool _focusStrategySet = false;
+
+  /// Always-visible focus, for everything under the editor: Flutter's own
+  /// highlights too, not only the kit's outlines.
+  void _syncFocusStrategy(bool always) {
+    if (always == _focusStrategySet) return;
+    _focusStrategySet = always;
+    FocusManager.instance.highlightStrategy = always
+        ? FocusHighlightStrategy.alwaysTraditional
+        : FocusHighlightStrategy.automatic;
+  }
+
+  /// The settings name a theme — a built-in accent or a module's preset —
+  /// and the sizes the chrome is drawn at.
+  void _syncTheme() {
+    final scope = widget.plugin.scope;
+    final settings = scope.prefs.settings.value;
+    if (scope.theme.preset(settings.themeId) != null) {
+      scope.theme.select(settings.themeId);
+    } else if (scope.theme.currentId.value != null ||
+        scope.theme.current.value.primary != settings.accent) {
+      // A preset that has gone — its module removed: the accent it had.
+      scope.theme.set(EditorThemeData.classic.withAccent(settings.accent));
+    }
+    _syncFocusStrategy(settings.alwaysShowFocus);
+    final sized = EditorMetrics.apply(settings);
+    // High contrast and colour-blind safe colours are the palette's to show,
+    // over whichever theme is picked.
+    if (!_applyTheme() && sized) _rebuildAll();
+  }
+
+  EditorThemeData? _themeSource;
+  (bool, bool)? _themeFlags;
+
+  /// Applies the picked theme, as the accessibility settings adjust it.
+  /// True when it changed — and everything was built again.
+  bool _applyTheme() {
+    final scope = widget.plugin.scope;
+    final source = scope.theme.current.value;
+    final settings = scope.prefs.settings.value;
+    final flags = (settings.highContrast, settings.colourBlindSafe);
+    if (identical(source, _themeSource) && flags == _themeFlags) return false;
+    _themeSource = source;
+    _themeFlags = flags;
+    var data = source;
+    if (settings.highContrast) data = data.highContrast();
+    if (settings.colourBlindSafe) data = data.colourBlindSafe();
+    EditorTheme.apply(data);
+    _rebuildAll();
+    return true;
+  }
+
+  /// Every colour and size is read as the chrome builds, so a new theme or
+  /// density means building all of it again. Its state — scroll positions,
+  /// open menus, typed text — stays.
+  void _rebuildAll() {
+    if (!mounted) return;
+    void mark(Element element) {
+      element.markNeedsBuild();
+      element.visitChildren(mark);
+    }
+
+    (context as Element).visitChildren(mark);
+  }
+
+  /// Whether the editor steps aside for the game: a play-test running —
+  /// not paused, which brings it back — with the settings asking for that.
+  bool _steppedAside(OverlayUiSettings settings) =>
+      settings.hideChromeWhilePlaying &&
+      widget.plugin.playController.state.value == EditorPlayState.playing;
+
+  /// The chrome's ambient look — its text at the size and weight the
+  /// settings ask for, the game's left alone; motion as they allow; one style
+  /// of tooltip — rebuilt when they change.
+  Widget _chromeLook(Widget child) => SignalBuilder<OverlayUiSettings>(
+    signal: widget.plugin.scope.prefs.settings,
+    builder: (context, _, _) => EditorLook(child: child),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -138,25 +296,37 @@ class JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
               child: OverlayPortal(
                 controller: _chromeController,
                 overlayChildBuilder: (context) {
-                  return SignalBuilder2<bool, bool>(
-                    signal1: plugin.isVisible,
-                    signal2: plugin.isStatusPanelVisible,
-                    builder: (context, _, _, _) {
-                      if (!plugin.isVisible.value) {
-                        if (!plugin.isStatusPanelVisible.value) {
-                          return const SizedBox.shrink();
+                  return _chromeLook(
+                    SignalBuilder2<bool, bool>(
+                      signal1: plugin.isVisible,
+                      signal2: plugin.isStatusPanelVisible,
+                      builder: (context, _, _, _) {
+                        if (!plugin.isVisible.value) {
+                          if (!plugin.isStatusPanelVisible.value) {
+                            return const SizedBox.shrink();
+                          }
+                          return CompactChrome(plugin: plugin);
                         }
-                        return CompactChrome(plugin: plugin);
-                      }
 
-                      return SignalBuilder<OverlayUiSettings>(
-                        signal: widget.plugin.scope.prefs.settings,
-                        builder: (context, settings, _) => FullEditorChrome(
-                          plugin: plugin,
-                          settings: settings,
-                        ),
-                      );
-                    },
+                        return SignalBuilder2<
+                          OverlayUiSettings,
+                          EditorPlayState
+                        >(
+                          signal1: widget.plugin.scope.prefs.settings,
+                          signal2: plugin.playController.state,
+                          builder: (context, settings, _, _) =>
+                              _steppedAside(settings)
+                              ? PlayTestChrome(
+                                  plugin: plugin,
+                                  settings: settings,
+                                )
+                              : FullEditorChrome(
+                                  plugin: plugin,
+                                  settings: settings,
+                                ),
+                        );
+                      },
+                    ),
                   );
                 },
                 child: SignalBuilder2<bool, bool>(
@@ -167,16 +337,19 @@ class JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
                       return AbsorbPointer(absorbing: false, child: gameChild);
                     }
 
-                    return SignalBuilder<OverlayUiSettings>(
-                      signal: widget.plugin.scope.prefs.settings,
-                      builder: (context, settings, _) {
+                    return SignalBuilder2<OverlayUiSettings, EditorPlayState>(
+                      signal1: widget.plugin.scope.prefs.settings,
+                      signal2: plugin.playController.state,
+                      builder: (context, settings, _, _) {
                         return OverlayUiSettingsWatcher(
                           plugin: plugin,
                           settings: settings,
-                          child: _GameInWhatIsLeft(
-                            plugin: plugin,
-                            gameChild: gameChild,
-                          ),
+                          child: _steppedAside(settings)
+                              ? gameChild
+                              : _GameInWhatIsLeft(
+                                  plugin: plugin,
+                                  gameChild: gameChild,
+                                ),
                         );
                       },
                     );

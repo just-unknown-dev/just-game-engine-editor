@@ -152,7 +152,7 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
         _toolbar(target, active),
         if (_mapSettings && target != null) _settings(target),
         if (target?.isReadOnly ?? false)
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(10, 4, 10, 4),
             child: Text(
               'A Tiled map: shown as it is, not edited here.',
@@ -337,13 +337,13 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: EditorTheme.border)),
       ),
       child: Row(
         children: [
           const SizedBox(width: 4),
-          const Icon(Icons.grid_on, size: 13, color: EditorTheme.textMuted),
+          Icon(Icons.grid_on, size: 13, color: EditorTheme.textMuted),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -351,10 +351,7 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
                   ? 'No Level Map'
                   : (target.entity.name ?? jge.LevelMaps.primaryName),
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 11,
-                color: EditorTheme.textSecondary,
-              ),
+              style: TextStyle(fontSize: 11, color: EditorTheme.textSecondary),
             ),
           ),
           _Icon(
@@ -621,7 +618,7 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
     }
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: EditorTheme.surfaceDark,
         border: Border(bottom: BorderSide(color: EditorTheme.border)),
       ),
@@ -792,7 +789,6 @@ class _DepthHeader extends StatelessWidget {
         message: description == null
             ? 'Place new things at $label'
             : '$description. Click to place new things here',
-        waitDuration: const Duration(milliseconds: 600),
         child: Container(
           height: 24,
           padding: const EdgeInsets.only(left: 8, right: 4),
@@ -898,7 +894,7 @@ class _MapLayerRow extends StatelessWidget {
               onTap: editable ? onToggleCollides : null,
             ),
             const SizedBox(width: 4),
-            const Icon(Icons.grid_on, size: 12, color: EditorTheme.textMuted),
+            Icon(Icons.grid_on, size: 12, color: EditorTheme.textMuted),
             const SizedBox(width: 4),
             Expanded(
               child: Text(
@@ -918,10 +914,7 @@ class _MapLayerRow extends StatelessWidget {
                 message: '$count entit${count == 1 ? 'y' : 'ies'} on it',
                 child: Text(
                   '$count',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: EditorTheme.textMuted,
-                  ),
+                  style: TextStyle(fontSize: 10, color: EditorTheme.textMuted),
                 ),
               ),
             if (editable)
@@ -983,20 +976,13 @@ class _EntitiesRow extends StatelessWidget {
           onTap: onToggleLocked,
         ),
         const SizedBox(width: 26),
-        const Icon(
-          Icons.category_outlined,
-          size: 12,
-          color: EditorTheme.textMuted,
-        ),
+        Icon(Icons.category_outlined, size: 12, color: EditorTheme.textMuted),
         const SizedBox(width: 4),
         Expanded(
           child: Text(
             count == 1 ? '1 entity' : '$count entities',
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
-              color: EditorTheme.textSecondary,
-            ),
+            style: TextStyle(fontSize: 12, color: EditorTheme.textSecondary),
           ),
         ),
         _Icon(
@@ -1023,7 +1009,7 @@ class _TintRow extends StatelessWidget {
       children: [
         SizedBox(
           width: InspectorField.labelWidth,
-          child: const Text(
+          child: Text(
             'Tint',
             style: TextStyle(fontSize: 11, color: EditorTheme.textSecondary),
           ),
@@ -1069,7 +1055,7 @@ class _Icon extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(4),
       child: Padding(
-        padding: const EdgeInsets.all(4),
+        padding: const EdgeInsets.all(5),
         child: Icon(
           icon,
           size: 14,

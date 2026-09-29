@@ -118,6 +118,24 @@ void main() {
       await tester.pump();
     }
 
+    testWidgets('removing a component is undoable', (tester) async {
+      final entity = platform('Platform_0');
+      final before = entity.components.length;
+      await pumpInspector(tester, entity);
+      final remove = find.byWidgetPredicate(
+        (w) => w is Tooltip && (w.message ?? '').startsWith('Remove '),
+      );
+      expect(remove, findsWidgets);
+
+      await tester.tap(remove.first);
+      await tester.pump();
+      expect(entity.components.length, before - 1);
+      expect(scope.history.canUndo.value, isTrue);
+
+      scope.history.undo();
+      expect(entity.components.length, before, reason: 'back, as it was');
+    });
+
     testWidgets('a field edit is undoable', (tester) async {
       final entity = platform('Platform_0');
       // Every renderable is keyed under RenderableComponent — one drawn

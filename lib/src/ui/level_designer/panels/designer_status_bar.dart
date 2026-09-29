@@ -64,8 +64,8 @@ class DesignerStatusBar extends StatelessWidget {
                   children: [
                     ToolOptionsBar(session: session),
                     const _SectionDivider(),
-                    ..._snapControls(controller),
-                    const SizedBox(width: 12),
+                    ..._spaced(_snapControls(controller)),
+                    const _SectionDivider(),
                     _overlayToggles(controller),
                     _tileReadout(controller),
                     // What the modules add, after the built-ins.
@@ -89,7 +89,7 @@ class DesignerStatusBar extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.right,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: EditorTheme.textSecondary,
                     fontSize: 11,
                     fontFeatures: [FontFeature.tabularFigures()],
@@ -111,7 +111,7 @@ class DesignerStatusBar extends StatelessWidget {
         label: 'Snap',
         isOn: enabled,
         tooltip: 'Snapping  (hold Ctrl while dragging to suspend)',
-        onTap: () => controller.snapEnabled.value = !enabled,
+        onTap: () => session.setSnapping(!enabled),
       ),
     ),
     SignalBuilder<bool>(
@@ -123,7 +123,7 @@ class DesignerStatusBar extends StatelessWidget {
         tooltip:
             'Also snap to other entities’ edges and centres, and to ruler '
             'guides',
-        onTap: () => controller.smartSnap.value = !enabled,
+        onTap: () => session.setSmartSnap(!enabled),
       ),
     ),
     _GridSizeField(
@@ -133,13 +133,24 @@ class DesignerStatusBar extends StatelessWidget {
     ),
   ];
 
+  /// The gap between two toggles side by side: their lit fills stay apart,
+  /// each its own target, rather than running into one bar.
+  static const double _gap = 4;
+
+  static List<Widget> _spaced(List<Widget> children) => [
+    for (var i = 0; i < children.length; i++) ...[
+      if (i > 0) const SizedBox(width: _gap),
+      children[i],
+    ],
+  ];
+
   /// One icon per registered overlay, including any an extension added, with
   /// the name in the tooltip.
   Widget _overlayToggles(LevelDesignerController controller) =>
       SignalBuilder<Set<String>>(
         signal: controller.hiddenOverlays,
         builder: (context, hidden, _) => Row(
-          children: [
+          children: _spaced([
             for (final overlay in session.overlays.all)
               DesignerToggle(
                 icon: overlay.icon,
@@ -152,7 +163,7 @@ class DesignerStatusBar extends StatelessWidget {
                   visible: hidden.contains(overlay.id),
                 ),
               ),
-          ],
+          ]),
         ),
       );
 
@@ -217,7 +228,7 @@ class _TileHoverReadout extends StatelessWidget {
         ? const SizedBox.shrink()
         : Text(
             describe(session, cell),
-            style: const TextStyle(
+            style: TextStyle(
               color: EditorTheme.textSecondary,
               fontSize: 11,
               fontFeatures: [FontFeature.tabularFigures()],
@@ -284,12 +295,9 @@ class _GridSizeField extends StatelessWidget {
           children: [
             Text(
               '${current.toInt()}px',
-              style: const TextStyle(
-                color: EditorTheme.textSecondary,
-                fontSize: 11,
-              ),
+              style: TextStyle(color: EditorTheme.textSecondary, fontSize: 11),
             ),
-            const Icon(
+            Icon(
               Icons.arrow_drop_down,
               size: 16,
               color: EditorTheme.textSecondary,

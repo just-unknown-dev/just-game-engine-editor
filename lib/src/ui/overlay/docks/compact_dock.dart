@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:just_debugger/just_debugger.dart';
@@ -7,11 +6,11 @@ import 'package:just_game_engine/just_game_engine.dart' show TransformComponent;
 import 'package:just_signals/just_signals.dart';
 
 import '../../../core/constants/editor_constants.dart';
+import '../../../core/theme/editor_metrics.dart';
 import '../../../core/plugin/editor_plugin.dart';
 import '../../../core/prefs/editor_prefs.dart';
 import '../../../extension/editor_contributions.dart';
 import '../settings/overlay_ui_settings.dart';
-import '../settings/settings_dialog.dart';
 import '../shared/snackbar.dart';
 import 'dock_controller.dart';
 import 'shell/built_in_docks.dart';
@@ -21,12 +20,10 @@ class CompactStatusDock extends StatefulWidget {
   const CompactStatusDock({
     super.key,
     required this.plugin,
-    required this.maxDetailWidth,
     required this.maxDetailHeight,
   });
 
   final JustGameEditorPlugin plugin;
-  final double maxDetailWidth;
   final double maxDetailHeight;
 
   @override
@@ -34,9 +31,6 @@ class CompactStatusDock extends StatefulWidget {
 }
 
 class _CompactStatusDockState extends State<CompactStatusDock> {
-  final GlobalKey _stackKey = GlobalKey();
-  final GlobalKey _settingsAnchorKey = GlobalKey();
-
   // Resolved once: dispose runs after the plugin may have closed the scope,
   // and must not go back through the container.
   late final DockController _dock = widget.plugin.scope.dockController;
@@ -45,6 +39,7 @@ class _CompactStatusDockState extends State<CompactStatusDock> {
   /// listen to it, so a refresh repaints those and nothing else.
   final ValueNotifier<int> _pulse = ValueNotifier(0);
   Timer? _ticker;
+  int? _tickerMs;
   List<VoidCallback> _stopWatching = const [];
 
   /// Where the dock state is kept between launches.
@@ -59,15 +54,6 @@ class _CompactStatusDockState extends State<CompactStatusDock> {
   double get _maxDockHeight =>
       (widget.maxDetailHeight * 0.75).clamp(180.0, 700.0);
 
-  void _updateSettings(OverlayUiSettings settings) {
-    final scope = widget.plugin.scope;
-    scope.prefs.update(settings);
-    // The accent the user picked is the theme the rest of the chrome reads.
-    scope.theme.select(settings.themePreset.name);
-  }
-
-  void _toggleSettings() => _dock.toggle(DockController.settingsId);
-
   @override
   void initState() {
     super.initState();
@@ -81,6 +67,8 @@ class _CompactStatusDockState extends State<CompactStatusDock> {
       _dock.order.watch(changed),
       _dock.maximised.watch(changed),
       _dock.poppedOut.watch(changed),
+      // A new refresh rate applies now, not at the next launch.
+      widget.plugin.scope.prefs.settings.watch(_startTicker),
     ];
     _dock.reconcile(_docks);
     _restore();
@@ -91,7 +79,6 @@ class _CompactStatusDockState extends State<CompactStatusDock> {
     final scope = widget.plugin.scope;
     await scope.prefs.load();
     if (!mounted) return;
-    scope.theme.select(scope.prefs.settings.value.themePreset.name);
     _dock
       ..attach(
         saved: scope.prefs.get(_saved),
@@ -101,9 +88,11 @@ class _CompactStatusDockState extends State<CompactStatusDock> {
   }
 
   void _startTicker() {
-    final ms = widget.plugin.scope.prefs.settings.value.metricRefreshMs
-        .clamp(100, 2000)
+    final ms = OverlayUiSettings.metricRefreshRange
+        .clamp(widget.plugin.scope.prefs.settings.value.metricRefreshMs)
         .round();
+    if (ms == _tickerMs && _ticker != null) return;
+    _tickerMs = ms;
     _ticker?.cancel();
     _ticker = Timer.periodic(Duration(milliseconds: ms), (_) {
       if (!mounted) return;
@@ -114,25 +103,6 @@ class _CompactStatusDockState extends State<CompactStatusDock> {
       );
       _pulse.value++;
     });
-  }
-
-  double _detailLeftForKey(GlobalKey anchorKey, double detailWidth) {
-    final stackBox = _stackKey.currentContext?.findRenderObject() as RenderBox?;
-    final anchorBox =
-        anchorKey.currentContext?.findRenderObject() as RenderBox?;
-    if (stackBox == null ||
-        anchorBox == null ||
-        !stackBox.hasSize ||
-        !anchorBox.hasSize) {
-      return 12;
-    }
-    final anchorCenter = anchorBox.localToGlobal(
-      anchorBox.size.center(Offset.zero),
-      ancestor: stackBox,
-    );
-    const minLeft = 12.0;
-    final maxLeft = math.max(minLeft, widget.maxDetailWidth - detailWidth - 12);
-    return (anchorCenter.dx - detailWidth / 2).clamp(minLeft, maxLeft);
   }
 
   @override
@@ -161,30 +131,20 @@ class _CompactStatusDockState extends State<CompactStatusDock> {
       if (mounted) _dock.reconcile(docks);
     });
     final active = _definition(_dock.activeDock);
-    final settingsOpen = _dock.isOpen(DockController.settingsId);
-    const strip = OverlayLayout.compactDockPanelHeight;
-    final detailMaxHeight = widget.maxDetailHeight - strip - 40;
-    final settingsPanelHeight = detailMaxHeight.clamp(260.0, 460.0).toDouble();
+    final strip = OverlayLayout.compactDockPanelHeight;
     final panelHeight = _dock.panelHeight(widget.maxDetailHeight - strip);
-    final totalHeight =
-        strip + panelHeight + (settingsOpen ? settingsPanelHeight + 12.0 : 0.0);
+    final totalHeight = strip + panelHeight;
 
     return SignalBuilder<OverlayUiSettings>(
       signal: widget.plugin.scope.prefs.settings,
       builder: (context, settings, _) {
-        final animationMs = (220 / settings.animationSpeed).clamp(80, 420);
-        final settingsWidth = math.min(
-          420.0,
-          math.max(280.0, widget.maxDetailWidth - 24),
-        );
         return AnimatedContainer(
-          duration: Duration(milliseconds: animationMs.round()),
+          duration: EditorMetrics.motionMedium,
           curve: Curves.easeOutCubic,
           height: totalHeight,
           child: Material(
             color: Colors.transparent,
             child: Stack(
-              key: _stackKey,
               clipBehavior: Clip.none,
               children: <Widget>[
                 Positioned(
@@ -198,16 +158,7 @@ class _CompactStatusDockState extends State<CompactStatusDock> {
                     controller: _dock,
                     settings: settings,
                     pulse: _pulse,
-                    trailing: <Widget>[
-                      const _MinimizedSnackChip(),
-                      const SizedBox(width: 8),
-                      _EditorSettingsButton(
-                        anchorKey: _settingsAnchorKey,
-                        settings: settings,
-                        isSelected: settingsOpen,
-                        onPressed: _toggleSettings,
-                      ),
-                    ],
+                    trailing: const <Widget>[MinimizedSnacksChip()],
                   ),
                 ),
                 if (active != null)
@@ -229,22 +180,6 @@ class _CompactStatusDockState extends State<CompactStatusDock> {
                       ),
                     ),
                   ),
-                if (settingsOpen)
-                  Positioned(
-                    left: _detailLeftForKey(_settingsAnchorKey, settingsWidth),
-                    bottom: strip + 12,
-                    child: SizedBox(
-                      width: settingsWidth,
-                      child: EditorSettingsPanel(
-                        initial: widget.plugin.scope.prefs.settings.value,
-                        prefs: widget.plugin.scope.prefs,
-                        sections: widget.plugin.scope.settingsSections,
-                        onChanged: _updateSettings,
-                        onClose: _toggleSettings,
-                        maxHeight: settingsPanelHeight,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -255,9 +190,12 @@ class _CompactStatusDockState extends State<CompactStatusDock> {
 }
 
 /// The status bar along the editor's foot: a line of quick facts — the
-/// scene, what is wrong, how fast it runs, what is selected — and one big
-/// button. A click anywhere on it opens the dock panel, or shuts it; which
-/// dock shows is the tabs' business, not the bar's.
+/// scene, what is wrong, how fast it runs, what is selected.
+///
+/// A fact that has somewhere to go is a button to it: the error count opens
+/// the Console on its errors, the frame rate the Profiler, the selection
+/// puts the level on it. A click anywhere else opens the dock panel, or
+/// shuts it; which dock shows is the tabs' business, not the bar's.
 class DockStatusStrip extends StatelessWidget {
   const DockStatusStrip({
     super.key,
@@ -276,7 +214,7 @@ class DockStatusStrip extends StatelessWidget {
   final Listenable pulse;
   final List<Widget> trailing;
 
-  static const Color _good = Color(0xFF7DE6B1);
+  static Color get _good => EditorTheme.success;
 
   @override
   Widget build(BuildContext context) {
@@ -285,10 +223,9 @@ class DockStatusStrip extends StatelessWidget {
       color: EditorTheme.surfaceDarker,
       child: InkWell(
         onTap: () => controller.togglePanel(fallback: BuiltInDocks.console),
-        hoverColor: settings.themeColor.withValues(alpha: 0.06),
+        hoverColor: EditorTheme.accent.withValues(alpha: 0.06),
         child: Tooltip(
           message: isOpen ? 'Hide the docks  (F2)' : 'Show the docks  (F2)',
-          waitDuration: const Duration(milliseconds: 700),
           child: Container(
             decoration: BoxDecoration(
               border: Border(
@@ -354,8 +291,8 @@ class DockStatusStrip extends StatelessWidget {
     }
     final problems = BuiltInDocks.problemScanOf(plugin).problems.length;
 
-    // Frame time against the 60 fps budget: fine, close, over.
-    const budget = 1000 / 60;
+    // Frame time against the budget at the target rate: fine, close, over.
+    final budget = plugin.scope.prefs.settings.value.frameBudgetMs;
     final frameColor = performance.lastUpdateMs > budget
         ? EditorTheme.error
         : performance.lastUpdateMs > budget * 0.75
@@ -376,7 +313,7 @@ class DockStatusStrip extends StatelessWidget {
               : EditorTheme.textPrimary,
         ),
         if (scene != null && sceneState.isDirty.value)
-          const _Fact(text: '● unsaved', color: EditorTheme.warning),
+          _Fact(text: '● unsaved', color: EditorTheme.warning),
         if (play != EditorPlayState.stopped)
           _Fact(
             text: play == EditorPlayState.playing ? '▶ playing' : '❚❚ paused',
@@ -393,21 +330,30 @@ class DockStatusStrip extends StatelessWidget {
               icon: Icons.error_outline_rounded,
               text: '$errors',
               color: EditorTheme.error,
-              tooltip: '$errors errors in the Console',
+              tooltip: '$errors errors: show them in the Console',
+              onTap: () => controller.open(
+                BuiltInDocks.console,
+                args: const {BuiltInDocks.levelArg: 'error'},
+              ),
             ),
           if (warnings > 0)
             _Fact(
               icon: Icons.warning_amber_rounded,
               text: '$warnings',
               color: EditorTheme.warning,
-              tooltip: '$warnings warnings in the Console',
+              tooltip: '$warnings warnings: show them in the Console',
+              onTap: () => controller.open(
+                BuiltInDocks.console,
+                args: const {BuiltInDocks.levelArg: 'warning'},
+              ),
             ),
           if (problems > 0)
             _Fact(
               icon: Icons.rule_rounded,
               text: '$problems',
               color: EditorTheme.warning,
-              tooltip: '$problems problems with the scene',
+              tooltip: '$problems problems with the scene: show them',
+              onTap: () => controller.open(BuiltInDocks.problems),
             ),
         ],
       [
@@ -417,11 +363,14 @@ class DockStatusStrip extends StatelessWidget {
               '${performance.currentFps} fps · '
               '${performance.lastUpdateMs.toStringAsFixed(1)} ms',
           color: frameColor,
+          tooltip: 'Frame rate and time: open the Profiler',
+          onTap: () => controller.open(BuiltInDocks.profiler),
         ),
         _Fact(
           icon: Icons.hub_outlined,
           text: '${plugin.debuggerController.snapshot.entityCount}',
-          tooltip: 'Entities',
+          tooltip: 'Entities: open World',
+          onTap: () => controller.open(BuiltInDocks.world),
         ),
       ],
       if (selected != null || count > 1)
@@ -432,6 +381,8 @@ class DockStatusStrip extends StatelessWidget {
                 ? '$count selected'
                 : selected!.name ?? 'Entity ${selected.id}',
             color: EditorTheme.textPrimary,
+            tooltip: selected == null ? null : 'Show it in the level',
+            onTap: selected == null ? null : () => plugin.focusOn(selected),
           ),
           if (count <= 1 && at != null)
             _Fact(
@@ -448,6 +399,11 @@ class DockStatusStrip extends StatelessWidget {
                 icon: d.icon,
                 text: '${d.readout?.label ?? d.label}  $value',
                 color: d.readout?.accent,
+                tooltip: 'Open ${d.label}',
+                onTap: () => controller.open(
+                  d.id,
+                  args: d.readout?.openArgs ?? const {},
+                ),
               ),
             ],
     ];
@@ -467,20 +423,28 @@ class DockStatusStrip extends StatelessWidget {
   }
 }
 
-/// One fact on the status bar: an optional icon and a few words.
+/// One fact on the status bar: an optional icon and a few words — and,
+/// with [onTap], a button to where it came from.
 class _Fact extends StatelessWidget {
-  const _Fact({required this.text, this.icon, this.color, this.tooltip});
+  const _Fact({
+    required this.text,
+    this.icon,
+    this.color,
+    this.tooltip,
+    this.onTap,
+  });
 
   final String text;
   final IconData? icon;
   final Color? color;
   final String? tooltip;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final tone = color ?? EditorTheme.textSecondary;
-    final body = Padding(
-      padding: const EdgeInsets.only(right: 8),
+    Widget body = Padding(
+      padding: EdgeInsets.only(right: 8, left: onTap == null ? 0 : 4),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -499,126 +463,23 @@ class _Fact extends StatelessWidget {
         ],
       ),
     );
-    return tooltip == null ? body : Tooltip(message: tooltip!, child: body);
-  }
-}
-
-// ── Minimized snackbar chip ───────────────────────────────────────────────────
-
-class _MinimizedSnackChip extends StatelessWidget {
-  const _MinimizedSnackChip();
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = EditorMessenger.of(context);
-    return SignalBuilder2<EditorSnackBarEntry?, bool>(
-      signal1: controller.current,
-      signal2: controller.isMinimized,
-      builder: (context, entry, minimized, _) {
-        if (entry == null || !minimized) {
-          return const SizedBox.shrink();
-        }
-        final accent = entry.type.accentColor;
-        return Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: controller.expand,
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: accent.withValues(alpha: 0.28)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Icon(entry.type.iconData, size: 11, color: accent),
-                    const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        entry.title ?? entry.message,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: EditorTheme.textSecondary,
-                          height: 1.0,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    GestureDetector(
-                      onTap: controller.dismiss,
-                      behavior: HitTestBehavior.opaque,
-                      child: const Padding(
-                        padding: EdgeInsets.all(2),
-                        child: Icon(
-                          Icons.close_rounded,
-                          size: 10,
-                          color: EditorTheme.textMuted,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _EditorSettingsButton extends StatelessWidget {
-  const _EditorSettingsButton({
-    required this.anchorKey,
-    required this.settings,
-    required this.isSelected,
-    required this.onPressed,
-  });
-
-  final GlobalKey anchorKey;
-  final OverlayUiSettings settings;
-  final bool isSelected;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      key: anchorKey,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Tooltip(
-        message: 'Editor settings',
+    final tap = onTap;
+    if (tap != null) {
+      // Its own click: the strip's — show or hide the docks — is for the
+      // rest of the bar.
+      body = Material(
+        type: MaterialType.transparency,
         child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(settings.cornerRadius),
-          child: Container(
-            decoration: isSelected
-                ? BoxDecoration(
-                    color: settings.themeColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(settings.cornerRadius),
-                    border: Border.all(
-                      color: settings.themeColor.withValues(alpha: 0.28),
-                    ),
-                  )
-                : null,
-            padding: EdgeInsets.symmetric(
-              horizontal: 6 * settings.compactness,
-              vertical: 3 * settings.compactness,
-            ),
-            child: Icon(
-              Icons.tune_rounded,
-              size: 14 * settings.effectiveTextScale,
-              color: settings.themeColor,
-            ),
+          onTap: tap,
+          borderRadius: BorderRadius.circular(4),
+          hoverColor: tone.withValues(alpha: 0.12),
+          child: SizedBox(
+            height: OverlayLayout.compactDockPanelHeight - 4,
+            child: Center(widthFactor: 1, child: body),
           ),
         ),
-      ),
-    );
+      );
+    }
+    return tooltip == null ? body : Tooltip(message: tooltip!, child: body);
   }
 }

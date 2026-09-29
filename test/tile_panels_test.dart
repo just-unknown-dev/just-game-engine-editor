@@ -394,7 +394,7 @@ void main() {
       await tapTooltip(tester, 'Layer settings');
       final name = find.descendant(
         of: find.byType(TextEditorRow),
-        matching: find.byType(TextFormField),
+        matching: find.byType(TextField),
       );
       await tester.enterText(name.first, 'Floor');
       await tester.testTextInput.receiveAction(TextInputAction.done);

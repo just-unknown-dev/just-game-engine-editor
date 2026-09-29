@@ -10,6 +10,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../core/constants/editor_constants.dart';
+import '../kit/kit.dart';
 import '../inspector/field_rows.dart';
 import '../timeline/timeline_dialogs.dart';
 import 'collision_shape_editor.dart';
@@ -203,32 +204,12 @@ class TilesetEditorState extends State<TilesetEditor> {
   Future<void> close() async {
     final s = _session;
     if (s != null && s.isDirty) {
-      final choice = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: EditorTheme.dialogBg,
-          title: const Text(
-            'Save changes to this tileset?',
-            style: TextStyle(fontSize: 13, color: EditorTheme.textBright),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop('discard'),
-              child: const Text("Don't save"),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop('save'),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+      final choice = await askToSaveChanges(
+        context,
+        title: 'Save changes to this tileset?',
       );
       if (choice == null) return;
-      if (choice == 'save' && !await save()) return;
+      if (choice == UnsavedChoice.save && !await save()) return;
     }
     widget.onClose?.call();
   }
@@ -406,7 +387,7 @@ class TilesetEditorState extends State<TilesetEditor> {
                   children: [
                     Text(
                       _error!,
-                      style: const TextStyle(color: EditorTheme.textSecondary),
+                      style: TextStyle(color: EditorTheme.textSecondary),
                     ),
                     TextButton(
                       onPressed: widget.onClose,
@@ -437,10 +418,7 @@ class TilesetEditorState extends State<TilesetEditor> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(child: _grid(s)),
-                      const VerticalDivider(
-                        width: 1,
-                        color: EditorTheme.border,
-                      ),
+                      VerticalDivider(width: 1, color: EditorTheme.border),
                       SizedBox(width: 310, child: _inspector(s)),
                     ],
                   ),
@@ -463,17 +441,17 @@ class TilesetEditorState extends State<TilesetEditor> {
       Container(
         height: 34,
         padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: EditorTheme.surfaceDark,
           border: Border(bottom: BorderSide(color: EditorTheme.border)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.grid_view, size: 15, color: EditorTheme.primary),
+            Icon(Icons.grid_view, size: 15, color: EditorTheme.primary),
             const SizedBox(width: 6),
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: EditorTheme.textBright,
@@ -527,10 +505,7 @@ class TilesetEditorState extends State<TilesetEditor> {
         child: Text(
           '${(_zoom * 100).round()}%',
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 11,
-            color: EditorTheme.textSecondary,
-          ),
+          style: TextStyle(fontSize: 11, color: EditorTheme.textSecondary),
         ),
       ),
       _BarButton(
@@ -565,14 +540,14 @@ class TilesetEditorState extends State<TilesetEditor> {
     height: 22,
     padding: const EdgeInsets.symmetric(horizontal: 10),
     alignment: Alignment.centerLeft,
-    decoration: const BoxDecoration(
+    decoration: BoxDecoration(
       color: EditorTheme.surfaceDark,
       border: Border(top: BorderSide(color: EditorTheme.border)),
     ),
     child: Text(
       text,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(fontSize: 11, color: EditorTheme.textSecondary),
+      style: TextStyle(fontSize: 11, color: EditorTheme.textSecondary),
     ),
   );
 
@@ -695,7 +670,7 @@ class TilesetEditorState extends State<TilesetEditor> {
             ),
           if (s.imageError != null) _Warning('Image: ${s.imageError}'),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Select tiles to give them collision, animation and properties. '
             'A tileset\'s tiles are numbered from the top left, row by row.',
             style: TextStyle(fontSize: 11, color: EditorTheme.textMuted),
@@ -736,7 +711,7 @@ class _Heading extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 6),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 10,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.8,
@@ -761,7 +736,7 @@ class _Line extends StatelessWidget {
           width: 96,
           child: Text(
             label,
-            style: const TextStyle(fontSize: 10, color: EditorTheme.textMuted),
+            style: TextStyle(fontSize: 10, color: EditorTheme.textMuted),
           ),
         ),
         Expanded(child: child),
@@ -781,16 +756,12 @@ class _Warning extends StatelessWidget {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(
-          Icons.warning_amber_rounded,
-          size: 14,
-          color: Color(0xFFFFB74D),
-        ),
+        Icon(Icons.warning_amber_rounded, size: 14, color: EditorTheme.warning),
         const SizedBox(width: 6),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(fontSize: 11, color: Color(0xFFFFB74D)),
+            style: TextStyle(fontSize: 11, color: EditorTheme.warning),
           ),
         ),
       ],

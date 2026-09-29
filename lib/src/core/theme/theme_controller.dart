@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:just_signals/just_signals.dart';
 
+import '../../ui/overlay/settings/overlay_ui_settings.dart';
 import 'editor_theme_data.dart';
 
 /// The editor's current palette and the presets it can switch between.
@@ -13,8 +14,10 @@ class ThemeController {
   ThemeController({EditorThemeData initial = EditorThemeData.classic})
     : current = Signal(initial, debugLabel: 'theme');
 
-  static const List<(String, String, Color)> _builtIn = [
-    ('sunrise', 'Sunrise', Color(0xFFFF6F61)),
+  /// The five built-in accents, in the order they were once saved by index:
+  /// id, label, colour.
+  static const List<(String, String, Color)> builtIn = [
+    ('sunrise', 'Sunrise', Color(0xFFF5746F)),
     ('mint', 'Mint', Color(0xFF5FD7A3)),
     ('cobalt', 'Cobalt', Color(0xFF5A8DFF)),
     ('amber', 'Amber', Color(0xFFFFC86B)),
@@ -22,11 +25,14 @@ class ThemeController {
   ];
 
   final Map<String, ThemePreset> _presets = {
-    for (final (id, label, accent) in _builtIn)
+    for (final (id, label, accent) in builtIn)
       id: ThemePreset(
         id: id,
         label: label,
-        data: EditorThemeData.classic.withAccent(accent),
+        // Sunrise is the classic palette itself, not a copy near it.
+        data: id == OverlayUiSettings.defaultThemeId
+            ? EditorThemeData.classic
+            : EditorThemeData.classic.withAccent(accent),
       ),
   };
 

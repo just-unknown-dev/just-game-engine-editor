@@ -13,8 +13,11 @@ import 'package:just_colours/just_colours.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../core/constants/editor_constants.dart';
+import '../../core/theme/editor_metrics.dart';
 import '../widgets/scrubbable_number_field.dart';
 import '../widgets/editor_dropdown.dart';
+import '../kit/buttons.dart';
+import '../kit/fields.dart';
 
 // ── Colour ↔ ShapePaintStyle bridge ──────────────────────────────────────────
 
@@ -133,7 +136,7 @@ class ColorEditorRow extends StatelessWidget {
           width: 96,
           child: Text(
             label,
-            style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
           ),
         ),
         Expanded(
@@ -199,7 +202,7 @@ class ColorEditorRow extends StatelessWidget {
                       child: Text(
                         inheritedFrom,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: EditorTheme.textMuted,
                           fontSize: 10,
                         ),
@@ -207,7 +210,7 @@ class ColorEditorRow extends StatelessWidget {
                     ),
                   ],
                   const Spacer(),
-                  const Icon(
+                  Icon(
                     Icons.colorize_rounded,
                     size: 13,
                     color: EditorTheme.primaryMuted,
@@ -251,16 +254,13 @@ class ReadonlyRow extends StatelessWidget {
           width: 96,
           child: Text(
             label,
-            style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
-              color: EditorTheme.textPrimary,
-              fontSize: 11,
-            ),
+            style: TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
           ),
         ),
       ],
@@ -288,38 +288,42 @@ class BoolEditorRow extends StatelessWidget {
           width: 96,
           child: Text(
             label,
-            style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
           ),
         ),
         Expanded(
-          child: InkWell(
-            onTap: () => onChanged(!value),
-            borderRadius: BorderRadius.circular(InspectorField.radius),
-            child: Container(
-              height: InspectorField.height,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: InspectorField.boxDecoration(),
-              child: Row(
-                children: [
-                  Icon(
-                    value
-                        ? Icons.check_box_rounded
-                        : Icons.check_box_outline_blank_rounded,
-                    size: 14,
-                    color: value
-                        ? EditorTheme.primaryMutedLight
-                        : EditorTheme.textMuted,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    value ? 'On' : 'Off',
-                    style: InspectorField.valueStyle.copyWith(
+          child: Semantics(
+            label: label,
+            checked: value,
+            child: InkWell(
+              onTap: () => onChanged(!value),
+              borderRadius: BorderRadius.circular(InspectorField.radius),
+              child: Container(
+                height: InspectorField.height,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: InspectorField.boxDecoration(),
+                child: Row(
+                  children: [
+                    Icon(
+                      value
+                          ? Icons.check_box_rounded
+                          : Icons.check_box_outline_blank_rounded,
+                      size: 14,
                       color: value
-                          ? EditorTheme.textPrimary
+                          ? EditorTheme.primaryMutedLight
                           : EditorTheme.textMuted,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    Text(
+                      value ? 'On' : 'Off',
+                      style: InspectorField.valueStyle.copyWith(
+                        color: value
+                            ? EditorTheme.textPrimary
+                            : EditorTheme.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -524,10 +528,7 @@ class _AxesFieldRowState extends State<AxesFieldRow> {
             child: Text(
               _fmt(i, widget.values[i]),
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: EditorTheme.textPrimary,
-                fontSize: 11,
-              ),
+              style: TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
             ),
           ),
         ],
@@ -535,7 +536,6 @@ class _AxesFieldRowState extends State<AxesFieldRow> {
     }
     return Tooltip(
       message: '${widget.label} ${widget.axes[i]}',
-      waitDuration: const Duration(milliseconds: 600),
       child: ScrubbableNumberField(
         label: widget.axes[i],
         labelInside: true,
@@ -556,7 +556,7 @@ class _AxesFieldRowState extends State<AxesFieldRow> {
     final label = Text(
       widget.label,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
+      style: TextStyle(
         color: EditorTheme.textMuted,
         fontSize: 10,
         fontWeight: FontWeight.w500,
@@ -618,20 +618,17 @@ class TextEditorRow extends StatelessWidget {
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               label,
-              style: const TextStyle(
-                color: EditorTheme.textMuted,
-                fontSize: 10,
-              ),
+              style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
             ),
           ),
         ),
         Expanded(
-          child: TextFormField(
-            initialValue: initialValue,
+          // Kept on Enter or when the field is left; an undo shows.
+          child: CommitTextField(
+            value: initialValue,
             style: InspectorField.valueStyle,
-            minLines: 1,
             maxLines: 4,
-            onFieldSubmitted: onSubmitted,
+            onCommit: onSubmitted,
             decoration: InspectorField.decoration(),
           ),
         ),
@@ -671,7 +668,7 @@ class DropdownEditorRow extends StatelessWidget {
           width: 96,
           child: Text(
             label,
-            style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
           ),
         ),
         Expanded(
@@ -768,10 +765,7 @@ class _OffsetListEditorRowState extends State<OffsetListEditorRow> {
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               widget.label,
-              style: const TextStyle(
-                color: EditorTheme.textMuted,
-                fontSize: 10,
-              ),
+              style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
             ),
           ),
         ),
@@ -798,13 +792,10 @@ class _OffsetListEditorRowState extends State<OffsetListEditorRow> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      GestureDetector(
+                      EditorIconButton(
+                        icon: Icons.close,
+                        tooltip: 'Remove this point',
                         onTap: () => _remove(i),
-                        child: const Icon(
-                          Icons.close,
-                          size: 14,
-                          color: EditorTheme.textMuted,
-                        ),
                       ),
                     ],
                   ),
@@ -812,7 +803,7 @@ class _OffsetListEditorRowState extends State<OffsetListEditorRow> {
               InkWell(
                 onTap: _add,
                 borderRadius: BorderRadius.circular(4),
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 4),
                   child: Row(
                     children: [
@@ -888,15 +879,15 @@ class MiniNumberField extends StatelessWidget {
         fillColor: InspectorField.fill,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-          borderSide: const BorderSide(color: EditorTheme.border),
+          borderSide: BorderSide(color: EditorTheme.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-          borderSide: const BorderSide(color: EditorTheme.border),
+          borderSide: BorderSide(color: EditorTheme.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-          borderSide: const BorderSide(color: EditorTheme.primaryActive),
+          borderSide: BorderSide(color: EditorTheme.primaryActive),
         ),
       ),
     );
@@ -924,7 +915,7 @@ class MiniTextField extends StatelessWidget {
     onFieldSubmitted: onSubmitted,
     decoration: InspectorField.decoration().copyWith(
       hintText: hint.isEmpty ? null : hint,
-      hintStyle: const TextStyle(
+      hintStyle: TextStyle(
         color: EditorTheme.textMuted,
         fontSize: InspectorField.fontSize,
       ),
@@ -1045,7 +1036,7 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
     super.initState();
     _anim = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 160),
+      duration: EditorMetrics.motionFast,
     );
     _sizeAnim = CurvedAnimation(parent: _anim, curve: Curves.easeOut);
     _scanFiles();
@@ -1139,10 +1130,7 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
               width: 96,
               child: Text(
                 widget.label,
-                style: const TextStyle(
-                  color: EditorTheme.textMuted,
-                  fontSize: 10,
-                ),
+                style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
               ),
             ),
             Expanded(
@@ -1157,7 +1145,7 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
                 builder: (context, candidateData, rejectedData) {
                   Color borderColor = EditorTheme.border;
                   if (candidateData.isNotEmpty) {
-                    borderColor = const Color(0xFF4CAF50);
+                    borderColor = EditorTheme.success;
                   } else if (rejectedData.isNotEmpty) {
                     borderColor = EditorTheme.error;
                   }
@@ -1218,7 +1206,7 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
                 width: 24,
                 height: 24,
                 child: _isGenerating
-                    ? const Padding(
+                    ? Padding(
                         padding: EdgeInsets.all(5),
                         child: CircularProgressIndicator(
                           strokeWidth: 1.5,
@@ -1230,7 +1218,7 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
                         child: InkWell(
                           onTap: _handleGenerate,
                           borderRadius: BorderRadius.circular(4),
-                          child: const Icon(
+                          child: Icon(
                             Icons.auto_awesome_rounded,
                             size: 14,
                             color: EditorTheme.primaryMuted,
@@ -1261,18 +1249,18 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
                     child: TextField(
                       controller: _searchCtrl,
                       onChanged: (_) => setState(() {}),
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: EditorTheme.textPrimary,
                         fontSize: 11,
                       ),
                       decoration: InputDecoration(
                         isDense: true,
                         hintText: 'Search PNG files…',
-                        hintStyle: const TextStyle(
+                        hintStyle: TextStyle(
                           color: EditorTheme.textMuted,
                           fontSize: 11,
                         ),
-                        prefixIcon: const Icon(
+                        prefixIcon: Icon(
                           Icons.search_rounded,
                           size: 14,
                           color: EditorTheme.textMuted,
@@ -1285,19 +1273,15 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(4),
-                          borderSide: const BorderSide(
-                            color: EditorTheme.border,
-                          ),
+                          borderSide: BorderSide(color: EditorTheme.border),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(4),
-                          borderSide: const BorderSide(
-                            color: EditorTheme.border,
-                          ),
+                          borderSide: BorderSide(color: EditorTheme.border),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(4),
-                          borderSide: const BorderSide(
+                          borderSide: BorderSide(
                             color: EditorTheme.primaryActive,
                           ),
                         ),
@@ -1305,7 +1289,7 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
                     ),
                   ),
                 ),
-                const Divider(height: 1, color: EditorTheme.border),
+                Divider(height: 1, color: EditorTheme.border),
                 Flexible(
                   child: filtered.isEmpty
                       ? Padding(
@@ -1314,7 +1298,7 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
                             _filePaths.isEmpty
                                 ? 'No ${widget.extensions.join('/').toUpperCase()} files found in assets/'
                                 : 'No matches for "$query"',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: EditorTheme.textMuted,
                               fontSize: 10,
                             ),
@@ -1361,7 +1345,7 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
                                           ),
                                           Text(
                                             path,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               color: EditorTheme.textMuted,
                                               fontSize: 9,
                                             ),
@@ -1372,7 +1356,7 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
                                       ),
                                     ),
                                     if (isSelected)
-                                      const Icon(
+                                      Icon(
                                         Icons.check_rounded,
                                         size: 12,
                                         color: EditorTheme.primaryMutedLight,

@@ -97,7 +97,7 @@ void main() {
     expect(scope.isProtected(block), isFalse);
   });
 
-  test('docks open exclusively, the settings panel included', () {
+  test('docks open exclusively', () {
     final scope = testScope(modules: [_Module()]);
     final dock = scope.dockController;
     dock.toggle('logs');
@@ -105,9 +105,7 @@ void main() {
     dock.toggle('test.waves');
     expect(dock.isOpen('logs'), isFalse);
     expect(dock.isOpen('test.waves'), isTrue);
-    dock.toggle(DockController.settingsId);
-    expect(dock.openId.value, DockController.settingsId);
-    dock.toggle(DockController.settingsId);
+    dock.toggle('test.waves');
     expect(dock.openId.value, isNull);
     dock.resize('test.waves', -50, fallback: 280, max: 700);
     expect(dock.heightOf('test.waves', fallback: 280), 330);

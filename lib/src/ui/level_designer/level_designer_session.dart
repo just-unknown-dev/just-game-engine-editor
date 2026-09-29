@@ -204,6 +204,7 @@ class LevelDesignerSession {
         codec: scope.codec,
         layout: scope.handleLayout,
         mapDocs: scope.mapDocs,
+        rotationStep: () => scope.prefs.settings.value.rotationStepRadians,
       ),
       DrawRectTool(
         sceneState: sceneState,
@@ -482,6 +483,7 @@ class LevelDesignerSession {
       canvasSize: canvasSize ?? camera.viewportSize,
       camera: camera,
       gridSize: gridSize,
+      snapStep: scope.prefs.settings.value.moveStep,
       modifiers: _readModifiers(),
       snapper: snapper,
       stateOf: stateOf,
@@ -810,6 +812,25 @@ class LevelDesignerSession {
     if (isRepeat || mods.control || mods.alt) return false;
     final label = key.keyLabel;
     return label.length == 1 && selectToolByShortcut(label.toUpperCase());
+  }
+
+  // ── Snapping ──────────────────────────────────────────────────────────────
+
+  /// Snapping on or off. One switch for the whole editor: the settings'
+  /// Snap to grid, which the magnet over the viewport shows too.
+  void setSnapping(bool on) {
+    controller.snapEnabled.value = on;
+    if (scope.prefs.settings.value.gridSnappingEnabled != on) {
+      scope.prefs.change((s) => s.copyWith(gridSnappingEnabled: on));
+    }
+  }
+
+  /// Smart snap on or off, kept in the settings.
+  void setSmartSnap(bool on) {
+    controller.smartSnap.value = on;
+    if (scope.prefs.settings.value.smartSnap != on) {
+      scope.prefs.change((s) => s.copyWith(smartSnap: on));
+    }
   }
 
   // ── Painting ──────────────────────────────────────────────────────────────

@@ -34,15 +34,15 @@ abstract final class InspectorField {
   /// field and fails if this drifts from it.
   static const double height = 33;
 
-  static const Color fill = EditorTheme.inputBg;
+  static final Color fill = EditorTheme.inputBg;
 
-  static const TextStyle labelStyle = TextStyle(
+  static final TextStyle labelStyle = TextStyle(
     color: EditorTheme.textMuted,
     fontSize: 10,
     fontWeight: FontWeight.w500,
   );
 
-  static const TextStyle valueStyle = TextStyle(
+  static final TextStyle valueStyle = TextStyle(
     color: EditorTheme.textPrimary,
     fontSize: fontSize,
   );
@@ -73,16 +73,5 @@ abstract final class InspectorField {
     color: fill,
     borderRadius: BorderRadius.circular(radius),
     border: Border.all(color: borderColor ?? EditorTheme.border),
-  );
-
-  /// A row: its label, then its control filling the rest.
-  static Widget row({required String label, required Widget child}) => Row(
-    children: [
-      SizedBox(
-        width: labelWidth,
-        child: Text(label, style: labelStyle, overflow: TextOverflow.ellipsis),
-      ),
-      Expanded(child: child),
-    ],
   );
 }

@@ -291,18 +291,12 @@ class _UiModeOverlayState extends State<UiModeOverlay> {
                           onCreateUi: widget.scope!.entities.createUi,
                         ),
                       ),
-                      const VerticalDivider(
-                        width: 1,
-                        color: EditorTheme.border,
-                      ),
+                      VerticalDivider(width: 1, color: EditorTheme.border),
                     ],
                     Expanded(child: _frameArea()),
                     // What the selected piece of interface is made of.
                     if (widget.scope != null) ...[
-                      const VerticalDivider(
-                        width: 1,
-                        color: EditorTheme.border,
-                      ),
+                      VerticalDivider(width: 1, color: EditorTheme.border),
                       SizedBox(
                         width: 312,
                         child: EntityInspectorPanel(
@@ -621,7 +615,7 @@ class _Toolbar extends StatelessWidget {
       color: EditorTheme.surfaceBg,
       child: Row(
         children: [
-          const Text(
+          Text(
             'UI',
             style: TextStyle(
               color: EditorTheme.primaryBright,
@@ -648,7 +642,7 @@ class _Toolbar extends StatelessWidget {
                 },
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.phone_iphone,
                       size: 13,
                       color: EditorTheme.textMuted,
@@ -656,12 +650,12 @@ class _Toolbar extends StatelessWidget {
                     const SizedBox(width: 5),
                     Text(
                       device.toString(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: EditorTheme.textSecondary,
                         fontSize: 11,
                       ),
                     ),
-                    const Icon(
+                    Icon(
                       Icons.arrow_drop_down,
                       size: 14,
                       color: EditorTheme.textMuted,
@@ -771,7 +765,6 @@ class _BarButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: tooltip,
-    waitDuration: const Duration(milliseconds: 400),
     child: InkWell(
       onTap: onPressed,
       hoverColor: danger
@@ -820,7 +813,6 @@ class _ZoomControl extends StatelessWidget {
         Builder(
           builder: (context) => Tooltip(
             message: 'How large the screen is drawn',
-            waitDuration: const Duration(milliseconds: 400),
             child: InkWell(
               onTap: () async {
                 final box = context.findRenderObject() as RenderBox?;
@@ -839,7 +831,7 @@ class _ZoomControl extends StatelessWidget {
                 child: Text(
                   session.isFitted ? 'Fit' : '${(zoom * 100).round()}%',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: EditorTheme.textSecondary,
                     fontSize: 11,
                   ),

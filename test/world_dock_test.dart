@@ -67,17 +67,27 @@ void main() {
     await done(tester);
   });
 
-  testWidgets('systems: a click switches one off, and on again', (
-    tester,
-  ) async {
+  testWidgets('systems: a click on the dot switches one off, and on again; '
+      'a click on the name does not', (tester) async {
     await pump(tester);
     await tester.tap(find.text('Systems'));
     await tester.pump();
     final system = scope.world.systems.whereType<HealthSystem>().single;
     await tester.tap(find.text('HealthSystem'));
     await tester.pump();
+    expect(system.isActive, isTrue, reason: 'the row is not a switch');
+
+    // The dot, in the On column just left of the name.
+    Offset dot() {
+      final name = tester.getRect(find.text('HealthSystem'));
+      return Offset(name.left - 20, name.center.dy);
+    }
+
+    await tester.tapAt(dot());
+    await tester.pump();
     expect(system.isActive, isFalse);
-    await tester.tap(find.text('HealthSystem'));
+    await tester.tapAt(dot());
+    await tester.pump();
     expect(system.isActive, isTrue);
     await done(tester);
   });

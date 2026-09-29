@@ -15,6 +15,7 @@ import '../tools/tiles/tile_select_tool.dart';
 import '../tools/tiles/tile_tool_base.dart';
 import 'built_in_overlays.dart';
 import 'designer_overlay.dart';
+import '../../../core/theme/viewport_look.dart';
 
 /// Ids of the tile overlays.
 abstract final class TileOverlays {
@@ -24,7 +25,8 @@ abstract final class TileOverlays {
 
 /// Colours the tile overlays use.
 abstract final class TileOverlayColors {
-  static const Color grid = Color(0x38FFFFFF);
+  /// The cell lines: the viewport's grid colour, a little stronger.
+  static Color get grid => ViewportLook.gridLine(0.22);
   static const Color hover = Color(0xCCFFFFFF);
   static const Color erase = Color(0xFFFF5252);
 }

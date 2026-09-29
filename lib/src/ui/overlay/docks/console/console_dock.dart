@@ -6,6 +6,7 @@ import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart' show Entity;
 
 import '../../../../core/constants/editor_constants.dart';
+import '../../shared/snackbar.dart';
 import '../../../../core/scope/editor_scope.dart';
 import '../../../../core/services/editor_log_entry.dart';
 import '../../../../extension/editor_contributions.dart';
@@ -138,11 +139,12 @@ class _ConsoleDockState extends State<ConsoleDock> {
   late bool _collapse = _memory?.read<bool>('collapse') ?? true;
   late bool _follow = _memory?.read<bool>('follow') ?? true;
   late bool _clearOnPlay = _memory?.read<bool>('clearOnPlay') ?? false;
+  // A Console that has never been touched hides what the settings say.
   late final Set<DebuggerLogLevel> _levels = {
     for (final l in DebuggerLogLevel.values)
-      if (!(_memory?.read<List<Object?>>('hiddenLevels') ?? const []).contains(
-        l.name,
-      ))
+      if (!(_memory?.read<List<Object?>>('hiddenLevels') ??
+              widget.scope.prefs.settings.value.consoleHiddenLevels)
+          .contains(l.name))
         l,
   };
   late final Set<String> _hiddenSources = {
@@ -159,11 +161,17 @@ class _ConsoleDockState extends State<ConsoleDock> {
   final List<String> _history = [];
   int _historyAt = -1;
   VoidCallback? _stopWatchingLog;
+  VoidCallback? _stopWatchingSettings;
+  late bool _timestamps = widget.scope.prefs.settings.value.consoleTimestamps;
 
   @override
   void initState() {
     super.initState();
     _stopWatchingLog = widget.scope.log.entries.watch(_onLog);
+    _stopWatchingSettings = widget.scope.prefs.settings.watch(() {
+      final on = widget.scope.prefs.settings.value.consoleTimestamps;
+      if (mounted && on != _timestamps) setState(() => _timestamps = on);
+    });
     widget.playChanges?.addListener(_onPlayChanged);
     _applyArgs();
     if (_follow) _scrollToEnd();
@@ -216,6 +224,7 @@ class _ConsoleDockState extends State<ConsoleDock> {
   @override
   void dispose() {
     _stopWatchingLog?.call();
+    _stopWatchingSettings?.call();
     widget.playChanges?.removeListener(_onPlayChanged);
     _scroll.dispose();
     _command.dispose();
@@ -273,16 +282,14 @@ class _ConsoleDockState extends State<ConsoleDock> {
     if (mounted) _say('$what copied');
   }
 
-  void _say(String text) => ScaffoldMessenger.maybeOf(context)
-    ?..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        content: Text(text),
-        duration: const Duration(milliseconds: 1400),
-        behavior: SnackBarBehavior.floating,
-        width: 320,
-      ),
-    );
+  // The editor's own messages, like everything else it says.
+  void _say(String text) => EditorMessenger.of(context).showSnackBar(
+    EditorSnackBarEntry(
+      message: text,
+      type: EditorSnackBarType.success,
+      duration: const Duration(milliseconds: 1600),
+    ),
+  );
 
   Future<void> _export(List<ConsoleRow> rows) async {
     final stamp = DateTime.now()
@@ -374,15 +381,18 @@ class _ConsoleDockState extends State<ConsoleDock> {
       setState(() {});
       return KeyEventResult.handled;
     }
+    // Tab completes when there is something to complete; otherwise it moves
+    // the focus on, as Tab does everywhere else.
     if (key == LogicalKeyboardKey.tab) {
       final options = _completions;
-      if (options.isNotEmpty) {
-        _command.text = options.first.$1;
-        _command.selection = TextSelection.collapsed(
-          offset: _command.text.length,
-        );
-        setState(() {});
+      if (options.isEmpty || _command.text == options.first.$1) {
+        return KeyEventResult.ignored;
       }
+      _command.text = options.first.$1;
+      _command.selection = TextSelection.collapsed(
+        offset: _command.text.length,
+      );
+      setState(() {});
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -407,15 +417,15 @@ class _ConsoleDockState extends State<ConsoleDock> {
 
     return Column(
       children: [
-        DockToolbar(
+        EditorToolbar(
           children: [
-            DockSearchField(
+            EditorSearchField(
               initial: _query,
               hint: 'Search, or /regex/',
               onChanged: (v) => _update(() => _query = v),
             ),
             const SizedBox(width: 4),
-            for (final (level, label, color, icon) in const [
+            for (final (level, label, color, icon) in [
               (
                 DebuggerLogLevel.info,
                 'Info',
@@ -435,7 +445,7 @@ class _ConsoleDockState extends State<ConsoleDock> {
                 Icons.error_outline_rounded,
               ),
             ])
-              DockFilterChip(
+              EditorChip(
                 label: label,
                 icon: icon,
                 color: color,
@@ -472,7 +482,7 @@ class _ConsoleDockState extends State<ConsoleDock> {
                       checked: !_hiddenSources.contains(s),
                       child: Text(
                         s,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: EditorTheme.textPrimary,
                           fontSize: 11,
                         ),
@@ -481,13 +491,13 @@ class _ConsoleDockState extends State<ConsoleDock> {
                 ],
               ),
             const Spacer(),
-            DockIconButton(
+            EditorIconButton(
               icon: Icons.compress_rounded,
               tooltip: 'Fold repeated lines into one',
               isActive: _collapse,
               onTap: () => _update(() => _collapse = !_collapse),
             ),
-            DockIconButton(
+            EditorIconButton(
               icon: _frozen == null
                   ? Icons.pause_rounded
                   : Icons.play_arrow_rounded,
@@ -502,7 +512,7 @@ class _ConsoleDockState extends State<ConsoleDock> {
                     : null,
               ),
             ),
-            DockIconButton(
+            EditorIconButton(
               icon: Icons.vertical_align_bottom_rounded,
               tooltip: 'Follow new lines',
               isActive: _follow,
@@ -511,13 +521,13 @@ class _ConsoleDockState extends State<ConsoleDock> {
                 if (_follow) _scrollToEnd();
               },
             ),
-            DockIconButton(
+            EditorIconButton(
               icon: Icons.cleaning_services_outlined,
               tooltip: 'Clear when Play starts',
               isActive: _clearOnPlay,
               onTap: () => _update(() => _clearOnPlay = !_clearOnPlay),
             ),
-            DockIconButton(
+            EditorIconButton(
               icon: Icons.copy_all_rounded,
               tooltip: 'Copy what is shown',
               onTap: rows.isEmpty
@@ -527,12 +537,12 @@ class _ConsoleDockState extends State<ConsoleDock> {
                       '${rows.length} lines',
                     ),
             ),
-            DockIconButton(
+            EditorIconButton(
               icon: Icons.save_alt_rounded,
               tooltip: 'Export what is shown to .editor_logs/',
               onTap: rows.isEmpty ? null : () => _export(rows),
             ),
-            DockIconButton(
+            EditorIconButton(
               icon: Icons.delete_outline_rounded,
               tooltip: 'Clear',
               onTap: all.isEmpty
@@ -549,7 +559,7 @@ class _ConsoleDockState extends State<ConsoleDock> {
         ),
         Expanded(
           child: rows.isEmpty
-              ? DockEmptyState(
+              ? EditorEmptyState(
                   icon: Icons.terminal_rounded,
                   title: all.isEmpty ? 'Nothing logged yet' : 'Nothing matches',
                   hint: all.isEmpty
@@ -575,7 +585,7 @@ class _ConsoleDockState extends State<ConsoleDock> {
                     onTap: () => _submit(id),
                     child: Text(
                       '$id  —  $label',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: EditorTheme.textMuted,
                         fontSize: 10,
                       ),
@@ -586,14 +596,14 @@ class _ConsoleDockState extends State<ConsoleDock> {
           ),
         Container(
           height: 26,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: EditorTheme.surfaceDarker,
             border: Border(top: BorderSide(color: EditorTheme.border)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Row(
             children: [
-              const Text(
+              Text(
                 '>',
                 style: TextStyle(
                   color: EditorTheme.primaryBright,
@@ -611,12 +621,12 @@ class _ConsoleDockState extends State<ConsoleDock> {
                     onChanged: (_) => setState(() {}),
                     onSubmitted: (_) => _submit(),
                     onTapOutside: (_) => _commandFocus.unfocus(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: EditorTheme.textPrimary,
                       fontSize: 11,
                       fontFamily: 'monospace',
                     ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       isCollapsed: true,
                       border: InputBorder.none,
                       hintText:
@@ -671,22 +681,24 @@ class _ConsoleDockState extends State<ConsoleDock> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              _time(row.lastAt),
-              style: const TextStyle(
-                color: EditorTheme.textMuted,
-                fontSize: 10,
-                fontFeatures: [FontFeature.tabularFigures()],
+            if (_timestamps) ...[
+              Text(
+                _time(row.lastAt),
+                style: TextStyle(
+                  color: EditorTheme.textMuted,
+                  fontSize: 10,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
+              const SizedBox(width: 8),
+            ],
             SizedBox(
               width: 64,
               child: Text(
                 e.source,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   color: EditorTheme.primaryMutedLight,
                   fontSize: 10,
                 ),
@@ -733,7 +745,7 @@ class _ConsoleDockState extends State<ConsoleDock> {
                 message: 'Select ${entity.name ?? 'entity #${entity.id}'}',
                 child: InkWell(
                   onTap: () => widget.scope.sceneState.selectEntity(entity),
-                  child: const Padding(
+                  child: Padding(
                     padding: EdgeInsets.only(left: 6),
                     child: Icon(
                       Icons.my_location_rounded,

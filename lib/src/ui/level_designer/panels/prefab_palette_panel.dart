@@ -54,7 +54,7 @@ class PrefabPalettePanel extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
                 child: Text(
                   entry.key.toUpperCase(),
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: EditorTheme.textMuted,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
@@ -100,7 +100,6 @@ class _PrefabTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tooltip(
       message: prefab.description ?? prefab.name,
-      waitDuration: const Duration(milliseconds: 400),
       child: Material(
         color: isActive ? EditorTheme.selectionBg : Colors.transparent,
         child: InkWell(

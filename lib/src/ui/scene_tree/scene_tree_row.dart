@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../core/constants/editor_constants.dart';
+import '../../core/theme/editor_metrics.dart';
 import '../../core/entity/entity_ops.dart';
 import 'scene_tree_model.dart';
 
@@ -201,27 +202,31 @@ class SceneTreeRowTile extends StatelessWidget {
             ),
           SizedBox(width: indent),
           if (row.hasChildren)
-            GestureDetector(
-              // Opaque and with room around it: a 14px glyph is not a
-              // thing anyone can reliably hit.
-              behavior: HitTestBehavior.opaque,
-              onTap: () => onToggleExpand(
-                subtree: HardwareKeyboard.instance.isAltPressed,
-              ),
-              child: SizedBox(
-                width: kSceneTreeRowTileHeight,
-                height: kSceneTreeRowTileHeight,
-                child: Icon(
-                  row.isExpanded
-                      ? Icons.expand_more_rounded
-                      : Icons.chevron_right_rounded,
-                  size: 14,
-                  color: EditorTheme.primary,
+            Semantics(
+              button: true,
+              label: row.isExpanded ? 'Collapse' : 'Expand',
+              child: GestureDetector(
+                // Opaque and with room around it: a 14px glyph is not a
+                // thing anyone can reliably hit.
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onToggleExpand(
+                  subtree: HardwareKeyboard.instance.isAltPressed,
+                ),
+                child: SizedBox(
+                  width: kSceneTreeRowTileHeight,
+                  height: kSceneTreeRowTileHeight,
+                  child: Icon(
+                    row.isExpanded
+                        ? Icons.expand_more_rounded
+                        : Icons.chevron_right_rounded,
+                    size: 14,
+                    color: EditorTheme.primary,
+                  ),
                 ),
               ),
             )
           else
-            const SizedBox(width: kSceneTreeRowTileHeight),
+            SizedBox(width: kSceneTreeRowTileHeight),
           const SizedBox(width: 2),
           Icon(
             icon ?? uiIconFor(entity) ?? _worldIcon(entity),
@@ -307,7 +312,7 @@ class SceneTreeRowTile extends StatelessWidget {
             IgnorePointer(
               ignoring: isDisabled,
               child: SceneTreeRowButton(
-                icon: isPinned ? Icons.lock_outline : Icons.lock_open_outlined,
+                icon: isPinned ? Icons.push_pin : Icons.push_pin_outlined,
                 tooltip: isPinned
                     ? 'Unpin the inspector'
                     : 'Keep the inspector on it',
@@ -322,7 +327,7 @@ class SceneTreeRowTile extends StatelessWidget {
               child: Builder(
                 builder: (context) => SceneTreeRowButton(
                   icon: Icons.more_vert,
-                  tooltip: 'What can be done with it',
+                  tooltip: 'More for it',
                   faded: true,
                   onPressed: () => onShowMenu!(_below(context)),
                   onDown: onControlDown,
@@ -353,7 +358,7 @@ class SceneTreeRowTile extends StatelessWidget {
 }
 
 /// The height the list lays a row out at.
-const double kSceneTreeRowTileHeight = 22;
+double get kSceneTreeRowTileHeight => EditorMetrics.minTarget;
 
 /// The name, while it is being typed.
 class _RenameBox extends StatefulWidget {
@@ -514,21 +519,26 @@ class SceneTreeRowButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: tooltip,
-    waitDuration: const Duration(milliseconds: 600),
     child: Listener(
       onPointerDown: (_) => onDown?.call(),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onPressed,
-        child: SizedBox(
-          width: kSceneTreeRowTileHeight,
-          height: kSceneTreeRowTileHeight,
-          child: Icon(
-            icon,
-            size: 13,
-            color: faded
-                ? EditorTheme.textMuted.withValues(alpha: 0.45)
-                : EditorTheme.primaryBright,
+      // An InkWell, not a bare detector: it takes the keyboard's focus,
+      // and Enter or Space presses it.
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(4),
+          hoverColor: EditorTheme.hoverBg,
+          child: SizedBox(
+            width: kSceneTreeRowTileHeight,
+            height: kSceneTreeRowTileHeight,
+            child: Icon(
+              icon,
+              size: 13,
+              color: faded
+                  ? EditorTheme.textMuted.withValues(alpha: 0.45)
+                  : EditorTheme.primaryBright,
+            ),
           ),
         ),
       ),
@@ -548,19 +558,22 @@ class _ColorMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: color == null ? 'Mark with a colour' : 'Change the mark',
-    waitDuration: const Duration(milliseconds: 600),
     child: Listener(
       onPointerDown: (_) => onDown?.call(),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onPressed,
-        child: SizedBox(
-          width: kSceneTreeRowTileHeight,
-          height: kSceneTreeRowTileHeight,
-          child: Icon(
-            color == null ? Icons.label_outline : Icons.label,
-            size: 13,
-            color: color ?? EditorTheme.textMuted.withValues(alpha: 0.45),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(4),
+          hoverColor: EditorTheme.hoverBg,
+          child: SizedBox(
+            width: kSceneTreeRowTileHeight,
+            height: kSceneTreeRowTileHeight,
+            child: Icon(
+              color == null ? Icons.label_outline : Icons.label,
+              size: 13,
+              color: color ?? EditorTheme.textMuted.withValues(alpha: 0.45),
+            ),
           ),
         ),
       ),

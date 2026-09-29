@@ -1,6 +1,6 @@
 // A module's preference is a typed key in the same store the editor always
-// used, and its settings section lands on a Modules tab that only exists
-// when someone contributed to it.
+// used, and its settings section gets a page of its own in the settings
+// dialog, under a Modules caption that only exists when someone contributed.
 
 import 'dart:async';
 
@@ -86,49 +86,103 @@ void main() {
     expect(store.saved.gridSize, 48);
   });
 
-  Widget host(EditorScope scope, {List<SettingsSection> sections = const []}) =>
-      MaterialApp(
-        home: Scaffold(
-          body: EditorScopeProvider(
-            scope: scope,
-            child: EditorSettingsPanel(
-              initial: const OverlayUiSettings.defaults(),
-              onChanged: (_) {},
-              onClose: () {},
-              maxHeight: 600,
-              prefs: scope.prefs,
-              sections: sections,
-            ),
-          ),
-        ),
-      );
+  test('settings compare by value, and read their density', () {
+    const d = OverlayUiSettings.defaults();
+    expect(d.copyWith(), d);
+    expect(d.copyWith(gridSize: 48), isNot(d));
+    expect(d.copyWith(compactness: 0.83).density, OverlayDensity.compact);
+    expect(d.density, OverlayDensity.standard);
+  });
 
-  testWidgets("a module's settings section appears on a Modules tab", (
-    tester,
-  ) async {
+  Widget host(EditorScope scope) => MaterialApp(
+    home: Scaffold(
+      body: EditorScopeProvider(
+        scope: scope,
+        child: EditorSettingsDialog(scope: scope, onClose: () {}),
+      ),
+    ),
+  );
+
+  EditorScope scopeWith({List<EditorModule> modules = const []}) {
     final scope = EditorScope(
       world: World()..initialize(),
-      modules: [_WavesModule()],
+      modules: modules,
       settingsStore: _MemoryStore(),
     );
     addTearDown(scope.dispose);
-    await tester.pumpWidget(host(scope, sections: scope.settingsSections));
+    return scope;
+  }
+
+  testWidgets("a module's settings section gets a page under Modules", (
+    tester,
+  ) async {
+    final scope = scopeWith(modules: [_WavesModule()]);
+    await tester.pumpWidget(host(scope));
     await tester.pumpAndSettle();
-    expect(find.text('Modules'), findsOneWidget);
-    await tester.tap(find.text('Modules'));
+    expect(find.text('MODULES'), findsOneWidget);
+    await tester.tap(find.text('Waves'));
     await tester.pumpAndSettle();
     expect(find.text('WAVES OFF'), findsOneWidget);
   });
 
-  testWidgets('with no modules there is no Modules tab', (tester) async {
-    final scope = EditorScope(
-      world: World()..initialize(),
-      settingsStore: _MemoryStore(),
-    );
-    addTearDown(scope.dispose);
+  testWidgets('with no modules there is no Modules caption', (tester) async {
+    final scope = scopeWith();
     await tester.pumpWidget(host(scope));
     await tester.pumpAndSettle();
-    expect(find.text('Modules'), findsNothing);
-    expect(find.text('Presets'), findsOneWidget);
+    expect(find.text('MODULES'), findsNothing);
+    // In the list on the left, and as the open page's title.
+    expect(find.text('Appearance'), findsNWidgets(2));
+  });
+
+  testWidgets('a change saves, and marks the setting and its page', (
+    tester,
+  ) async {
+    final scope = scopeWith();
+    await tester.pumpWidget(host(scope));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Back to the default'), findsNothing);
+
+    await tester.tap(find.text('Compact'));
+    await tester.pumpAndSettle();
+    expect(scope.prefs.settings.value.compactness, 0.85);
+    expect(
+      (scope.prefs.store as _MemoryStore).saved.compactness,
+      0.85,
+      reason: 'kept for next time',
+    );
+    expect(find.byTooltip('Back to the default'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back to the default'));
+    await tester.pumpAndSettle();
+    expect(scope.prefs.settings.value.compactness, 1.0);
+  });
+
+  testWidgets('search finds settings on every page', (tester) async {
+    final scope = scopeWith();
+    await tester.pumpWidget(host(scope));
+    await tester.pumpAndSettle();
+    expect(find.text('Grid size'), findsNothing, reason: 'another page');
+
+    await tester.enterText(find.byType(TextField).first, 'grid');
+    await tester.pumpAndSettle();
+    expect(find.text('Grid size'), findsOneWidget);
+    expect(find.text('Show grid'), findsOneWidget);
+    expect(find.text('Corner radius'), findsNothing);
+  });
+
+  testWidgets('reset all asks first', (tester) async {
+    final scope = scopeWith();
+    await scope.prefs.update(
+      scope.prefs.settings.value.copyWith(gridSize: 64, showGrid: false),
+    );
+    await tester.pumpWidget(host(scope));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Reset all…'));
+    await tester.pumpAndSettle();
+    expect(scope.prefs.settings.value.gridSize, 64, reason: 'not yet');
+    await tester.tap(find.text('Reset all'));
+    await tester.pumpAndSettle();
+    expect(scope.prefs.settings.value, const OverlayUiSettings.defaults());
   });
 }

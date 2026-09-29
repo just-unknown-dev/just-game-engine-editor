@@ -82,14 +82,14 @@ class _WorldDockState extends State<WorldDock> {
     final active = entities.where((e) => e.isActive).length;
     return Column(
       children: [
-        DockToolbar(
+        EditorToolbar(
           children: [
             for (final (tab, label, count) in [
               (_WorldTab.entities, 'Entities', entities.length),
               (_WorldTab.systems, 'Systems', systems.length),
               (_WorldTab.components, 'Components', null),
             ])
-              DockFilterChip(
+              EditorChip(
                 label: label,
                 count: count,
                 selected: _tab == tab,
@@ -99,7 +99,7 @@ class _WorldDockState extends State<WorldDock> {
                 },
               ),
             const SizedBox(width: 8),
-            DockSearchField(
+            EditorSearchField(
               hint: 'Filter',
               width: 180,
               onChanged: (v) => setState(() => _query = v),
@@ -107,10 +107,7 @@ class _WorldDockState extends State<WorldDock> {
             const Spacer(),
             Text(
               '$active active of ${entities.length}',
-              style: const TextStyle(
-                color: EditorTheme.textMuted,
-                fontSize: 10,
-              ),
+              style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
             ),
           ],
         ),
@@ -144,7 +141,7 @@ class _WorldDockState extends State<WorldDock> {
       rows: rows,
       isSelected: (e) => identical(e, selected),
       onTap: (e) => _select([e]),
-      empty: const DockEmptyState(
+      empty: const EditorEmptyState(
         icon: Icons.hub_outlined,
         title: 'No entities match',
       ),
@@ -193,21 +190,25 @@ class _WorldDockState extends State<WorldDock> {
     ];
     return DockTable<jge.System>(
       rows: rows,
-      // A click switches a system off or back on — until the editor closes;
-      // it is a debugging aid, not something a scene saves.
-      onTap: (s) => setState(() => s.isActive = !s.isActive),
-      empty: const DockEmptyState(
+      empty: const EditorEmptyState(
         icon: Icons.settings_suggest_outlined,
         title: 'No systems match',
       ),
       columns: [
+        // Only the dot switches a system off or back on — until the editor
+        // closes; it is a debugging aid, not something a scene saves. A
+        // stray click on the row stops nothing.
         DockColumn(
           label: 'On',
           width: 40,
           text: (s) => s.isActive ? '●' : '○',
           color: (s) =>
-              s.isActive ? const Color(0xFF7DE6B1) : EditorTheme.textMuted,
+              s.isActive ? EditorTheme.success : EditorTheme.textMuted,
           sortKey: (s) => s.isActive ? 0 : 1,
+          onTap: (s) => setState(() => s.isActive = !s.isActive),
+          tooltip: (s) => s.isActive
+              ? 'Switch off until the editor closes'
+              : 'Switch back on',
         ),
         DockColumn(
           label: 'System',
@@ -258,7 +259,7 @@ class _WorldDockState extends State<WorldDock> {
       rows: rows,
       // Everything that carries it, selected at once.
       onTap: (type) => _select(carriers[type]!),
-      empty: const DockEmptyState(
+      empty: const EditorEmptyState(
         icon: Icons.extension_outlined,
         title: 'No component types match',
       ),

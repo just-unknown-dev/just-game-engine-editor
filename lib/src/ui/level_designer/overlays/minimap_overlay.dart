@@ -22,8 +22,8 @@ class MinimapLayout {
   static const double margin = 10;
 
   /// The panel rectangle for a visible viewport [area]: bottom-left, clear of
-  /// the left ruler, and [bottomReserve] above the bottom edge — the play
-  /// controls sit beneath it.
+  /// the left ruler, and [bottomReserve] above the bottom edge, for anything
+  /// that has to sit beneath it.
   static Rect panelFor(Rect area, {double bottomReserve = 0}) => Rect.fromLTWH(
     area.left + RulersOverlay.thickness + margin,
     area.bottom - margin - bottomReserve - size.height,

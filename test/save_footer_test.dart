@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
-import 'package:just_game_engine_editor/src/ui/overlay/shared/shared_widgets.dart';
 
 void main() {
   testWidgets(
@@ -59,9 +58,9 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: Center(
-          child: OverlayBadge(
+          child: EditorBadge(
             label: 'UNSAVED',
             accent: EditorTheme.warning,
             showDot: true,

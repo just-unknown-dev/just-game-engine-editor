@@ -357,6 +357,21 @@ class EditorSceneState {
     _edited();
   }
 
+  /// What a snapped scale moves in — 0.1 is 10 % — and a snapped turn, in
+  /// radians. Set from the settings; snapping itself is
+  /// [gridSnappingEnabled].
+  double scaleStep = 0.1;
+
+  /// What moving snaps in, in world units; 0 is [gridSize].
+  double moveStep = 0;
+  double rotationStep = 0.2617993877991494; // 15°
+
+  /// [radians] on the nearest [rotationStep] while snapping.
+  double snapRotation(double radians) =>
+      gridSnappingEnabled.value && rotationStep > 0
+      ? (radians / rotationStep).roundToDouble() * rotationStep
+      : radians;
+
   /// Rotate [entity] by [deltaRad] radians.
   void applyRotation(Entity entity, double deltaRad) {
     final transform = entity.getComponent<TransformComponent>();
@@ -460,15 +475,17 @@ class EditorSceneState {
   }
 
   Offset _snapPosition(Offset value) {
-    final size = gridSize.value;
+    final size = moveStep > 0 ? moveStep : gridSize.value;
     final gx = (value.dx / size).roundToDouble() * size;
     final gy = (value.dy / size).roundToDouble() * size;
     return Offset(gx, gy);
   }
 
   double _snapScale(double value) {
-    final step = 1 / gridSize.value;
-    return (value / step).roundToDouble() * step;
+    final step = scaleStep;
+    if (step <= 0) return value;
+    // Never snapped to nothing: the smallest scale is one step.
+    return ((value / step).roundToDouble() * step).clamp(step, 50.0);
   }
 
   /// Rename [entity] and keep the linked [SceneNode] in sync.

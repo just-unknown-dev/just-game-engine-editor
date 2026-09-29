@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart' hide Animation;
 
 import '../../core/constants/editor_constants.dart';
+import '../../core/theme/editor_metrics.dart';
 import '../../core/scope/editor_scope.dart';
 import '../../core/ecs/registry/component_registry.dart';
 import '../../core/state/editor_scene_state.dart';
+import '../level_designer/state/editor_commands.dart';
+import '../kit/kit.dart';
 
 /// An expandable in-place panel that lets the user search for and add a
 /// component to the currently selected entity.
@@ -44,7 +48,7 @@ class _AddComponentPickerState extends State<AddComponentPicker>
     super.initState();
     _animCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 160),
+      duration: EditorMetrics.motionFast,
     );
     _heightFactor = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
     _searchCtrl.addListener(() {
@@ -61,6 +65,8 @@ class _AddComponentPickerState extends State<AddComponentPicker>
   }
 
   void _toggle() {
+    // As the motion settings are now, not as they were when it was built.
+    _animCtrl.duration = EditorMetrics.motionFast;
     setState(() => _expanded = !_expanded);
     if (_expanded) {
       _animCtrl.forward();
@@ -90,10 +96,26 @@ class _AddComponentPickerState extends State<AddComponentPicker>
   }
 
   void _addComponent(ComponentEntry entry) {
-    widget.entity.addComponent(entry.factory());
-    widget.sceneState.markDirty();
-    widget.sceneState.refresh();
+    // Through the history, so an added component can be undone.
+    widget.scope.history.push(
+      AddComponentCommand(
+        entity: widget.entity,
+        component: entry.factory(),
+        sceneState: widget.sceneState,
+      ),
+    );
     _toggle();
+  }
+
+  bool _addable(ComponentEntry entry) =>
+      entry.allowMultiple ||
+      !_existingTypes.contains(entry.componentTypeName ?? entry.name);
+
+  /// Enter in the search: the first match that can be added.
+  void _addFirst() {
+    for (final entry in _filtered) {
+      if (_addable(entry)) return _addComponent(entry);
+    }
   }
 
   @override
@@ -108,7 +130,7 @@ class _AddComponentPickerState extends State<AddComponentPicker>
             onTap: _toggle,
             borderRadius: BorderRadius.circular(6),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
+              duration: EditorMetrics.motionFast,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: _expanded
@@ -129,7 +151,7 @@ class _AddComponentPickerState extends State<AddComponentPicker>
                     color: EditorTheme.primary,
                   ),
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'Add Component',
                       style: TextStyle(
@@ -141,8 +163,8 @@ class _AddComponentPickerState extends State<AddComponentPicker>
                   ),
                   AnimatedRotation(
                     turns: _expanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 160),
-                    child: const Icon(
+                    duration: EditorMetrics.motionFast,
+                    child: Icon(
                       Icons.keyboard_arrow_down_rounded,
                       size: 16,
                       color: EditorTheme.primaryMuted,
@@ -163,6 +185,8 @@ class _AddComponentPickerState extends State<AddComponentPicker>
             filtered: _filtered,
             existingTypes: _existingTypes,
             onAdd: _addComponent,
+            onSubmit: _addFirst,
+            onEscape: _toggle,
           ),
         ),
       ],
@@ -179,6 +203,8 @@ class _PickerList extends StatelessWidget {
     required this.filtered,
     required this.existingTypes,
     required this.onAdd,
+    required this.onSubmit,
+    required this.onEscape,
   });
 
   final TextEditingController searchCtrl;
@@ -186,6 +212,12 @@ class _PickerList extends StatelessWidget {
   final List<ComponentEntry> filtered;
   final Set<String> existingTypes;
   final void Function(ComponentEntry) onAdd;
+
+  /// Enter: add the first match.
+  final VoidCallback onSubmit;
+
+  /// Esc: fold the picker away.
+  final VoidCallback onEscape;
 
   @override
   Widget build(BuildContext context) {
@@ -213,57 +245,33 @@ class _PickerList extends StatelessWidget {
         children: <Widget>[
           Padding(
             padding: const EdgeInsets.all(8),
-            child: TextField(
-              controller: searchCtrl,
-              focusNode: searchFocus,
-              style: const TextStyle(
-                color: EditorTheme.textPrimary,
-                fontSize: 12,
-              ),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: 'Search components…',
-                hintStyle: const TextStyle(
-                  color: EditorTheme.primaryMuted,
-                  fontSize: 12,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  size: 16,
-                  color: EditorTheme.primaryMuted,
-                ),
-                prefixIconConstraints: const BoxConstraints(
-                  minWidth: 32,
-                  minHeight: 32,
-                ),
-                filled: true,
-                fillColor: EditorTheme.inputBg,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 8,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(4),
-                  borderSide: const BorderSide(color: EditorTheme.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(4),
-                  borderSide: const BorderSide(color: EditorTheme.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(4),
-                  borderSide: const BorderSide(
-                    color: EditorTheme.primaryActive,
+            child: CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.escape): onEscape,
+              },
+              child: TextField(
+                controller: searchCtrl,
+                focusNode: searchFocus,
+                cursorColor: EditorTheme.primaryBright,
+                style: TextStyle(color: EditorTheme.textPrimary, fontSize: 12),
+                // Enter adds the first match, Esc folds the list away.
+                onSubmitted: (_) => onSubmit(),
+                decoration: editorFieldDecoration(
+                  hint: 'Search components — Enter adds the first',
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    size: 15,
+                    color: EditorTheme.textMuted,
                   ),
                 ),
               ),
             ),
           ),
-          const Divider(height: 1, color: EditorTheme.surfaceBg),
+          Divider(height: 1, color: EditorTheme.surfaceBg),
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 280),
             child: filtered.isEmpty
-                ? const Padding(
+                ? Padding(
                     padding: EdgeInsets.all(16),
                     child: Text(
                       'No components match your search.',
@@ -336,7 +344,7 @@ class _GroupHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
       child: Text(
         label.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           color: EditorTheme.primaryBright,
           fontSize: 10,
           fontWeight: FontWeight.w700,
@@ -376,7 +384,7 @@ class _ComponentRow extends StatelessWidget {
                     entry.name,
                     style: TextStyle(
                       color: alreadyAdded
-                          ? EditorTheme.hoverBgAlt
+                          ? EditorTheme.textMuted.withValues(alpha: 0.6)
                           : EditorTheme.textSecondary,
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -386,8 +394,8 @@ class _ComponentRow extends StatelessWidget {
                     entry.description,
                     style: TextStyle(
                       color: alreadyAdded
-                          ? EditorTheme.hoverBg
-                          : EditorTheme.primaryMuted,
+                          ? EditorTheme.textMuted.withValues(alpha: 0.45)
+                          : EditorTheme.textMuted,
                       fontSize: 10,
                     ),
                   ),
@@ -395,16 +403,16 @@ class _ComponentRow extends StatelessWidget {
               ),
             ),
             if (alreadyAdded)
-              const Text(
+              Text(
                 'added',
                 style: TextStyle(
-                  color: EditorTheme.hoverBgAlt,
+                  color: EditorTheme.textMuted,
                   fontSize: 10,
                   fontStyle: FontStyle.italic,
                 ),
               )
             else
-              const Icon(
+              Icon(
                 Icons.add_rounded,
                 size: 14,
                 color: EditorTheme.primaryMuted,

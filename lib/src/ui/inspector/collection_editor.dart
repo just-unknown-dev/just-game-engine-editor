@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/editor_constants.dart';
+import '../kit/fields.dart';
 
 /// Edits a list or a map field as rows, not as JSON.
 ///
@@ -66,10 +67,7 @@ class CollectionEditor extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(
-                color: EditorTheme.textMuted,
-                fontSize: 10,
-              ),
+              style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
             ),
             const SizedBox(width: 6),
             _CountPill(count),
@@ -169,7 +167,7 @@ class CollectionEditor extends StatelessWidget {
                 },
               ),
             ),
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(horizontal: 4),
               child: Icon(
                 Icons.arrow_right_alt_rounded,
@@ -248,7 +246,7 @@ class _ItemCard extends StatelessWidget {
                       '${entry.key}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: EditorTheme.textMuted,
                         fontSize: 10,
                       ),
@@ -329,21 +327,20 @@ class _Cell extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Text(
           text,
-          style: const TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
+          style: TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
         ),
       );
     }
-    return TextFormField(
-      // A value changed from outside — an undo, another item removed — must
-      // show; a field keeps its own text otherwise.
-      key: ValueKey(text),
-      initialValue: text,
+    // Kept on Enter or when the cell is left; a value changed from outside
+    // — an undo, another item removed — shows while it is not being typed
+    // in.
+    return CommitTextField(
+      value: text,
       keyboardType: v is num
           ? const TextInputType.numberWithOptions(decimal: true, signed: true)
           : TextInputType.text,
-      style: const TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
-      onFieldSubmitted: (t) => onChanged(_parse(t)),
-      onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+      style: TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
+      onCommit: (t) => onChanged(_parse(t)),
       decoration: InputDecoration(
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
@@ -351,15 +348,15 @@ class _Cell extends StatelessWidget {
         fillColor: EditorTheme.inputBg,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-          borderSide: const BorderSide(color: EditorTheme.border),
+          borderSide: BorderSide(color: EditorTheme.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-          borderSide: const BorderSide(color: EditorTheme.border),
+          borderSide: BorderSide(color: EditorTheme.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-          borderSide: const BorderSide(color: EditorTheme.primaryActive),
+          borderSide: BorderSide(color: EditorTheme.primaryActive),
         ),
       ),
     );
@@ -382,7 +379,7 @@ class _IndexChip extends StatelessWidget {
     ),
     child: Text(
       '${index + 1}',
-      style: const TextStyle(
+      style: TextStyle(
         color: EditorTheme.textSecondary,
         fontSize: 9,
         fontWeight: FontWeight.w700,
@@ -405,7 +402,7 @@ class _CountPill extends StatelessWidget {
     ),
     child: Text(
       '$count',
-      style: const TextStyle(color: EditorTheme.textSecondary, fontSize: 9),
+      style: TextStyle(color: EditorTheme.textSecondary, fontSize: 9),
     ),
   );
 }
@@ -424,7 +421,6 @@ class _IconAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: tooltip,
-    waitDuration: const Duration(milliseconds: 400),
     child: InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(4),
@@ -447,7 +443,7 @@ class _Muted extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: 2),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         color: EditorTheme.textMuted,
         fontSize: 10,
         fontStyle: FontStyle.italic,
@@ -480,7 +476,7 @@ class EntityLinkList extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
           ),
           const SizedBox(width: 6),
           _CountPill(names.length),

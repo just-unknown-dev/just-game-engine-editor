@@ -121,7 +121,7 @@ class _ThemeDockState extends State<ThemeDock> {
   Widget build(BuildContext context) {
     final themes = _themes;
     if (_path == null) {
-      return DockEmptyState(
+      return EditorEmptyState(
         icon: Icons.palette_outlined,
         title: themes.isEmpty ? 'No theme yet' : 'No theme open',
         hint: themes.isEmpty
@@ -143,7 +143,7 @@ class _ThemeDockState extends State<ThemeDock> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(width: 280, child: _tokens()),
-              const VerticalDivider(width: 1, color: EditorTheme.border),
+              VerticalDivider(width: 1, color: EditorTheme.border),
               Expanded(child: _gallery()),
             ],
           ),
@@ -152,10 +152,13 @@ class _ThemeDockState extends State<ThemeDock> {
     );
   }
 
+  // The toolbar's height and line, with the theme picker filling it.
   Widget _header(List<String> themes) => Container(
-    height: 30,
-    padding: const EdgeInsets.symmetric(horizontal: 10),
-    color: EditorTheme.surfaceBg,
+    height: EditorToolbar.height,
+    padding: const EdgeInsets.symmetric(horizontal: 8),
+    decoration: BoxDecoration(
+      border: Border(bottom: BorderSide(color: EditorTheme.border)),
+    ),
     child: Row(
       children: [
         Expanded(
@@ -170,17 +173,13 @@ class _ThemeDockState extends State<ThemeDock> {
         if (_message != null)
           Text(
             _message!,
-            style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
           ),
         const SizedBox(width: 8),
-        TextButton(
+        EditorButton(
+          label: _dirty ? 'Save' : 'Saved',
+          kind: _dirty ? EditorButtonKind.primary : EditorButtonKind.ghost,
           onPressed: _dirty ? _save : null,
-          style: TextButton.styleFrom(
-            foregroundColor: EditorTheme.primaryBright,
-            disabledForegroundColor: EditorTheme.textMuted,
-            textStyle: const TextStyle(fontSize: 11),
-          ),
-          child: Text(_dirty ? 'Save' : 'Saved'),
         ),
       ],
     ),

@@ -385,7 +385,7 @@ class _LevelMapSection extends StatelessWidget {
 
   final jge.LevelMapComponent component;
 
-  static const _text = TextStyle(
+  static final _text = TextStyle(
     color: EditorTheme.textSecondary,
     fontSize: 11,
   );
@@ -404,7 +404,7 @@ class _LevelMapSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (data == null)
-            const Text('Loading…', style: _text)
+            Text('Loading…', style: _text)
           else ...[
             Text(
               '${data.orientation.name}, ${data.tileWidth} × ${data.tileHeight} '
@@ -483,10 +483,7 @@ class _Button extends StatelessWidget {
             const SizedBox(width: 5),
             Text(
               label,
-              style: const TextStyle(
-                color: EditorTheme.textBright,
-                fontSize: 11,
-              ),
+              style: TextStyle(color: EditorTheme.textBright, fontSize: 11),
             ),
           ],
         ),

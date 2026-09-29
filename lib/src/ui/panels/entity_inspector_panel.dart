@@ -8,6 +8,7 @@ import '../../core/level_map/tile_selection_ops.dart';
 import '../../core/scope/editor_scope.dart';
 import '../inspector/definition_section.dart';
 import '../../core/state/editor_scene_state.dart';
+import '../kit/kit.dart';
 
 /// Inspector panel that shows and edits components on the selected entity.
 class EntityInspectorPanel extends StatelessWidget {
@@ -54,7 +55,7 @@ class EntityInspectorPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _TileSelectionCard(scope: scope, world: world),
-        const Divider(height: 1, color: EditorTheme.border),
+        Divider(height: 1, color: EditorTheme.border),
         Expanded(child: content),
       ],
     );
@@ -86,11 +87,12 @@ class EntityInspectorPanel extends StatelessWidget {
     }
     final entity = sceneState.selectedEntity.value;
     if (entity == null) {
-      return const Center(
-        child: Text(
-          'No entity selected',
-          style: TextStyle(color: EditorTheme.textMuted, fontSize: 12),
-        ),
+      return const EditorEmptyState(
+        icon: Icons.ads_click_rounded,
+        title: 'Nothing selected',
+        hint:
+            'Pick something in the level or in the list above to see what '
+            'it is made of.',
       );
     }
     return _EntityInspector(
@@ -128,15 +130,17 @@ class _TileSelectionCard extends StatelessWidget {
     final n = TileSelectionOps.tileCount(scope, world);
     final target = scope.tiles.peek(world);
     final layer = target == null ? null : scope.tiles.peekLayer(target);
-    Widget action(IconData icon, String tooltip, VoidCallback onTap) =>
-        IconButton(
-          tooltip: tooltip,
-          onPressed: onTap,
-          icon: Icon(icon, size: 15),
-          color: EditorTheme.textSecondary,
-          visualDensity: VisualDensity.compact,
-          splashRadius: 16,
-        );
+    Widget action(
+      IconData icon,
+      String tooltip,
+      String shortcut,
+      VoidCallback onTap,
+    ) => EditorIconButton(
+      icon: icon,
+      tooltip: tooltip,
+      shortcut: shortcut,
+      onTap: onTap,
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Column(
@@ -144,7 +148,7 @@ class _TileSelectionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.highlight_alt,
                 size: 14,
                 color: EditorTheme.primaryBright,
@@ -157,7 +161,7 @@ class _TileSelectionCard extends StatelessWidget {
                       : n == cells
                       ? '$n tile${n == 1 ? '' : 's'} selected'
                       : '$n tile${n == 1 ? '' : 's'} in $cells cells selected',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: EditorTheme.textSecondary,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -172,10 +176,7 @@ class _TileSelectionCard extends StatelessWidget {
               child: Text(
                 '${target.entity.name ?? 'Map'} ▸ ${layer.name}',
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: EditorTheme.textMuted,
-                  fontSize: 11,
-                ),
+                style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
               ),
             ),
           if (n == 0 && layer != null)
@@ -185,30 +186,17 @@ class _TileSelectionCard extends StatelessWidget {
                 '${layer.name} has no tiles there. Choose the layer the '
                 'tiles are on in LAYERS, or start a selection on a tile: '
                 'it picks their layer.',
-                style: const TextStyle(
-                  color: EditorTheme.warning,
-                  fontSize: 11,
-                ),
+                style: TextStyle(color: EditorTheme.warning, fontSize: 11),
               ),
             ),
           const SizedBox(height: 10),
-          ElevatedButton.icon(
+          EditorButton(
+            label: 'Make ${n == 1 ? 'it' : 'them'} an entity',
+            icon: Icons.open_in_new,
+            kind: EditorButtonKind.primary,
             onPressed: n == 0
                 ? null
                 : () => TileSelectionOps.makeEntity(scope, world, _say),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: EditorTheme.buttonBg,
-              foregroundColor: EditorTheme.primary,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-            icon: const Icon(Icons.open_in_new, size: 14),
-            label: Text(
-              'Make ${n == 1 ? 'it' : 'them'} an entity',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
           ),
           const SizedBox(height: 4),
           Row(
@@ -216,22 +204,26 @@ class _TileSelectionCard extends StatelessWidget {
             children: [
               action(
                 Icons.content_copy_outlined,
-                'Copy tiles (Ctrl+C)',
+                'Copy tiles',
+                'Ctrl+C',
                 () => TileSelectionOps.copy(scope, world, _say),
               ),
               action(
                 Icons.content_cut,
-                'Cut tiles (Ctrl+X)',
+                'Cut tiles',
+                'Ctrl+X',
                 () => TileSelectionOps.cut(scope, world, _say),
               ),
               action(
                 Icons.delete_outline,
-                'Delete tiles (Delete)',
+                'Delete tiles',
+                'Delete',
                 () => TileSelectionOps.delete(scope, world, _say),
               ),
               action(
                 Icons.deselect,
-                'Select none (Esc)',
+                'Select none',
+                'Esc',
                 () => TileSelectionOps.deselect(scope, _say),
               ),
             ],
@@ -263,28 +255,17 @@ class _MultiSelectionPanel extends StatelessWidget {
         children: <Widget>[
           Text(
             '$count entities selected',
-            style: const TextStyle(
+            style: TextStyle(
               color: EditorTheme.textSecondary,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 12),
-          ElevatedButton.icon(
+          EditorButton(
+            label: 'Group $count entities',
+            icon: Icons.folder_open_rounded,
             onPressed: onGroupSelection,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: EditorTheme.buttonBg,
-              foregroundColor: EditorTheme.primary,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-            icon: const Icon(Icons.folder_open_rounded, size: 14),
-            label: Text(
-              'Group $count entities',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
           ),
         ],
       ),
@@ -340,18 +321,18 @@ class _EntityInspector extends StatelessWidget {
           // showing something other than the selection, refusing edits,
           // or sitting over an entity the viewport will not give up.
           if (off) ...[
-            const _Notice(
+            _Notice(
               icon: Icons.do_not_disturb_on_outlined,
               tint: EditorTheme.warning,
               message:
-                  'Switched off in the game. Turn it on with the tick in '
+                  'Switched off in the game. Turn it on with its tick in '
                   'the scene tree to edit it.',
             ),
             const SizedBox(height: 6),
           ],
           if (scope.view.isPinned(entity.id)) ...[
             _Notice(
-              icon: Icons.lock_outline,
+              icon: Icons.push_pin_outlined,
               tint: EditorTheme.primaryBright,
               message:
                   'Pinned to ${entity.name ?? 'this entity'}. The inspector '
@@ -426,7 +407,7 @@ class _Notice extends StatelessWidget {
         Expanded(
           child: Text(
             message,
-            style: const TextStyle(
+            style: TextStyle(
               color: EditorTheme.textSecondary,
               fontSize: 10,
               height: 1.4,
@@ -437,8 +418,10 @@ class _Notice extends StatelessWidget {
           InkWell(
             onTap: onAction,
             borderRadius: BorderRadius.circular(4),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 24),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
                 actionLabel!,
                 style: TextStyle(

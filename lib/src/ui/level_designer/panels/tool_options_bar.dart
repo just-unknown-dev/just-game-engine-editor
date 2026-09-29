@@ -52,10 +52,7 @@ class ToolOptionsBar extends StatelessWidget {
                 description ?? '',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: EditorTheme.textMuted,
-                  fontSize: 11,
-                ),
+                style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
               ),
             ),
         const OptionsDivider(),
@@ -63,7 +60,7 @@ class ToolOptionsBar extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           tool.label,
-          style: const TextStyle(
+          style: TextStyle(
             color: EditorTheme.textPrimary,
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -93,7 +90,7 @@ class _KeyCap extends StatelessWidget {
     ),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         color: EditorTheme.textMuted,
         fontSize: 9,
         fontWeight: FontWeight.w700,

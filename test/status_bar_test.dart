@@ -105,16 +105,25 @@ void main() {
     expect(find.text('120, 48'), findsOneWidget);
 
     // Trouble shows only when there is some.
-    expect(find.byTooltip('1 errors in the Console'), findsNothing);
+    expect(find.byTooltip('1 errors: show them in the Console'), findsNothing);
     final before = plugin.logService.entries.value
         .where((e) => e.level == DebuggerLogLevel.error)
         .length;
     plugin.logService.log('boom', level: DebuggerLogLevel.error);
     await refresh(tester);
     expect(
-      find.byTooltip('${before + 1} errors in the Console'),
+      find.byTooltip('${before + 1} errors: show them in the Console'),
       findsOneWidget,
     );
+    // The count is a button to them: the Console, on its errors.
+    await tester.tap(
+      find.byTooltip('${before + 1} errors: show them in the Console'),
+    );
+    await refresh(tester);
+    expect(plugin.scope.dockController.activeDock, 'logs');
+    expect(plugin.scope.dockController.openArgs['level'], 'error');
+    plugin.scope.dockController.close();
+    await refresh(tester);
 
     plugin.playController.play();
     await refresh(tester);

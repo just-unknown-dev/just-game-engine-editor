@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../../core/constants/editor_constants.dart';
+import '../../../core/theme/editor_metrics.dart';
 import '../../../core/plugin/editor_plugin.dart';
 import '../settings/overlay_ui_settings.dart';
 import '../../widgets/editor_dropdown.dart';
+import '../../kit/buttons.dart';
+import 'transform_toolbar.dart';
 import '../../../core/play/play_controller.dart';
 
 String formatBytes(int bytes) {
@@ -31,38 +34,44 @@ String formatBytes(int bytes) {
 /// Play-test and view controls for the editor, top-left of the viewport.
 /// Editor-only — never affects the shipped game's own gameplay loop.
 ///
-/// Three groups, left to right: **transport** (Play, Pause, Step, Stop,
-/// Restart, speed, and what the play-test is doing), **editing mode** (the
-/// Level Designer), and **view toggles** (the game camera preview, then
-/// whatever modules add). The frame takes the play state's colour, so a
-/// running play-test is visible from the corner of the eye.
+/// Three frames, left to right: **transport** (Play, Pause, Step, Stop,
+/// Restart, the speed, and what the play-test is doing), **view and mode**
+/// (the game camera preview, the Level Designer, the interface editor), and
+/// what **modules** add. The frames take the play state's colour, so a
+/// running play-test is visible from the corner of the eye. Narrower than
+/// [maxWidth], the row scrolls sideways rather than run into what is at the
+/// top right.
 class PlayControlsToolbar extends StatelessWidget {
   const PlayControlsToolbar({
     super.key,
     required this.plugin,
     required this.settings,
+    this.maxWidth,
   });
 
   final JustGameEditorPlugin plugin;
   final OverlayUiSettings settings;
 
-  static const Color _playing = Color(0xFF7DE6B1);
+  /// How wide the row may be before it scrolls.
+  final double? maxWidth;
+
+  static Color get _playing => EditorTheme.success;
 
   /// Side of one button: a comfortable target, the height of an inspector
   /// field, growing with the text scale.
   static double buttonSize(OverlayUiSettings settings) =>
-      math.max(28, 16 * settings.effectiveTextScale + 12);
+      math.max(EditorMetrics.controlMd, 16 * settings.effectiveTextScale + 12);
 
   /// The toolbar's height for [settings], so whatever hangs below it — the
   /// game camera preview — knows where it ends. Mirrors the layout below: a
   /// button, the frame's vertical padding, and its border.
   static double heightFor(OverlayUiSettings settings) =>
-      buttonSize(settings) + 6 * settings.compactness + 2;
+      buttonSize(settings) + EditorMetrics.space(6) + 2;
 
-  /// `Play (F5)`: the label, and the key bound to [commandId] if there is one.
-  String _tip(String label, String commandId) {
+  /// The key bound to [commandId], if there is one.
+  String? _key(String commandId) {
     final bound = plugin.scope.commands.bindingsFor(commandId);
-    return bound.isEmpty ? label : '$label  (${bound.first.shortcut})';
+    return bound.isEmpty ? null : bound.first.shortcut;
   }
 
   static String _clock(int seconds) =>
@@ -88,202 +97,190 @@ class PlayControlsToolbar extends StatelessWidget {
       builder: (context, _) {
         final state = play.state.value;
         final running = state != EditorPlayState.stopped;
-        final accent = switch (state) {
+        final frameColour = switch (state) {
           EditorPlayState.playing => _playing,
           EditorPlayState.paused => EditorTheme.warning,
-          EditorPlayState.stopped => settings.themeColor,
+          EditorPlayState.stopped => EditorTheme.accent,
         };
+        final hasScene = plugin.sceneState.hasScene;
+        final side = buttonSize(settings);
 
         Widget button(
           IconData icon,
           String tooltip,
-          Color color, {
+          Color colour, {
           required VoidCallback? onTap,
+          String? commandId,
           bool isActive = false,
-        }) => _PlayControlButton(
-          icon: icon,
-          tooltip: tooltip,
-          color: color,
-          isActive: isActive,
-          onTap: onTap,
-          settings: settings,
+        }) => Padding(
+          // A gap between neighbours, so two lit buttons read as two.
+          padding: const EdgeInsets.symmetric(horizontal: 1),
+          child: EditorToolButton(
+            icon: icon,
+            tooltip: tooltip,
+            shortcut: commandId == null ? null : _key(commandId),
+            showShortcut: false,
+            activeBar: false,
+            activeColor: colour,
+            isActive: isActive,
+            onTap: onTap,
+            width: side,
+            height: side,
+            iconSize: 16 * settings.effectiveTextScale,
+          ),
         );
 
-        return Row(
-          spacing: 4 * settings.compactness,
+        Widget frame(List<Widget> children) => FloatingToolFrame(
+          settings: settings,
+          borderColor: frameColour,
+          borderWidth: running ? 1.5 : 1,
+          horizontalPadding: EditorMetrics.space(5),
+          child: Row(mainAxisSize: MainAxisSize.min, children: children),
+        );
+
+        final modules = plugin.scope.toolbarButtons;
+        final row = Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: EditorMetrics.space(4),
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              decoration: BoxDecoration(
-                color: EditorTheme.statusBadgeBg,
-                borderRadius: BorderRadius.circular(settings.cornerRadius + 6),
-                border: Border.all(color: accent, width: running ? 1.5 : 1),
+            // ── Transport ──────────────────────────────────────────────
+            frame([
+              button(
+                Icons.play_arrow_rounded,
+                state == EditorPlayState.paused ? 'Resume' : 'Play',
+                _playing,
+                commandId: 'editor.playToggle',
+                isActive: state == EditorPlayState.playing,
+                onTap: state == EditorPlayState.playing ? null : play.play,
               ),
-              padding: EdgeInsets.symmetric(
-                horizontal: 5 * settings.compactness,
-                vertical: 3 * settings.compactness,
+              button(
+                Icons.pause_rounded,
+                'Pause',
+                EditorTheme.warning,
+                commandId: 'editor.pauseToggle',
+                isActive: state == EditorPlayState.paused,
+                onTap: state == EditorPlayState.playing ? play.pause : null,
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  // ── Transport ──────────────────────────────────────────────
-                  button(
-                    Icons.play_arrow_rounded,
-                    _tip(
-                      state == EditorPlayState.paused ? 'Resume' : 'Play',
-                      'editor.playToggle',
+              button(
+                Icons.skip_next_rounded,
+                'Step one frame',
+                EditorTheme.warning,
+                commandId: 'editor.playStep',
+                onTap: running ? play.step : null,
+              ),
+              button(
+                Icons.stop_rounded,
+                'Stop',
+                EditorTheme.error,
+                commandId: 'editor.playToggle',
+                onTap: running ? play.stop : null,
+              ),
+              button(
+                Icons.replay_rounded,
+                'Restart',
+                _playing,
+                commandId: 'editor.playRestart',
+                onTap: running ? play.restart : null,
+              ),
+              const SizedBox(width: 4),
+              EditorDropdown<double>(
+                value: play.speed.value,
+                tooltip: 'Play speed',
+                isExpanded: false,
+                height: 24,
+                fontSize: 10,
+                options: [
+                  for (final speed in PlayController.speeds)
+                    EditorDropdownOption(
+                      value: speed,
+                      label:
+                          '${speed == speed.roundToDouble() ? speed.toInt() : speed}×',
                     ),
-                    _playing,
-                    isActive: state == EditorPlayState.playing,
-                    onTap: state == EditorPlayState.playing ? null : play.play,
-                  ),
-                  button(
-                    Icons.pause_rounded,
-                    _tip('Pause', 'editor.pauseToggle'),
-                    EditorTheme.warning,
-                    isActive: state == EditorPlayState.paused,
-                    onTap: state == EditorPlayState.playing ? play.pause : null,
-                  ),
-                  button(
-                    Icons.skip_next_rounded,
-                    _tip('Step one frame', 'editor.playStep'),
-                    EditorTheme.warning,
-                    onTap: running ? play.step : null,
-                  ),
-                  button(
-                    Icons.stop_rounded,
-                    _tip('Stop', 'editor.playToggle'),
-                    EditorTheme.error,
-                    onTap: running ? play.stop : null,
-                  ),
-                  button(
-                    Icons.replay_rounded,
-                    _tip('Restart', 'editor.playRestart'),
-                    _playing,
-                    onTap: running ? play.restart : null,
-                  ),
-                  const SizedBox(width: 4),
-                  EditorDropdown<double>(
-                    value: play.speed.value,
-                    tooltip: 'Play speed',
-                    isExpanded: false,
-                    height: 22,
-                    fontSize: 10,
-                    options: [
-                      for (final speed in PlayController.speeds)
-                        EditorDropdownOption(
-                          value: speed,
-                          label:
-                              '${speed == speed.roundToDouble() ? speed.toInt() : speed}×',
-                        ),
-                    ],
-                    onChanged: play.setSpeed,
-                  ),
-                  if (running)
-                    _StateChip(
-                      state: state,
-                      color: accent,
-                      clock: _clock(play.elapsedSeconds.value),
-                    ),
-                  const SizedBox(width: 4),
-                  button(
-                    Icons.camera,
-                    _tip(
-                      plugin.showGamePreview.value
-                          ? 'Hide the game camera preview'
-                          : 'Show the game camera preview',
-                      'editor.togglePreview',
-                    ),
-                    EditorTheme.primaryBright,
-                    isActive: plugin.showGamePreview.value,
-                    onTap: () => plugin.showGamePreview.value =
-                        !plugin.showGamePreview.value,
-                  ),
                 ],
+                onChanged: play.setSpeed,
               ),
-            ),
-            // ── Editing mode ───────────────────────────────────────────
-            Container(
-              decoration: BoxDecoration(
-                color: EditorTheme.statusBadgeBg,
-                borderRadius: BorderRadius.circular(settings.cornerRadius + 6),
-                border: Border.all(color: accent, width: running ? 1.5 : 1),
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: 5 * settings.compactness,
-                vertical: 3 * settings.compactness,
-              ),
-              child: button(
-                Icons.map_outlined,
-                _tip(
-                  plugin.isLevelDesignerOpen
-                      ? 'Close Level Designer'
-                      : 'Open Level Designer',
-                  'editor.toggleDesigner',
+              if (running)
+                _StateChip(
+                  state: state,
+                  color: frameColour,
+                  clock: _clock(play.elapsedSeconds.value),
                 ),
+              const SizedBox(width: 2),
+            ]),
+            // ── View and mode ──────────────────────────────────────────
+            // What the viewport shows and what it is for: the game camera
+            // over the level, the level being built, or the interface
+            // drawn over it.
+            frame([
+              button(
+                Icons.camera,
+                plugin.showGamePreview.value
+                    ? 'Hide the game camera preview'
+                    : 'Show the game camera preview',
                 EditorTheme.primaryBright,
+                commandId: 'editor.togglePreview',
+                isActive: plugin.showGamePreview.value,
+                onTap: () => plugin.showGamePreview.value =
+                    !plugin.showGamePreview.value,
+              ),
+              Container(
+                width: 1,
+                height: side * 0.6,
+                margin: EdgeInsets.symmetric(
+                  horizontal: EditorMetrics.space(4),
+                ),
+                color: EditorTheme.borderStrong,
+              ),
+              button(
+                Icons.map_outlined,
+                !hasScene
+                    ? 'Level Designer — open a scene first'
+                    : plugin.isLevelDesignerOpen
+                    ? 'Close Level Designer'
+                    : 'Open Level Designer',
+                EditorTheme.primaryBright,
+                commandId: 'editor.toggleDesigner',
                 isActive: plugin.isLevelDesignerOpen,
                 // Needs a scene: there is nothing to design into otherwise,
                 // and the session holds entity references from one.
-                onTap: plugin.sceneState.hasScene
-                    ? plugin.toggleLevelDesigner
-                    : null,
+                onTap: hasScene ? plugin.toggleLevelDesigner : null,
               ),
-            ),
-            // Beside the designer, because it is the same kind of
-            // choice: which of the two things in this scene the
-            // viewport is for — the world, or the interface over it.
-            Container(
-              decoration: BoxDecoration(
-                color: EditorTheme.statusBadgeBg,
-                borderRadius: BorderRadius.circular(settings.cornerRadius + 6),
-                border: Border.all(color: accent, width: running ? 1.5 : 1),
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: 5 * settings.compactness,
-                vertical: 3 * settings.compactness,
-              ),
-              child: button(
-                plugin.uiMode.enabled.value
-                    ? Icons.public_off
-                    : Icons.phone_iphone,
-                plugin.uiMode.enabled.value
-                    ? 'Back to the world'
-                    : 'Edit the interface',
+              button(
+                Icons.phone_iphone,
+                hasScene
+                    ? 'Edit the interface drawn over this scene'
+                    : 'Interface — open a scene first',
                 EditorTheme.primaryBright,
                 isActive: plugin.uiMode.enabled.value,
-                onTap: plugin.sceneState.hasScene
-                    ? () => plugin.uiMode.enabled.value
-                          ? plugin.scope.closeWorkspace()
-                          : plugin.scope.openWorkspace(BuiltInWorkspaces.ui)
+                onTap: hasScene
+                    ? () => plugin.scope.openWorkspace(BuiltInWorkspaces.ui)
                     : null,
               ),
-            ),
-            // ── View toggles, then what the modules add ────────────────
-            for (final extra in plugin.scope.toolbarButtons)
-              Container(
-                decoration: BoxDecoration(
-                  color: EditorTheme.statusBadgeBg,
-                  borderRadius: BorderRadius.circular(
-                    settings.cornerRadius + 6,
+            ]),
+            // ── What the modules add ───────────────────────────────────
+            if (modules.isNotEmpty)
+              frame([
+                for (final extra in modules)
+                  button(
+                    extra.icon,
+                    extra.tooltip,
+                    EditorTheme.accent,
+                    isActive: extra.isActive?.call(plugin.scope) ?? false,
+                    onTap: (extra.isEnabled?.call(plugin.scope) ?? true)
+                        ? () => extra.onPressed(plugin.scope)
+                        : null,
                   ),
-                  border: Border.all(color: accent, width: running ? 1.5 : 1),
-                ),
-                padding: EdgeInsets.symmetric(
-                  horizontal: 5 * settings.compactness,
-                  vertical: 3 * settings.compactness,
-                ),
-                child: button(
-                  extra.icon,
-                  extra.tooltip,
-                  settings.themeColor,
-                  isActive: extra.isActive?.call(plugin.scope) ?? false,
-                  onTap: (extra.isEnabled?.call(plugin.scope) ?? true)
-                      ? () => extra.onPressed(plugin.scope)
-                      : null,
-                ),
-              ),
+              ]),
           ],
+        );
+        final limit = maxWidth;
+        if (limit == null) return row;
+        return ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: math.max(limit, side * 2)),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: row,
+          ),
         );
       },
     );
@@ -340,122 +337,4 @@ class _StateChip extends StatelessWidget {
       ],
     ),
   );
-}
-
-class _PlayControlButton extends StatelessWidget {
-  const _PlayControlButton({
-    required this.icon,
-    required this.tooltip,
-    required this.color,
-    required this.isActive,
-    required this.onTap,
-    required this.settings,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final Color color;
-  final bool isActive;
-  final VoidCallback? onTap;
-  final OverlayUiSettings settings;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onTap != null;
-    final iconColor = !enabled
-        ? EditorTheme.textMuted.withValues(alpha: 0.4)
-        : (isActive ? color : EditorTheme.textBright);
-    final side = PlayControlsToolbar.buttonSize(settings);
-
-    return Tooltip(
-      message: tooltip,
-      waitDuration: const Duration(milliseconds: 400),
-      // A gap between neighbours, so two active buttons read as two.
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 1),
-        child: Material(
-          color: isActive ? color.withValues(alpha: 0.18) : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            hoverColor: color.withValues(alpha: 0.12),
-            child: SizedBox.square(
-              dimension: side,
-              child: Icon(
-                icon,
-                size: 16 * settings.effectiveTextScale,
-                color: iconColor,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A small status pill: tinted with its [accent] rather than filled with it.
-///
-/// A solid bright pill with white text is both the loudest thing in the panel
-/// and the hardest to read (white on the warning yellow is about 1.4:1). This
-/// is the same chip the play toolbar uses for `PLAYING`: a faint fill, a hair
-/// of border, and the accent as the text colour.
-class OverlayBadge extends StatelessWidget {
-  const OverlayBadge({
-    super.key,
-    required this.label,
-    this.accent = EditorTheme.buttonBg,
-    this.settings = const OverlayUiSettings.defaults(),
-    this.showDot = false,
-  });
-
-  final String label;
-  final Color accent;
-  final OverlayUiSettings settings;
-
-  /// A leading dot, for a badge that reports a state rather than a label.
-  final bool showDot;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: accent.withValues(alpha: 0.45)),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: 8 * settings.compactness,
-          vertical: 3 * settings.compactness,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (showDot) ...[
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: accent,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 5),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                color: accent,
-                fontSize: 9 * settings.effectiveTextScale,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

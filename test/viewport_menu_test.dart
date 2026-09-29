@@ -71,7 +71,10 @@ void main() {
 
       expect(find.text('Focus'), findsOneWidget);
       expect(find.text('Duplicate'), findsOneWidget);
-      expect(find.text('Delete'), findsOneWidget);
+      // The item, and the key beside it — the Delete key.
+      expect(find.text('Delete'), findsNWidgets(2));
+      // Each with the key that does the same.
+      expect(find.text('Ctrl+D'), findsOneWidget);
       expect(find.text('Hide it'), findsOneWidget);
       expect(find.text('Lock it'), findsOneWidget);
       expect(find.text('Isolate: hide everything else'), findsOneWidget);

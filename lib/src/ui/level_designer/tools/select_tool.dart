@@ -51,8 +51,13 @@ class SelectTool extends LevelToolHandler {
     required this.codec,
     this.layout = const SelectionHandleLayout(),
     this.mapDocs,
+    this.rotationStep,
     String Function(String prefix)? uniqueName,
   }) : _uniqueName = uniqueName ?? ((prefix) => prefix);
+
+  /// The step a snapped turn moves in, in radians, read as the turn is
+  /// made: the settings' step. Without it, [layout]'s.
+  final double Function()? rotationStep;
 
   /// The maps being edited, for turning a piece of one's tiles. Without
   /// them a piece does not turn.
@@ -523,7 +528,7 @@ class SelectTool extends LevelToolHandler {
         .resolve(
           SnapRequest(
             moving: rect,
-            gridSize: context.gridSize,
+            gridSize: context.moveStep,
             others: _snapRects,
             xLines: _guideXs,
             yLines: _guideYs,
@@ -698,8 +703,8 @@ class SelectTool extends LevelToolHandler {
       return;
     }
     if (context.snapping) {
-      angle =
-          (angle / layout.rotationStep).roundToDouble() * layout.rotationStep;
+      final step = rotationStep?.call() ?? layout.rotationStep;
+      if (step > 0) angle = (angle / step).roundToDouble() * step;
     }
     final cos = math.cos(angle);
     final sin = math.sin(angle);

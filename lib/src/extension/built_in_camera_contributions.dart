@@ -102,7 +102,7 @@ class _Badge extends StatelessWidget {
     ),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         color: EditorTheme.textBright,
         fontSize: 8,
         fontWeight: FontWeight.w800,

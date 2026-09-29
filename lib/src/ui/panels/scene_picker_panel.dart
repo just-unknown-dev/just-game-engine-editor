@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/editor_constants.dart';
+import '../kit/kit.dart';
+import '../widgets/editor_menu.dart';
 
 import '../dialogs/create_scene_overlay.dart';
 import '../dialogs/scene_actions_dialogs.dart';
@@ -163,7 +165,7 @@ class _ListView extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
           child: Row(
             children: <Widget>[
-              const Text(
+              Text(
                 'SCENES',
                 style: TextStyle(
                   color: EditorTheme.primaryBright,
@@ -191,7 +193,7 @@ class _ListView extends StatelessWidget {
             ],
           ),
         ),
-        const Divider(height: 1, color: EditorTheme.border),
+        Divider(height: 1, color: EditorTheme.border),
         if (actionError != null)
           _ActionErrorBanner(message: actionError!, onDismiss: onDismissError),
         // Body
@@ -229,28 +231,19 @@ class _ActionErrorBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: <Widget>[
-          const Icon(
-            Icons.error_outline_rounded,
-            size: 14,
-            color: EditorTheme.error,
-          ),
+          Icon(Icons.error_outline_rounded, size: 14, color: EditorTheme.error),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                color: EditorTheme.errorLight,
-                fontSize: 11,
-              ),
+              style: TextStyle(color: EditorTheme.errorLight, fontSize: 11),
             ),
           ),
-          InkWell(
+          EditorIconButton(
+            icon: Icons.close_rounded,
+            tooltip: 'Dismiss',
+            color: EditorTheme.errorLight,
             onTap: onDismiss,
-            child: const Icon(
-              Icons.close_rounded,
-              size: 14,
-              color: EditorTheme.errorLight,
-            ),
           ),
         ],
       ),
@@ -264,60 +257,13 @@ class _EmptyState extends StatelessWidget {
   final VoidCallback onAdd;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          const Icon(
-            Icons.folder_open_rounded,
-            color: EditorTheme.border,
-            size: 36,
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'No scenes yet',
-            style: TextStyle(
-              color: EditorTheme.primaryBright,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Press + to create your first scene.',
-            style: TextStyle(
-              color: EditorTheme.primaryMuted,
-              fontSize: 11,
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 34,
-            child: ElevatedButton.icon(
-              onPressed: onAdd,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: EditorTheme.buttonBg,
-                foregroundColor: EditorTheme.primary,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-              icon: const Icon(Icons.add_rounded, size: 16),
-              label: const Text(
-                'New Scene',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => EditorEmptyState(
+    icon: Icons.folder_open_rounded,
+    title: 'No scenes yet',
+    hint: 'A scene is a level to build: make the first one here.',
+    actionLabel: 'New scene',
+    onAction: onAdd,
+  );
 }
 
 enum _SceneRowAction { rename, duplicate, delete }
@@ -347,7 +293,7 @@ class _SceneRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         child: Row(
           children: <Widget>[
-            const Icon(
+            Icon(
               Icons.folder_rounded,
               size: 15,
               color: EditorTheme.primaryMuted,
@@ -356,7 +302,7 @@ class _SceneRow extends StatelessWidget {
             Expanded(
               child: Text(
                 name,
-                style: const TextStyle(
+                style: TextStyle(
                   color: EditorTheme.textSecondary,
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
@@ -365,7 +311,7 @@ class _SceneRow extends StatelessWidget {
               ),
             ),
             if (isProtected)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(right: 4),
                 child: Tooltip(
                   message:
@@ -379,7 +325,7 @@ class _SceneRow extends StatelessWidget {
                 ),
               ),
             PopupMenuButton<_SceneRowAction>(
-              icon: const Icon(
+              icon: Icon(
                 Icons.more_vert_rounded,
                 size: 16,
                 color: EditorTheme.textMuted,
@@ -389,44 +335,27 @@ class _SceneRow extends StatelessWidget {
               color: EditorTheme.menuBg,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(6),
-                side: const BorderSide(color: EditorTheme.border),
+                side: BorderSide(color: EditorTheme.border),
               ),
+              tooltip: 'More for $name',
               itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: _SceneRowAction.rename,
-                  height: 32,
-                  child: Text(
-                    'Rename',
-                    style: TextStyle(
-                      color: EditorTheme.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
+                editorMenuItem(
+                  _SceneRowAction.rename,
+                  'Rename',
+                  icon: Icons.drive_file_rename_outline,
                 ),
-                const PopupMenuItem(
-                  value: _SceneRowAction.duplicate,
-                  height: 32,
-                  child: Text(
-                    'Duplicate',
-                    style: TextStyle(
-                      color: EditorTheme.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
+                editorMenuItem(
+                  _SceneRowAction.duplicate,
+                  'Duplicate',
+                  icon: Icons.copy_outlined,
                 ),
-                PopupMenuItem(
-                  value: _SceneRowAction.delete,
-                  height: 32,
+                editorMenuDivider(),
+                editorMenuItem(
+                  _SceneRowAction.delete,
+                  isProtected ? 'Delete (the game uses it)' : 'Delete',
+                  icon: Icons.delete_outline,
+                  color: EditorTheme.error,
                   enabled: !isProtected,
-                  child: Text(
-                    'Delete',
-                    style: TextStyle(
-                      color: isProtected
-                          ? EditorTheme.textMuted
-                          : EditorTheme.error,
-                      fontSize: 12,
-                    ),
-                  ),
                 ),
               ],
               onSelected: (action) {
@@ -440,10 +369,10 @@ class _SceneRow extends StatelessWidget {
                 }
               },
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
               size: 16,
-              color: EditorTheme.border,
+              color: EditorTheme.textMuted.withValues(alpha: 0.6),
             ),
           ],
         ),
@@ -479,13 +408,13 @@ class _CreateView extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(8, 8, 14, 8),
             child: Row(
               children: <Widget>[
-                const Icon(
+                Icon(
                   Icons.arrow_back_ios_new_rounded,
                   size: 14,
                   color: EditorTheme.primary,
                 ),
                 const SizedBox(width: 6),
-                const Text(
+                Text(
                   'New Scene',
                   style: TextStyle(
                     color: EditorTheme.textPrimary,
@@ -497,7 +426,7 @@ class _CreateView extends StatelessWidget {
             ),
           ),
         ),
-        const Divider(height: 1, color: EditorTheme.border),
+        Divider(height: 1, color: EditorTheme.border),
         Expanded(
           child: CreateSceneOverlay(
             onSceneCreated: onSceneCreated,

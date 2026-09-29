@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:just_signals/just_signals.dart';
 
 /// One reversible editor action.
@@ -54,14 +56,26 @@ class CallbackCommand extends EditorCommand {
 /// Exposes its state as signals so toolbar buttons bind directly instead of
 /// polling or being told to rebuild.
 class EditorHistory {
-  EditorHistory({this.capacity = 200});
+  EditorHistory({int capacity = 200}) : _capacity = math.max(1, capacity);
 
   /// How many commands are retained. Older ones are dropped from the bottom.
   ///
   /// Bounded because a command can hold a full component snapshot of a deleted
   /// entity, so an unbounded stack is an unbounded memory leak across a long
-  /// editing session.
-  final int capacity;
+  /// editing session. Made smaller, the oldest steps go at once.
+  int get capacity => _capacity;
+  int _capacity;
+  set capacity(int value) {
+    final next = math.max(1, value);
+    if (next == _capacity) return;
+    _capacity = next;
+    if (_undoStack.length > next) {
+      batch(() {
+        _undoStack.removeRange(0, _undoStack.length - next);
+        _publish();
+      });
+    }
+  }
 
   final List<EditorCommand> _undoStack = [];
   final List<EditorCommand> _redoStack = [];
@@ -108,7 +122,7 @@ class EditorHistory {
         // Absorbed into the previous command; nothing new to stack.
       } else {
         _undoStack.add(command);
-        if (_undoStack.length > capacity) _undoStack.removeAt(0);
+        if (_undoStack.length > _capacity) _undoStack.removeAt(0);
       }
 
       _publish();
@@ -125,7 +139,7 @@ class EditorHistory {
       _redoStack.clear();
       if (_undoStack.isEmpty || !_undoStack.last.mergeWith(command)) {
         _undoStack.add(command);
-        if (_undoStack.length > capacity) _undoStack.removeAt(0);
+        if (_undoStack.length > _capacity) _undoStack.removeAt(0);
       }
       _publish();
     });

@@ -222,10 +222,7 @@ class _TerrainList extends StatelessWidget {
                 child: Text(
                   '${ts.wangSets[i].name.isEmpty ? 'Terrains' : ts.wangSets[i].name} '
                   '· ${ts.wangSets[i].type.name}',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: EditorTheme.textMuted,
-                  ),
+                  style: TextStyle(fontSize: 10, color: EditorTheme.textMuted),
                 ),
               ),
               for (var c = 0; c < ts.wangSets[i].colors.length; c++)
@@ -392,7 +389,7 @@ class _TopRow extends StatelessWidget {
     return Container(
       height: 26,
       padding: const EdgeInsets.only(left: 2, right: 6),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: EditorTheme.border)),
       ),
       child: Row(
@@ -410,7 +407,7 @@ class _TopRow extends StatelessWidget {
                   session.scope.mapDocs.projectRoot,
                 ).where((p) => !used.contains(p)).toList();
                 if (files.isEmpty) {
-                  return const [
+                  return [
                     PopupMenuItem(
                       enabled: false,
                       height: 28,
@@ -431,7 +428,7 @@ class _TopRow extends StatelessWidget {
                       height: 28,
                       child: Text(
                         path,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           color: EditorTheme.textSecondary,
                         ),
@@ -439,7 +436,7 @@ class _TopRow extends StatelessWidget {
                     ),
                 ];
               },
-              child: const Padding(
+              child: Padding(
                 padding: EdgeInsets.all(4),
                 child: Icon(
                   Icons.add,
@@ -619,7 +616,7 @@ class _TilesetSection extends StatelessWidget {
                         slot == null ? 'built in · not on the map' : 'built in',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 10,
                           color: EditorTheme.textMuted,
                         ),
@@ -644,7 +641,7 @@ class _TilesetSection extends StatelessWidget {
                       itemBuilder: (context) => [
                         // Drawn in code: nothing to edit.
                         if (!_builtIn)
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: 'edit',
                             height: 28,
                             child: Text(
@@ -655,7 +652,7 @@ class _TilesetSection extends StatelessWidget {
                               ),
                             ),
                           ),
-                        const PopupMenuItem(
+                        PopupMenuItem(
                           value: 'remove',
                           height: 28,
                           child: Text(
@@ -667,8 +664,8 @@ class _TilesetSection extends StatelessWidget {
                           ),
                         ),
                       ],
-                      child: const Padding(
-                        padding: EdgeInsets.all(3),
+                      child: Padding(
+                        padding: EdgeInsets.all(5),
                         child: Icon(
                           Icons.more_vert,
                           size: 14,
@@ -971,12 +968,12 @@ class _ZoomBar extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: 24,
     padding: const EdgeInsets.symmetric(horizontal: 6),
-    decoration: const BoxDecoration(
+    decoration: BoxDecoration(
       border: Border(top: BorderSide(color: EditorTheme.border)),
     ),
     child: Row(
       children: [
-        const Expanded(
+        Expanded(
           child: Text(
             'Ctrl+click: random set',
             overflow: TextOverflow.ellipsis,
@@ -993,10 +990,7 @@ class _ZoomBar extends StatelessWidget {
           child: Text(
             '${(zoom * 100).round()}%',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 10,
-              color: EditorTheme.textSecondary,
-            ),
+            style: TextStyle(fontSize: 10, color: EditorTheme.textSecondary),
           ),
         ),
         _SmallButton(
@@ -1027,7 +1021,7 @@ class _SmallButton extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(3),
       child: Padding(
-        padding: const EdgeInsets.all(3),
+        padding: const EdgeInsets.all(5.5),
         child: Icon(icon, size: 13, color: EditorTheme.textSecondary),
       ),
     ),

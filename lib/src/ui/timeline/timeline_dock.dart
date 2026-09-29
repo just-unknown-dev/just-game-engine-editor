@@ -468,7 +468,7 @@ class TimelineDockState extends State<TimelineDock>
                         _TreeHeader(onAdd: _addTrack),
                         Expanded(
                           child: asset.tracks.isEmpty
-                              ? const Padding(
+                              ? Padding(
                                   padding: EdgeInsets.all(12),
                                   child: Text(
                                     'No tracks yet. Add one to animate a '
@@ -560,7 +560,7 @@ class TimelineDockState extends State<TimelineDock>
     final entity = widget.scope.sceneState.selectedEntity.value;
     final player = entity?.getComponent<jge.TimelinePlayerComponent>();
     final note = session.message.value;
-    return DockEmptyState(
+    return EditorEmptyState(
       icon: Icons.movie_filter_outlined,
       title: entity == null
           ? 'No timeline'
@@ -595,7 +595,7 @@ class _TreeHeader extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 6),
     child: Row(
       children: [
-        const Expanded(
+        Expanded(
           child: Text(
             'TRACKS',
             style: TextStyle(
@@ -609,7 +609,7 @@ class _TreeHeader extends StatelessWidget {
           builder: (anchor) => InkWell(
             onTap: () => onAdd(anchor),
             borderRadius: BorderRadius.circular(3),
-            child: const Padding(
+            child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               child: Row(
                 children: [

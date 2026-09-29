@@ -86,9 +86,14 @@ class EditorPrefs {
     return _loading ??= _loadOnce();
   }
 
+  /// A change made while [load] was still reading: it wins over what was
+  /// read, which is older.
+  bool _changedWhileLoading = false;
+
   Future<void> _loadOnce() async {
     try {
-      settings.value = await store.loadSettings();
+      final loaded = await store.loadSettings();
+      if (!_changedWhileLoading) settings.value = loaded;
       _raw.addAll(await store.readAll());
       for (final entry in _watched.entries) {
         if (_raw.containsKey(entry.key)) {
@@ -105,6 +110,7 @@ class EditorPrefs {
 
   /// Applies and persists [next].
   Future<void> update(OverlayUiSettings next) async {
+    if (!_loaded) _changedWhileLoading = true;
     settings.value = next;
     try {
       await store.saveSettings(next);
@@ -113,6 +119,10 @@ class EditorPrefs {
       debugPrintStack(stackTrace: stackTrace);
     }
   }
+
+  /// Applies and persists what [change] makes of the settings as they are.
+  Future<void> change(OverlayUiSettings Function(OverlayUiSettings s) change) =>
+      update(change(settings.value));
 
   /// The stored value of [pref], or its default.
   T get<T>(SettingPref<T> pref) {
@@ -125,7 +135,11 @@ class EditorPrefs {
     final raw = pref.encode(value);
     _raw[pref.key] = raw;
     _watched[pref.key]?.value = raw;
-    await store.writeRaw(pref.key, raw);
+    try {
+      await store.writeRaw(pref.key, raw);
+    } catch (error) {
+      debugPrint('Failed to save preference ${pref.key}: $error');
+    }
   }
 
   /// A listenable view of [pref]'s decoded value.

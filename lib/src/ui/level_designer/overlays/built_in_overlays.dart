@@ -8,11 +8,13 @@ import '../state/level_designer_controller.dart';
 import '../state/editor_history.dart';
 import '../tools/tool_registry.dart';
 import 'designer_overlay.dart';
+import '../../../core/theme/viewport_look.dart';
 
 /// Palette shared by the built-in overlays.
 abstract final class OverlayColors {
-  /// Marquee, drag rectangle and selection outlines.
-  static const Color selection = Color(0xFF5AC8FA);
+  /// Marquee, drag rectangle and selection outlines: the settings' selection
+  /// colour, when one is picked.
+  static Color get selection => ViewportLook.designerSelection;
 
   /// Alignment guides.
   static const Color guide = Color(0xFF00E5FF);

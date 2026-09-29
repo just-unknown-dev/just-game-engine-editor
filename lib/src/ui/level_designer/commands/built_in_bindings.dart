@@ -74,6 +74,12 @@ abstract final class BuiltInBindings {
     const KeyBinding(LogicalKeyboardKey.f10, 'editor.playStep'),
     const KeyBinding(LogicalKeyboardKey.f3, 'editor.toggleDesigner'),
     const KeyBinding(LogicalKeyboardKey.f4, 'editor.togglePreview'),
+    // Ctrl+, for settings, as in most editors.
+    const KeyBinding(
+      LogicalKeyboardKey.comma,
+      'editor.settings',
+      control: true,
+    ),
     // The docks: Ctrl+` for the panel, as in every editor with a terminal,
     // and Ctrl+Shift+letter for a dock by name.
     const KeyBinding(
@@ -107,6 +113,8 @@ abstract final class BuiltInBindings {
       (LogicalKeyboardKey.keyW, 'entities'),
       (LogicalKeyboardKey.keyF, 'search'),
       (LogicalKeyboardKey.keyH, 'history'),
+      (LogicalKeyboardKey.keyE, 'problems'),
+      (LogicalKeyboardKey.keyU, 'uitheme'),
     ])
       KeyBinding(key, 'dock.open.$id', control: true, shift: true),
     const KeyBinding(LogicalKeyboardKey.keyS, 'editor.save', control: true),

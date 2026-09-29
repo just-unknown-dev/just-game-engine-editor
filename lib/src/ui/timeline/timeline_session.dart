@@ -76,7 +76,10 @@ class TimelineSession {
   TimelineSession(this.scope, {String? root})
     : root = (root ?? Directory.current.path).replaceAll('\\', '/') {
     scope.authoredStateGuards.add(endPreview);
+    scope.authoredStateHeld.add(_previewing);
   }
+
+  bool _previewing() => isPreviewing;
 
   static final Expando<TimelineSession> _sessions = Expando('timelineSession');
 
@@ -1770,6 +1773,7 @@ class TimelineSession {
   void dispose() {
     endPreview();
     scope.authoredStateGuards.remove(endPreview);
+    scope.authoredStateHeld.remove(_previewing);
     _sessions[scope] = null;
   }
 }

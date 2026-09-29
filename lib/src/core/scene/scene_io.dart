@@ -54,6 +54,62 @@ class SceneIO {
     }
   }
 
+  /// Opens [sceneName] from [rawJson] — a backup — instead of its file. It
+  /// opens with unsaved changes, which is what it holds.
+  Future<bool> openFrom(String sceneName, Map<String, dynamic> rawJson) async {
+    if (_busy) return false;
+    _busy = true;
+    try {
+      await _open(sceneName, raw: rawJson);
+      sceneState.markDirty();
+      scope.log.log(
+        'Recovered unsaved changes to $sceneName from a backup.',
+        source: 'editor',
+        category: 'scene',
+      );
+      return true;
+    } finally {
+      _busy = false;
+    }
+  }
+
+  /// The open scene as a save would write it, without writing it or
+  /// disturbing anything: a timeline preview goes on showing. Null when no
+  /// scene is open.
+  String? encodeCurrent({
+    List<Map<String, dynamic>>? asAuthored,
+    Map<String, dynamic>? editorData,
+  }) {
+    final scene = sceneState.activeScene.value;
+    if (scene == null) return null;
+    final encoded =
+        asAuthored ??
+        scope.codec.encodeEntities(
+          authored(world),
+          rootOrder: sceneState.rootOrder(world),
+        );
+    return scope.scenes.encodeScene(scene, encoded, editor: editorData);
+  }
+
+  String? _lastBackup;
+
+  /// Writes a backup of the open scene, keeping the newest [keep]. Nothing
+  /// is written — and false returned — when no scene is open, an open or
+  /// save is in flight, or the scene is as the last backup had it.
+  Future<bool> backup({
+    List<Map<String, dynamic>>? asAuthored,
+    Map<String, dynamic>? editorData,
+    required int keep,
+  }) async {
+    final scene = sceneState.activeScene.value;
+    if (_busy || scene == null) return false;
+    final text = encodeCurrent(asAuthored: asAuthored, editorData: editorData);
+    if (text == null || text == _lastBackup) return false;
+    _lastBackup = text;
+    await scope.scenes.writeBackup(scene.name, text, keep: keep);
+    return true;
+  }
+
   /// Saves the active scene to its file, the one the game loads, so there
   /// is nothing else to regenerate. [asAuthored] is the play snapshot's
   /// entities while a play-test is on; the live world otherwise.
@@ -71,7 +127,8 @@ class SceneIO {
     }
   }
 
-  Future<void> _open(String sceneName) async {
+  Future<void> _open(String sceneName, {Map<String, dynamic>? raw}) async {
+    _lastBackup = null;
     // Destroy any entities left over from a previously open scene.
     //
     // Everything alive, which is more than the things with a transform (a
@@ -86,7 +143,7 @@ class SceneIO {
     // scene uses. A new scene starts a new history, as in any editor.
     scope.history.clear();
 
-    var rawJson = await scope.scenes.loadRawSidecar(sceneName);
+    var rawJson = raw ?? await scope.scenes.loadRawSidecar(sceneName);
     // An older file is brought to the current format in memory; the file
     // itself changes only when the author saves.
     if (rawJson != null &&

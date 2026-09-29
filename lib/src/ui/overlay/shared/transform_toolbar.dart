@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../../core/constants/editor_constants.dart';
+import '../../../core/theme/editor_metrics.dart';
 import '../../../core/plugin/editor_plugin.dart';
 import '../../../core/state/transform_mode.dart';
 import '../../level_designer/level_designer_session.dart';
@@ -86,27 +87,43 @@ class TransformToolbar extends StatelessWidget {
   }
 }
 
-/// The rounded, bordered frame the viewport's floating toolbars sit in —
-/// the transform column and the Level Designer's tool strip below it — in
-/// the play controls' style.
+/// The rounded, bordered frame everything floating over the viewport sits
+/// in — the play controls, the transform column, the Level Designer's tool
+/// strip, the settings gear — so they read as one set.
 class FloatingToolFrame extends StatelessWidget {
   const FloatingToolFrame({
     super.key,
     required this.settings,
     required this.child,
+    this.borderColor,
+    this.borderWidth = 1,
+    this.horizontalPadding = 0,
   });
 
   final OverlayUiSettings settings;
   final Widget child;
 
+  /// The frame's line; the accent when null. The play controls' frame
+  /// takes the play state's colour.
+  final Color? borderColor;
+  final double borderWidth;
+  final double horizontalPadding;
+
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: EditorMetrics.motionFast,
     decoration: BoxDecoration(
       color: EditorTheme.statusBadgeBg,
-      borderRadius: BorderRadius.circular(settings.cornerRadius + 6),
-      border: Border.all(color: settings.themeColor),
+      borderRadius: BorderRadius.circular(EditorMetrics.radiusLg),
+      border: Border.all(
+        color: borderColor ?? EditorTheme.accent,
+        width: borderWidth,
+      ),
     ),
-    padding: EdgeInsets.symmetric(vertical: 3 * settings.compactness),
+    padding: EdgeInsets.symmetric(
+      vertical: EditorMetrics.space(3),
+      horizontal: horizontalPadding,
+    ),
     clipBehavior: Clip.antiAlias,
     child: child,
   );

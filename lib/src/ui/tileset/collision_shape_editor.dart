@@ -36,7 +36,7 @@ class CollisionEditor extends StatelessWidget {
       children: [
         Row(
           children: [
-            const SizedBox(width: 60, child: Text('Kind', style: _label)),
+            SizedBox(width: 60, child: Text('Kind', style: _label)),
             Expanded(
               child: PopupMenuButton<String>(
                 tooltip: 'What the tile\'s shapes do',
@@ -77,7 +77,7 @@ class CollisionEditor extends StatelessWidget {
                           : MapCollisionKinds.byId(kind)?.label ?? kind,
                       style: _value,
                     ),
-                    const Icon(
+                    Icon(
                       Icons.arrow_drop_down,
                       size: 16,
                       color: EditorTheme.textSecondary,
@@ -110,7 +110,7 @@ class CollisionEditor extends StatelessWidget {
             tileId: id,
           )
         else
-          const Text(
+          Text(
             'Select one tile to draw its shapes by hand.',
             style: TextStyle(fontSize: 10, color: EditorTheme.textMuted),
           ),
@@ -119,11 +119,11 @@ class CollisionEditor extends StatelessWidget {
   }
 }
 
-const TextStyle _label = TextStyle(
+final TextStyle _label = TextStyle(
   fontSize: 11,
   color: EditorTheme.textSecondary,
 );
-const TextStyle _value = TextStyle(
+final TextStyle _value = TextStyle(
   fontSize: 11,
   color: EditorTheme.textPrimary,
 );
@@ -502,7 +502,7 @@ class _ShapeCanvasState extends State<ShapeCanvas> {
             _TextButton(label: 'Remove', onTap: selected ? _removeShape : null),
           ],
         ),
-        const Text(
+        Text(
           'Drag a corner · Ctrl+click an edge adds one · Alt+click removes '
           'one · Shift snaps to eighths',
           style: TextStyle(fontSize: 10, color: EditorTheme.textMuted),

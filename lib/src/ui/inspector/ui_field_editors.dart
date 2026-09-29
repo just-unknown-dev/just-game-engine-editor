@@ -272,7 +272,7 @@ class UiActionsEditorRow extends StatelessWidget {
             Expanded(
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: DockIconButton(
+                child: EditorIconButton(
                   icon: Icons.add_rounded,
                   tooltip: 'Add an action',
                   onTap: () => onChanged(
@@ -314,7 +314,7 @@ class UiActionsEditorRow extends StatelessWidget {
                 )
               else
                 const Spacer(flex: 4),
-              DockIconButton(
+              EditorIconButton(
                 icon: Icons.close_rounded,
                 tooltip: 'Remove',
                 onTap: () => onChanged(

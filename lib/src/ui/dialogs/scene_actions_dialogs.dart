@@ -1,49 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/editor_constants.dart';
+import '../kit/kit.dart';
 
-/// Shows a destructive-action confirmation dialog for deleting [sceneName].
-/// Returns `true` if the user confirmed.
-Future<bool> confirmDeleteScene(BuildContext context, String sceneName) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    barrierColor: Colors.black54,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF1E1E1E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      title: const Text(
-        'Delete scene?',
-        style: TextStyle(
-          color: EditorTheme.textPrimary,
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      content: Text(
-        'This permanently deletes "$sceneName" '
-        '(assets/scenes/$sceneName.scene.json). This cannot be undone.',
-        style: const TextStyle(color: EditorTheme.textSecondary, fontSize: 12),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: const Text(
-            'Cancel',
-            style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
-          ),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, true),
-          child: const Text(
-            'Delete',
-            style: TextStyle(color: EditorTheme.error, fontSize: 11),
-          ),
-        ),
-      ],
-    ),
-  );
-  return confirmed ?? false;
-}
+/// Asks before deleting [sceneName] for good. True when the user went ahead.
+Future<bool> confirmDeleteScene(BuildContext context, String sceneName) =>
+    showEditorConfirm(
+      context,
+      title: 'Delete scene?',
+      message:
+          'This permanently deletes "$sceneName" '
+          '(assets/scenes/$sceneName.scene.json). This cannot be undone.',
+      confirmLabel: 'Delete',
+    );
 
 /// Shows a text-input dialog with live validation, used for both rename and
 /// duplicate flows. Returns the entered name, or `null` if cancelled.
@@ -57,11 +26,13 @@ Future<String?> promptSceneName(
   return showDialog<String>(
     context: context,
     barrierColor: Colors.black54,
-    builder: (ctx) => _SceneNamePromptDialog(
-      title: title,
-      actionLabel: actionLabel,
-      initialValue: initialValue,
-      validate: validate,
+    builder: (ctx) => EditorLook(
+      child: _SceneNamePromptDialog(
+        title: title,
+        actionLabel: actionLabel,
+        initialValue: initialValue,
+        validate: validate,
+      ),
     ),
   );
 }
@@ -112,17 +83,8 @@ class _SceneNamePromptDialogState extends State<_SceneNamePromptDialog> {
   @override
   Widget build(BuildContext context) {
     final canSubmit = _error == null && _controller.text.trim().isNotEmpty;
-    return AlertDialog(
-      backgroundColor: const Color(0xFF1E1E1E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      title: Text(
-        widget.title,
-        style: const TextStyle(
-          color: EditorTheme.textPrimary,
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+    return EditorAlert(
+      title: widget.title,
       content: SizedBox(
         width: 280,
         child: Column(
@@ -134,38 +96,13 @@ class _SceneNamePromptDialogState extends State<_SceneNamePromptDialog> {
               autofocus: true,
               onChanged: _onChanged,
               onSubmitted: (_) => canSubmit ? _submit() : null,
-              style: const TextStyle(
-                color: EditorTheme.textPrimary,
-                fontSize: 13,
-              ),
-              decoration: InputDecoration(
-                hintText: 'e.g. level_2',
-                hintStyle: const TextStyle(color: EditorTheme.primaryMuted),
-                filled: true,
-                fillColor: EditorTheme.surfaceDark,
+              cursorColor: EditorTheme.primaryBright,
+              style: TextStyle(color: EditorTheme.textPrimary, fontSize: 13),
+              decoration: editorFieldDecoration(
+                hint: 'e.g. level_2',
                 contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
+                  horizontal: 10,
                   vertical: 10,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: EditorTheme.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(
-                    color: _error != null
-                        ? EditorTheme.error
-                        : EditorTheme.border,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(
-                    color: _error != null
-                        ? EditorTheme.error
-                        : EditorTheme.primaryActive,
-                  ),
                 ),
               ),
             ),
@@ -173,32 +110,22 @@ class _SceneNamePromptDialogState extends State<_SceneNamePromptDialog> {
               const SizedBox(height: 6),
               Text(
                 _error!,
-                style: const TextStyle(
-                  color: EditorTheme.errorLight,
-                  fontSize: 11,
-                ),
+                style: TextStyle(color: EditorTheme.errorLight, fontSize: 11),
               ),
             ],
           ],
         ),
       ),
       actions: [
-        TextButton(
+        EditorButton(
+          label: 'Cancel',
+          kind: EditorButtonKind.ghost,
           onPressed: () => Navigator.pop(context),
-          child: const Text(
-            'Cancel',
-            style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
-          ),
         ),
-        TextButton(
+        EditorButton(
+          label: widget.actionLabel,
+          kind: EditorButtonKind.primary,
           onPressed: canSubmit ? _submit : null,
-          child: Text(
-            widget.actionLabel,
-            style: const TextStyle(
-              color: EditorTheme.primaryMuted,
-              fontSize: 11,
-            ),
-          ),
         ),
       ],
     );

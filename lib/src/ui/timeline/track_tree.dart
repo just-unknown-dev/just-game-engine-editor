@@ -94,7 +94,7 @@ class _GroupRow extends StatelessWidget {
             child: Text(
               who,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 color: EditorTheme.textSecondary,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -103,7 +103,7 @@ class _GroupRow extends StatelessWidget {
           ),
           // Nobody to act on is worth saying: the tracks below do nothing.
           if (entity == null)
-            const Tooltip(
+            Tooltip(
               message: 'Nothing in the scene answers to this.',
               child: Icon(
                 Icons.link_off_rounded,
@@ -208,7 +208,7 @@ class _TrackRow extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Text(
                   readout,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: EditorTheme.textMuted,
                     fontSize: 10,
                     fontFeatures: [FontFeature.tabularFigures()],
@@ -324,7 +324,6 @@ class _RowButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: tooltip,
-    waitDuration: const Duration(milliseconds: 500),
     child: InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(3),

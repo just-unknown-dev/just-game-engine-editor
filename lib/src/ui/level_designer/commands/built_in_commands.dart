@@ -22,12 +22,19 @@ abstract final class BuiltInCommands {
         id: id,
         label: label,
         repeats: true,
-        // Shift nudges one unit; otherwise one grid cell.
-        run: (c) => c.session!.ops.nudge(
-          c.session!.selectionEntities(),
-          delta *
-              (c.modifiers.shift ? 1.0 : (c.gridSize > 0 ? c.gridSize : 1.0)),
-        ),
+        // Shift nudges one unit; otherwise the settings' distance, or the
+        // step moving snaps in.
+        run: (c) {
+          final settings = c.scope.prefs.settings.value;
+          final set = settings.nudgeDistance;
+          final snap = settings.moveStepFor(c.gridSize);
+          final step = c.modifiers.shift
+              ? 1.0
+              : set > 0
+              ? set
+              : (snap > 0 ? snap : 1.0);
+          c.session!.ops.nudge(c.session!.selectionEntities(), delta * step);
+        },
       ),
     _d(
       'designer.rotateClockwise',
@@ -150,6 +157,29 @@ abstract final class BuiltInCommands {
       run: (c) =>
           c.plugin!.showGamePreview.value = !c.plugin!.showGamePreview.value,
     ),
+    // The quick snapping bar's: no keys until one is given them.
+    DesignerCommand(
+      id: 'editor.snap.toggle',
+      label: 'Snapping on or off',
+      scope: CommandScope.editor,
+      run: (c) => c.scope.prefs.change(
+        (s) => s.copyWith(gridSnappingEnabled: !s.gridSnappingEnabled),
+      ),
+    ),
+    DesignerCommand(
+      id: 'editor.grid.toggle',
+      label: 'Show or hide the grid',
+      scope: CommandScope.editor,
+      run: (c) =>
+          c.scope.prefs.change((s) => s.copyWith(showGrid: !s.showGrid)),
+    ),
+    // `EditorSettingsDialog.commandId`: the gear at the viewport's foot.
+    DesignerCommand(
+      id: 'editor.settings',
+      label: 'Editor settings',
+      scope: CommandScope.always,
+      run: (c) => c.scope.chrome.toggleSettings(),
+    ),
     // ── The bottom docks ───────────────────────────────────────────────────
     DesignerCommand(
       id: 'dock.toggle',
@@ -245,6 +275,7 @@ abstract final class BuiltInCommands {
       ('history', 'History'),
       ('animator', 'Animator'),
       ('search', 'Search the scene'),
+      ('uitheme', 'Theme'),
     ])
       DesignerCommand(
         id: 'dock.open.$id',

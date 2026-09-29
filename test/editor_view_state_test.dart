@@ -122,7 +122,7 @@ void main() {
 
     // The padlock pins the inspector to the row — Unity's inspector
     // lock. Locking against picking lives in the row's menu now.
-    await tester.tap(find.byIcon(Icons.lock_open_outlined));
+    await tester.tap(find.byIcon(Icons.push_pin_outlined));
     await tester.pump();
     expect(scope.view.isPinned(a.id), isTrue);
 

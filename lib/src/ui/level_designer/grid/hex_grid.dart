@@ -6,6 +6,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import '../../../extension/editor_module.dart';
 import '../state/designer_geometry.dart';
 import 'grid_topology.dart';
+import '../../../core/theme/viewport_look.dart';
 
 /// Pointy-top hexagons, addressed by axial coordinates: [Point2.x] is `q`,
 /// [Point2.y] is `r`. The cell size is a hex's width, flat to flat, so a
@@ -178,7 +179,7 @@ class HexGrid extends GridTopology {
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8
-      ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.09);
+      ..color = ViewportLook.gridLine(0.09);
     for (final cell in cellsIn(view.inflate(cellSize), cellSize)) {
       final path = cellPath(cell, cellSize);
       final screen = Path();

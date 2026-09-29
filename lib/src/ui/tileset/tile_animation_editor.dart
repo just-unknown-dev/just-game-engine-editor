@@ -54,7 +54,7 @@ class TileAnimationEditor extends StatelessWidget {
                       : null,
                 ),
                 const SizedBox(width: 6),
-                const Text('tile', style: _label),
+                Text('tile', style: _label),
                 const SizedBox(width: 4),
                 SizedBox(
                   width: 48,
@@ -86,7 +86,7 @@ class TileAnimationEditor extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 2),
-                const Text('ms', style: _label),
+                Text('ms', style: _label),
                 const Spacer(),
                 _Icon(
                   icon: Icons.arrow_upward,
@@ -138,7 +138,7 @@ class TileAnimationEditor extends StatelessWidget {
           ],
         ),
         if (frames.length == 1)
-          const Text(
+          Text(
             'One frame shows as a still tile: add another to animate.',
             style: TextStyle(fontSize: 10, color: EditorTheme.textMuted),
           ),
@@ -147,7 +147,7 @@ class TileAnimationEditor extends StatelessWidget {
   }
 }
 
-const TextStyle _label = TextStyle(
+final TextStyle _label = TextStyle(
   fontSize: 11,
   color: EditorTheme.textSecondary,
 );

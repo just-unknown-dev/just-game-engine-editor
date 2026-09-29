@@ -194,8 +194,13 @@ class EditorLogService {
     );
 
     _entries.add(entry);
-    if (_entries.length > EditorLogConstants.maxEntries) {
-      _entries.removeRange(0, _entries.length - EditorLogConstants.maxEntries);
+    if (_entries.length > _maxEntries) {
+      _entries.removeRange(0, _entries.length - _maxEntries);
+    }
+    if (level == DebuggerLogLevel.error) {
+      for (final listener in List.of(_errorListeners)) {
+        listener(entry);
+      }
     }
 
     if (!_storageWriteFailed) {
@@ -369,15 +374,37 @@ class EditorLogService {
       }
     }
 
-    if (merged.length <= EditorLogConstants.maxEntries) {
+    if (merged.length <= _maxEntries) {
       return merged;
     }
 
-    return merged.sublist(merged.length - EditorLogConstants.maxEntries);
+    return merged.sublist(merged.length - _maxEntries);
   }
 
   String _entryFingerprint(EditorLogEntry entry) {
     return '${entry.timestamp.toIso8601String()}|${entry.level.name}|${entry.source}|${entry.category}|${entry.message}|${entry.details ?? ''}';
+  }
+
+  /// Lines kept; the oldest go first. Made smaller, they go at once.
+  int get maxEntries => _maxEntries;
+  int _maxEntries = EditorLogConstants.maxEntries;
+  set maxEntries(int value) {
+    final next = value < 1 ? 1 : value;
+    if (next == _maxEntries) return;
+    _maxEntries = next;
+    if (_entries.length > next) {
+      _entries.removeRange(0, _entries.length - next);
+      _scheduleNotify(_publish);
+    }
+  }
+
+  final List<void Function(EditorLogEntry entry)> _errorListeners = [];
+
+  /// Calls [listener] with each error as it is logged — from the game, a
+  /// caught exception, the editor itself. Returns what stops it.
+  VoidCallback onError(void Function(EditorLogEntry entry) listener) {
+    _errorListeners.add(listener);
+    return () => _errorListeners.remove(listener);
   }
 
   void dispose() => entries.dispose();

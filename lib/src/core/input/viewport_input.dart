@@ -66,6 +66,29 @@ class ViewportInput {
   GizmoHandle? _activeHandle;
   Offset? _dragStartScreen;
 
+  /// Where a turn or a scale began, and what it began from: each is worked
+  /// out from there, not step by step, so a snapped one moves a whole step
+  /// when the pointer has gone far enough rather than never.
+  Offset? _dragOriginScreen;
+  double _startRotation = 0;
+  double _turned = 0;
+  Offset _startScale = const Offset(1, 1);
+  Offset _startPosition = Offset.zero;
+
+  /// Remembers where a drag of the selection began, and what it began from.
+  void _beginDrag(Offset at) {
+    _dragStartScreen = at;
+    _dragOriginScreen = at;
+    final transform = sceneState.selectedEntity.value
+        ?.getComponent<TransformComponent>();
+    _startRotation = transform?.rotation ?? 0;
+    _turned = 0;
+    _startScale = transform == null
+        ? const Offset(1, 1)
+        : Offset(transform.scale.x, transform.scale.y);
+    _startPosition = transform?.position.toOffset() ?? Offset.zero;
+  }
+
   /// Size of the game canvas, updated each frame by the overlay.
   Size canvasSize = Size.zero;
 
@@ -204,7 +227,7 @@ class ViewportInput {
         sceneState.selectEntity(hit.entity!);
         if (wasSelected) {
           _activeHandle = GizmoHandle.translateXY;
-          _dragStartScreen = event.localPosition;
+          _beginDrag(event.localPosition);
           return true;
         }
       }
@@ -215,7 +238,7 @@ class ViewportInput {
     {
       // Begin gizmo drag
       _activeHandle = hit.handle;
-      _dragStartScreen = event.localPosition;
+      _beginDrag(event.localPosition);
     }
     return true;
   }
@@ -276,9 +299,14 @@ class ViewportInput {
     camera.viewportSize = canvasSize;
 
     switch (_activeHandle!) {
+      // Moves are measured from where the drag began, so a snapped one
+      // steps once the pointer has gone far enough — step by step, each
+      // small move would snap back to where it was.
       case GizmoHandle.translateXY:
         final worldNow = camera.screenToWorld(event.localPosition);
-        final worldStart = camera.screenToWorld(_dragStartScreen!);
+        final worldStart = camera.screenToWorld(
+          _dragOriginScreen ?? _dragStartScreen!,
+        );
         var dx = worldNow.dx - worldStart.dx;
         var dy = worldNow.dy - worldStart.dy;
 
@@ -291,24 +319,28 @@ class ViewportInput {
           }
         }
 
-        sceneState.applyTranslation(entity, Offset(dx, dy));
+        sceneState.setPosition(entity, _startPosition + Offset(dx, dy));
         _dragStartScreen = event.localPosition;
 
       case GizmoHandle.translateX:
         final worldNow = camera.screenToWorld(event.localPosition);
-        final worldStart = camera.screenToWorld(_dragStartScreen!);
-        sceneState.applyTranslation(
+        final worldStart = camera.screenToWorld(
+          _dragOriginScreen ?? _dragStartScreen!,
+        );
+        sceneState.setPosition(
           entity,
-          Offset(worldNow.dx - worldStart.dx, 0),
+          _startPosition + Offset(worldNow.dx - worldStart.dx, 0),
         );
         _dragStartScreen = event.localPosition;
 
       case GizmoHandle.translateY:
         final worldNow = camera.screenToWorld(event.localPosition);
-        final worldStart = camera.screenToWorld(_dragStartScreen!);
-        sceneState.applyTranslation(
+        final worldStart = camera.screenToWorld(
+          _dragOriginScreen ?? _dragStartScreen!,
+        );
+        sceneState.setPosition(
           entity,
-          Offset(0, worldNow.dy - worldStart.dy),
+          _startPosition + Offset(0, worldNow.dy - worldStart.dy),
         );
         _dragStartScreen = event.localPosition;
 
@@ -318,9 +350,13 @@ class ViewportInput {
         final center = camera.worldToScreen(transform.position.toOffset());
         final prev = _dragStartScreen! - center;
         final curr = event.localPosition - center;
-        final delta =
-            math.atan2(curr.dy, curr.dx) - math.atan2(prev.dy, prev.dx);
-        sceneState.applyRotation(entity, delta);
+        var delta = math.atan2(curr.dy, curr.dx) - math.atan2(prev.dy, prev.dx);
+        // Across the ±π seam the difference jumps by a whole turn.
+        if (delta > math.pi) delta -= 2 * math.pi;
+        if (delta < -math.pi) delta += 2 * math.pi;
+        _turned += delta;
+        final target = sceneState.snapRotation(_startRotation + _turned);
+        sceneState.applyRotation(entity, target - transform.rotation);
         _dragStartScreen = event.localPosition;
 
       case GizmoHandle.scaleNW:
@@ -330,10 +366,18 @@ class ViewportInput {
         final transform = entity.getComponent<TransformComponent>();
         if (transform == null) break;
         final center = camera.worldToScreen(transform.position.toOffset());
-        final prevDist = (_dragStartScreen! - center).distance;
+        final fromDist =
+            ((_dragOriginScreen ?? _dragStartScreen!) - center).distance;
         final currDist = (event.localPosition - center).distance;
-        if (prevDist > 0) {
-          sceneState.applyScale(entity, currDist / prevDist);
+        if (fromDist > 0) {
+          final ratio = currDist / fromDist;
+          sceneState.setScale(
+            entity,
+            Offset(
+              (_startScale.dx * ratio).clamp(0.01, 50.0),
+              (_startScale.dy * ratio).clamp(0.01, 50.0),
+            ),
+          );
         }
         _dragStartScreen = event.localPosition;
 
@@ -341,10 +385,11 @@ class ViewportInput {
         final transform = entity.getComponent<TransformComponent>();
         if (transform == null) break;
         final center = camera.worldToScreen(transform.position.toOffset());
-        final prevDistX = (_dragStartScreen!.dx - center.dx).abs();
+        final fromDistX =
+            ((_dragOriginScreen ?? _dragStartScreen!).dx - center.dx).abs();
         final currDistX = (event.localPosition.dx - center.dx).abs();
-        if (prevDistX > 0.5) {
-          final newSx = (transform.scale.x * currDistX / prevDistX).clamp(
+        if (fromDistX > 0.5) {
+          final newSx = (_startScale.dx * currDistX / fromDistX).clamp(
             0.01,
             50.0,
           );
@@ -356,10 +401,11 @@ class ViewportInput {
         final transform = entity.getComponent<TransformComponent>();
         if (transform == null) break;
         final center = camera.worldToScreen(transform.position.toOffset());
-        final prevDistY = (_dragStartScreen!.dy - center.dy).abs();
+        final fromDistY =
+            ((_dragOriginScreen ?? _dragStartScreen!).dy - center.dy).abs();
         final currDistY = (event.localPosition.dy - center.dy).abs();
-        if (prevDistY > 0.5) {
-          final newSy = (transform.scale.y * currDistY / prevDistY).clamp(
+        if (fromDistY > 0.5) {
+          final newSy = (_startScale.dy * currDistY / fromDistY).clamp(
             0.01,
             50.0,
           );
@@ -408,6 +454,7 @@ class ViewportInput {
     designerOf()?.onPointerCancel();
     _activeHandle = null;
     _dragStartScreen = null;
+    _dragOriginScreen = null;
     _isPanningCamera = false;
   }
 

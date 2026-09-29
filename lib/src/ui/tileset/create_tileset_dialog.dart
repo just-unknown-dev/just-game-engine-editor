@@ -147,7 +147,7 @@ class _CreateTilesetFormState extends State<CreateTilesetForm> {
             child: ListView(
               padding: const EdgeInsets.all(14),
               children: [
-                const Text(
+                Text(
                   'New tileset',
                   style: TextStyle(
                     fontSize: 14,
@@ -167,7 +167,7 @@ class _CreateTilesetFormState extends State<CreateTilesetForm> {
                 else
                   ReadonlyRow(label: 'Image', value: widget.image!),
                 if (images.isEmpty && widget.image == null)
-                  const Text(
+                  Text(
                     'No .png files under assets/ yet.',
                     style: TextStyle(
                       fontSize: 10,
@@ -199,7 +199,7 @@ class _CreateTilesetFormState extends State<CreateTilesetForm> {
                             (_image == null ? 'Choose an image.' : 'Loading…'))
                       : '${_picture!.width} × ${_picture!.height} px: '
                             '$_columns × $_rows = ${_columns * _rows} tiles',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     color: EditorTheme.textSecondary,
                   ),
@@ -235,7 +235,7 @@ class _CreateTilesetFormState extends State<CreateTilesetForm> {
               ],
             ),
           ),
-          const VerticalDivider(width: 1, color: EditorTheme.border),
+          VerticalDivider(width: 1, color: EditorTheme.border),
           Expanded(
             child: _picture == null
                 ? const SizedBox.shrink()
@@ -287,10 +287,7 @@ class _IntRow extends StatelessWidget {
           width: 76,
           child: Text(
             label,
-            style: const TextStyle(
-              fontSize: 11,
-              color: EditorTheme.textSecondary,
-            ),
+            style: TextStyle(fontSize: 11, color: EditorTheme.textSecondary),
           ),
         ),
         Expanded(

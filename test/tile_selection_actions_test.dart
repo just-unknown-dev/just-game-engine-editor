@@ -198,17 +198,17 @@ void main() {
       expect(find.text('2 tiles selected'), findsOneWidget);
       expect(find.text('Level Map ▸ Ground'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Copy tiles (Ctrl+C)'));
+      await tester.tap(find.byTooltip('Copy tiles  (Ctrl+C)'));
       await tester.pump();
       expect(scope.tiles.clipboard?.cells, hasLength(2));
 
-      await tester.tap(find.byTooltip('Delete tiles (Delete)'));
+      await tester.tap(find.byTooltip('Delete tiles  (Delete)'));
       await tester.pump();
       expect(ground.cells.usedBounds, isNull);
       scope.history.undo();
       expect(ground.cells.cellAt(1, 0), TileCell.make(0, 2));
 
-      await tester.tap(find.byTooltip('Select none (Esc)'));
+      await tester.tap(find.byTooltip('Select none  (Esc)'));
       await tester.pump();
       expect(find.text('2 tiles selected'), findsNothing);
     });

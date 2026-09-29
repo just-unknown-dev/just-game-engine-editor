@@ -95,7 +95,7 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'No scene is open',
             style: TextStyle(
               color: EditorTheme.textPrimary,
@@ -104,12 +104,12 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Create a scene to start placing and editing entities.',
             style: TextStyle(color: EditorTheme.primaryBright, fontSize: 12),
           ),
           const SizedBox(height: 20),
-          const Text(
+          Text(
             'SCENE NAME',
             style: TextStyle(
               color: EditorTheme.primaryBright,
@@ -124,13 +124,10 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
             onChanged: _onNameChanged,
             onSubmitted: (_) => _canCreate ? _onCreate() : null,
             autofocus: true,
-            style: const TextStyle(
-              color: EditorTheme.textPrimary,
-              fontSize: 13,
-            ),
+            style: TextStyle(color: EditorTheme.textPrimary, fontSize: 13),
             decoration: InputDecoration(
               hintText: 'e.g. level_1',
-              hintStyle: const TextStyle(color: EditorTheme.primaryMuted),
+              hintStyle: TextStyle(color: EditorTheme.primaryMuted),
               filled: true,
               fillColor: EditorTheme.surfaceDark,
               contentPadding: const EdgeInsets.symmetric(
@@ -139,7 +136,7 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: EditorTheme.border),
+                borderSide: BorderSide(color: EditorTheme.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
@@ -163,10 +160,7 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
             const SizedBox(height: 6),
             Text(
               _errorMessage!,
-              style: const TextStyle(
-                color: EditorTheme.errorLight,
-                fontSize: 11,
-              ),
+              style: TextStyle(color: EditorTheme.errorLight, fontSize: 11),
             ),
           ],
           const SizedBox(height: 16),
@@ -185,7 +179,7 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
                 elevation: 0,
               ),
               child: _isCreating
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
@@ -203,7 +197,7 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Creates assets/scenes/{name}.scene.json and adds it to\n'
             'assets/scenes/scenes.json. It ships with the game as it is.',
             style: TextStyle(

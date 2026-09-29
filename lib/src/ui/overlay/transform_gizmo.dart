@@ -5,6 +5,7 @@ import 'package:flutter/painting.dart';
 
 import '../../core/constants/editor_constants.dart';
 import 'gizmo_painter.dart' show GizmoHandle;
+import '../../core/theme/viewport_look.dart';
 
 /// The Move, Scale and Rotate gizmos: how each is drawn, and where its
 /// handles are. One for the editor's gizmo and the Level Designer's, so the
@@ -14,9 +15,11 @@ import 'gizmo_painter.dart' show GizmoHandle;
 /// and [px], what one screen pixel is in it: 1 on the screen, world units
 /// per pixel in the level. Screen up is minus y in both.
 abstract final class TransformGizmo {
-  static const double _arrow = GizmoConstants.arrowLength;
-  static const double _square = GizmoConstants.moveHandleRadius;
-  static const double _tip = GizmoConstants.axisSquareHalf;
+  /// How big the handles are drawn, as the settings make them.
+  static double get _k => ViewportLook.gizmoScale;
+  static double get _arrow => GizmoConstants.arrowLength * _k;
+  static double get _square => (GizmoConstants.moveHandleRadius * _k) * _k;
+  static double get _tip => GizmoConstants.axisSquareHalf * _k;
 
   static final Paint _paint = Paint()..isAntiAlias = true;
 
@@ -33,11 +36,15 @@ abstract final class TransformGizmo {
   /// Which part of the move gizmo at [centre] is under [pos]: the square
   /// (both axes), an arrow (one), or none.
   static GizmoHandle moveHandleAt(Offset pos, Offset centre, {double px = 1}) {
-    if (_inSquare(pos, centre, GizmoConstants.moveHandleHitRadius * px)) {
+    if (_inSquare(
+      pos,
+      centre,
+      (GizmoConstants.moveHandleHitRadius * _k) * px,
+    )) {
       return GizmoHandle.translateXY;
     }
-    final reach = GizmoConstants.arrowTipRadius * px;
-    final shaft = GizmoConstants.axisHitWidth * px;
+    final reach = (GizmoConstants.arrowTipRadius * _k) * px;
+    final shaft = (GizmoConstants.axisHitWidth * _k) * px;
     if ((pos - xEnd(centre, px)).distance <= reach ||
         _nearSegment(pos, centre, xEnd(centre, px), shaft)) {
       return GizmoHandle.translateX;
@@ -51,7 +58,7 @@ abstract final class TransformGizmo {
 
   /// Which axis handle of the scale gizmo at [centre] is under [pos].
   static GizmoHandle scaleAxisAt(Offset pos, Offset centre, {double px = 1}) {
-    final reach = GizmoConstants.axisSquareHitRadius * px;
+    final reach = (GizmoConstants.axisSquareHitRadius * _k) * px;
     if ((pos - xEnd(centre, px)).distance <= reach) return GizmoHandle.scaleX;
     if ((pos - yEnd(centre, px)).distance <= reach) return GizmoHandle.scaleY;
     return GizmoHandle.none;
@@ -61,7 +68,10 @@ abstract final class TransformGizmo {
   /// All, on tiles — never sits on an arrowhead and takes its presses.
   static double ringClearOfArrows(double radius, {double px = 1}) => math.max(
     radius,
-    (_arrow + GizmoConstants.arrowTipRadius + GizmoConstants.ringHitWidth + 2) *
+    (_arrow +
+            (GizmoConstants.arrowTipRadius * _k) +
+            (GizmoConstants.ringHitWidth * _k) +
+            2) *
         px,
   );
 
@@ -73,7 +83,7 @@ abstract final class TransformGizmo {
     double px = 1,
   }) =>
       ((pos - centre).distance - radius).abs() <=
-      GizmoConstants.ringHitWidth * px;
+      (GizmoConstants.ringHitWidth * _k) * px;
 
   /// Which part of the all-in-one gizmo at [centre] is under [pos], its
   /// scale corners at [corners] (NW, NE, SE, SW) and its rotate dot at the
@@ -87,7 +97,7 @@ abstract final class TransformGizmo {
     bool scale = true,
     bool rotate = true,
   }) {
-    if ((pos - centre).distance < GizmoConstants.moveHandleHitRadius) {
+    if ((pos - centre).distance < (GizmoConstants.moveHandleHitRadius * _k)) {
       return GizmoHandle.translateXY;
     }
     if (scale && corners.length == 4) {
@@ -98,31 +108,32 @@ abstract final class TransformGizmo {
         GizmoHandle.scaleSW,
       ];
       for (var i = 0; i < 4; i++) {
-        if ((pos - corners[i]).distance < GizmoConstants.scaleHandle + 4) {
+        if ((pos - corners[i]).distance <
+            (GizmoConstants.scaleHandle * _k) + 4) {
           return handles[i];
         }
       }
     }
     if (rotate &&
         (pos - _arcEnd(centre, rotation)).distance <
-            GizmoConstants.rotDotRadius) {
+            (GizmoConstants.rotDotRadius * _k)) {
       return GizmoHandle.rotate;
     }
-    if ((pos - xEnd(centre)).distance < GizmoConstants.arrowTipRadius) {
+    if ((pos - xEnd(centre)).distance < (GizmoConstants.arrowTipRadius * _k)) {
       return GizmoHandle.translateX;
     }
-    if ((pos - yEnd(centre)).distance < GizmoConstants.arrowTipRadius) {
+    if ((pos - yEnd(centre)).distance < (GizmoConstants.arrowTipRadius * _k)) {
       return GizmoHandle.translateY;
     }
     // After the tips, so an arrowhead wins over the shaft.
     if (scale) {
-      const along = GizmoConstants.axisSquareOffset;
-      if ((pos - (centre + const Offset(along, 0))).distance <
-          GizmoConstants.axisSquareHitRadius) {
+      final along = GizmoConstants.axisSquareOffset * _k;
+      if ((pos - (centre + Offset(along, 0))).distance <
+          (GizmoConstants.axisSquareHitRadius * _k)) {
         return GizmoHandle.scaleX;
       }
-      if ((pos - (centre + const Offset(0, -along))).distance <
-          GizmoConstants.axisSquareHitRadius) {
+      if ((pos - (centre + Offset(0, -along))).distance <
+          (GizmoConstants.axisSquareHitRadius * _k)) {
         return GizmoHandle.scaleY;
       }
     }
@@ -136,7 +147,7 @@ abstract final class TransformGizmo {
             math.cos(rotation + GizmoConstants.rotSweep),
             math.sin(rotation + GizmoConstants.rotSweep),
           ) *
-          GizmoConstants.rotRadius;
+          (GizmoConstants.rotRadius * _k);
 
   static bool _inSquare(Offset pos, Offset centre, double half) =>
       (pos.dx - centre.dx).abs() <= half && (pos.dy - centre.dy).abs() <= half;
@@ -205,7 +216,7 @@ abstract final class TransformGizmo {
       _handle(
         canvas,
         corner,
-        GizmoConstants.scaleHandle,
+        (GizmoConstants.scaleHandle * _k),
         GizmoConstants.colScale,
       );
     }
@@ -238,7 +249,7 @@ abstract final class TransformGizmo {
       )
       ..drawCircle(
         knob,
-        GizmoConstants.dotRadius,
+        (GizmoConstants.dotRadius * _k),
         _paint
           ..style = PaintingStyle.fill
           ..color = GizmoConstants.colRot,
@@ -260,24 +271,17 @@ abstract final class TransformGizmo {
     _arrowTo(canvas, centre, xEnd(centre), GizmoConstants.colX);
     _arrowTo(canvas, centre, yEnd(centre), GizmoConstants.colY);
     if (scale) {
-      const along = GizmoConstants.axisSquareOffset;
-      _handle(
-        canvas,
-        centre + const Offset(along, 0),
-        _tip,
-        GizmoConstants.colX,
-      );
-      _handle(
-        canvas,
-        centre + const Offset(0, -along),
-        _tip,
-        GizmoConstants.colY,
-      );
+      final along = GizmoConstants.axisSquareOffset * _k;
+      _handle(canvas, centre + Offset(along, 0), _tip, GizmoConstants.colX);
+      _handle(canvas, centre + Offset(0, -along), _tip, GizmoConstants.colY);
     }
     if (rotate) {
       canvas
         ..drawArc(
-          Rect.fromCircle(center: centre, radius: GizmoConstants.rotRadius),
+          Rect.fromCircle(
+            center: centre,
+            radius: (GizmoConstants.rotRadius * _k),
+          ),
           rotation,
           GizmoConstants.rotSweep,
           false,
@@ -288,7 +292,7 @@ abstract final class TransformGizmo {
         )
         ..drawCircle(
           _arcEnd(centre, rotation),
-          GizmoConstants.dotRadius,
+          (GizmoConstants.dotRadius * _k),
           _paint
             ..style = PaintingStyle.fill
             ..color = GizmoConstants.colRot,
@@ -297,14 +301,14 @@ abstract final class TransformGizmo {
     canvas
       ..drawCircle(
         centre,
-        GizmoConstants.moveHandleRadius,
+        (GizmoConstants.moveHandleRadius * _k),
         _paint
           ..style = PaintingStyle.fill
           ..color = GizmoConstants.colMove.withValues(alpha: 0.9),
       )
       ..drawCircle(
         centre,
-        GizmoConstants.moveHandleRadius,
+        (GizmoConstants.moveHandleRadius * _k),
         _paint
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.2
@@ -349,8 +353,8 @@ abstract final class TransformGizmo {
     if (length == 0) return;
     final along = direction / length;
     final across = Offset(-along.dy, along.dx);
-    final base = to - along * GizmoConstants.arrowHeadLength;
-    final half = GizmoConstants.arrowHeadWidth / 2;
+    final base = to - along * (GizmoConstants.arrowHeadLength * _k);
+    final half = (GizmoConstants.arrowHeadWidth * _k) / 2;
     canvas.drawPath(
       ui.Path()
         ..moveTo(to.dx, to.dy)

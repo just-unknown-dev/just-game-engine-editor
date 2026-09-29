@@ -15,6 +15,8 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
 import '../../core/constants/editor_constants.dart';
+import '../../core/theme/editor_metrics.dart';
+import '../kit/kit.dart';
 import '../../core/entity/entity_ops.dart';
 import '../../core/scope/editor_scope.dart';
 import '../../core/state/editor_scene_state.dart';
@@ -37,8 +39,6 @@ class SceneTreePanel extends StatefulWidget {
     this.authored,
     this.onFocusEntity,
     this.onCreateUi,
-    this.onToggleUiMode,
-    this.uiModeOn = false,
     this.contents = TreeContents.world,
     this.isHidden,
     this.isLocked,
@@ -64,9 +64,6 @@ class SceneTreePanel extends StatefulWidget {
 
   /// Makes a piece of interface of the given kind.
   final void Function(String kind)? onCreateUi;
-
-  final void Function(bool on)? onToggleUiMode;
-  final bool uiModeOn;
 
   /// The world's tree, or the interface editor's own.
   final TreeContents contents;
@@ -275,18 +272,31 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     }
 
     if (tree.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(12),
-        child: Text(
-          _tree.filter.value.isEmpty
-              ? 'Nothing in the scene yet.'
-              : 'Nothing matches.',
-          style: const TextStyle(
-            color: EditorTheme.primaryMuted,
-            fontSize: 11,
-            height: 1.5,
-          ),
-        ),
+      final filtered = !_tree.filter.value.isEmpty;
+      return EditorEmptyState(
+        icon: filtered
+            ? Icons.filter_alt_off_outlined
+            : Icons.category_outlined,
+        title: filtered ? 'Nothing matches' : 'Nothing in the scene yet',
+        hint: filtered
+            ? 'Clear the search or the filters to see everything again.'
+            : widget.contents == TreeContents.ui
+            ? 'Make a piece of interface with the button above.'
+            : 'Make the first entity here, or drag an image in from Assets.',
+        actionLabel: filtered
+            ? 'Clear'
+            : widget.contents == TreeContents.ui
+            ? null
+            : 'Create an entity',
+        actionIcon: filtered ? Icons.clear_rounded : Icons.add_rounded,
+        onAction: filtered
+            ? () {
+                _search.clear();
+                _tree.filter.value = TreeFilter.none;
+              }
+            : widget.contents == TreeContents.ui
+            ? null
+            : widget.entities.createEntity,
       );
     }
 
@@ -363,7 +373,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
                     color: EditorTheme.dragOverBg,
                     border: Border.all(color: EditorTheme.primaryBright),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Move to the top level',
                     style: TextStyle(
                       color: EditorTheme.primaryBright,
@@ -1109,7 +1119,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
           child: Text(
             widget.contents == TreeContents.ui ? 'INTERFACE' : 'SCENE TREE',
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               color: EditorTheme.primaryBright,
               fontSize: 10,
               fontWeight: FontWeight.w700,
@@ -1136,20 +1146,11 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
             builder: (context, _) => Text(
               _countLabel(),
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: EditorTheme.textMuted, fontSize: 9),
+              style: TextStyle(color: EditorTheme.textMuted, fontSize: 9),
             ),
           ),
         ),
         const SizedBox(width: 4),
-        if (widget.onToggleUiMode != null)
-          _HeaderButton(
-            icon: widget.uiModeOn ? Icons.public_off : Icons.phone_iphone,
-            tooltip: widget.uiModeOn
-                ? 'Back to the world'
-                : 'Edit the interface',
-            bright: widget.uiModeOn,
-            onPressed: () => widget.onToggleUiMode!(!widget.uiModeOn),
-          ),
         if (widget.onCreateUi != null)
           Builder(
             builder: (context) => _HeaderButton(
@@ -1189,18 +1190,18 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
       height: InspectorField.height,
       child: TextField(
         controller: _search,
-        style: const TextStyle(
+        style: TextStyle(
           color: EditorTheme.textPrimary,
           fontSize: InspectorField.fontSize,
         ),
         decoration: InputDecoration(
           isDense: true,
           hintText: 'Search name or component',
-          hintStyle: const TextStyle(
+          hintStyle: TextStyle(
             color: EditorTheme.textMuted,
             fontSize: InspectorField.fontSize,
           ),
-          prefixIcon: const Icon(
+          prefixIcon: Icon(
             Icons.search_rounded,
             size: 14,
             color: EditorTheme.textMuted,
@@ -1211,7 +1212,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
           fillColor: InspectorField.fill,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
-            borderSide: const BorderSide(color: EditorTheme.border),
+            borderSide: BorderSide(color: EditorTheme.border),
           ),
         ),
         onChanged: (text) =>
@@ -1227,7 +1228,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         widget.contents != TreeContents.world) {
       return const SizedBox.shrink();
     }
-    return const Padding(
+    return Padding(
       padding: EdgeInsets.fromLTRB(10, 0, 10, 6),
       child: Row(
         children: [
@@ -1450,10 +1451,7 @@ class _Draggable extends StatelessWidget {
             selection.length > 1
                 ? '${selection.length} entities'
                 : entity.name ?? 'Entity #${entity.id}',
-            style: const TextStyle(
-              color: EditorTheme.textPrimary,
-              fontSize: 11,
-            ),
+            style: TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
           ),
         ),
       ),
@@ -1463,34 +1461,25 @@ class _Draggable extends StatelessWidget {
   }
 }
 
+/// A button in the tree's header: the kit's, in the accent.
 class _HeaderButton extends StatelessWidget {
   const _HeaderButton({
     required this.icon,
     required this.tooltip,
     required this.onPressed,
-    this.bright = false,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
-  final bool bright;
 
   @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip,
-    child: IconButton(
-      onPressed: onPressed,
-      icon: Icon(icon),
-      iconSize: 16,
-      color: bright ? EditorTheme.primaryBright : EditorTheme.primary,
-      splashRadius: 14,
-      padding: const EdgeInsets.all(3),
-      // 24 square: a pointer target that is still comfortable, and four
-      // of them fit the 264-wide panel the interface editor gives this.
-      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-      visualDensity: VisualDensity.compact,
-    ),
+  Widget build(BuildContext context) => EditorIconButton(
+    icon: icon,
+    tooltip: tooltip,
+    color: EditorTheme.primary,
+    iconSize: 16,
+    onTap: onPressed,
   );
 }
 
@@ -1529,14 +1518,19 @@ class _FilterChip extends StatelessWidget {
               : box.localToGlobal(box.size.bottomLeft(Offset.zero)),
         );
       },
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(EditorMetrics.radiusPill),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(8, 2, 4, 2),
+        constraints: BoxConstraints(minHeight: EditorMetrics.minTarget),
+        padding: const EdgeInsets.fromLTRB(9, 2, 5, 2),
         decoration: BoxDecoration(
-          color: on ? EditorTheme.selectionBg : Colors.transparent,
-          borderRadius: BorderRadius.circular(4),
+          color: on
+              ? EditorTheme.primaryBright.withValues(alpha: 0.16)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(EditorMetrics.radiusPill),
           border: Border.all(
-            color: on ? EditorTheme.primaryActive : EditorTheme.border,
+            color: on
+                ? EditorTheme.primaryBright.withValues(alpha: 0.6)
+                : EditorTheme.borderStrong.withValues(alpha: 0.6),
           ),
         ),
         child: Row(
@@ -1553,15 +1547,12 @@ class _FilterChip extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 '$count',
-                style: const TextStyle(
-                  fontSize: 9,
-                  color: EditorTheme.textMuted,
-                ),
+                style: TextStyle(fontSize: 9, color: EditorTheme.textMuted),
               ),
             ],
             SizedBox(width: isMenu ? 0 : 4),
             if (isMenu)
-              const Icon(
+              Icon(
                 Icons.arrow_drop_down,
                 size: 13,
                 color: EditorTheme.textMuted,

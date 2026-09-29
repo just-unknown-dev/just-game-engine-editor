@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../theme/editor_metrics.dart';
 import '../theme/editor_theme_data.dart';
 import '../theme/theme_controller.dart';
 
@@ -14,61 +15,78 @@ import '../theme/theme_controller.dart';
 // ── Theme ────────────────────────────────────────────────────────────────────
 
 abstract final class EditorTheme {
-  /// The palette in force at [context]: a module's preset, the accent the
-  /// user picked, or these constants when nothing has changed them. New code
-  /// reads colours here; the constants below are the classic palette.
+  /// The palette in force at [context]. The getters below read the same
+  /// palette without a context.
   static EditorThemeData of(BuildContext context) =>
       EditorThemeScope.of(context);
 
-  // ── Accent ───────────────────────────────────────────────────────────────
-  static const Color primary = Color(0xFFF5746F);
-  static const Color primaryBright = Color(0xFFFF9C98);
-  static const Color primaryActive = Color(0xFFD95450);
-  static const Color primaryMuted = Color(0xFF7A4A4A);
-  static const Color primaryMutedLight = Color(0xFFC97E7E);
+  /// The palette every colour below reads: [EditorThemeData.classic] until
+  /// the overlay applies the accent the user picked, or a module's preset.
+  static EditorThemeData get current => _current;
+  static EditorThemeData _current = EditorThemeData.classic;
 
-  // ── Selection / hover backgrounds ────────────────────────────────────────
-  static const Color selectionBg = Color(0xFF3D1A1A);
-  static const Color dragOverBg = Color(0xFF4A1E1E);
-  static const Color multiSelectBg = Color(0xFF301515);
-  static const Color hoverBg = Color(0xFF33201E);
-  static const Color hoverBgAlt = Color(0xFF4A2D2D);
+  /// Makes [data] the palette. The overlay does this when the theme changes,
+  /// and rebuilds everything it draws so what reads a colour here sees the
+  /// new one; anything else built after this reads it too.
+  static void apply(EditorThemeData data) => _current = data;
 
-  // ── Surfaces ─────────────────────────────────────────────────────────────
-  static const Color panelBg = Color(0xFF0F0E0E);
-  static const Color surfaceBg = Color(0xFF1A1818);
-  static const Color dialogBg = Color(0xFF161414);
-  static const Color inputBg = Color(0xFF111010);
-  static const Color menuBg = Color(0xFF1C1919);
-  static const Color surfaceDark = Color(0xFF0C0B0B);
-  static const Color surfaceDarker = Color(0xFF0A0909);
-  static const Color surfaceDarkest = Color(0xFF080707);
+  /// The accent: what is picked, switched on, or wants to be seen.
+  static Color get accent => _current.primary;
 
-  // ── Borders / dividers ───────────────────────────────────────────────────
-  static const Color border = Color.fromARGB(13, 245, 115, 111);
+  // ── Accent ─────────────────────────────────────────────────────────────────
+  static Color get primary => _current.primary;
+  static Color get primaryBright => _current.primaryBright;
+  static Color get primaryActive => _current.primaryActive;
+  static Color get primaryMuted => _current.primaryMuted;
+  static Color get primaryMutedLight => _current.primaryMutedLight;
 
-  // ── Button / badge backgrounds ───────────────────────────────────────────
-  static const Color buttonBg = Color(0xFF44201F);
-  static const Color statusBadgeBg = Color(0xE644201F);
+  // ── Selection / hover backgrounds ──────────────────────────────────────────
+  static Color get selectionBg => _current.selectionBg;
+  static Color get dragOverBg => _current.dragOverBg;
+  static Color get multiSelectBg => _current.multiSelectBg;
+  static Color get hoverBg => _current.hoverBg;
+  static Color get hoverBgAlt => _current.hoverBgAlt;
 
-  // ── Text ─────────────────────────────────────────────────────────────────
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFFCCCCCC);
-  static const Color textMuted = Color(0xFF999999);
-  static const Color textBright = Color(0xFFFFFFFF);
-  static const Color textBadge = Color(0xFFFFFFFF);
+  // ── Surfaces ───────────────────────────────────────────────────────────────
+  static Color get panelBg => _current.panelBg;
+  static Color get surfaceBg => _current.surfaceBg;
+  static Color get dialogBg => _current.dialogBg;
+  static Color get inputBg => _current.inputBg;
+  static Color get menuBg => _current.menuBg;
+  static Color get panelRaised => _current.panelRaised;
+  static Color get surfaceDark => _current.surfaceDark;
+  static Color get surfaceDarker => _current.surfaceDarker;
+  static Color get surfaceDarkest => _current.surfaceDarkest;
 
-  // ── Semantic ─────────────────────────────────────────────────────────────
-  static const Color error = Color(0xFFE54B4B);
-  static const Color errorLight = Color(0xFFFF7070);
-  static const Color warning = Color(0xFFFFD660);
+  // ── Borders / dividers ─────────────────────────────────────────────────────
+  static Color get border => _current.border;
+  static Color get borderStrong => _current.borderStrong;
+
+  // ── Button / badge backgrounds ─────────────────────────────────────────────
+  static Color get buttonBg => _current.buttonBg;
+  static Color get statusBadgeBg => _current.statusBadgeBg;
+
+  // ── Text ───────────────────────────────────────────────────────────────────
+  static Color get textPrimary => _current.textPrimary;
+  static Color get textSecondary => _current.textSecondary;
+  static Color get textMuted => _current.textMuted;
+  static Color get textBright => _current.textBright;
+  static Color get textBadge => _current.textBadge;
+
+  // ── Semantic ───────────────────────────────────────────────────────────────
+  static Color get error => _current.error;
+  static Color get errorLight => _current.errorLight;
+  static Color get warning => _current.warning;
+  static Color get success => _current.success;
+  static Color get info => _current.info;
 }
 
 // ── Overlay layout ───────────────────────────────────────────────────────────
 
 abstract final class OverlayLayout {
   /// The status bar: one line of text.
-  static const double compactDockPanelHeight = 26;
+  static double get compactDockPanelHeight =>
+      EditorMetrics.settings.largeTargets ? 34 : 26;
   static const double rightPanelDefaultWidth = 360;
   static const double rightPanelMinWidth = 280;
   static const double rightPanelMaxWidth = 640;
@@ -133,23 +151,72 @@ abstract final class GizmoConstants {
 abstract final class OverlaySettingsPrefKeys {
   static const String prefTextScale = 'editor.overlay.textScale';
   static const String prefCornerRadius = 'editor.overlay.cornerRadius';
-  static const String prefThemePreset = 'editor.overlay.themePreset';
+  static const String prefThemeId = 'editor.overlay.themeId';
+  static const String prefAccent = 'editor.overlay.accent';
+
+  /// The accent as an index into the five built-in ones, from before a
+  /// module could add its own; read once, when there is no [prefThemeId].
+  static const String prefLegacyThemePreset = 'editor.overlay.themePreset';
   static const String prefCompactness = 'editor.overlay.compactness';
   static const String prefAnimationSpeed = 'editor.overlay.animationSpeed';
-  static const String prefEcsWarnOnInactive =
-      'editor.overlay.ecsWarnOnInactive';
-  static const String prefEcsWarnOnNoSystems =
-      'editor.overlay.ecsWarnOnNoSystems';
-  static const String prefWarningSeverity = 'editor.overlay.warningSeverity';
   static const String prefMetricRefreshMs = 'editor.overlay.metricRefreshMs';
-  static const String prefLogLineClamp = 'editor.overlay.logLineClamp';
-  static const String prefLogsAutoScroll = 'editor.overlay.logsAutoScroll';
-  static const String prefAccessibilityMode =
-      'editor.overlay.accessibilityMode';
   static const String prefShowGrid = 'editor.overlay.showGrid';
   static const String prefGridSnappingEnabled =
       'editor.overlay.gridSnappingEnabled';
   static const String prefGridSize = 'editor.overlay.gridSize';
+
+  // Accessibility.
+  static const String prefBoldText = 'editor.a11y.boldText';
+  static const String prefHighContrast = 'editor.a11y.highContrast';
+  static const String prefColourBlindSafe = 'editor.a11y.colourBlindSafe';
+  static const String prefReduceMotion = 'editor.a11y.reduceMotion';
+  static const String prefLongerTimings = 'editor.a11y.longerTimings';
+  static const String prefAlwaysShowFocus = 'editor.a11y.alwaysShowFocus';
+  static const String prefLargeTargets = 'editor.a11y.largeTargets';
+
+  // Saving and starting.
+  static const String prefAutosaveMinutes = 'editor.save.autosaveMinutes';
+  static const String prefAutosaveMode = 'editor.save.autosaveMode';
+  static const String prefBackupsToKeep = 'editor.save.backupsToKeep';
+  static const String prefReopenLastScene = 'editor.startup.reopenLastScene';
+  static const String prefReopenDesigner = 'editor.startup.reopenDesigner';
+
+  // Keyboard: the commands whose keys were changed, as JSON.
+  static const String prefShortcuts = 'editor.keys.shortcuts';
+
+  // Performance.
+  static const String prefTargetFps = 'editor.performance.targetFps';
+
+  // Editing.
+  static const String prefRotationStep = 'editor.edit.rotationStep';
+  static const String prefScaleStep = 'editor.edit.scaleStep';
+  static const String prefNudgeDistance = 'editor.edit.nudgeDistance';
+  static const String prefSmartSnap = 'editor.edit.smartSnap';
+  static const String prefMoveStep = 'editor.edit.moveStep';
+  static const String prefUndoLimit = 'editor.edit.undoLimit';
+  static const String prefConfirmDelete = 'editor.edit.confirmDelete';
+  static const String prefClosePrompt = 'editor.edit.closePrompt';
+
+  // The viewport's look.
+  static const String prefGridColour = 'editor.viewport.gridColour';
+  static const String prefGridOpacity = 'editor.viewport.gridOpacity';
+  static const String prefBackdrop = 'editor.viewport.backdrop';
+  static const String prefGizmoScale = 'editor.viewport.gizmoScale';
+  static const String prefSelectionColour = 'editor.viewport.selectionColour';
+
+  // Play-testing.
+  static const String prefPauseOnError = 'editor.play.pauseOnError';
+  static const String prefHideChromeWhilePlaying = 'editor.play.hideChrome';
+
+  // The Console and messages.
+  static const String prefConsoleMaxEntries = 'editor.console.maxEntries';
+  static const String prefConsoleHiddenLevels = 'editor.console.hiddenLevels';
+  static const String prefConsoleTimestamps = 'editor.console.timestamps';
+  static const String prefMessageLevel = 'editor.messages.level';
+
+  // Where the last session left off — kept, not settings: never exported.
+  static const String sessionLastScene = 'editor.session.lastScene';
+  static const String sessionDesignerOpen = 'editor.session.designerOpen';
 }
 
 // ── Editor log service ────────────────────────────────────────────────────────

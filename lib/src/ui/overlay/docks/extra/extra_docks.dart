@@ -83,14 +83,14 @@ class _ProblemsDockState extends State<ProblemsDock> {
   Widget build(BuildContext context) {
     final problems = widget.scan.problems;
     if (!widget.scope.sceneState.hasScene) {
-      return const DockEmptyState(
+      return const EditorEmptyState(
         icon: Icons.rule_rounded,
         title: 'No scene open',
         hint: 'Problems are checked for the scene being edited.',
       );
     }
     if (problems.isEmpty) {
-      return const DockEmptyState(
+      return const EditorEmptyState(
         icon: Icons.check_circle_outline_rounded,
         title: 'Nothing wrong that the editor can see',
         hint:
@@ -131,7 +131,7 @@ class _ProblemsDockState extends State<ProblemsDock> {
                     children: [
                       Text(
                         p.message,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: EditorTheme.textPrimary,
                           fontSize: 11,
                         ),
@@ -139,7 +139,7 @@ class _ProblemsDockState extends State<ProblemsDock> {
                       if (p.hint != null)
                         Text(
                           p.hint!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: EditorTheme.textMuted,
                             fontSize: 10,
                           ),
@@ -148,7 +148,7 @@ class _ProblemsDockState extends State<ProblemsDock> {
                   ),
                 ),
                 if (p.entity != null)
-                  const Icon(
+                  Icon(
                     Icons.my_location_rounded,
                     size: 12,
                     color: EditorTheme.primaryBright,
@@ -169,7 +169,7 @@ class _ProblemsDockState extends State<ProblemsDock> {
 class HistoryDock extends StatelessWidget {
   const HistoryDock({super.key, required this.history});
 
-  /// The Level Designer's history; null while it is not open.
+  /// The editor's undo stack. Null only if a module swaps in none.
   final ValueListenable<EditorHistory?> history;
 
   @override
@@ -177,10 +177,10 @@ class HistoryDock extends StatelessWidget {
     valueListenable: history,
     builder: (context, h, _) {
       if (h == null) {
-        return const DockEmptyState(
+        return const EditorEmptyState(
           icon: Icons.history_rounded,
-          title: 'No history yet',
-          hint: 'Open the Level Designer: every edit there is a step here.',
+          title: 'No history',
+          hint: 'Nothing is keeping an undo history for this editor.',
         );
       }
       return ValueListenableBuilder<int>(
@@ -189,9 +189,10 @@ class HistoryDock extends StatelessWidget {
           final done = h.undoEntries;
           final undone = h.redoEntries.reversed.toList();
           if (done.isEmpty && undone.isEmpty) {
-            return const DockEmptyState(
+            return const EditorEmptyState(
               icon: Icons.history_rounded,
               title: 'Nothing done yet',
+              hint: 'Every edit is a step here: click one to go back to it.',
             );
           }
           return ListView(
@@ -341,7 +342,7 @@ class _AnimatorMonitorDockState extends State<AnimatorMonitorDock> {
     final entity = widget.scope.sceneState.selectedEntity.value;
     final animator = entity?.getComponent<jge.AnimatorComponent>();
     if (entity == null || animator == null) {
-      return const DockEmptyState(
+      return const EditorEmptyState(
         icon: Icons.account_tree_outlined,
         title: 'Select an entity with an Animator',
         hint: 'Its state and parameters show here, live, while the game plays.',
@@ -361,14 +362,14 @@ class _AnimatorMonitorDockState extends State<AnimatorMonitorDock> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              DockToolbar(
+              EditorToolbar(
                 children: [
                   Text(
                     animator.currentState.isEmpty
                         ? 'not running'
                         : animator.currentState,
-                    style: const TextStyle(
-                      color: Color(0xFF7DE6B1),
+                    style: TextStyle(
+                      color: EditorTheme.success,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -382,14 +383,14 @@ class _AnimatorMonitorDockState extends State<AnimatorMonitorDock> {
                       if (sprite != null)
                         'clip ${sprite.clip} · frame ${sprite.frameIndex + 1}',
                     ].join('  ·  '),
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: EditorTheme.textMuted,
                       fontSize: 10,
                     ),
                   ),
                   const Spacer(),
                   if (animator.graphPath.isNotEmpty)
-                    DockIconButton(
+                    EditorIconButton(
                       icon: Icons.open_in_new_rounded,
                       tooltip: 'Open the graph',
                       onTap: () =>
@@ -400,7 +401,7 @@ class _AnimatorMonitorDockState extends State<AnimatorMonitorDock> {
               Expanded(
                 child: DockTable<MapEntry<String, Object>>(
                   rows: animator.parameters.entries.toList(),
-                  empty: const DockEmptyState(
+                  empty: const EditorEmptyState(
                     icon: Icons.tune_rounded,
                     title: 'No parameters yet',
                     hint: 'They appear once the graph has loaded.',
@@ -415,7 +416,7 @@ class _AnimatorMonitorDockState extends State<AnimatorMonitorDock> {
                           ? (e.value as double).toStringAsFixed(2)
                           : '${e.value}',
                       color: (e) =>
-                          e.value == true ? const Color(0xFF7DE6B1) : null,
+                          e.value == true ? EditorTheme.success : null,
                     ),
                     DockColumn(
                       label: 'From',
@@ -431,11 +432,11 @@ class _AnimatorMonitorDockState extends State<AnimatorMonitorDock> {
             ],
           ),
         ),
-        const VerticalDivider(width: 1, color: EditorTheme.border),
+        VerticalDivider(width: 1, color: EditorTheme.border),
         Expanded(
           flex: 2,
           child: _trail.isEmpty
-              ? const DockEmptyState(
+              ? const EditorEmptyState(
                   icon: Icons.swap_horiz_rounded,
                   title: 'No transitions yet',
                   hint: 'Press Play: each change of state is listed here.',
@@ -574,9 +575,9 @@ class _SceneSearchDockState extends State<SceneSearchDock> {
     final selected = widget.scope.sceneState.selectedEntity.value;
     return Column(
       children: [
-        DockToolbar(
+        EditorToolbar(
           children: [
-            DockSearchField(
+            EditorSearchField(
               initial: _text,
               width: 360,
               hint: 'name, tag, component — or Health.health < 3',
@@ -588,13 +589,10 @@ class _SceneSearchDockState extends State<SceneSearchDock> {
             const SizedBox(width: 10),
             Text(
               query.isEmpty ? '' : '${found.length} found',
-              style: const TextStyle(
-                color: EditorTheme.textMuted,
-                fontSize: 10,
-              ),
+              style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
             ),
             const Spacer(),
-            DockIconButton(
+            EditorIconButton(
               icon: Icons.select_all_rounded,
               tooltip: 'Select everything found',
               onTap: found.isEmpty
@@ -610,7 +608,7 @@ class _SceneSearchDockState extends State<SceneSearchDock> {
         ),
         Expanded(
           child: query.isEmpty
-              ? const DockEmptyState(
+              ? const EditorEmptyState(
                   icon: Icons.manage_search_rounded,
                   title: 'Search the scene',
                   hint:
@@ -625,7 +623,7 @@ class _SceneSearchDockState extends State<SceneSearchDock> {
                     widget.scope.sceneState.selectEntity(e);
                     setState(() {});
                   },
-                  empty: const DockEmptyState(
+                  empty: const EditorEmptyState(
                     icon: Icons.search_off_rounded,
                     title: 'Nothing matches',
                   ),

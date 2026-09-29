@@ -9,6 +9,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../core/constants/editor_constants.dart';
+import '../kit/look.dart';
 
 /// One line of a menu.
 PopupMenuItem<T> editorMenuItem<T>(
@@ -22,35 +23,53 @@ PopupMenuItem<T> editorMenuItem<T>(
   /// The icon's own colour, where the icon *is* the point — a swatch in
   /// a list of colours, which was otherwise eight identical grey squares.
   Color? iconColor,
+
+  /// The key that does the same, at the right: `Ctrl+D`.
+  String? shortcut,
 }) => PopupMenuItem<T>(
   value: value,
   height: height,
   enabled: enabled,
-  child: Row(
-    children: [
-      if (icon != null) ...[
-        Icon(
-          icon,
-          size: 13,
-          color: enabled
-              ? (iconColor ?? color ?? EditorTheme.textSecondary)
-              : EditorTheme.textMuted,
-        ),
-        const SizedBox(width: 8),
-      ],
-      Flexible(
-        child: Text(
-          label,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
+  child: EditorLook(
+    child: Row(
+      children: [
+        if (icon != null) ...[
+          Icon(
+            icon,
+            size: 13,
             color: enabled
-                ? (color ?? EditorTheme.textPrimary)
+                ? (iconColor ?? color ?? EditorTheme.textSecondary)
                 : EditorTheme.textMuted,
-            fontSize: 11,
+          ),
+          const SizedBox(width: 8),
+        ],
+        // With a key at the right, the label takes the room between them.
+        Flexible(
+          fit: shortcut == null ? FlexFit.loose : FlexFit.tight,
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: enabled
+                  ? (color ?? EditorTheme.textPrimary)
+                  : EditorTheme.textMuted,
+              fontSize: 11,
+            ),
           ),
         ),
-      ),
-    ],
+        if (shortcut != null) ...[
+          const SizedBox(width: 16),
+          Text(
+            shortcut,
+            style: TextStyle(
+              color: EditorTheme.textMuted,
+              fontSize: 10,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ],
+    ),
   ),
 );
 
@@ -58,13 +77,15 @@ PopupMenuItem<T> editorMenuItem<T>(
 PopupMenuItem<T> editorMenuHeading<T>(String label) => PopupMenuItem<T>(
   enabled: false,
   height: 22,
-  child: Text(
-    label.toUpperCase(),
-    style: const TextStyle(
-      color: EditorTheme.textMuted,
-      fontSize: 9,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0.5,
+  child: EditorLook(
+    child: Text(
+      label.toUpperCase(),
+      style: TextStyle(
+        color: EditorTheme.textMuted,
+        fontSize: 9,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.5,
+      ),
     ),
   ),
 );
@@ -87,7 +108,7 @@ Future<T?> showEditorMenu<T>(
   position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx, at.dy),
   shape: RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(4),
-    side: const BorderSide(color: EditorTheme.border),
+    side: BorderSide(color: EditorTheme.border),
   ),
   items: items,
 );

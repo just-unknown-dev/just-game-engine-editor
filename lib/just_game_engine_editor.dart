@@ -7,6 +7,7 @@ export 'src/ui/overlay/editor_overlay.dart' show JustGameEditorOverlay;
 export 'src/ui/overlay/shared/snackbar.dart'
     show
         EditorMessenger,
+        EditorSnack,
         EditorSnackBarController,
         EditorSnackBarEntry,
         EditorSnackBarStep,
@@ -37,7 +38,9 @@ export 'src/ui/scene_tree/scene_tree_model.dart';
 export 'src/ui/scene_tree/scene_tree_panel.dart';
 export 'src/ui/scene_tree/scene_tree_row.dart';
 export 'src/ui/widgets/scrubbable_number_field.dart';
+export 'src/ui/kit/kit.dart';
 export 'src/ui/widgets/editor_dropdown.dart';
+export 'src/ui/widgets/editor_menu.dart';
 export 'src/ui/widgets/editor_scrollbar.dart';
 export 'src/core/ecs/systems/editor_log_capture_system.dart';
 export 'src/core/ecs/systems/physics_body_binding_system.dart';

@@ -98,9 +98,80 @@ class KeyBinding {
 
   /// The keys as a person would say them: `Ctrl+Shift+Z`, `F5`. What a
   /// tooltip shows beside the command it triggers.
-  String get shortcut =>
+  String get shortcut => chord(key, control: control, shift: shift, alt: alt);
+
+  /// [key] with the modifiers, as [shortcut] writes a chord.
+  static String chord(
+    LogicalKeyboardKey key, {
+    bool control = false,
+    bool shift = false,
+    bool alt = false,
+  }) =>
       '${control ? 'Ctrl+' : ''}${shift ? 'Shift+' : ''}${alt ? 'Alt+' : ''}'
-      '${key.keyLabel.isEmpty ? key.debugName : key.keyLabel}';
+      '${nameOf(key)}';
+
+  /// What [key] is called in a chord.
+  static String nameOf(LogicalKeyboardKey key) =>
+      key.keyLabel.isEmpty ? (key.debugName ?? '${key.keyId}') : key.keyLabel;
+
+  /// Whether [key] is one a chord is made with rather than of.
+  static bool isModifier(LogicalKeyboardKey key) => _modifiers.contains(key);
+
+  static final Set<LogicalKeyboardKey> _modifiers = {
+    LogicalKeyboardKey.control,
+    LogicalKeyboardKey.controlLeft,
+    LogicalKeyboardKey.controlRight,
+    LogicalKeyboardKey.shift,
+    LogicalKeyboardKey.shiftLeft,
+    LogicalKeyboardKey.shiftRight,
+    LogicalKeyboardKey.alt,
+    LogicalKeyboardKey.altLeft,
+    LogicalKeyboardKey.altRight,
+    LogicalKeyboardKey.meta,
+    LogicalKeyboardKey.metaLeft,
+    LogicalKeyboardKey.metaRight,
+  };
+
+  /// The binding [text] names — a chord as [shortcut] writes it,
+  /// `Ctrl+Shift+Z` — for [commandId]; null when it names no key.
+  static KeyBinding? parse(String text, String commandId) {
+    var rest = text.trim();
+    var control = false, shift = false, alt = false;
+    while (true) {
+      if (rest.length > 5 && rest.startsWith('Ctrl+')) {
+        control = true;
+        rest = rest.substring(5);
+      } else if (rest.length > 6 && rest.startsWith('Shift+')) {
+        shift = true;
+        rest = rest.substring(6);
+      } else if (rest.length > 4 && rest.startsWith('Alt+')) {
+        alt = true;
+        rest = rest.substring(4);
+      } else {
+        break;
+      }
+    }
+    final key = _keyNamed(rest);
+    if (key == null) return null;
+    return KeyBinding(key, commandId, control: control, shift: shift, alt: alt);
+  }
+
+  static Map<String, LogicalKeyboardKey>? _byName;
+
+  /// The key [nameOf] calls [name]. Where two share a name, the one with
+  /// the lower id: the key on the main keyboard, not a pad's.
+  static LogicalKeyboardKey? _keyNamed(String name) {
+    final byName = _byName ??= () {
+      final map = <String, LogicalKeyboardKey>{};
+      for (final key in LogicalKeyboardKey.knownLogicalKeys) {
+        final named = nameOf(key).toLowerCase();
+        final had = map[named];
+        if (had == null || key.keyId < had.keyId) map[named] = key;
+      }
+      return map;
+    }();
+    return byName[name.toLowerCase()];
+  }
 
   @override
   String toString() => '$shortcut → $commandId';
@@ -115,6 +186,11 @@ class CommandRegistry {
 
   final Map<String, DesignerCommand> _commands = {};
   final List<KeyBinding> _bindings = [];
+
+  /// The bindings as built — the built-ins and the modules' — before any
+  /// were changed in the settings.
+  List<KeyBinding> _built = const [];
+  bool _hasBuilt = false;
 
   List<DesignerCommand> get all => List.unmodifiable(_commands.values);
   List<KeyBinding> get bindings => List.unmodifiable(_bindings);
@@ -181,8 +257,55 @@ class CommandRegistry {
     return true;
   }
 
+  /// Remembers the bindings as they are now as the ones built: what
+  /// [applyShortcuts] lays changes over, and what a reset goes back to.
+  void markBuilt() {
+    _built = List.unmodifiable(_bindings);
+    _hasBuilt = true;
+  }
+
+  /// The bindings [commandId] had as built, before any change.
+  List<KeyBinding> builtBindingsFor(String commandId) => [
+    for (final b in _hasBuilt ? _built : _bindings)
+      if (b.commandId == commandId) b,
+  ];
+
+  /// Puts back the bindings as built, then lays [changed] over them: each
+  /// command named runs from the chords listed — `Ctrl+Shift+S` — and from
+  /// nothing else. A chord that names no key is skipped.
+  void applyShortcuts(Map<String, List<String>> changed) {
+    if (!_hasBuilt) markBuilt();
+    _bindings
+      ..clear()
+      ..addAll(_built);
+    for (final e in changed.entries) {
+      unbind(e.key);
+      for (final chord in e.value) {
+        final binding = KeyBinding.parse(chord, e.key);
+        if (binding != null) bind(binding);
+      }
+    }
+  }
+
+  /// The command [binding]'s chord runs now, other than [binding]'s own —
+  /// what binding it would take the chord from.
+  DesignerCommand? conflictWith(KeyBinding binding) {
+    for (final b in _bindings.reversed) {
+      if (b.commandId == binding.commandId) continue;
+      if (b.key == binding.key &&
+          b.control == binding.control &&
+          b.shift == binding.shift &&
+          b.alt == binding.alt) {
+        return _commands[b.commandId];
+      }
+    }
+    return null;
+  }
+
   void clear() {
     _commands.clear();
     _bindings.clear();
+    _built = const [];
+    _hasBuilt = false;
   }
 }

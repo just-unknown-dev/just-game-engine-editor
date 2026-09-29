@@ -5,6 +5,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../state/designer_geometry.dart';
 import 'grid_topology.dart';
+import '../../../core/theme/viewport_look.dart';
 
 /// The default grid: axis-aligned squares of [cellSize] on a side.
 class SquareGrid extends GridTopology {
@@ -173,9 +174,7 @@ class SquareGrid extends GridTopology {
     void line(bool major, Offset from, Offset to) {
       paint
         ..strokeWidth = major ? 1.2 : 0.8
-        ..color = const Color(
-          0xFFFFFFFF,
-        ).withValues(alpha: major ? 0.14 : 0.07);
+        ..color = ViewportLook.gridLine(major ? 0.14 : 0.07);
       canvas.drawLine(from, to, paint);
     }
 

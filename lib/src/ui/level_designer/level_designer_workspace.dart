@@ -2,24 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../core/constants/editor_constants.dart';
+import '../kit/kit.dart';
 import 'level_designer_session.dart';
 import 'panels/align_bar.dart';
-import 'panels/designer_status_bar.dart';
 import 'panels/designer_switch.dart';
 import 'panels/level_layers_panel.dart';
 import 'panels/prefab_palette_panel.dart';
 import 'panels/tileset_palette_panel.dart';
 import 'tools/level_tool.dart';
 
-/// The Level Designer's chrome: tool strip on the left, prefab and layer
-/// panels on the right, and the status strip along the bottom — the tool's
-/// options at its left.
+/// The Level Designer's panel: the designer in use, its sections — prefabs,
+/// layers, the tileset, whatever modules add — and the align bar for what is
+/// selected. The right panel shows it as its **Level** tab while the designer
+/// is open, beside the Inspector, so the level keeps the width of one panel.
 ///
-/// Deliberately *not* a container for the viewport. The game canvas is painted
-/// by the engine underneath the whole overlay, and the designer's own overlays
-/// go on that same canvas through the plugin's render hook. This widget only
-/// adds chrome around the edges, so there is one source of truth for what the
-/// viewport shows and no chance of the two drifting apart.
+/// Its tool strip floats over the viewport, top right, and its status bar
+/// runs along the foot of the level; neither is here. Deliberately *not* a
+/// container for the viewport: the designer's overlays go on the game's own
+/// canvas through the plugin's render hook, so there is one source of truth
+/// for what the viewport shows.
 class LevelDesignerWorkspace extends StatelessWidget {
   const LevelDesignerWorkspace({
     super.key,
@@ -27,7 +28,6 @@ class LevelDesignerWorkspace extends StatelessWidget {
     required this.gridSize,
     required this.onGridSizeChanged,
     required this.onClose,
-    this.rightPanelWidth = 260,
   });
 
   /// The session this chrome drives.
@@ -42,35 +42,11 @@ class LevelDesignerWorkspace extends StatelessWidget {
   /// Closes the designer.
   final VoidCallback onClose;
 
-  /// Width of the prefab and layers column.
-  final double rightPanelWidth;
-
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // The viewport shows through here: the designer adds chrome at the
-        // edges and never covers the canvas. Its tool strip floats over the
-        // top right of it, under the transform column (see the chrome).
-        const Expanded(child: IgnorePointer(child: SizedBox.expand())),
-        SizedBox(
-          width: rightPanelWidth,
-          child: _DesignerSidePanel(
-            session: session,
-            gridSize: gridSize,
-            onClose: onClose,
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// The bottom status strip, positioned by the caller so it can span the full
-  /// width beneath both the viewport and the side panel.
-  Widget buildStatusBar() => DesignerStatusBar(
+  Widget build(BuildContext context) => _DesignerSidePanel(
     session: session,
     gridSize: gridSize,
-    onGridSizeChanged: onGridSizeChanged,
+    onClose: onClose,
   );
 }
 
@@ -144,9 +120,7 @@ class _DesignerSidePanel extends StatelessWidget {
     return Material(
       color: EditorTheme.panelBg,
       child: DecoratedBox(
-        decoration: const BoxDecoration(
-          border: Border(left: BorderSide(color: EditorTheme.border)),
-        ),
+        decoration: const BoxDecoration(),
         child: Column(
           children: [
             _Header(session: session, onClose: onClose),
@@ -207,7 +181,7 @@ class _Header extends StatelessWidget {
   final LevelDesignerSession session;
   final VoidCallback onClose;
 
-  static const TextStyle _title = TextStyle(
+  static final TextStyle _title = TextStyle(
     color: EditorTheme.textBright,
     fontSize: 12,
     fontWeight: FontWeight.w700,
@@ -217,34 +191,25 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: const BoxDecoration(
+      padding: const EdgeInsets.only(left: 10, right: 4),
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: EditorTheme.border)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.map_outlined, size: 15, color: EditorTheme.primary),
+          Icon(Icons.map_outlined, size: 15, color: EditorTheme.primary),
           const SizedBox(width: 8),
           // With only the built-in designer there is nothing to switch to,
           // so the header is a plain title.
           if (session.scope.designers.isEmpty)
-            const Expanded(child: Text('Level Designer', style: _title))
+            Expanded(child: Text('Level Designer', style: _title))
           else
             Expanded(child: DesignerSwitch(scope: session.scope)),
-          Tooltip(
-            message: 'Close Level Designer',
-            child: InkWell(
-              onTap: onClose,
-              borderRadius: BorderRadius.circular(4),
-              child: const Padding(
-                padding: EdgeInsets.all(4),
-                child: Icon(
-                  Icons.close,
-                  size: 14,
-                  color: EditorTheme.textMuted,
-                ),
-              ),
-            ),
+          EditorIconButton(
+            icon: Icons.close,
+            tooltip: 'Close Level Designer',
+            shortcut: 'F3',
+            onTap: onClose,
           ),
         ],
       ),
@@ -286,7 +251,7 @@ class _Section extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(4, 5, 10, 4),
             decoration: open
                 ? null
-                : const BoxDecoration(
+                : BoxDecoration(
                     border: Border(
                       bottom: BorderSide(color: EditorTheme.border),
                     ),
@@ -301,7 +266,7 @@ class _Section extends StatelessWidget {
                 const SizedBox(width: 2),
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: EditorTheme.textMuted,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,

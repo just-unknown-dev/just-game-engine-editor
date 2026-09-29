@@ -41,7 +41,7 @@ void main() {
       ),
     );
     final dropdown = tester.getSize(find.byType(EditorDropdown<String>));
-    final text = tester.getSize(find.byType(TextFormField));
+    final text = tester.getSize(find.byType(TextField));
     // Not a guessed constant: sized the way the text field is, so they agree
     // at any font and text scale.
     expect(dropdown.height, text.height);

@@ -30,7 +30,7 @@ class TimelineHeader extends StatelessWidget {
 
     // The left of the bar scrolls when the dock is narrow, so nothing is
     // ever cut off; the buttons on the right stay where they are.
-    return DockToolbar(
+    return EditorToolbar(
       children: [
         Expanded(
           child: SingleChildScrollView(
@@ -55,7 +55,7 @@ class TimelineHeader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                DockIconButton(
+                EditorIconButton(
                   icon: Icons.skip_previous_rounded,
                   tooltip: 'To the start  (Home)',
                   onTap: () => session
@@ -63,12 +63,12 @@ class TimelineHeader extends StatelessWidget {
                     ..scrubTo(0)
                     ..scrollTo(0),
                 ),
-                DockIconButton(
+                EditorIconButton(
                   icon: Icons.chevron_left_rounded,
                   tooltip: 'Back a frame  (,)',
                   onTap: () => session.stepFrames(-1),
                 ),
-                DockIconButton(
+                EditorIconButton(
                   icon: session.isPlaying.value
                       ? Icons.pause_rounded
                       : Icons.play_arrow_rounded,
@@ -80,23 +80,22 @@ class TimelineHeader extends StatelessWidget {
                       ? session.pause()
                       : session.play(),
                 ),
-                DockIconButton(
+                EditorIconButton(
                   icon: Icons.chevron_right_rounded,
                   tooltip: 'On a frame  (.)',
                   onTap: () => session.stepFrames(1),
                 ),
-                DockIconButton(
+                EditorIconButton(
                   icon: Icons.fiber_manual_record_rounded,
                   tooltip: session.record.value
                       ? 'Recording: what you change becomes a key here'
                       : 'Record: turn changes made anywhere into keys  (R)',
                   isActive: session.record.value,
-                  color: session.record.value
-                      ? EditorTheme.error
-                      : EditorTheme.primaryBright,
+                  // Red, lit or not: the record button everywhere.
+                  color: EditorTheme.error,
                   onTap: () => session.setRecording(!session.record.value),
                 ),
-                DockIconButton(
+                EditorIconButton(
                   icon: Icons.stop_rounded,
                   tooltip: 'Stop, and show the scene as it is saved',
                   isActive: session.isPreviewing,
@@ -118,7 +117,7 @@ class TimelineHeader extends StatelessWidget {
                       child: Text(
                         '${session.formatTime(session.playhead.value)} / '
                         '${session.formatTime(asset.duration)}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: EditorTheme.textPrimary,
                           fontSize: 12,
                           fontFeatures: [FontFeature.tabularFigures()],
@@ -165,7 +164,7 @@ class TimelineHeader extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: Text(
                       '${_wrapLabel(asset.wrap)} ▾',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: EditorTheme.textSecondary,
                         fontSize: 11,
                       ),
@@ -179,7 +178,7 @@ class TimelineHeader extends StatelessWidget {
         if (session.player != null) _divider(),
         ..._playRange(context),
         ..._selected(context),
-        DockIconButton(
+        EditorIconButton(
           icon: Icons.show_chart_rounded,
           tooltip: session.showCurves.value
               ? 'Back to the dope sheet  (Tab)'
@@ -187,35 +186,29 @@ class TimelineHeader extends StatelessWidget {
           isActive: session.showCurves.value,
           onTap: () => session.showCurves.value = !session.showCurves.value,
         ),
-        DockIconButton(
+        EditorIconButton(
           icon: Icons.grid_on_rounded,
           tooltip: 'Snap to frames',
           isActive: session.snap.value,
           onTap: () => session.snap.value = !session.snap.value,
         ),
-        DockIconButton(
+        EditorIconButton(
           icon: Icons.fit_screen_outlined,
           tooltip: 'Show the whole timeline  (F)',
           onTap: onFit,
         ),
-        DockIconButton(
+        EditorIconButton(
           icon: Icons.undo_rounded,
           tooltip: 'Undo  (Ctrl+Z)',
-          color: session.canUndo
-              ? EditorTheme.primaryBright
-              : EditorTheme.textMuted,
-          onTap: session.undo,
+          onTap: session.canUndo ? session.undo : null,
         ),
-        DockIconButton(
+        EditorIconButton(
           icon: Icons.redo_rounded,
           tooltip: 'Redo  (Ctrl+Y)',
-          color: session.canRedo
-              ? EditorTheme.primaryBright
-              : EditorTheme.textMuted,
-          onTap: session.redo,
+          onTap: session.canRedo ? session.redo : null,
         ),
         if (session.isInline)
-          DockIconButton(
+          EditorIconButton(
             icon: Icons.output_rounded,
             tooltip:
                 'Extract to a .timeline.json, so other entities can play it',
@@ -231,7 +224,7 @@ class TimelineHeader extends StatelessWidget {
             },
           )
         else
-          DockIconButton(
+          EditorIconButton(
             icon: Icons.save_outlined,
             tooltip: 'Save  (Ctrl+S)',
             isActive: session.isDirty.value,
@@ -286,7 +279,7 @@ class TimelineHeader extends StatelessWidget {
                   : EditorTheme.textMuted,
             ),
             const SizedBox(width: 5),
-            const Text(
+            Text(
               'Plays',
               style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
             ),
@@ -305,7 +298,7 @@ class TimelineHeader extends StatelessWidget {
           width: 42,
           onSeconds: (v) => session.setPlayRange(v, range.$2),
         ),
-        const Padding(
+        Padding(
           padding: EdgeInsets.only(right: 8),
           child: Text(
             '→',
@@ -313,7 +306,7 @@ class TimelineHeader extends StatelessWidget {
           ),
         ),
       ] else
-        const Padding(
+        Padding(
           padding: EdgeInsets.only(right: 6),
           child: Text(
             'to',
@@ -328,7 +321,7 @@ class TimelineHeader extends StatelessWidget {
         onSeconds: (v) => session.setPlayRange(range.$1, v),
       ),
       if (player.hasRange)
-        DockIconButton(
+        EditorIconButton(
           icon: Icons.close_rounded,
           tooltip: 'Play the whole timeline again',
           onTap: session.clearPlayRange,
@@ -360,7 +353,7 @@ class TimelineHeader extends StatelessWidget {
           padding: const EdgeInsets.only(right: 8),
           child: Text(
             '$count selected',
-            style: const TextStyle(color: EditorTheme.textMuted, fontSize: 11),
+            style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
           ),
         ),
     ];
@@ -429,14 +422,13 @@ class _NumberBoxState extends State<_NumberBox> {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: widget.tooltip,
-    waitDuration: const Duration(milliseconds: 600),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         if (widget.label.isNotEmpty) ...[
           Text(
             widget.label,
-            style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
           ),
           const SizedBox(width: 4),
         ],
@@ -447,7 +439,7 @@ class _NumberBoxState extends State<_NumberBox> {
             controller: _text,
             focusNode: _focus,
             onSubmitted: (_) => _submit(),
-            style: const TextStyle(
+            style: TextStyle(
               color: EditorTheme.textPrimary,
               fontSize: 11,
               fontFeatures: [FontFeature.tabularFigures()],

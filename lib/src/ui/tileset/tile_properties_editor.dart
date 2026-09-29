@@ -71,10 +71,7 @@ class _Row extends StatelessWidget {
           child: Text(
             label,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 11,
-              color: EditorTheme.textSecondary,
-            ),
+            style: TextStyle(fontSize: 11, color: EditorTheme.textSecondary),
           ),
         ),
         Expanded(child: child),

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/editor_constants.dart';
+import '../../../../core/theme/editor_metrics.dart';
+import '../../../../ui/kit/kit.dart';
+import '../../../widgets/editor_menu.dart';
 import '../../../../core/scope/editor_scope.dart';
 import '../../../../extension/editor_contributions.dart';
 import '../../settings/overlay_ui_settings.dart';
 import '../dock_controller.dart';
-import '../logs_dock.dart' show PanelResizeHandle;
+import '../panel_parts.dart' show PanelResizeHandle;
 
 /// Colour for a badge of [severity]; the accent for the quiet ones.
 Color dockSeverityColor(DockSeverity severity, Color accent) =>
@@ -37,7 +40,7 @@ class DockPanel extends StatelessWidget {
   final double height;
   final double maxHeight;
 
-  static const double tabBarHeight = 30;
+  static double get tabBarHeight => EditorMetrics.minTarget + 6;
 
   DockDefinition? _byId(String? id) {
     for (final d in docks) {
@@ -66,7 +69,7 @@ class DockPanel extends StatelessWidget {
     final active = _byId(controller.activeDock);
     if (active == null) return const SizedBox.shrink();
     final maximised = controller.maximised.value;
-    final accent = settings.themeColor;
+    final accent = EditorTheme.accent;
     final dockContext = contextFor(active);
 
     return SizedBox(
@@ -104,37 +107,36 @@ class DockPanel extends StatelessWidget {
                         docks: docks,
                         controller: controller,
                         accent: accent,
-                        textScale: settings.effectiveTextScale,
                       ),
                     ),
                     ...?active.headerActions?.call(context, dockContext),
                     const SizedBox(width: 4),
-                    DockHeaderButton(
+                    EditorIconButton(
                       icon: maximised
                           ? Icons.close_fullscreen_rounded
                           : Icons.open_in_full_rounded,
                       tooltip: maximised ? 'Restore' : 'Maximise',
                       isActive: maximised,
-                      accent: accent,
+                      activeColor: accent,
                       onTap: () => controller.maximised.value = !maximised,
                     ),
-                    DockHeaderButton(
+                    EditorIconButton(
                       icon: Icons.open_in_new_rounded,
                       tooltip: 'Pop out into its own window',
-                      accent: accent,
+                      activeColor: accent,
                       onTap: () => controller.popOut(active.id),
                     ),
-                    DockHeaderButton(
+                    EditorIconButton(
                       icon: Icons.keyboard_arrow_down_rounded,
-                      tooltip: 'Collapse  (Esc)',
-                      accent: accent,
+                      tooltip: 'Collapse  (F2)',
+                      activeColor: accent,
                       onTap: controller.close,
                     ),
                     const SizedBox(width: 4),
                   ],
                 ),
               ),
-              const Divider(height: 1, color: EditorTheme.border),
+              Divider(height: 1, color: EditorTheme.border),
               Expanded(
                 child: Stack(
                   children: [
@@ -168,65 +170,61 @@ class DockPanel extends StatelessWidget {
   }
 }
 
-/// A small square button in the panel's header.
-class DockHeaderButton extends StatelessWidget {
-  const DockHeaderButton({
-    super.key,
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-    this.accent = EditorTheme.primaryBright,
-    this.isActive = false,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onTap;
-  final Color accent;
-  final bool isActive;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip,
-    waitDuration: const Duration(milliseconds: 400),
-    child: Material(
-      color: isActive ? accent.withValues(alpha: 0.18) : Colors.transparent,
-      borderRadius: BorderRadius.circular(5),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        hoverColor: accent.withValues(alpha: 0.12),
-        child: SizedBox.square(
-          dimension: 24,
-          child: Icon(
-            icon,
-            size: 14,
-            color: onTap == null
-                ? EditorTheme.textMuted.withValues(alpha: 0.4)
-                : isActive
-                ? accent
-                : EditorTheme.textSecondary,
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
 class _TabBar extends StatelessWidget {
   const _TabBar({
     required this.scope,
     required this.docks,
     required this.controller,
     required this.accent,
-    required this.textScale,
   });
 
   final EditorScope scope;
   final List<DockDefinition> docks;
   final DockController controller;
   final Color accent;
-  final double textScale;
+
+  String? _keyOf(String dockId) {
+    final bound = scope.commands.bindingsFor('dock.open.$dockId');
+    return bound.isEmpty ? null : bound.first.shortcut;
+  }
+
+  Future<void> _showMore(
+    BuildContext context,
+    List<DockDefinition> others,
+    Map<String, DockDefinition> byId,
+    Set<String> popped,
+  ) async {
+    final box = context.findRenderObject() as RenderBox?;
+    final at = box == null
+        ? Offset.zero
+        : box.localToGlobal(box.size.topLeft(Offset.zero));
+    final windows = [
+      for (final id in popped)
+        if (byId[id] != null) byId[id]!,
+    ];
+    final chosen = await showEditorMenu<String>(context, at, [
+      if (others.isNotEmpty) ...[
+        editorMenuHeading('Add a tab'),
+        for (final d in others)
+          editorMenuItem('open:${d.id}', d.label, icon: d.icon),
+      ],
+      if (windows.isNotEmpty) ...[
+        if (others.isNotEmpty) editorMenuDivider(),
+        editorMenuHeading('In a window'),
+        for (final d in windows)
+          editorMenuItem(
+            'back:${d.id}',
+            'Put ${d.label} back',
+            icon: Icons.move_down_rounded,
+          ),
+      ],
+      if (others.isEmpty && windows.isEmpty)
+        editorMenuItem('', 'Every dock is on the bar', enabled: false),
+    ]);
+    if (chosen == null || chosen.isEmpty) return;
+    final id = chosen.substring(chosen.indexOf(':') + 1);
+    chosen.startsWith('back:') ? controller.popIn(id) : controller.open(id);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -254,45 +252,22 @@ class _TabBar extends StatelessWidget {
                     badge: tabs[i].tabBadge?.call(scope),
                     isActive: controller.activeDock == tabs[i].id,
                     accent: accent,
-                    textScale: textScale,
                     controller: controller,
+                    shortcut: _keyOf(tabs[i].id),
                   ),
               ],
             ),
           ),
         ),
-        if (others.isNotEmpty)
-          PopupMenuButton<String>(
+        // Always there: every dock is reachable from it — the ones kept off
+        // the bar, and the ones popped out into a window of their own.
+        Builder(
+          builder: (context) => EditorIconButton(
+            icon: Icons.add_rounded,
             tooltip: 'More docks',
-            padding: EdgeInsets.zero,
-            color: EditorTheme.dialogBg,
-            icon: const Icon(
-              Icons.add_rounded,
-              size: 15,
-              color: EditorTheme.textSecondary,
-            ),
-            onSelected: controller.open,
-            itemBuilder: (context) => [
-              for (final d in others)
-                PopupMenuItem(
-                  value: d.id,
-                  height: 30,
-                  child: Row(
-                    children: [
-                      Icon(d.icon, size: 13, color: EditorTheme.textSecondary),
-                      const SizedBox(width: 8),
-                      Text(
-                        d.label,
-                        style: const TextStyle(
-                          color: EditorTheme.textPrimary,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
+            onTap: () => _showMore(context, others, byId, popped),
           ),
+        ),
       ],
     );
   }
@@ -307,8 +282,8 @@ class _Tab extends StatefulWidget {
     required this.badge,
     required this.isActive,
     required this.accent,
-    required this.textScale,
     required this.controller,
+    this.shortcut,
   });
 
   final DockDefinition dock;
@@ -316,8 +291,10 @@ class _Tab extends StatefulWidget {
   final DockBadge? badge;
   final bool isActive;
   final Color accent;
-  final double textScale;
   final DockController controller;
+
+  /// The keys that open it, for its tooltip.
+  final String? shortcut;
 
   @override
   State<_Tab> createState() => _TabState();
@@ -325,6 +302,41 @@ class _Tab extends StatefulWidget {
 
 class _TabState extends State<_Tab> {
   bool _hovered = false;
+
+  Future<void> _showMenu(Offset at) async {
+    final c = widget.controller;
+    final id = widget.dock.id;
+    final isOpen = c.activeDock == id;
+    final chosen = await showEditorMenu<String>(context, at, [
+      editorMenuItem(
+        'popout',
+        'Pop out into a window',
+        icon: Icons.open_in_new_rounded,
+      ),
+      editorMenuItem(
+        'maximise',
+        isOpen && c.maximised.value ? 'Restore its height' : 'Maximise',
+        icon: Icons.open_in_full_rounded,
+        shortcut: 'Ctrl+Shift+M',
+      ),
+      editorMenuDivider(),
+      editorMenuItem(
+        'unpin',
+        'Take off the bar',
+        icon: Icons.close_rounded,
+        shortcut: 'Middle-click',
+      ),
+    ]);
+    switch (chosen) {
+      case 'popout':
+        c.popOut(id);
+      case 'maximise':
+        if (!isOpen) c.open(id);
+        c.maximised.value = !(isOpen && c.maximised.value);
+      case 'unpin':
+        c.unpin(id);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -344,6 +356,8 @@ class _TabState extends State<_Tab> {
         },
         child: InkWell(
           onTap: () => widget.controller.open(dock.id),
+          // A right click: what can be done with the tab.
+          onSecondaryTapUp: (details) => _showMenu(details.globalPosition),
           child: Container(
             height: DockPanel.tabBarHeight,
             padding: const EdgeInsets.only(left: 10, right: 6),
@@ -371,7 +385,7 @@ class _TabState extends State<_Tab> {
                   dock.label,
                   style: TextStyle(
                     color: color,
-                    fontSize: 11 * widget.textScale,
+                    fontSize: 11,
                     fontWeight: widget.isActive
                         ? FontWeight.w600
                         : FontWeight.w500,
@@ -384,12 +398,15 @@ class _TabState extends State<_Tab> {
                 SizedBox(
                   width: 18,
                   child: _hovered
-                      ? InkWell(
-                          onTap: () => widget.controller.unpin(dock.id),
-                          child: const Icon(
-                            Icons.close_rounded,
-                            size: 11,
-                            color: EditorTheme.textMuted,
+                      ? Tooltip(
+                          message: 'Take off the bar  (middle-click)',
+                          child: InkWell(
+                            onTap: () => widget.controller.unpin(dock.id),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 11,
+                              color: EditorTheme.textMuted,
+                            ),
                           ),
                         )
                       : null,
@@ -422,7 +439,10 @@ class _TabState extends State<_Tab> {
               ),
             ),
           ),
-          child: body,
+          child: Tooltip(
+            message: tooltipWithShortcut(dock.label, widget.shortcut),
+            child: body,
+          ),
         ),
       ),
     );

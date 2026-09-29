@@ -9,6 +9,7 @@ import '../../core/constants/editor_constants.dart';
 import '../../core/state/transform_mode.dart';
 import '../level_designer/grid/square_grid.dart';
 import 'transform_gizmo.dart';
+import '../../core/theme/viewport_look.dart';
 
 /// Gizmo handle identifier returned by [GizmoHitTester.hitTest].
 enum GizmoHandle {
@@ -48,8 +49,9 @@ class GizmoPainter {
   /// extent on its definition first, so it is the marquee's answer too.
   static Size? sizeOf(Component component) => _sizeFromComponent(component);
 
-  static const double _rotRadius = GizmoConstants.rotRadius;
-  static const Color _colSel = GizmoConstants.colSel;
+  static double get _rotRadius =>
+      GizmoConstants.rotRadius * ViewportLook.gizmoScale;
+  static Color get _colSel => ViewportLook.selection;
   static const Color _colOrigin = GizmoConstants.colOrigin;
 
   final Paint _paint = Paint()..isAntiAlias = true;
@@ -496,8 +498,10 @@ bool _pointInOrientedRect(Offset point, _ScreenBounds bounds) {
 
 /// Hit-tests pointer events against gizmo handles and entity bodies.
 class GizmoHitTester {
-  static const double _rotRadius = GizmoConstants.rotRadius;
-  static const double _scaleHandle = GizmoConstants.scaleHandle;
+  static double get _rotRadius =>
+      GizmoConstants.rotRadius * ViewportLook.gizmoScale;
+  static double get _scaleHandle =>
+      GizmoConstants.scaleHandle * ViewportLook.gizmoScale;
 
   /// Returns the [GizmoHitResult] for [screenPos].
   ///

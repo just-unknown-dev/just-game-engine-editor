@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../core/constants/editor_constants.dart';
+import '../../core/theme/editor_metrics.dart';
+import '../kit/kit.dart';
+import 'package:just_signals/just_signals.dart';
 import '../../core/scope/editor_scope.dart';
 import '../../core/state/editor_scene_state.dart';
 import '../level_designer/state/editor_commands.dart';
@@ -29,11 +32,15 @@ List<Widget> buildComponentSections({
         component: component,
         definition: definition,
         scope: scope,
-        onDelete: () {
-          entity.removeComponentByType(component.componentType);
-          sceneState.markDirty();
-          sceneState.refresh();
-        },
+        // Through the history, so a removed component comes back on undo
+        // with every value it had.
+        onDelete: () => scope.history.push(
+          RemoveComponentCommand(
+            entity: entity,
+            component: component,
+            sceneState: sceneState,
+          ),
+        ),
         onChanged: () {
           sceneState.syncEntityNode(entity);
           sceneState.markDirty();
@@ -69,16 +76,27 @@ class DefinitionSection extends StatelessWidget {
   ComponentEditorExtras? get extras => scope.extras.forType(definition.type);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => SignalBuilder<Set<String>>(
+    signal: scope.chrome.collapsedComponents,
+    builder: (context, collapsed, _) =>
+        _card(context, collapsed.contains(definition.type)),
+  );
+
+  Widget _card(BuildContext context, bool collapsed) {
     final accent = hints.accentColor;
     final actions = extras?.actions ?? const <InspectorAction>[];
     final section = extras?.section;
+    final summary = collapsed ? extras?.summary?.call(component) : null;
+    final title = hints.name ?? definition.type;
     return Container(
       decoration: BoxDecoration(
         color: EditorTheme.dialogBg,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: EditorTheme.border),
+        borderRadius: BorderRadius.circular(EditorMetrics.radiusMd),
+        border: Border.all(
+          color: EditorTheme.borderStrong.withValues(alpha: 0.5),
+        ),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -88,9 +106,18 @@ class DefinitionSection extends StatelessWidget {
                   ? Border(left: BorderSide(color: accent, width: 3))
                   : null,
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.fromLTRB(2, 2, 4, 2),
             child: Row(
               children: [
+                // Folds the card to this line — on every entity, so a
+                // component read once and left alone stays out of the way.
+                EditorIconButton(
+                  icon: collapsed
+                      ? Icons.chevron_right_rounded
+                      : Icons.expand_more_rounded,
+                  tooltip: collapsed ? 'Show $title' : 'Fold $title',
+                  onTap: () => scope.chrome.toggleCollapsed(definition.type),
+                ),
                 if (hints.icon != null) ...[
                   Icon(
                     hints.icon,
@@ -100,72 +127,78 @@ class DefinitionSection extends StatelessWidget {
                   const SizedBox(width: 6),
                 ],
                 Expanded(
-                  child: Text(
-                    hints.name ?? definition.type,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: EditorTheme.primaryMutedLight,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: title,
+                          style: TextStyle(
+                            color: EditorTheme.primaryMutedLight,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        // Folded, what matters about it, on the same line.
+                        if (summary != null && summary.isNotEmpty)
+                          TextSpan(
+                            text: '   $summary',
+                            style: TextStyle(
+                              color: EditorTheme.textMuted,
+                              fontSize: 10,
+                            ),
+                          ),
+                      ],
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 for (final action in actions)
-                  Tooltip(
-                    message: action.label,
-                    child: InkWell(
-                      onTap: () async {
-                        await action.run(context, component);
-                        onChanged();
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Icon(
-                          action.icon ?? Icons.bolt,
-                          size: 14,
-                          color: EditorTheme.primaryMuted,
+                  EditorIconButton(
+                    icon: action.icon ?? Icons.bolt,
+                    tooltip: action.label,
+                    onTap: () async {
+                      await action.run(context, component);
+                      onChanged();
+                    },
+                  ),
+                if (hints.deletable)
+                  EditorIconButton(
+                    icon: Icons.close,
+                    tooltip: 'Remove $title (undo brings it back)',
+                    onTap: onDelete,
+                  ),
+              ],
+            ),
+          ),
+          if (!collapsed) ...[
+            Divider(height: 1, color: EditorTheme.border),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (hints.description case final d? when d.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        d,
+                        style: TextStyle(
+                          color: EditorTheme.textMuted,
+                          fontSize: 10,
                         ),
                       ),
                     ),
-                  ),
-                if (hints.deletable)
-                  GestureDetector(
-                    onTap: onDelete,
-                    child: const Icon(
-                      Icons.close,
-                      size: 14,
-                      color: EditorTheme.textMuted,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: EditorTheme.border),
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (hints.description case final d? when d.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      d,
-                      style: const TextStyle(
-                        color: EditorTheme.textMuted,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-                ..._fieldWidgets(),
-                if (section != null) ...[
-                  const SizedBox(height: 8),
-                  section(context, component),
+                  ..._fieldWidgets(),
+                  if (section != null) ...[
+                    const SizedBox(height: 8),
+                    section(context, component),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -200,7 +233,7 @@ class DefinitionSection extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 4),
           child: Text(
             entry.key.toUpperCase(),
-            style: const TextStyle(
+            style: TextStyle(
               color: EditorTheme.primaryMuted,
               fontSize: 9,
               fontWeight: FontWeight.w700,
@@ -213,7 +246,7 @@ class DefinitionSection extends StatelessWidget {
     }
     if (out.isEmpty) {
       out.add(
-        const Text(
+        Text(
           'No visible properties',
           style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
         ),

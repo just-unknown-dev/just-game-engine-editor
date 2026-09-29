@@ -8,20 +8,20 @@ import '../../../extension/editor_contributions.dart';
 /// The bottom panel's state: which dock is showing, how tall each is, which
 /// are pinned as tabs and in what order, and what each remembers.
 ///
-/// One dock shows at a time; the settings panel shares the slot under
-/// [settingsId], so opening it closes the dock and the other way round.
-/// Built-in and module docks go through the same controller.
+/// One dock shows at a time. Built-in and module docks go through the same
+/// controller. The settings dialog is not a dock: it has a gear of its own
+/// on the viewport.
 ///
 /// Everything here survives a restart once [attach] has been given somewhere
 /// to keep it.
 class DockController {
   DockController();
 
-  /// The settings panel's id.
-  static const String settingsId = 'settings';
+  /// What the settings panel was saved as when it shared the dock slot; a
+  /// saved state from then is read as "nothing open".
+  static const String _legacySettingsId = 'settings';
 
-  /// What is open — a dock's id, or [settingsId] — or null when the panel is
-  /// collapsed.
+  /// The open dock's id, or null when the panel is collapsed.
   final Signal<String?> openId = Signal(null, debugLabel: 'openDock');
 
   /// Each dock's height once it has been resized. Replaced, never mutated,
@@ -57,16 +57,14 @@ class DockController {
 
   bool isOpen(String id) => openId.value == id;
 
-  /// The dock showing in the panel, or null (collapsed, or settings).
-  String? get activeDock => openId.value == settingsId ? null : openId.value;
+  /// The dock showing in the panel, or null when it is collapsed.
+  String? get activeDock => openId.value;
 
   /// Opens [id] with [args].
   void open(String id, {Map<String, Object?> args = const {}}) {
     openArgs = args;
-    if (id != settingsId) {
-      _lastDock = id;
-      if (!order.value.contains(id) && !poppedOut.value.contains(id)) pin(id);
-    }
+    _lastDock = id;
+    if (!order.value.contains(id) && !poppedOut.value.contains(id)) pin(id);
     // Same dock, new args: say so, or nobody rebuilds.
     openId.value == id ? openId.forceSet(id) : openId.value = id;
     _save();
@@ -162,6 +160,7 @@ class DockController {
 
   void popOut(String id) {
     poppedOut.value = Set.unmodifiable({...poppedOut.value, id});
+    _save();
     if (activeDock == id) {
       final rest = [
         for (final o in order.value)
@@ -176,6 +175,7 @@ class DockController {
       for (final o in poppedOut.value)
         if (o != id) o,
     });
+    _save();
     open(id);
   }
 
@@ -254,6 +254,8 @@ class DockController {
             if (x is String) x,
       ];
       order.value = List.unmodifiable(strings(json['order']));
+      // A dock left in a window of its own opens in it again.
+      poppedOut.value = Set.unmodifiable(strings(json['popped']).toSet());
       _unpinned
         ..clear()
         ..addAll(strings(json['unpinned']));
@@ -281,7 +283,7 @@ class DockController {
       // so F2 brings that one straight back.
       _lastDock =
           json['last'] as String? ??
-          (open is String && open != settingsId ? open : null);
+          (open is String && open != _legacySettingsId ? open : null);
     } catch (_) {
       // A damaged preference is not worth failing the editor over.
     }
@@ -291,6 +293,7 @@ class DockController {
     'open': activeDock,
     'last': _lastDock,
     'order': order.value,
+    'popped': poppedOut.value.toList(),
     'unpinned': _unpinned.toList(),
     'heights': heights.value,
     'memory': _memory,

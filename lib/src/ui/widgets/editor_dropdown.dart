@@ -105,7 +105,7 @@ class EditorDropdown<T> extends StatelessWidget {
       constraints: BoxConstraints(minWidth: width, maxWidth: width),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(4),
-        side: const BorderSide(color: EditorTheme.border),
+        side: BorderSide(color: EditorTheme.border),
       ),
       items: [
         _MenuBody<T>(
@@ -142,7 +142,7 @@ class EditorDropdown<T> extends StatelessWidget {
       color: EditorTheme.inputBg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(4),
-        side: const BorderSide(color: EditorTheme.border),
+        side: BorderSide(color: EditorTheme.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -302,7 +302,7 @@ class _MenuBodyState<T> extends State<_MenuBody<T>> {
 
   Widget _searchBox() => Container(
     height: 30,
-    decoration: const BoxDecoration(
+    decoration: BoxDecoration(
       border: Border(bottom: BorderSide(color: EditorTheme.border)),
     ),
     child: TextField(
@@ -319,11 +319,7 @@ class _MenuBodyState<T> extends State<_MenuBody<T>> {
         isDense: true,
         border: InputBorder.none,
         contentPadding: const EdgeInsets.fromLTRB(4, 8, 8, 8),
-        prefixIcon: const Icon(
-          Icons.search,
-          size: 14,
-          color: EditorTheme.textMuted,
-        ),
+        prefixIcon: Icon(Icons.search, size: 14, color: EditorTheme.textMuted),
         prefixIconConstraints: const BoxConstraints(minWidth: 26),
         hintText: 'Search',
         hintStyle: TextStyle(
@@ -351,7 +347,7 @@ class _MenuBodyState<T> extends State<_MenuBody<T>> {
           SizedBox(
             width: 16,
             child: selected
-                ? const Icon(Icons.check, size: 12, color: EditorTheme.primary)
+                ? Icon(Icons.check, size: 12, color: EditorTheme.primary)
                 : null,
           ),
           Expanded(

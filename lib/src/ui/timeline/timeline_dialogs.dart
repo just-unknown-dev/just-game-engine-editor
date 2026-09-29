@@ -9,12 +9,12 @@ import '../../core/constants/editor_constants.dart';
 import '../overlay/docks/shared/dock_widgets.dart';
 import 'timeline_session.dart';
 
-const _body = TextStyle(color: EditorTheme.textSecondary, fontSize: 12);
+final _body = TextStyle(color: EditorTheme.textSecondary, fontSize: 12);
 
 InputDecoration _input(String? hint) => InputDecoration(
   isDense: true,
   hintText: hint,
-  hintStyle: const TextStyle(color: EditorTheme.textMuted, fontSize: 12),
+  hintStyle: TextStyle(color: EditorTheme.textMuted, fontSize: 12),
   filled: true,
   fillColor: EditorTheme.inputBg,
   contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -55,27 +55,29 @@ Future<String?> promptTimelineText(
   final text = TextEditingController(text: initial);
   return showDialog<String>(
     context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: EditorTheme.dialogBg,
-      title: Text(title, style: _body.copyWith(fontSize: 13)),
-      content: SizedBox(
-        width: 280,
-        child: TextField(
-          controller: text,
-          autofocus: true,
-          style: _body.copyWith(color: EditorTheme.textPrimary),
-          decoration: _input(hint),
-          onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+    builder: (context) => EditorLook(
+      child: AlertDialog(
+        backgroundColor: EditorTheme.dialogBg,
+        title: Text(title, style: _body.copyWith(fontSize: 13)),
+        content: SizedBox(
+          width: 280,
+          child: TextField(
+            controller: text,
+            autofocus: true,
+            style: _body.copyWith(color: EditorTheme.textPrimary),
+            decoration: _input(hint),
+            onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+          ),
         ),
+        actions: [
+          timelineDialogButton('Cancel', () => Navigator.of(context).pop()),
+          timelineDialogButton(
+            'OK',
+            () => Navigator.of(context).pop(text.text.trim()),
+            primary: true,
+          ),
+        ],
       ),
-      actions: [
-        timelineDialogButton('Cancel', () => Navigator.of(context).pop()),
-        timelineDialogButton(
-          'OK',
-          () => Navigator.of(context).pop(text.text.trim()),
-          primary: true,
-        ),
-      ],
     ),
   );
 }
@@ -87,7 +89,9 @@ Future<jge.TrackBinding?> promptTrackBinding(
   jge.TrackBinding initial = jge.TrackBinding.owner,
 }) => showDialog<jge.TrackBinding>(
   context: context,
-  builder: (context) => _BindingDialog(session: session, initial: initial),
+  builder: (context) => EditorLook(
+    child: _BindingDialog(session: session, initial: initial),
+  ),
 );
 
 class _BindingDialog extends StatefulWidget {
@@ -140,7 +144,7 @@ class _BindingDialogState extends State<_BindingDialog> {
                   (jge.TrackBindingKind.name, 'Entity'),
                   (jge.TrackBindingKind.tag, 'Tag'),
                 ])
-                  DockFilterChip(
+                  EditorChip(
                     label: label,
                     selected: _kind == kind,
                     onTap: () => setState(() => _kind = kind),
@@ -149,7 +153,7 @@ class _BindingDialogState extends State<_BindingDialog> {
             ),
             const SizedBox(height: 10),
             if (_kind == jge.TrackBindingKind.self)
-              const Text(
+              Text(
                 'Whoever plays the timeline. This is what lets one timeline '
                 'animate many entities.',
                 style: _body,
@@ -219,7 +223,9 @@ Future<PropertyChoice?> promptPropertyTrack(
   jge.TrackBinding binding = jge.TrackBinding.owner,
 }) => showDialog<PropertyChoice>(
   context: context,
-  builder: (context) => _PropertyDialog(session: session, binding: binding),
+  builder: (context) => EditorLook(
+    child: _PropertyDialog(session: session, binding: binding),
+  ),
 );
 
 class _PropertyDialog extends StatefulWidget {

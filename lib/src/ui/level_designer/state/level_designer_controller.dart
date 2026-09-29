@@ -232,12 +232,12 @@ class LevelDesignerController {
     debugLabel: 'hiddenOverlays',
   );
 
-  /// Snap positions to the grid. Mirrors [EditorSceneState.gridSnappingEnabled]
-  /// so the designer's own toggle and the overlay settings agree.
+  /// Snap positions to the grid. The settings' Snap to grid — one switch
+  /// for the whole editor — which the plugin keeps this in step with.
   final Signal<bool> snapEnabled = Signal(true, debugLabel: 'snapEnabled');
 
   /// Snap to other entities' edges and centres, and to ruler guides, as
-  /// well as to the grid.
+  /// well as to the grid. Kept in the settings, like [snapEnabled].
   ///
   /// Levels are built by lining things up with each other, and the grid only
   /// helps when both things happen to sit on it.

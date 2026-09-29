@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../../core/constants/editor_constants.dart';
+import '../../kit/kit.dart';
 import '../level_designer_session.dart';
 import '../tools/level_tool.dart';
 import '../tools/tool_registry.dart';
@@ -100,7 +101,7 @@ class ToolGroupCaption extends StatelessWidget {
       overflow: TextOverflow.clip,
       softWrap: false,
       textAlign: TextAlign.center,
-      style: const TextStyle(
+      style: TextStyle(
         color: EditorTheme.textMuted,
         fontSize: 8,
         fontWeight: FontWeight.w700,
@@ -118,9 +119,10 @@ String _tooltipFor(LevelToolHandler tool) {
   return description == null ? head : '$head\n$description';
 }
 
-/// One button of the strip: the icon, the shortcut letter in its corner, and
-/// — for the tool in hand — a fill and an accent bar down its left edge.
-class ToolStripButton extends StatefulWidget {
+/// One button of the strip: the kit's tool button, as wide as the strip —
+/// the icon, the shortcut letter in its corner, and for the tool in hand a
+/// fill and an accent bar down its left edge.
+class ToolStripButton extends StatelessWidget {
   const ToolStripButton({
     super.key,
     required this.icon,
@@ -143,88 +145,21 @@ class ToolStripButton extends StatefulWidget {
   final bool enabled;
 
   @override
-  State<ToolStripButton> createState() => _ToolStripButtonState();
-}
-
-class _ToolStripButtonState extends State<ToolStripButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final active = widget.isActive;
-    final Color iconColor = !widget.enabled
-        ? EditorTheme.textMuted.withValues(alpha: 0.4)
-        : active
-        ? EditorTheme.primaryBright
-        : _hover
-        ? EditorTheme.textPrimary
-        : EditorTheme.textSecondary;
-    final shortcut = widget.shortcut;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-      child: Tooltip(
-        message: widget.tooltip,
-        waitDuration: const Duration(milliseconds: 400),
-        child: MouseRegion(
-          cursor: widget.enabled
-              ? SystemMouseCursors.click
-              : SystemMouseCursors.basic,
-          onEnter: (_) => setState(() => _hover = true),
-          onExit: (_) => setState(() => _hover = false),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.enabled ? widget.onTap : null,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 90),
-              height: 32,
-              decoration: BoxDecoration(
-                color: active
-                    ? EditorTheme.primaryMuted.withValues(alpha: 0.55)
-                    : _hover && widget.enabled
-                    ? EditorTheme.hoverBg
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: Stack(
-                children: [
-                  if (active)
-                    Positioned(
-                      left: 0,
-                      top: 5,
-                      bottom: 5,
-                      child: Container(
-                        width: 3,
-                        decoration: BoxDecoration(
-                          color: EditorTheme.primaryBright,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                  Center(child: Icon(widget.icon, size: 18, color: iconColor)),
-                  if (shortcut != null)
-                    Positioned(
-                      right: 3,
-                      bottom: 1,
-                      child: Text(
-                        shortcut,
-                        style: TextStyle(
-                          color: active
-                              ? EditorTheme.primaryMutedLight
-                              : EditorTheme.textMuted,
-                          fontSize: 8,
-                          fontWeight: FontWeight.w700,
-                          height: 1.2,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+    child: EditorToolButton(
+      icon: icon,
+      // The tooltips here already name their key.
+      tooltip: tooltip,
+      shortcut: null,
+      cornerLabel: shortcut,
+      isActive: isActive,
+      onTap: enabled ? onTap : null,
+      width: double.infinity,
+      height: 32,
+      iconSize: 18,
+    ),
+  );
 }
 
 /// Undo and redo, bound directly to the history's signals so they enable and

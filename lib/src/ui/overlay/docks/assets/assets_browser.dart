@@ -7,6 +7,7 @@ import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../../../core/constants/editor_constants.dart';
+import '../../../../ui/widgets/editor_menu.dart';
 import '../../../../core/scope/editor_scope.dart';
 import '../../../../extension/editor_contributions.dart';
 import '../shared/dock_widgets.dart';
@@ -309,28 +310,31 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
       );
     return showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: EditorTheme.dialogBg,
-        title: const Text(
-          'Rename',
-          style: TextStyle(color: EditorTheme.textPrimary, fontSize: 13),
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          style: const TextStyle(color: EditorTheme.textPrimary, fontSize: 12),
-          onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+      builder: (context) => EditorLook(
+        child: AlertDialog(
+          backgroundColor: EditorTheme.dialogBg,
+          title: Text(
+            'Rename',
+            style: TextStyle(color: EditorTheme.textPrimary, fontSize: 13),
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Rename'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            style: TextStyle(color: EditorTheme.textPrimary, fontSize: 12),
+            onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(controller.text.trim()),
+              child: const Text('Rename'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -344,37 +348,36 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
     bool cancellable = true,
   }) => showDialog<bool>(
     context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: EditorTheme.dialogBg,
-      title: Text(
-        title,
-        style: const TextStyle(color: EditorTheme.textPrimary, fontSize: 13),
-      ),
-      content: SingleChildScrollView(
-        child: Text(
-          body,
-          style: const TextStyle(
-            color: EditorTheme.textSecondary,
-            fontSize: 11,
+    builder: (context) => EditorLook(
+      child: AlertDialog(
+        backgroundColor: EditorTheme.dialogBg,
+        title: Text(
+          title,
+          style: TextStyle(color: EditorTheme.textPrimary, fontSize: 13),
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            body,
+            style: TextStyle(color: EditorTheme.textSecondary, fontSize: 11),
           ),
         ),
+        actions: [
+          if (cancellable)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          if (secondary != null)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(secondary),
+            ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(primary),
+          ),
+        ],
       ),
-      actions: [
-        if (cancellable)
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-        if (secondary != null)
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(secondary),
-          ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: Text(primary),
-        ),
-      ],
     ),
   );
 
@@ -389,68 +392,44 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
       IconData icon,
       VoidCallback run, {
       Color? color,
-    }) => PopupMenuItem(
-      value: run,
-      height: 28,
-      child: Row(
-        children: [
-          Icon(icon, size: 13, color: color ?? EditorTheme.textSecondary),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: color ?? EditorTheme.textPrimary,
-                fontSize: 11,
-              ),
-            ),
-          ),
-        ],
+    }) => editorMenuItem<VoidCallback>(run, label, icon: icon, color: color);
+    final run = await showEditorMenu<VoidCallback>(context, at, [
+      item('Open', Icons.open_in_new_rounded, () => _open(entry)),
+      for (final a in actions)
+        item(a.label, a.icon, () => a.run(widget.scope, entry.path)),
+      editorMenuDivider(),
+      item('Rename…', Icons.drive_file_rename_outline, () => _rename(entry)),
+      if (!entry.isDirectory)
+        item(
+          'Duplicate',
+          Icons.copy_rounded,
+          () => _index.duplicate(entry.path),
+        ),
+      if (!entry.isDirectory)
+        item(
+          'Find references',
+          Icons.travel_explore_rounded,
+          () => _showReferences(entry),
+        ),
+      item(
+        'Reveal in file manager',
+        Icons.folder_open_rounded,
+        () => _index.reveal(entry.path),
       ),
-    );
-    final run = await showMenu<VoidCallback>(
-      context: context,
-      color: EditorTheme.dialogBg,
-      position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx, at.dy),
-      items: [
-        item('Open', Icons.open_in_new_rounded, () => _open(entry)),
-        for (final a in actions)
-          item(a.label, a.icon, () => a.run(widget.scope, entry.path)),
-        const PopupMenuDivider(),
-        item('Rename…', Icons.drive_file_rename_outline, () => _rename(entry)),
-        if (!entry.isDirectory)
-          item(
-            'Duplicate',
-            Icons.copy_rounded,
-            () => _index.duplicate(entry.path),
-          ),
-        if (!entry.isDirectory)
-          item(
-            'Find references',
-            Icons.travel_explore_rounded,
-            () => _showReferences(entry),
-          ),
+      if (!entry.isDirectory)
         item(
-          'Reveal in file manager',
-          Icons.folder_open_rounded,
-          () => _index.reveal(entry.path),
+          'Open with the default app',
+          Icons.launch_rounded,
+          () => _index.openExternally(entry.path),
         ),
-        if (!entry.isDirectory)
-          item(
-            'Open with the default app',
-            Icons.launch_rounded,
-            () => _index.openExternally(entry.path),
-          ),
-        const PopupMenuDivider(),
-        item(
-          'Delete',
-          Icons.delete_outline_rounded,
-          () => _delete(entry),
-          color: EditorTheme.error,
-        ),
-      ],
-    );
+      editorMenuDivider(),
+      item(
+        'Delete',
+        Icons.delete_outline_rounded,
+        () => _delete(entry),
+        color: EditorTheme.error,
+      ),
+    ]);
     run?.call();
   }
 
@@ -467,14 +446,14 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(width: 190, child: _tree()),
-              const VerticalDivider(width: 1, color: EditorTheme.border),
+              VerticalDivider(width: 1, color: EditorTheme.border),
               Expanded(
                 child: Column(
                   children: [
                     _toolbar(),
                     Expanded(
                       child: shown.isEmpty
-                          ? DockEmptyState(
+                          ? EditorEmptyState(
                               icon: Icons.folder_off_outlined,
                               title: _query.isEmpty && _kinds.isEmpty
                                   ? 'This folder is empty'
@@ -492,7 +471,7 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
                 ),
               ),
               if (selected != null && !selected.isDirectory) ...[
-                const VerticalDivider(width: 1, color: EditorTheme.border),
+                VerticalDivider(width: 1, color: EditorTheme.border),
                 SizedBox(width: 230, child: _preview(selected)),
               ],
             ],
@@ -509,7 +488,7 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
                   child: Text(
                     'Moved ${trashed.originalPath.split('/').last} to '
                     '${AssetIndex.trashFolder}/',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: EditorTheme.textSecondary,
                       fontSize: 11,
                     ),
@@ -525,7 +504,7 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
 
   Widget _toolbar() {
     final parts = _dir.split('/');
-    return DockToolbar(
+    return EditorToolbar(
       children: [
         // Breadcrumbs: every folder on the way is a way back.
         Expanded(
@@ -535,7 +514,7 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
               children: [
                 for (var i = 0; i < parts.length; i++) ...[
                   if (i > 0)
-                    const Icon(
+                    Icon(
                       Icons.chevron_right_rounded,
                       size: 13,
                       color: EditorTheme.textMuted,
@@ -569,7 +548,7 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
           AssetKind.levelMap,
           AssetKind.audio,
         ])
-          DockFilterChip(
+          EditorChip(
             label: kind.label,
             color: assetColor(kind),
             selected: _kinds.contains(kind),
@@ -580,13 +559,13 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
             ),
           ),
         const SizedBox(width: 6),
-        DockSearchField(
+        EditorSearchField(
           hint: 'Search in ${parts.last}',
           width: 170,
           onChanged: (v) => setState(() => _query = v),
         ),
         const SizedBox(width: 4),
-        DockIconButton(
+        EditorIconButton(
           icon: _grid ? Icons.view_list_rounded : Icons.grid_view_rounded,
           tooltip: _grid ? 'List' : 'Grid',
           onTap: () {
@@ -594,12 +573,12 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
             _memory?.write('grid', _grid);
           },
         ),
-        DockIconButton(
+        EditorIconButton(
           icon: Icons.create_new_folder_outlined,
           tooltip: 'New folder',
           onTap: _newFolder,
         ),
-        DockIconButton(
+        EditorIconButton(
           icon: Icons.refresh_rounded,
           tooltip: 'Refresh',
           onTap: _index.scan,
@@ -630,24 +609,32 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
               padding: EdgeInsets.only(left: 4.0 + depth * 12, right: 4),
               child: Row(
                 children: [
-                  InkWell(
-                    onTap: children.isEmpty
+                  Semantics(
+                    button: children.isNotEmpty,
+                    label: children.isEmpty
                         ? null
-                        : () => setState(
-                            () => open
-                                ? _openFolders.remove(dir)
-                                : _openFolders.add(dir),
-                          ),
-                    child: Icon(
-                      children.isEmpty
-                          ? Icons.remove
-                          : open
-                          ? Icons.expand_more_rounded
-                          : Icons.chevron_right_rounded,
-                      size: 13,
-                      color: children.isEmpty
-                          ? Colors.transparent
-                          : EditorTheme.textMuted,
+                        : open
+                        ? 'Collapse'
+                        : 'Expand',
+                    child: InkWell(
+                      onTap: children.isEmpty
+                          ? null
+                          : () => setState(
+                              () => open
+                                  ? _openFolders.remove(dir)
+                                  : _openFolders.add(dir),
+                            ),
+                      child: Icon(
+                        children.isEmpty
+                            ? Icons.remove
+                            : open
+                            ? Icons.expand_more_rounded
+                            : Icons.chevron_right_rounded,
+                        size: 13,
+                        color: children.isEmpty
+                            ? Colors.transparent
+                            : EditorTheme.textMuted,
+                      ),
                     ),
                   ),
                   Icon(
@@ -672,7 +659,7 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
                   ),
                   if (dir == _dir)
                     for (final a in actions)
-                      DockIconButton(
+                      EditorIconButton(
                         icon: a.icon,
                         tooltip: a.label,
                         onTap: () => a.run(widget.scope, dir),
@@ -707,10 +694,7 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
               ),
               child: Text(
                 entry.name,
-                style: const TextStyle(
-                  color: EditorTheme.textPrimary,
-                  fontSize: 11,
-                ),
+                style: TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
               ),
             ),
           ),
@@ -774,7 +758,6 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
         entry,
         Tooltip(
           message: entry.path,
-          waitDuration: const Duration(milliseconds: 700),
           child: Container(
             decoration: BoxDecoration(
               color: selected ? EditorTheme.selectionBg : null,
@@ -848,10 +831,7 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
               if (!entry.isDirectory)
                 Text(
                   entry.sizeLabel,
-                  style: const TextStyle(
-                    color: EditorTheme.textMuted,
-                    fontSize: 10,
-                  ),
+                  style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
                 ),
             ],
           ),
@@ -886,7 +866,7 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
             entry.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               color: EditorTheme.textPrimary,
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -900,29 +880,29 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
                 '${modified.year}-${modified.month.toString().padLeft(2, '0')}-'
                     '${modified.day.toString().padLeft(2, '0')}',
             ].join(' · '),
-            style: const TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
           ),
           const SizedBox(height: 4),
           Row(
             children: [
-              DockIconButton(
+              EditorIconButton(
                 icon: Icons.open_in_new_rounded,
                 tooltip: 'Open',
                 onTap: () => _open(entry),
               ),
               for (final a in actions)
-                DockIconButton(
+                EditorIconButton(
                   icon: a.icon,
                   tooltip: a.label,
                   onTap: () => a.run(widget.scope, entry.path),
                 ),
-              DockIconButton(
+              EditorIconButton(
                 icon: Icons.travel_explore_rounded,
                 tooltip: 'Find references',
                 onTap: () => _showReferences(entry),
               ),
               const Spacer(),
-              DockIconButton(
+              EditorIconButton(
                 icon: Icons.delete_outline_rounded,
                 tooltip: 'Delete (to the trash)',
                 color: EditorTheme.error,

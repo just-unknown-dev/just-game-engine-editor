@@ -290,26 +290,30 @@ class _MapItemRowState extends State<MapItemRow> {
           padding: const EdgeInsets.only(right: 8),
           child: Row(
             children: [
-              const SizedBox(width: kSceneTreeRowTileHeight),
+              SizedBox(width: kSceneTreeRowTileHeight),
               SizedBox(width: indent),
               if (expander != null)
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: expander,
-                  child: SizedBox(
-                    width: kSceneTreeRowTileHeight,
-                    height: kSceneTreeRowTileHeight,
-                    child: Icon(
-                      row.isExpanded
-                          ? Icons.expand_more_rounded
-                          : Icons.chevron_right_rounded,
-                      size: 14,
-                      color: EditorTheme.primary,
+                Semantics(
+                  button: true,
+                  label: row.isExpanded ? 'Collapse' : 'Expand',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: expander,
+                    child: SizedBox(
+                      width: kSceneTreeRowTileHeight,
+                      height: kSceneTreeRowTileHeight,
+                      child: Icon(
+                        row.isExpanded
+                            ? Icons.expand_more_rounded
+                            : Icons.chevron_right_rounded,
+                        size: 14,
+                        color: EditorTheme.primary,
+                      ),
                     ),
                   ),
                 )
               else
-                const SizedBox(width: kSceneTreeRowTileHeight),
+                SizedBox(width: kSceneTreeRowTileHeight),
               const SizedBox(width: 2),
               Icon(
                 icon,
@@ -355,7 +359,7 @@ class _MapItemRowState extends State<MapItemRow> {
                               child: Text(
                                 detail,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
                                   color: EditorTheme.textMuted,
                                 ),
@@ -417,7 +421,7 @@ class _RenameFieldState extends State<_RenameField> {
     child: TextField(
       controller: _text,
       autofocus: true,
-      style: const TextStyle(fontSize: 11, color: EditorTheme.textPrimary),
+      style: TextStyle(fontSize: 11, color: EditorTheme.textPrimary),
       decoration: const InputDecoration(
         isDense: true,
         border: InputBorder.none,

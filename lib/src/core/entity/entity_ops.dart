@@ -282,10 +282,31 @@ class EntityOps {
       ? entities.single.name ?? 'entity'
       : '${entities.length} entities';
 
-  /// Deletes everything selected as one undoable action.
+  /// Asks whether to delete what [what] names — `'Player'`, `'3 entities'`
+  /// — when the settings want deletes confirmed. Set by the overlay, which
+  /// has somewhere to ask; without it nothing is asked.
+  Future<bool> Function(String what)? confirmDelete;
+
+  /// Deletes everything selected as one undoable action — once confirmed,
+  /// when the settings ask for that.
   void deleteSelection(EditorHistory history) {
     final targets = selectionEntities;
     if (targets.isEmpty) return;
+    final ask = confirmDelete;
+    if (ask == null || !scope.prefs.settings.value.confirmDelete) {
+      _delete(history, targets);
+      return;
+    }
+    ask(_describe(targets)).then((yes) {
+      final alive = [
+        for (final e in targets)
+          if (e.isAlive) e,
+      ];
+      if (yes && alive.isNotEmpty) _delete(history, alive);
+    });
+  }
+
+  void _delete(EditorHistory history, List<Entity> targets) {
     history.push(
       DeleteEntitiesCommand(
         label: 'Delete ${_describe(targets)}',

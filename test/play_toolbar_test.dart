@@ -159,10 +159,7 @@ void main() {
     }
 
     Rect rectOf(WidgetTester tester, String tooltip) => tester.getRect(
-      find.descendant(
-        of: find.byWidgetPredicate((w) => w is Tooltip && w.message == tooltip),
-        matching: find.byType(InkWell),
-      ),
+      find.byWidgetPredicate((w) => w is Tooltip && w.message == tooltip),
     );
 
     testWidgets('buttons are 28 px targets with air between them', (
@@ -174,14 +171,18 @@ void main() {
       expect(playButton.size, const Size(28, 28));
       expect(pause.left - playButton.right, greaterThanOrEqualTo(2));
 
-      // Across a group boundary the gap is a divider's worth, not a button's.
+      // Across a frame boundary the gap is wider than a button's air: the
+      // transport ends, and the view-and-mode frame starts with the preview.
       final restart = rectOf(tester, 'Restart  (Shift+F5)');
-      final designer = rectOf(tester, 'Open Level Designer  (F3)');
+      final designer = rectOf(
+        tester,
+        'Level Designer — open a scene first  (F3)',
+      );
       final preview = rectOf(tester, 'Hide the game camera preview  (F4)');
-      expect(designer.left - restart.right, greaterThan(14));
-      // The camera preview closes the play group, so the next boundary is
-      // between it and the designer's own group.
-      expect(designer.left - preview.right, greaterThan(14));
+      expect(preview.left - restart.right, greaterThan(14));
+      // Inside that frame a divider parts what the viewport shows from what
+      // it is for.
+      expect(designer.left - preview.right, greaterThan(8));
       done();
     });
 
@@ -201,7 +202,7 @@ void main() {
         'Pause  (F6)',
         'Step one frame  (F10)',
         'Restart  (Shift+F5)',
-        'Open Level Designer  (F3)',
+        'Level Designer — open a scene first  (F3)',
         'Hide the game camera preview  (F4)',
       ]) {
         expect(find.byTooltip(message), findsOneWidget, reason: message);
