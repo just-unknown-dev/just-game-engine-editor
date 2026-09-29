@@ -33,8 +33,9 @@ class DesignerStatusBar extends StatelessWidget {
   /// dialog stay in agreement.
   final ValueChanged<double> onGridSizeChanged;
 
-  /// Height of the strip.
-  static const double height = 30;
+  /// Height of the strip: room above and below its 24 px toggles, so their
+  /// lit fills sit in the bar rather than filling it edge to edge.
+  static const double height = 34;
 
   @override
   Widget build(BuildContext context) => SignalBuilder<String?>(
@@ -49,7 +50,7 @@ class DesignerStatusBar extends StatelessWidget {
     return Container(
       height: height,
       color: EditorTheme.surfaceDark,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       // The controls scroll rather than overflow — extensions add overlays
       // and status controls, so how much there is to show is not the
       // editor's to decide. The status message keeps a fixed share on
@@ -135,7 +136,7 @@ class DesignerStatusBar extends StatelessWidget {
 
   /// The gap between two toggles side by side: their lit fills stay apart,
   /// each its own target, rather than running into one bar.
-  static const double _gap = 4;
+  static const double _gap = 6;
 
   static List<Widget> _spaced(List<Widget> children) => [
     for (var i = 0; i < children.length; i++) ...[

@@ -26,6 +26,11 @@ PopupMenuItem<T> editorMenuItem<T>(
 
   /// The key that does the same, at the right: `Ctrl+D`.
   String? shortcut,
+
+  /// Keeps an icon's room when there is no [icon], so that in a menu where
+  /// some lines have one — a tick by the current choice — every label
+  /// starts in the same column.
+  bool iconSlot = false,
 }) => PopupMenuItem<T>(
   value: value,
   height: height,
@@ -42,7 +47,8 @@ PopupMenuItem<T> editorMenuItem<T>(
                 : EditorTheme.textMuted,
           ),
           const SizedBox(width: 8),
-        ],
+        ] else if (iconSlot)
+          const SizedBox(width: 13 + 8),
         // With a key at the right, the label takes the room between them.
         Flexible(
           fit: shortcut == null ? FlexFit.loose : FlexFit.tight,

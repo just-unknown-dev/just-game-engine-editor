@@ -199,42 +199,4 @@ void main() {
       expect(scope.history.canUndo.value, isFalse);
     });
   });
-
-  group('the UI mode and the designer share it', () {
-    test('a UI drag and a world edit undo off one stack, newest first', () {
-      final canvas = ops.createUi('canvas')!;
-      final text = ops.createUi('text', parent: canvas)!;
-      final slot = text.getComponent<UiSlotComponent>()!;
-      final world = platform('Platform_0');
-
-      // What the UI mode pushes for a drag.
-      scope.history.push(
-        ComponentFieldCommand(
-          label: 'Move ${text.name}',
-          component: slot,
-          before: slot.offset,
-          after: const Offset(40, 0),
-          write: (c, v) => (c as UiSlotComponent).offset = v as Offset,
-          sceneState: scope.sceneState,
-        ),
-      );
-      // Then something in the world.
-      scope.sceneState.selectEntity(world);
-      ops.deleteSelection(scope.history);
-
-      expect(slot.offset, const Offset(40, 0));
-      expect(scope.world.findEntityByName('Platform_0'), isNull);
-
-      scope.history.undo();
-      expect(
-        scope.world.findEntityByName('Platform_0'),
-        isNotNull,
-        reason: 'the newest edit first',
-      );
-      expect(slot.offset, const Offset(40, 0));
-
-      scope.history.undo();
-      expect(slot.offset, Offset.zero);
-    });
-  });
 }

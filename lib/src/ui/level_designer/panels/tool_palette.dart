@@ -144,9 +144,24 @@ class ToolStripButton extends StatelessWidget {
   /// Greyed and not tappable when false.
   final bool enabled;
 
+  /// A button's height and its icon's — the same for every button in a
+  /// column down the right of the viewport: this strip, the transform
+  /// column, the snapping buttons and the gear.
+  static const double buttonHeight = 32;
+  static const double iconSize = 18;
+
+  /// Around each button: in from the frame's sides, two pixels apart.
+  static const EdgeInsets padding = EdgeInsets.symmetric(
+    horizontal: 4,
+    vertical: 1,
+  );
+
+  /// How much of a column's height one button takes, [padding] included.
+  static const double extent = buttonHeight + 2;
+
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+    padding: padding,
     child: EditorToolButton(
       icon: icon,
       // The tooltips here already name their key.
@@ -156,8 +171,8 @@ class ToolStripButton extends StatelessWidget {
       isActive: isActive,
       onTap: enabled ? onTap : null,
       width: double.infinity,
-      height: 32,
-      iconSize: 18,
+      height: buttonHeight,
+      iconSize: iconSize,
     ),
   );
 }

@@ -514,7 +514,7 @@ class UngroupCommand extends EditorCommand {
     required jge.Entity group,
     required this.codec,
   }) : _name = group.name ?? 'group',
-       _components = [for (final c in group.components) ?codec.encode(c)],
+       _components = codec.encodeAll(group.components),
        _slot = HierarchySlot.of(group, world: world, sceneState: sceneState),
        _children = [
          for (final id in List.of(
@@ -568,11 +568,7 @@ class UngroupCommand extends EditorCommand {
 
   @override
   void undo() {
-    final components = <jge.Component>[];
-    for (final json in _components) {
-      final component = codec.decode(json);
-      if (component != null) components.add(component);
-    }
+    final components = codec.decodeAll(_components);
     final group = world.createEntityWithComponents(components, name: _name);
     sceneState.registerEntity(group);
     _group = group;

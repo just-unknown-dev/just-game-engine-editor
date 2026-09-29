@@ -16,7 +16,7 @@ import '../controls/designer_controls.dart';
 import '../level_designer_session.dart';
 import '../tools/level_tool.dart';
 import '../tools/tiles/tile_tool_base.dart';
-import '../ui_mode/ui_workspace.dart';
+import '../../tileset/built_in_workspaces.dart';
 import '../../widgets/editor_scrollbar.dart';
 
 /// The tiles to paint with: the engine's basic shapes, then the map's own

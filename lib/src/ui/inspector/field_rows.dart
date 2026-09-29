@@ -133,10 +133,10 @@ class ColorEditorRow extends StatelessWidget {
     return Row(
       children: [
         SizedBox(
-          width: 96,
+          width: InspectorField.labelWidth,
           child: Text(
             label,
-            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            style: InspectorField.labelStyle,
           ),
         ),
         Expanded(
@@ -181,35 +181,44 @@ class ColorEditorRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      hasGradient ? 'Gradient' : hex,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: inherited
-                            ? EditorTheme.textMuted
-                            : EditorTheme.textPrimary,
-                        fontSize: 11,
-                        fontStyle: inherited
-                            ? FontStyle.italic
-                            : FontStyle.normal,
-                      ),
+                  // One stretch for the words, so the picker icon is always
+                  // at the box's end: a text and a spacer each took a share
+                  // of the room, and the icon moved with every value.
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            hasGradient ? 'Gradient' : hex,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: inherited
+                                  ? EditorTheme.textMuted
+                                  : EditorTheme.textPrimary,
+                              fontSize: 11,
+                              fontStyle: inherited
+                                  ? FontStyle.italic
+                                  : FontStyle.normal,
+                            ),
+                          ),
+                        ),
+                        if (inherited && inheritedFrom.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              inheritedFrom,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: EditorTheme.textMuted,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  if (inherited && inheritedFrom.isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        inheritedFrom,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: EditorTheme.textMuted,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
+                  const SizedBox(width: 4),
                   Icon(
                     Icons.colorize_rounded,
                     size: 13,
@@ -251,16 +260,34 @@ class ReadonlyRow extends StatelessWidget {
     return Row(
       children: [
         SizedBox(
-          width: 96,
+          width: InspectorField.labelWidth,
           child: Text(
             label,
-            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            overflow: TextOverflow.ellipsis,
+            style: InspectorField.labelStyle,
           ),
         ),
+        // The same box as every other row, so it sits on the same lines —
+        // left unfilled and quieter, since there is nothing in it to change.
         Expanded(
-          child: Text(
-            value,
-            style: TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
+          child: Container(
+            constraints: const BoxConstraints(
+              minHeight: InspectorField.height,
+            ),
+            // Less the border's pixel on each side, which a box's padding
+            // grows by: then one line comes out at the height of the rest.
+            padding: InspectorField.padding - const EdgeInsets.all(1),
+            alignment: Alignment.centerLeft,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(InspectorField.radius),
+              border: Border.all(color: EditorTheme.border),
+            ),
+            child: Text(
+              value,
+              style: InspectorField.valueStyle.copyWith(
+                color: EditorTheme.textSecondary,
+              ),
+            ),
           ),
         ),
       ],
@@ -285,10 +312,10 @@ class BoolEditorRow extends StatelessWidget {
     return Row(
       children: [
         SizedBox(
-          width: 96,
+          width: InspectorField.labelWidth,
           child: Text(
             label,
-            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            style: InspectorField.labelStyle,
           ),
         ),
         Expanded(
@@ -613,12 +640,12 @@ class TextEditorRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 96,
+          width: InspectorField.labelWidth,
           child: Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               label,
-              style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+              style: InspectorField.labelStyle,
             ),
           ),
         ),
@@ -665,10 +692,10 @@ class DropdownEditorRow extends StatelessWidget {
     return Row(
       children: [
         SizedBox(
-          width: 96,
+          width: InspectorField.labelWidth,
           child: Text(
             label,
-            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            style: InspectorField.labelStyle,
           ),
         ),
         Expanded(
@@ -760,12 +787,12 @@ class _OffsetListEditorRowState extends State<OffsetListEditorRow> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 96,
+          width: InspectorField.labelWidth,
           child: Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               widget.label,
-              style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+              style: InspectorField.labelStyle,
             ),
           ),
         ),
@@ -1127,10 +1154,10 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             SizedBox(
-              width: 96,
+              width: InspectorField.labelWidth,
               child: Text(
                 widget.label,
-                style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+                style: InspectorField.labelStyle,
               ),
             ),
             Expanded(

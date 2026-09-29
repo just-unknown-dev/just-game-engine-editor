@@ -6,7 +6,7 @@ import '../../../core/scope/editor_scope.dart';
 import '../../../core/theme/editor_metrics.dart';
 import '../../kit/kit.dart';
 import '../settings/overlay_ui_settings.dart';
-import 'shared_widgets.dart';
+import '../../level_designer/panels/tool_palette.dart';
 import 'transform_toolbar.dart';
 
 /// Which of the bar's rows is out.
@@ -30,12 +30,10 @@ class QuickSnapBar extends StatefulWidget {
   /// The steps the snap row offers, in world units; 0 is the grid's own.
   static const List<double> steps = [0, 1, 2, 4, 8, 16, 32, 64];
 
-  /// How tall it stands, for what has to clear it: two buttons, one above
-  /// the other, in the frame the gear has.
+  /// How tall it stands, for what has to clear it: two of the tool
+  /// strip's buttons, one above the other, in the frame the strip has.
   static double heightFor(OverlayUiSettings settings) =>
-      PlayControlsToolbar.heightFor(settings) +
-      PlayControlsToolbar.buttonSize(settings) +
-      EditorMetrics.space(3);
+      FloatingToolFrame.heightFor(ToolStripButton.extent * 2);
 
   /// [step] as the rows and the settings write it: `8`, `0.5`.
   static String formatStep(double step) =>
@@ -81,8 +79,6 @@ class _QuickSnapBarState extends State<QuickSnapBar> {
   @override
   Widget build(BuildContext context) {
     final settings = widget.settings;
-    final side = PlayControlsToolbar.buttonSize(settings);
-    final iconSize = 16 * settings.effectiveTextScale;
     final snapping = settings.gridSnappingEnabled;
     final grid = settings.showGrid;
     final step = settings.moveStep;
@@ -90,52 +86,62 @@ class _QuickSnapBarState extends State<QuickSnapBar> {
     final moves = step > 0
         ? '${QuickSnapBar.formatStep(step)} u steps'
         : 'grid cells';
+    // The tool strip's frame, width and buttons, so the column down the
+    // right of the viewport reads as one set from the top to the gear.
     final bar = FloatingToolFrame(
       settings: settings,
-      horizontalPadding: EditorMetrics.space(3),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          EditorToolButton(
-            icon: Icons.grid_4x4_rounded,
-            glyph: (colour, size) => MagnetGlyph(colour: colour, size: size),
-            tooltip:
-                '${snapping ? 'Snapping is on' : 'Snapping is off'} — moves '
-                'in $moves. Right-click for the step.',
-            shortcut: _key(QuickSnapBar.snapCommandId),
-            showShortcut: false,
-            // The step, when it is not the grid's: seen without asking.
-            cornerLabel: step > 0 ? QuickSnapBar.formatStep(step) : null,
-            activeBar: false,
-            isActive: snapping,
-            onTap: () => _scope.prefs.change(
-              (s) => s.copyWith(gridSnappingEnabled: !s.gridSnappingEnabled),
+      child: SizedBox(
+        width: ToolPalette.width,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: ToolStripButton.padding,
+              child: EditorToolButton(
+                icon: Icons.grid_4x4_rounded,
+                glyph: (colour, size) =>
+                    MagnetGlyph(colour: colour, size: size),
+                tooltip:
+                    '${snapping ? 'Snapping is on' : 'Snapping is off'} — moves '
+                    'in $moves. Right-click for the step.',
+                shortcut: _key(QuickSnapBar.snapCommandId),
+                showShortcut: false,
+                // The step, when it is not the grid's: seen without asking.
+                cornerLabel: step > 0 ? QuickSnapBar.formatStep(step) : null,
+                isActive: snapping,
+                onTap: () => _scope.prefs.change(
+                  (s) =>
+                      s.copyWith(gridSnappingEnabled: !s.gridSnappingEnabled),
+                ),
+                onSecondaryTap: () => _toggle(_Row.snap),
+                width: double.infinity,
+                height: ToolStripButton.buttonHeight,
+                iconSize: ToolStripButton.iconSize,
+              ),
             ),
-            onSecondaryTap: () => _toggle(_Row.snap),
-            width: side,
-            height: side,
-            iconSize: iconSize,
-          ),
-          SizedBox(height: EditorMetrics.space(3)),
-          EditorToolButton(
-            icon: grid ? Icons.grid_on_rounded : Icons.grid_off_rounded,
-            tooltip:
-                '${grid ? 'The grid is shown' : 'The grid is hidden'} — '
-                '$size u cells. Right-click for the size.',
-            shortcut: _key(QuickSnapBar.gridCommandId),
-            showShortcut: false,
-            // Its size, always: what the lines are drawn at.
-            cornerLabel: size,
-            activeBar: false,
-            isActive: grid,
-            onTap: () =>
-                _scope.prefs.change((s) => s.copyWith(showGrid: !s.showGrid)),
-            onSecondaryTap: () => _toggle(_Row.grid),
-            width: side,
-            height: side,
-            iconSize: iconSize,
-          ),
-        ],
+            Padding(
+              padding: ToolStripButton.padding,
+              child: EditorToolButton(
+                icon: grid ? Icons.grid_on_rounded : Icons.grid_off_rounded,
+                tooltip:
+                    '${grid ? 'The grid is shown' : 'The grid is hidden'} — '
+                    '$size u cells. Right-click for the size.',
+                shortcut: _key(QuickSnapBar.gridCommandId),
+                showShortcut: false,
+                // Its size, always: what the lines are drawn at.
+                cornerLabel: size,
+                isActive: grid,
+                onTap: () => _scope.prefs.change(
+                  (s) => s.copyWith(showGrid: !s.showGrid),
+                ),
+                onSecondaryTap: () => _toggle(_Row.grid),
+                width: double.infinity,
+                height: ToolStripButton.buttonHeight,
+                iconSize: ToolStripButton.iconSize,
+              ),
+            ),
+          ],
+        ),
       ),
     );
     final Widget? row = switch (_open) {
@@ -143,12 +149,12 @@ class _QuickSnapBarState extends State<QuickSnapBar> {
       _Row.snap => QuickValueRow(
         key: const ValueKey('snapSteps'),
         settings: settings,
-        label: 'Move step',
+        label: 'Step',
         options: [
           for (final s in QuickSnapBar.steps)
             (
               s,
-              s == 0 ? 'Grid' : QuickSnapBar.formatStep(s),
+              s == 0 ? 'Auto' : QuickSnapBar.formatStep(s),
               s == 0
                   ? 'The grid\'s own: $size u'
                   : '${QuickSnapBar.formatStep(s)} world units',
@@ -161,7 +167,7 @@ class _QuickSnapBarState extends State<QuickSnapBar> {
       _Row.grid => QuickValueRow(
         key: const ValueKey('gridSizes'),
         settings: settings,
-        label: 'Grid size',
+        label: 'Grid Size',
         options: [
           for (final s in _scope.config.gridSizes)
             (
@@ -257,14 +263,17 @@ class _QuickValueRowState extends State<QuickValueRow> {
     child: FloatingToolFrame(
       settings: widget.settings,
       horizontalPadding: EditorMetrics.space(4),
+      // As tall as one of the bar's buttons with its gap, so the row sits
+      // level with the button it came out of.
       child: SizedBox(
-        height: PlayControlsToolbar.buttonSize(widget.settings),
+        height: ToolStripButton.buttonHeight,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            const SizedBox(width: 8),
             Text(
               widget.label,
-              style: TextStyle(color: EditorTheme.textMuted, fontSize: 10.5),
+              style: TextStyle(color: EditorTheme.textBright, fontSize: 10.5),
             ),
             const SizedBox(width: 8),
             for (final (value, label, tooltip) in widget.options) ...[

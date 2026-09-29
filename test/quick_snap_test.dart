@@ -71,6 +71,38 @@ void main() {
       await stop(tester);
     });
 
+    testWidgets('the column down the right is one width, to the gear', (
+      tester,
+    ) async {
+      if (!kDebugMode) return;
+      await start(tester);
+      Rect frameOf(Finder of) => tester.getRect(
+        find.ancestor(of: of, matching: find.byType(FloatingToolFrame)).first,
+      );
+      final transform = tester.getRect(
+        find
+            .descendant(
+              of: find.byType(TransformToolbar),
+              matching: find.byType(FloatingToolFrame),
+            )
+            .first,
+      );
+      final snap = frameOf(inBar(find.byType(MagnetGlyph)));
+      final gear = frameOf(find.byTooltip('Editor settings  (Ctrl+,)'));
+
+      for (final frame in [snap, gear]) {
+        expect(frame.width, transform.width);
+        expect(frame.right, transform.right);
+      }
+      // The strip's own buttons, the same size.
+      expect(
+        tester.getSize(find.byTooltip('Editor settings  (Ctrl+,)')).height,
+        ToolStripButton.buttonHeight,
+      );
+      expect(gear.top - snap.bottom, 8, reason: 'the gap between frames');
+      await stop(tester);
+    });
+
     testWidgets('the magnet switches snapping; the grid button the grid', (
       tester,
     ) async {

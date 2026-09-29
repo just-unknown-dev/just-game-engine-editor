@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import '../../level_designer/ui_mode/ui_workspace.dart';
 import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
@@ -88,7 +87,6 @@ class PlayControlsToolbar extends StatelessWidget {
         play.elapsedSeconds,
         plugin.designer,
         plugin.sceneState.activeScene,
-        plugin.uiMode.enabled,
         plugin.showGamePreview,
         // A module button lit while its workspace is open (`isActive`) has
         // to hear the workspace open and close.
@@ -244,17 +242,6 @@ class PlayControlsToolbar extends StatelessWidget {
                 // Needs a scene: there is nothing to design into otherwise,
                 // and the session holds entity references from one.
                 onTap: hasScene ? plugin.toggleLevelDesigner : null,
-              ),
-              button(
-                Icons.phone_iphone,
-                hasScene
-                    ? 'Edit the interface drawn over this scene'
-                    : 'Interface — open a scene first',
-                EditorTheme.primaryBright,
-                isActive: plugin.uiMode.enabled.value,
-                onTap: hasScene
-                    ? () => plugin.scope.openWorkspace(BuiltInWorkspaces.ui)
-                    : null,
               ),
             ]),
             // ── What the modules add ───────────────────────────────────

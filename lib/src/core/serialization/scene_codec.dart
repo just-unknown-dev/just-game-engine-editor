@@ -1,12 +1,16 @@
 import 'package:just_game_engine/just_game_engine.dart';
 
+import 'unknown_components.dart';
+
 /// Encodes and decodes components for one editor, through the engine's
 /// definition registry.
 ///
 /// The same registry the shipped game loads with, so the editor and the game
 /// cannot disagree about what a saved level means. A component with no
 /// definition is not saved — the save path warns instead of silently writing
-/// something the game would then refuse to load.
+/// something the game would then refuse to load. A *saved* component with no
+/// definition is the other way round: it came from the file, so it is kept
+/// ([UnknownComponents]) and written back as it was.
 class SceneCodec {
   const SceneCodec(this.definitions);
 
@@ -25,7 +29,40 @@ class SceneCodec {
   Component? decode(Map<String, dynamic> json) => definitions.decode(json);
 
   /// Whether [component] would be saved.
-  bool canEncode(Component component) => definitions.canEncode(component);
+  bool canEncode(Component component) =>
+      component is UnknownComponents || definitions.canEncode(component);
+
+  /// Decodes an entity's saved components, in order.
+  ///
+  /// What no definition can read is not dropped: it is gathered, verbatim,
+  /// into one [UnknownComponents] so that [encodeAll] writes it back.
+  List<Component> decodeAll(Iterable<dynamic> json) {
+    final out = <Component>[];
+    final unknown = <Map<String, dynamic>>[];
+    for (final item in json) {
+      if (item is! Map) continue;
+      final map = item.cast<String, dynamic>();
+      final component = decode(map);
+      if (component != null) {
+        out.add(component);
+      } else {
+        unknown.add(map);
+      }
+    }
+    if (unknown.isNotEmpty) out.add(UnknownComponents(unknown));
+    return out;
+  }
+
+  /// Encodes [components] as a scene file stores them: the ones with a
+  /// definition through it, the [UnknownComponents] exactly as they were
+  /// read, and runtime-only state not at all.
+  List<Map<String, dynamic>> encodeAll(Iterable<Component> components) => [
+    for (final c in components)
+      if (c is UnknownComponents)
+        for (final entry in c.entries) Map<String, dynamic>.of(entry)
+      else
+        ?encode(c),
+  ];
 
   /// Encodes [entities] the way a scene file stores them.
   ///
@@ -36,14 +73,17 @@ class SceneCodec {
   List<Map<String, dynamic>> encodeEntities(
     List<Entity> entities, {
     List<EntityId>? rootOrder,
-  }) {
-    final active = _inTreeOrder(
-      entities.where((e) => e.isAlive).toList(),
-      rootOrder: rootOrder,
-    );
-    final names = {for (final e in active) e.id: e.name ?? 'entity_${e.id}'};
+  }) => encodeInOrder(
+    inTreeOrder(entities.where((e) => e.isAlive).toList(), rootOrder: rootOrder),
+  );
+
+  /// Encodes [ordered] as it stands, one record per entity in the same
+  /// order — for a caller that must keep each record beside its entity
+  /// (see [inTreeOrder] for the order a file wants).
+  List<Map<String, dynamic>> encodeInOrder(List<Entity> ordered) {
+    final names = {for (final e in ordered) e.id: e.name ?? 'entity_${e.id}'};
     return [
-      for (final e in active)
+      for (final e in ordered)
         {
           'name': e.name,
           // Left out when it is on, which is nearly always.
@@ -52,10 +92,7 @@ class SceneCodec {
             final id? => names[id],
             null => null,
           },
-          'components': e.components
-              .map(encode)
-              .whereType<Map<String, dynamic>>()
-              .toList(),
+          'components': encodeAll(e.components),
         },
     ];
   }
@@ -67,7 +104,7 @@ class SceneCodec {
   /// rebuilds each `ChildrenComponent` by walking the file. So a row whose
   /// buttons were dragged into a new order keeps it by being written in
   /// it.
-  static List<Entity> _inTreeOrder(
+  static List<Entity> inTreeOrder(
     List<Entity> entities, {
     List<EntityId>? rootOrder,
   }) {

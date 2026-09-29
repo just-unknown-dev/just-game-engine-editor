@@ -12,7 +12,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
-import 'package:just_game_engine_editor/src/core/theme/editor_metrics.dart';
 import 'package:just_game_engine_editor/src/core/theme/viewport_look.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/chrome/editor_chrome.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/settings/overlay_settings_store.dart';

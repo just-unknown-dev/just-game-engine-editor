@@ -7,12 +7,11 @@ import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_signals/just_signals.dart';
 
 import '../../../core/constants/editor_constants.dart';
-import '../../../core/theme/editor_metrics.dart';
 import '../../../core/prefs/editor_prefs.dart';
 import '../../../core/scope/editor_scope.dart';
 import '../../../extension/editor_contributions.dart';
 import '../../level_designer/commands/designer_command.dart';
-import '../shared/shared_widgets.dart';
+import '../../level_designer/panels/tool_palette.dart';
 import '../shared/transform_toolbar.dart';
 import 'overlay_settings_store.dart';
 import 'overlay_ui_settings.dart';
@@ -38,30 +37,34 @@ class SettingsGearButton extends StatelessWidget {
   final OverlayUiSettings settings;
 
   /// How tall it stands, for what has to clear it: the messages above it
-  /// and the tool strip.
+  /// and the tool strip. One of the strip's buttons in the strip's frame.
   static double heightFor(OverlayUiSettings settings) =>
-      PlayControlsToolbar.heightFor(settings);
+      FloatingToolFrame.heightFor(ToolStripButton.extent);
 
   @override
   Widget build(BuildContext context) {
     final bound = scope.commands.bindingsFor(EditorSettingsDialog.commandId);
-    final side = PlayControlsToolbar.buttonSize(settings);
     return SignalBuilder<bool>(
       signal: scope.chrome.settingsOpen,
+      // As wide as the tool strip above it, with the strip's button.
       builder: (context, open, _) => FloatingToolFrame(
         settings: settings,
-        horizontalPadding: EditorMetrics.space(3),
-        child: EditorToolButton(
-          icon: Icons.settings_outlined,
-          tooltip: 'Editor settings',
-          shortcut: bound.isEmpty ? null : bound.first.shortcut,
-          showShortcut: false,
-          activeBar: false,
-          isActive: open,
-          onTap: scope.chrome.toggleSettings,
-          width: side,
-          height: side,
-          iconSize: 16 * settings.effectiveTextScale,
+        child: SizedBox(
+          width: ToolPalette.width,
+          child: Padding(
+            padding: ToolStripButton.padding,
+            child: EditorToolButton(
+              icon: Icons.settings_outlined,
+              tooltip: 'Editor settings',
+              shortcut: bound.isEmpty ? null : bound.first.shortcut,
+              showShortcut: false,
+              isActive: open,
+              onTap: scope.chrome.toggleSettings,
+              width: double.infinity,
+              height: ToolStripButton.buttonHeight,
+              iconSize: ToolStripButton.iconSize,
+            ),
+          ),
         ),
       ),
     );

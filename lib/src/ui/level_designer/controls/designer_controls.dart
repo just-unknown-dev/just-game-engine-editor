@@ -47,33 +47,41 @@ class DesignerToggle extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(4),
-          child: Container(
+          // As big as its content, and at least 24 px: an aligned box
+          // grows to all the room it is given, which ran the lit fill from
+          // the top of the status bar to its foot.
+          child: ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 13,
-                  color: isOn
-                      ? EditorTheme.primaryBright
-                      : EditorTheme.textMuted,
-                ),
-                if (label != null) ...[
-                  const SizedBox(width: 4),
-                  Text(
-                    label!,
-                    style: TextStyle(
-                      fontSize: 11,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Center(
+                widthFactor: 1,
+                heightFactor: 1,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 13,
                       color: isOn
-                          ? EditorTheme.textBright
+                          ? EditorTheme.primaryBright
                           : EditorTheme.textMuted,
                     ),
-                  ),
-                ],
-              ],
+                    if (label != null) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        label!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isOn
+                              ? EditorTheme.textBright
+                              : EditorTheme.textMuted,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),

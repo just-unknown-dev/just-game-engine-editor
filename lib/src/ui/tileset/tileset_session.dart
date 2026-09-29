@@ -130,12 +130,13 @@ class TilesetSession {
 
   bool get isDirty => jsonEncode(_data.toJson()) != _saved;
 
-  String get title {
-    final name = path == null
-        ? 'New tileset'
-        : path!.substring(path!.lastIndexOf('/') + 1);
-    return isDirty ? '$name •' : name;
-  }
+  /// The file's name, or what a tileset not yet saved is called.
+  String get fileName => path == null
+      ? 'New tileset'
+      : path!.substring(path!.lastIndexOf('/') + 1);
+
+  /// [fileName], with a dot while there is work not saved.
+  String get title => isDirty ? '$fileName •' : fileName;
 
   void say(String text) => message.value = text;
 

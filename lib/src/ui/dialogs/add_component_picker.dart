@@ -7,6 +7,7 @@ import '../../core/theme/editor_metrics.dart';
 import '../../core/scope/editor_scope.dart';
 import '../../core/ecs/registry/component_registry.dart';
 import '../../core/state/editor_scene_state.dart';
+import '../level_designer/state/editor_history.dart';
 import '../level_designer/state/editor_commands.dart';
 import '../kit/kit.dart';
 
@@ -21,6 +22,7 @@ class AddComponentPicker extends StatefulWidget {
     required this.entity,
     required this.sceneState,
     required this.scope,
+    this.history,
   });
 
   final Entity entity;
@@ -28,6 +30,9 @@ class AddComponentPicker extends StatefulWidget {
   /// What can be added: the scope's definitions.
   final EditorScope scope;
   final EditorSceneState sceneState;
+
+  /// Where adding is recorded; the scene's history unless given.
+  final EditorHistory? history;
 
   @override
   State<AddComponentPicker> createState() => _AddComponentPickerState();
@@ -97,7 +102,7 @@ class _AddComponentPickerState extends State<AddComponentPicker>
 
   void _addComponent(ComponentEntry entry) {
     // Through the history, so an added component can be undone.
-    widget.scope.history.push(
+    (widget.history ?? widget.scope.history).push(
       AddComponentCommand(
         entity: widget.entity,
         component: entry.factory(),

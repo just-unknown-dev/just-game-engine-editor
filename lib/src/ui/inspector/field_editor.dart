@@ -1,10 +1,19 @@
 import 'package:flutter/widgets.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../../core/state/editor_scene_state.dart';
 import '../widgets/scrubbable_number_field.dart' show NumberScrubConfig;
 import 'field_rows.dart';
 
 /// Builds the inspector control for one field.
+/// What [component]'s unset colour field [field] falls back to, or null
+/// when this lookup has nothing to say about it.
+typedef InheritedColor =
+    ({Color color, String from})? Function(
+      jge.Component component,
+      String field,
+    );
+
 typedef FieldEditorBuilder = Widget Function(FieldEditorContext context);
 
 /// Everything a field editor is given: the field, its hint, the live value,
@@ -19,6 +28,8 @@ class FieldEditorContext {
     required this.editors,
     this.readOnly = false,
     this.entityNames,
+    this.world,
+    this.sceneState,
   });
 
   /// The definition field being edited: name, kind, limits, read/write.
@@ -46,6 +57,12 @@ class FieldEditorContext {
   /// The names of the scene's entities, for a field that refers to one.
   /// Null where there is no scene to ask.
   final List<String> Function()? entityNames;
+
+  /// The world the inspector is editing, and its selection, when that is
+  /// not the scene's — a screen in the interface editor. A field that
+  /// points at other entities looks them up here, not in the level.
+  final jge.World? world;
+  final EditorSceneState? sceneState;
 
   /// Label to show: the hint's, else the field name.
   String get label => hint.label ?? field.name;
@@ -100,6 +117,24 @@ class FieldEditorRegistry {
 
   final Map<String, FieldEditorBuilder> _byTypeId = {};
 
+  /// What an unset colour falls back to, asked in turn until one answers —
+  /// a theme's panel colour, say. Modules add theirs through
+  /// `EditorModule.inheritedColors`.
+  final List<InheritedColor> inheritedColors = [];
+
+  /// What [component]'s unset colour field [field] is drawn with, and what
+  /// to call that — or null when unset means none at all.
+  ({Color color, String from})? inheritedColor(
+    jge.Component component,
+    String field,
+  ) {
+    for (final lookup in inheritedColors) {
+      final found = lookup(component, field);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
   /// Registers [builder] for the field type with [typeId].
   void register(
     String typeId,
@@ -153,5 +188,8 @@ class FieldEditorRegistry {
   }
 
   /// Forgets every editor.
-  void clear() => _byTypeId.clear();
+  void clear() {
+    _byTypeId.clear();
+    inheritedColors.clear();
+  }
 }

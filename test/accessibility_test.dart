@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
-import 'package:just_game_engine_editor/src/core/theme/editor_metrics.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/settings/settings_controls.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/settings/settings_dialog.dart';
 

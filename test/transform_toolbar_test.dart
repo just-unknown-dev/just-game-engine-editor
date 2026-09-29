@@ -50,8 +50,9 @@ void main() {
         LayerComponent(mapLayer: 1),
         ParentComponent(parentId: map.id),
       ], name: 'Piece');
+      // Nothing to move, turn or scale: no transform at all.
       final label = world.createEntityWithComponents([
-        UiSlotComponent(),
+        HealthComponent(maxHealth: 1),
       ], name: 'Label');
 
       expect(

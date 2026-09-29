@@ -101,8 +101,14 @@ abstract class EditorModule {
   /// a custom section, a replacement editor for one field.
   List<ComponentEditorExtras> get componentExtras => const [];
 
-  /// Palette entries the draw and paint tools can place.
+  /// Palette entries the draw and paint tools can place — while this
+  /// module is the Level Designer (see [providesLevelDesigner]).
   List<PrefabDefinition> get prefabs => const [];
+
+  /// Palette entries every Level Designer offers, whichever module is
+  /// designing: beside the editor's own shapes, as the Interface module's
+  /// Text is. Offering them does not make this module a designer.
+  List<PrefabDefinition> get sharedPrefabs => const [];
 
   /// Viewport tools, built fresh for each designer session. Ids should be
   /// prefixed to avoid colliding with built-ins; reusing a built-in's id
@@ -222,6 +228,15 @@ abstract class EditorModule {
   /// Inspector sections after the component sections.
   List<InspectorSection> get inspectorSections => const [];
 
+  /// What an unset colour field falls back to, for the components this
+  /// module knows — so the inspector can show it rather than a blank.
+  List<InheritedColor> get inheritedColors => const [];
+
+  /// Endings of the JSON files this module owns (`.ui.json`), so the editor
+  /// never takes one for a sprite atlas — which is what it assumes of any
+  /// `.json` it does not recognise.
+  List<String> get dataFileSuffixes => const [];
+
   /// Called once per registration pass, after the built-ins are in place.
   void onRegister(EditorModuleContext context) {}
 
@@ -230,6 +245,13 @@ abstract class EditorModule {
 
   /// Called every editor tick.
   void onUpdate(double dt) {}
+
+  /// A file in the project changed — saved by a tool, dropped in from
+  /// outside. Whatever this module shows from it should show the new one.
+  void onAssetChanged(String path) {}
+
+  /// A play-test started (true) or stopped (false).
+  void onPlayStateChanged(bool playing) {}
 
   /// Called when the owning editor is disposed.
   void dispose() {}
@@ -287,5 +309,22 @@ class ModuleRegistry {
       m.dispose();
     }
     _modules.clear();
+  }
+}
+
+/// The data-file endings the registered modules declared; see
+/// [EditorModule.dataFileSuffixes]. Filled in by [EditorScope.reload], read
+/// by the checks that must tell a module's JSON from a sprite atlas.
+abstract final class ModuleDataFiles {
+  static final Set<String> _suffixes = {};
+
+  /// Every ending declared, lower case.
+  static Set<String> get suffixes => Set.unmodifiable(_suffixes);
+
+  /// Replaces the set — once per registration pass.
+  static void replace(Iterable<String> suffixes) {
+    _suffixes
+      ..clear()
+      ..addAll(suffixes.map((s) => s.toLowerCase()));
   }
 }

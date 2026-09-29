@@ -345,8 +345,8 @@ void main() {
       plugin.stop();
       expect(plugin.sceneState.canSelect(player), isFalse);
 
-      // The interface editor works on the HUDs, which are not on the map.
-      plugin.scope.openWorkspace(BuiltInWorkspaces.ui);
+      // A workspace over it works on something that is not on the map.
+      plugin.scope.openWorkspace(BuiltInWorkspaces.tileset);
       expect(plugin.sceneState.canSelect(player), isTrue);
       plugin.scope.closeWorkspace();
       expect(plugin.sceneState.canSelect(player), isFalse);

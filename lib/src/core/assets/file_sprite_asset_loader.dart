@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:flutter/services.dart' show ByteData, rootBundle;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:just_game_engine/just_game_engine.dart';
 
 /// Reads sprites from the project's files instead of the asset bundle.
@@ -92,16 +92,6 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
     return TimelineAsset.parse(await file.readAsString());
   }
 
-  /// A UI theme, from the project's files. `UiThemes` keeps what it loads
-  /// until it is evicted, so saving one in the theme editor shows.
-  Future<UiTheme> loadUiTheme(String path) async {
-    final file = _file(path);
-    if (!await file.exists()) {
-      return UiTheme.parse(await rootBundle.loadString(path));
-    }
-    return UiTheme.parse(await file.readAsString());
-  }
-
   /// A text file — a tileset, a tile map, a Tiled map — from the project's
   /// files, or the bundle when it is not one of them. What `TileAssets`
   /// reads through while the editor runs.
@@ -109,31 +99,6 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
     final file = _file(path);
     if (!await file.exists()) return rootBundle.loadString(path, cache: false);
     return file.readAsString();
-  }
-
-  /// A font file, from the project's files — so a font dropped into
-  /// `assets/fonts` works without a rebuild or a line in pubspec.yaml.
-  Future<ByteData> loadFontData(String path) async {
-    final file = _file(path);
-    if (!await file.exists()) return rootBundle.load(path);
-    final bytes = await file.readAsBytes();
-    return ByteData.sublistView(bytes);
-  }
-
-  /// Every font file in the project, by project-relative path.
-  ///
-  /// This is what lets a font dropped into `assets/fonts` be used with no
-  /// rebuild and no line in pubspec.yaml.
-  List<String> fontFiles([String folder = 'assets/fonts']) {
-    final directory = Directory('$root/$folder');
-    if (!directory.existsSync()) return const [];
-    const extensions = ['.ttf', '.otf', '.ttc'];
-    return [
-      for (final entry in directory.listSync(recursive: true))
-        if (entry is File)
-          if (extensions.any((e) => entry.path.toLowerCase().endsWith(e)))
-            entry.path.replaceAll(r'', '/').replaceFirst('$root/', ''),
-    ]..sort();
   }
 
   /// Forgets [path] — and, for an atlas, the sheet beside it, which was

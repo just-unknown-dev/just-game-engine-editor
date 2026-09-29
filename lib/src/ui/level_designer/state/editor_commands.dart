@@ -202,11 +202,7 @@ class CreateEntitiesCommand extends EditorCommand {
     final created = <jge.Entity>[];
 
     for (final spec in specs) {
-      final components = <jge.Component>[];
-      for (final json in spec.componentsJson) {
-        final component = spec.codec.decode(json);
-        if (component != null) components.add(component);
-      }
+      final components = spec.decode();
       if (components.isEmpty) continue;
 
       final entity = world.createEntityWithComponents(
@@ -273,11 +269,7 @@ class EntitySpec {
     SceneCodec codec, {
     jge.World? world,
   }) {
-    final json = <Map<String, dynamic>>[];
-    for (final component in entity.components) {
-      final encoded = codec.encode(component);
-      if (encoded != null) json.add(encoded);
-    }
+    final json = codec.encodeAll(entity.components);
     final parentId = entity.getComponent<jge.ParentComponent>()?.parentId;
     final parent = parentId == null ? null : world?.getEntity(parentId);
     return EntitySpec(
@@ -309,11 +301,9 @@ class EntitySpec {
   /// Turns [componentsJson] back into components: the scope's codec.
   final SceneCodec codec;
 
-  /// Decodes the components. Anything with no definition is left out,
-  /// exactly as a save would.
-  List<jge.Component> decode() => [
-    for (final json in componentsJson) ?codec.decode(json),
-  ];
+  /// Decodes the components. Anything with no definition is kept as it
+  /// was saved (`UnknownComponents`), exactly as a scene load does.
+  List<jge.Component> decode() => codec.decodeAll(componentsJson);
 
   /// Makes [entity] match this spec, in place.
   ///
@@ -481,11 +471,7 @@ class DeleteEntitiesCommand extends EditorCommand {
   void undo() {
     final restored = <jge.Entity>[];
     for (final spec in _specs) {
-      final components = <jge.Component>[];
-      for (final json in spec.componentsJson) {
-        final component = spec.codec.decode(json);
-        if (component != null) components.add(component);
-      }
+      final components = spec.decode();
       if (components.isEmpty) {
         restored.add(jge.Entity(-1));
         continue;

@@ -174,8 +174,10 @@ class TileGridOverlay extends DesignerOverlay {
     final state = scope.tiles;
     if (state.showCollision.value) _paintCollision(context);
     if (!_tileToolActive(context)) return;
-    final target = state.target(context.world);
-    final layer = target == null ? null : state.layerOf(target);
+    // Peek, never choose: choosing writes signals, and a paint that
+    // writes one schedules a build mid-frame.
+    final target = state.peek(context.world);
+    final layer = target == null ? null : state.peekLayer(target);
     if (target == null || layer == null) return;
     final draw = context.draw;
     final g = target.geometry;
@@ -317,8 +319,10 @@ class TileBrushOverlay extends DesignerOverlay {
   void paint(OverlayPaintContext context) {
     if (!_tileToolActive(context)) return;
     final state = scope.tiles;
-    final target = state.target(context.world);
-    final layer = target == null ? null : state.layerOf(target);
+    // Peek, never choose: choosing writes signals, and a paint that
+    // writes one schedules a build mid-frame.
+    final target = state.peek(context.world);
+    final layer = target == null ? null : state.peekLayer(target);
     if (target == null || layer == null) return;
     final draw = context.draw;
     final g = target.geometry;
@@ -406,8 +410,10 @@ class TileBrushOverlay extends DesignerOverlay {
     final state = scope.tiles;
     final cells = state.selection.value;
     if (cells.isEmpty || state.floating.isNotEmpty) return;
-    final target = state.target(context.world);
-    final layer = target == null ? null : state.layerOf(target);
+    // Peek, never choose: choosing writes signals, and a paint that
+    // writes one schedules a build mid-frame.
+    final target = state.peek(context.world);
+    final layer = target == null ? null : state.peekLayer(target);
     if (target == null || layer == null) return;
     final draw = context.draw;
     final bounds = TileSelectTool.cellsBounds(

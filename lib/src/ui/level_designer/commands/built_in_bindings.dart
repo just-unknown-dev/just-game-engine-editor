@@ -114,7 +114,6 @@ abstract final class BuiltInBindings {
       (LogicalKeyboardKey.keyF, 'search'),
       (LogicalKeyboardKey.keyH, 'history'),
       (LogicalKeyboardKey.keyE, 'problems'),
-      (LogicalKeyboardKey.keyU, 'uitheme'),
     ])
       KeyBinding(key, 'dock.open.$id', control: true, shift: true),
     const KeyBinding(LogicalKeyboardKey.keyS, 'editor.save', control: true),

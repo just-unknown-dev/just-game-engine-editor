@@ -36,8 +36,6 @@ import '../level_map/level_map_focus.dart';
 import '../level_map/level_map_provision.dart';
 import '../level_map/tile_commands.dart';
 import '../../ui/level_designer/state/editor_history.dart';
-import '../../ui/level_designer/ui_mode/ui_mode_session.dart';
-import '../../ui/level_designer/ui_mode/ui_workspace.dart';
 import '../../ui/level_designer/tools/level_tool.dart';
 import '../../ui/level_designer/tools/tiles/tile_tool_base.dart';
 import '../../ui/level_designer/tools/tool_registry.dart';
@@ -368,15 +366,10 @@ class JustGameEditorPlugin implements EnginePlugin {
     SpriteAssets.loader = spriteAssets;
     AnimatorAssets.loader = spriteAssets.loadGraph;
     TimelineAssets.loader = spriteAssets.loadTimeline;
-    UiThemes.loader = spriteAssets.loadUiTheme;
-    UiFonts.read = spriteAssets.loadFontData;
     TileAssets.readText = spriteAssets.readText;
     // Tile maps draw in the editor as in the game; their collision is built
     // only in a play-test (see _syncRuntimeSystems).
     registerLevelMapSystems(engine.world);
-    // The fonts in the project, so the text-style editor can offer them by
-    // name from the first inspector that opens.
-    unawaited(reloadFonts());
     registerSpriteSystems(engine.world);
     // While authoring, the output camera is the editor's view: the brain
     // keeps thinking but does not write to it. Play hands it over.
@@ -385,6 +378,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     keepsToLevelMap.addListener(_syncLevelMapFocus);
     _syncLevelMapFocus();
     playController.state.addListener(_focusGameOnPlay);
+    playController.state.addListener(_tellModulesPlayState);
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
     // Register game custom components and wire post-refresh re-registration.
@@ -438,14 +432,6 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   // ── Level Designer ────────────────────────────────────────────────────────
-
-  /// The UI mode: the viewport showing the scene's interface, on a device
-  /// frame, instead of the world.
-  ///
-  /// It needs no Level Designer — a HUD is built from the scene tree and
-  /// the inspector — so it keeps an undo stack of its own for the drags
-  /// made in it.
-  UiModeSession get uiMode => scope.uiMode;
 
   /// Undo for everything the editor does. The scope owns it; this is the
   /// name the rest of the editor reaches it by.
@@ -551,8 +537,9 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// Whether only the Level Map can be worked on: the Level Designer is
-  /// open and building, not play-testing, and no workspace — the
-  /// interface editor, say, which works on the HUDs — is open over it.
+  /// open and building, not play-testing, and no workspace — the tileset
+  /// or interface editor, which work on things off the map — is open over
+  /// it.
   late final Computed<bool> keepsToLevelMap = Computed(
     () =>
         designer.value != null &&
@@ -727,7 +714,6 @@ class JustGameEditorPlugin implements EnginePlugin {
     '.scene.json',
     '.animator.json',
     '.timeline.json',
-    '.uitheme.json',
     '.tileset.json',
     LevelMapFiles.suffix,
     LevelMapFiles.legacySuffix,
@@ -739,7 +725,8 @@ class JustGameEditorPlugin implements EnginePlugin {
   static bool isSpriteAtlasPath(String path) {
     final p = path.toLowerCase().replaceAll('\\', '/');
     if (!p.endsWith('.json') || p == 'scenes.json') return false;
-    return !dataJsonSuffixes.any(p.endsWith);
+    return !dataJsonSuffixes.any(p.endsWith) &&
+        !ModuleDataFiles.suffixes.any(p.endsWith);
   }
 
   /// Whether dropping [path] on the viewport makes something: an image, a
@@ -952,8 +939,6 @@ class JustGameEditorPlugin implements EnginePlugin {
       reloadAnimators(path);
     } else if (lower.endsWith('.timeline.json')) {
       reloadTimelines(path);
-    } else if (lower.endsWith('.uitheme.json')) {
-      reloadUiThemes(path);
     } else if (lower.endsWith('.tileset.json') ||
         LevelMapFiles.isMapFile(lower) ||
         lower.endsWith('.tmx') ||
@@ -961,18 +946,21 @@ class JustGameEditorPlugin implements EnginePlugin {
         lower.endsWith('.tsx') ||
         lower.endsWith('.tsj')) {
       reloadLevelMaps(path);
-    } else if (lower.endsWith('.ttf') ||
-        lower.endsWith('.otf') ||
-        lower.endsWith('.ttc')) {
-      reloadFonts(path);
     } else if (isSpriteAtlasPath(path)) {
       reloadSprites(path);
     } else if (lower.endsWith('.json')) {
       // Some other data file: nothing a sprite shows.
-    } else {
+    } else if (!_isFont(lower)) {
       reloadSprites();
     }
+    // And whatever a module shows from it — a theme, a font, a screen.
+    for (final module in scope.modules.all) {
+      module.onAssetChanged(path);
+    }
   }
+
+  static bool _isFont(String lower) =>
+      lower.endsWith('.ttf') || lower.endsWith('.otf') || lower.endsWith('.ttc');
 
   /// An animator graph changed on disk: animators running it start over
   /// with the new one.
@@ -1003,37 +991,6 @@ class JustGameEditorPlugin implements EnginePlugin {
     for (final system in engine.world.systems) {
       if (system is TimelineSystem) system.reload(timelinePath);
     }
-  }
-
-  /// A UI theme changed on disk: every canvas drawn with it is restyled on
-  /// the next frame, without reopening the scene.
-  Future<void> reloadUiThemes([String? themePath]) async {
-    UiThemes.evict(themePath);
-    final paths = <String>{
-      ?themePath,
-      for (final entity in engine.world.query([UiCanvasComponent]))
-        if (entity.getComponent<UiCanvasComponent>()!.theme.isNotEmpty)
-          entity.getComponent<UiCanvasComponent>()!.theme,
-    };
-    for (final path in paths) {
-      await UiThemes.load(path);
-    }
-    for (final entity in engine.world.query([UiCanvasComponent])) {
-      entity.getComponent<UiCanvasComponent>()!.markDirty();
-    }
-  }
-
-  /// A font file appeared or changed: load it so the inspector offers it
-  /// and anything using it redraws with it.
-  ///
-  /// Without a path, everything in `assets/fonts` — which is how a font
-  /// dropped into the project becomes available with no rebuild and no
-  /// line in pubspec.yaml.
-  Future<void> reloadFonts([String? fontPath]) async {
-    UiFonts.reset();
-    await UiFonts.loadAll(
-      fontPath != null ? [fontPath] : spriteAssets.fontFiles(),
-    );
   }
 
   // Systems that must not run on the scene being edited:
@@ -1071,6 +1028,18 @@ class JustGameEditorPlugin implements EnginePlugin {
           scope.activeWorkspace.value == null &&
           designer.value?.controller.activeTool?.group == ToolGroups.tiles,
     );
+  }
+
+  /// Play started or stopped: modules that show something only in a
+  /// play-test — the game's screens — follow it.
+  bool _modulesThinkPlaying = false;
+  void _tellModulesPlayState() {
+    final playing = playController.state.value != EditorPlayState.stopped;
+    if (playing == _modulesThinkPlaying) return;
+    _modulesThinkPlaying = playing;
+    for (final module in scope.modules.all) {
+      module.onPlayStateChanged(playing);
+    }
   }
 
   void _focusGameOnPlay() {
@@ -1489,25 +1458,13 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// Puts the viewport on [entity] — what double-clicking a row in the
   /// scene tree does.
   ///
-  /// A piece of interface is nowhere in the world, so for one of those the
-  /// interface editor opens instead, where it *is* somewhere. A HUD is
-  /// the door to it: a canvas sits in the world and has a transform, but
-  /// putting the camera on it would show nothing worth seeing.
   void focusOn(Entity entity) {
     if (entity.hasComponent<LevelMapComponent>()) {
       designLevelMap(entity);
       return;
     }
-    if (entity.getComponent<UiCanvasComponent>() != null) {
-      scope.openWorkspace(BuiltInWorkspaces.ui);
-      sceneState.selectEntity(entity);
-      return;
-    }
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) {
-      if (entity.getComponent<UiSlotComponent>() != null) {
-        scope.openWorkspace(BuiltInWorkspaces.ui);
-      }
       sceneState.selectEntity(entity);
       return;
     }
@@ -1853,6 +1810,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     isAuthoring.removeListener(_syncCameraOwnership);
     keepsToLevelMap.removeListener(_syncLevelMapFocus);
     playController.state.removeListener(_focusGameOnPlay);
+    playController.state.removeListener(_tellModulesPlayState);
     if (identical(SpriteAssets.loader, spriteAssets)) {
       SpriteAssets.loader = _previousSpriteLoader ?? BundleSpriteAssetLoader();
       AnimatorAssets.useBundle();

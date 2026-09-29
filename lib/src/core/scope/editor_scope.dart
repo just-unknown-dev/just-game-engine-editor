@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:just_di/just_di.dart';
 import 'package:just_game_engine/just_game_engine.dart';
@@ -38,8 +40,7 @@ import '../state/editor_view_state.dart';
 import '../level_map/tile_edit_state.dart';
 import '../level_map/level_map_documents.dart';
 import '../level_map/level_map_provision.dart';
-import '../../ui/level_designer/ui_mode/ui_mode_session.dart';
-import '../../ui/level_designer/ui_mode/ui_workspace.dart';
+import '../../ui/tileset/built_in_workspaces.dart';
 import '../../extension/built_in_camera_contributions.dart';
 import '../../extension/tiled_object_mapper.dart';
 import '../../extension/built_in_tile_contributions.dart';
@@ -144,10 +145,6 @@ class EditorScope {
           camera: _mainCamera,
           onChanged: sceneState.refresh,
         ),
-      )
-      ..registerLazySingleton<UiModeSession>(
-        () => UiModeSession(world: () => this.world),
-        dispose: (u) => u.dispose(),
       )
       ..registerLazySingleton<LevelMapDocuments>(
         () =>
@@ -347,16 +344,57 @@ class EditorScope {
 
   /// Opens the workspace called [id], on [path] if given. False when no
   /// module provides it.
+  ///
+  /// Over an open workspace with unsaved work, the open one is asked first
+  /// (see [setWorkspaceCloseGuard]); it opens only if that one agrees.
   bool openWorkspace(String id, {String? path}) {
     for (final w in workspaces) {
       if (w.id != id) continue;
+      final open = activeWorkspace.value;
+      final guard = _closeGuard;
+      final replacing =
+          open != null && (open.definition.id != id || open.path != path);
+      if (guard != null && replacing) {
+        unawaited(() async {
+          if (!await guard()) return;
+          _clearCloseGuard();
+          activeWorkspace.value = OpenWorkspace(w, path);
+        }());
+        return true;
+      }
+      if (replacing) _clearCloseGuard();
       activeWorkspace.value = OpenWorkspace(w, path);
-      // The interface editor's own flag follows the workspace, so the
-      // buttons that light up when it is open have one thing to read.
-      uiMode.enabled.value = id == BuiltInWorkspaces.ui;
       return true;
     }
     return false;
+  }
+
+  Future<bool> Function()? _closeGuard;
+  OpenWorkspace? _closeGuardOf;
+
+  /// What the open workspace wants asked before it goes — "save your
+  /// changes?" — or null to go without asking. Closing or replacing the
+  /// workspace clears it.
+  ///
+  /// [of] is the workspace asking; the open one when null. Clearing is
+  /// only ever for its own: a workspace let go after another has opened
+  /// in its place does not take the new one's question with it.
+  void setWorkspaceCloseGuard(
+    Future<bool> Function()? guard, {
+    OpenWorkspace? of,
+  }) {
+    final owner = of ?? activeWorkspace.value;
+    if (guard == null && !identical(owner, _closeGuardOf)) return;
+    _closeGuard = guard;
+    _closeGuardOf = guard == null ? null : owner;
+  }
+
+  /// Closes the open workspace once its guard agrees. True when it closed.
+  Future<bool> requestCloseWorkspace() async {
+    final guard = _closeGuard;
+    if (guard != null && !await guard()) return false;
+    closeWorkspace();
+    return true;
   }
 
   /// Opens whichever workspace best fits [path]'s ending. False when none
@@ -376,9 +414,17 @@ class EditorScope {
     return openWorkspace(best.id, path: path);
   }
 
+  /// Closes the open workspace at once. A workspace calls this itself once
+  /// it has asked about its own unsaved work; anything else closing one
+  /// goes through [requestCloseWorkspace].
   void closeWorkspace() {
+    _clearCloseGuard();
     activeWorkspace.value = null;
-    uiMode.enabled.value = false;
+  }
+
+  void _clearCloseGuard() {
+    _closeGuard = null;
+    _closeGuardOf = null;
   }
 
   /// Module buttons appended after the built-in toolbar, by order.
@@ -530,11 +576,6 @@ class EditorScope {
     return e.cameraSystem.mainCamera;
   }
 
-  /// The interface editor's state — which screen it is showing, what is
-  /// snapped to, where each node landed. On the scope because a
-  /// workspace is built from one: its builder gets nothing else.
-  UiModeSession get uiMode => container.get<UiModeSession>();
-
   /// The tile maps being edited: in the scene or in their own files, what
   /// has changed, saving. On the scope because tools, panels, the inspector
   /// and the save all reach it.
@@ -585,6 +626,7 @@ class EditorScope {
     final context = EditorModuleContext(scope: this, isDebug: _isDebug);
     for (final module in modules.all) {
       fieldEditors.registerAll(module.fieldEditors, override: true);
+      fieldEditors.inheritedColors.addAll(module.inheritedColors);
       extras.registerAll(module.componentExtras);
       commands.registerAll(module.commands, override: true);
       commands.bindAll(module.keyBindings);
@@ -603,6 +645,9 @@ class EditorScope {
       module.themePresets.forEach(theme.register);
       module.onRegister(context);
     }
+    ModuleDataFiles.replace([
+      for (final module in modules.all) ...module.dataFileSuffixes,
+    ]);
     // The bindings are as built: the keys changed in the settings go over
     // them, on this and every later rebuild.
     commands.markBuilt();
@@ -647,6 +692,9 @@ class EditorScope {
     _grid = const SquareGrid();
     prefabs.clear();
     BuiltInPrefabs.registerAll(prefabs);
+    for (final module in modules.all) {
+      prefabs.registerAll(module.sharedPrefabs);
+    }
     layers.clear();
     layers.registerAll(LayerPresetRegistry.builtIn);
     for (final module in designerModules) {

@@ -21,7 +21,6 @@ void main() {
       BuiltInPrefabs.rectangleId,
       BuiltInPrefabs.circleId,
       BuiltInPrefabs.spriteId,
-      BuiltInPrefabs.textId,
       BuiltInPrefabs.emptyId,
       BuiltInPrefabs.solidId,
       BuiltInPrefabs.triggerId,

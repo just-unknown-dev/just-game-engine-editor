@@ -95,6 +95,35 @@ class EditorHistory {
   /// Raised whenever the stack changes, so the viewport can repaint.
   final Signal<int> revision = Signal(0, debugLabel: 'undoRevision');
 
+  /// Whether what is applied differs from what was last saved — see
+  /// [markSaved]. Undoing back to the save reads clean again.
+  final Signal<bool> dirty = Signal(false, debugLabel: 'historyDirty');
+
+  /// The command on top when [markSaved] was called — null for an empty
+  /// stack — so the document is clean exactly when that is on top again.
+  EditorCommand? _savedTop;
+
+  /// Whether the next push must stand alone; see [breakMerge].
+  bool _noMerge = false;
+
+  /// Records that what is applied now is what was saved.
+  ///
+  /// Nothing is folded into the command on top afterwards: merged, it would
+  /// be a different state wearing the saved one's name.
+  void markSaved() {
+    _savedTop = _undoStack.isEmpty ? null : _undoStack.last;
+    _publish();
+  }
+
+  /// Makes the next command its own undo step, whatever it would have merged
+  /// with. Called when a new gesture begins — a drag, a nudge — so two drags
+  /// of the same thing undo as two, while one drag stays one.
+  void breakMerge() => _noMerge = true;
+
+  // Merging into the saved state would change it without moving off it.
+  bool _mayMergeInto(EditorCommand top) =>
+      !_noMerge && !identical(top, _savedTop);
+
   /// True while [undo] or [redo] is running.
   ///
   /// Mutation funnels check this and skip recording, so replaying a command
@@ -118,12 +147,15 @@ class EditorHistory {
       // A new action makes the redo branch unreachable — standard linear undo.
       _redoStack.clear();
 
-      if (_undoStack.isNotEmpty && _undoStack.last.mergeWith(command)) {
+      if (_undoStack.isNotEmpty &&
+          _mayMergeInto(_undoStack.last) &&
+          _undoStack.last.mergeWith(command)) {
         // Absorbed into the previous command; nothing new to stack.
       } else {
         _undoStack.add(command);
         if (_undoStack.length > _capacity) _undoStack.removeAt(0);
       }
+      _noMerge = false;
 
       _publish();
     });
@@ -137,10 +169,13 @@ class EditorHistory {
     if (_isApplying) return;
     batch(() {
       _redoStack.clear();
-      if (_undoStack.isEmpty || !_undoStack.last.mergeWith(command)) {
+      if (_undoStack.isEmpty ||
+          !_mayMergeInto(_undoStack.last) ||
+          !_undoStack.last.mergeWith(command)) {
         _undoStack.add(command);
         if (_undoStack.length > _capacity) _undoStack.removeAt(0);
       }
+      _noMerge = false;
       _publish();
     });
   }
@@ -217,6 +252,10 @@ class EditorHistory {
     canRedo.value = _redoStack.isNotEmpty;
     nextUndoLabel.value = _undoStack.isEmpty ? null : _undoStack.last.label;
     nextRedoLabel.value = _redoStack.isEmpty ? null : _redoStack.last.label;
+    dirty.value = !identical(
+      _undoStack.isEmpty ? null : _undoStack.last,
+      _savedTop,
+    );
     revision.value = revision.value + 1;
   }
 
@@ -233,5 +272,6 @@ class EditorHistory {
     nextUndoLabel.dispose();
     nextRedoLabel.dispose();
     revision.dispose();
+    dirty.dispose();
   }
 }

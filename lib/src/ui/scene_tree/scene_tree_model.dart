@@ -198,7 +198,6 @@ abstract final class SceneTreeModel {
     TreeFilter filter = TreeFilter.none,
     Set<jge.EntityId>? authored,
     Set<jge.EntityId> withProblems = const {},
-    TreeContents contents = TreeContents.world,
     jge.LevelMapData? Function(jge.Entity entity)? mapOf,
     Set<(jge.EntityId, int)> expandedLayers = const {},
   }) {
@@ -241,41 +240,17 @@ abstract final class SceneTreeModel {
       claimed.add(entity.id);
     }
 
-    // A HUD is edited in the interface editor, not here: in the world's
-    // tree a canvas is a leaf, and in the interface editor's tree the
-    // canvases are the roots, wherever in the world they hang.
-    final canvases = <jge.EntityId>{
-      for (final entity in live.values)
-        if (entity.getComponent<jge.UiCanvasComponent>() != null) entity.id,
-    };
-    if (contents == TreeContents.world) {
-      for (final id in canvases) {
-        childrenOf.remove(id);
-      }
-    }
-
     // The roots: what the editor's order says first, then anything else.
     final roots = <jge.Entity>[];
-    if (contents == TreeContents.ui) {
-      for (final id in rootOrder) {
-        if (canvases.contains(id)) roots.add(live[id]!);
-      }
-      for (final entity in live.values) {
-        if (!canvases.contains(entity.id)) continue;
-        if (roots.any((r) => r.id == entity.id)) continue;
-        roots.add(entity);
-      }
-    } else {
-      for (final id in rootOrder) {
-        final entity = live[id];
-        if (entity == null || claimed.contains(id)) continue;
-        roots.add(entity);
-      }
-      for (final entity in live.values) {
-        if (claimed.contains(entity.id)) continue;
-        if (roots.any((r) => r.id == entity.id)) continue;
-        roots.add(entity);
-      }
+    for (final id in rootOrder) {
+      final entity = live[id];
+      if (entity == null || claimed.contains(id)) continue;
+      roots.add(entity);
+    }
+    for (final entity in live.values) {
+      if (claimed.contains(entity.id)) continue;
+      if (roots.any((r) => r.id == entity.id)) continue;
+      roots.add(entity);
     }
 
     final filtering = !filter.isEmpty;
@@ -412,10 +387,3 @@ abstract final class SceneTreeModel {
     return SceneTree(rows: rows, runtimeAt: runtimeAt);
   }
 }
-
-/// Which tree this is: the world's, or the interface editor's.
-///
-/// One model builds both. The world's tree stops at a UI canvas — what is
-/// inside a HUD is the interface editor's business — and the interface
-/// editor's tree starts there.
-enum TreeContents { world, ui }

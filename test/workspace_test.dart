@@ -64,11 +64,11 @@ class _PaintModule extends EditorModule {
 void main() {
   test('a module lists workspaces; a file opens in the one that fits best', () {
     final scope = testScope(modules: [_PaintModule()]);
-    // The interface and tileset editors are the editor's own workspaces
-    // and are always there; the module's come after them.
+    // The tileset editor is the editor's own workspace and is always
+    // there; the module's come after it.
     expect(
       [for (final w in scope.workspaces) w.id],
-      [BuiltInWorkspaces.ui, BuiltInWorkspaces.tileset, 'paint', 'graph'],
+      [BuiltInWorkspaces.tileset, 'paint', 'graph'],
     );
     expect(scope.activeWorkspace.value, isNull);
 
@@ -98,7 +98,7 @@ void main() {
     scope.reload();
     expect(
       [for (final w in scope.workspaces) w.id],
-      [BuiltInWorkspaces.ui, BuiltInWorkspaces.tileset],
+      [BuiltInWorkspaces.tileset],
       reason: "only the editor's own are left",
     );
     expect(scope.activeWorkspace.value, isNull);
@@ -106,11 +106,14 @@ void main() {
 
   test("a reload leaves the editor's own workspace open", () {
     final scope = testScope(modules: [_PaintModule()]);
-    expect(scope.openWorkspace(BuiltInWorkspaces.ui), isTrue);
+    expect(scope.openWorkspace(BuiltInWorkspaces.tileset), isTrue);
 
     scope.reload();
 
-    expect(scope.activeWorkspace.value?.definition.id, BuiltInWorkspaces.ui);
+    expect(
+      scope.activeWorkspace.value?.definition.id,
+      BuiltInWorkspaces.tileset,
+    );
   });
 
   test('asset actions say which files they are for', () {
@@ -293,5 +296,75 @@ void main() {
       scope.openWorkspace('graph');
       expect(scope.workspaceFullScreen.value, isTrue, reason: 'still filled');
     });
+  });
+
+  group('unsaved work in a workspace', () {
+    test('its question is asked before another opens over it', () async {
+      final scope = testScope(modules: [_PaintModule()]);
+      scope.openWorkspace('paint', path: 'a.png');
+      var answer = false;
+      var asked = 0;
+      scope.setWorkspaceCloseGuard(() async {
+        asked++;
+        return answer;
+      });
+
+      scope.openWorkspace('graph');
+      await Future<void>.delayed(Duration.zero);
+      expect(asked, 1);
+      expect(scope.activeWorkspace.value!.definition.id, 'paint');
+
+      answer = true;
+      scope.openWorkspace('graph');
+      await Future<void>.delayed(Duration.zero);
+      expect(scope.activeWorkspace.value!.definition.id, 'graph');
+
+      // Its question went with it.
+      scope.openWorkspace('paint');
+      expect(asked, 2);
+      expect(scope.activeWorkspace.value!.definition.id, 'paint');
+    });
+
+    test(
+      'closing through the editor asks; the workspace itself does not',
+      () async {
+        final scope = testScope(modules: [_PaintModule()]);
+        scope.openWorkspace('paint');
+        scope.setWorkspaceCloseGuard(() async => false);
+
+        expect(await scope.requestCloseWorkspace(), isFalse);
+        expect(scope.activeWorkspace.value, isNotNull);
+
+        scope.closeWorkspace();
+        expect(scope.activeWorkspace.value, isNull);
+      },
+    );
+
+    test(
+      'one let go late never clears the question of the one after it',
+      () async {
+        final scope = testScope(modules: [_PaintModule()]);
+        scope.openWorkspace('paint', path: 'a.png');
+        final first = scope.activeWorkspace.value!;
+        scope.setWorkspaceCloseGuard(() async => true, of: first);
+
+        scope.openWorkspace('paint', path: 'b.png');
+        await Future<void>.delayed(Duration.zero);
+        final second = scope.activeWorkspace.value!;
+        expect(second.path, 'b.png');
+
+        // The new one is built — and asks — before the old one is disposed.
+        var asked = false;
+        scope.setWorkspaceCloseGuard(() async {
+          asked = true;
+          return false;
+        }, of: second);
+        scope.setWorkspaceCloseGuard(null, of: first);
+
+        expect(await scope.requestCloseWorkspace(), isFalse);
+        expect(asked, isTrue);
+        expect(scope.activeWorkspace.value, same(second));
+      },
+    );
   });
 }

@@ -353,9 +353,6 @@ Size? _sizeFromComponent(Component component) {
     );
     return Size(rect.width, rect.height);
   }
-  if (component is UIComponent) {
-    return component.size;
-  }
   if (component is PhysicsBodyComponent) {
     final rect = component.shape.getBounds(Offset.zero);
     return Size(rect.width, rect.height);

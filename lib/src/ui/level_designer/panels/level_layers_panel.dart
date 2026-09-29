@@ -521,9 +521,7 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
     final base = (entity.name ?? 'entity').replaceFirst(RegExp(r'_\d+$'), '');
     return EntitySpec(
       name: session.uniqueName(base),
-      componentsJson: [
-        for (final c in components) ?session.scope.codec.encode(c),
-      ],
+      componentsJson: session.scope.codec.encodeAll(components),
       codec: session.scope.codec,
       parentName: spec.parentName,
     );

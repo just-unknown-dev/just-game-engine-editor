@@ -107,4 +107,116 @@ void main() {
     // What _saveScene writes while playing.
     expect(snapshot.entities, beforePlay);
   });
+
+  group('the tree comes back as it was', () {
+    /// Hangs [child] under [parent], both ends, at [dx] from it.
+    void link(Entity child, Entity parent, {double dx = 0}) {
+      child.addComponent(
+        ParentComponent(parentId: parent.id, localOffset: Vector3(dx, 0, 0)),
+      );
+      if (!parent.hasComponent<ChildrenComponent>()) {
+        parent.addComponent(ChildrenComponent());
+      }
+      parent.getComponent<ChildrenComponent>()!.addChild(child.id);
+    }
+
+    String? parentOf(Entity e) => switch (e
+        .getComponent<ParentComponent>()
+        ?.parentId) {
+      final id? => world.getEntity(id)?.name,
+      null => null,
+    };
+
+    Map<String?, String?> tree() => {
+      for (final e in world.entities) e.name: parentOf(e),
+    };
+
+    test('an entity made last but filed early does not shift the rest', () {
+      // Made in one order, filed in another: the snapshot once took ids in
+      // the first and records in the second, so stopping play gave every
+      // entity after the late one its neighbour's name, components and
+      // place in the tree. level_01's menus were scrambled exactly so.
+      final map = _block(world, 'Map', 0);
+      final early = _block(world, 'Early', 0);
+      link(early, map);
+      final hud = world.createEntityWithComponents([
+        HealthComponent(maxHealth: 1),
+      ], name: 'Hud');
+      final coins = world.createEntityWithComponents([
+        HealthComponent(maxHealth: 2),
+      ], name: 'Coins');
+      link(coins, hud);
+      final late = _block(world, 'Late', 40);
+      link(late, map, dx: -144);
+
+      final snapshot = PlaySnapshot.capture(world, scope.codec);
+      snapshot.restoreInto(world);
+
+      expect(tree(), {
+        'Map': null,
+        'Early': 'Map',
+        'Hud': null,
+        'Coins': 'Hud',
+        'Late': 'Map',
+      });
+      // Every id kept its own record.
+      expect([hud.name, coins.name, late.name], ['Hud', 'Coins', 'Late']);
+      expect(coins.getComponent<HealthComponent>()!.maxHealth, 2);
+      expect(map.getComponent<ChildrenComponent>()!.childIds, [
+        early.id,
+        late.id,
+      ]);
+      expect(hud.getComponent<ChildrenComponent>()!.childIds, [coins.id]);
+      expect(late.getComponent<ParentComponent>()!.localOffset.x, -144);
+    });
+
+    test('links play changed are put back', () {
+      final a = _block(world, 'A', 0);
+      final b = _block(world, 'B', 0);
+      link(b, a, dx: 8);
+      final c = _block(world, 'C', 0);
+      final snapshot = PlaySnapshot.capture(world, scope.codec);
+
+      // Play cuts B loose and hangs C under A.
+      b.removeComponentByType(ParentComponent);
+      a.getComponent<ChildrenComponent>()!.removeChild(b.id);
+      link(c, a);
+      snapshot.restoreInto(world);
+
+      expect(tree(), {'A': null, 'B': 'A', 'C': null});
+      expect(a.getComponent<ChildrenComponent>()!.childIds, [b.id]);
+      expect(b.getComponent<ParentComponent>()!.localOffset.x, 8);
+      expect(c.hasComponent<ChildrenComponent>(), isFalse);
+    });
+
+    test('a child play destroyed comes back under its parent', () {
+      final a = _block(world, 'A', 0);
+      final b = _block(world, 'B', 0);
+      link(b, a);
+      final snapshot = PlaySnapshot.capture(world, scope.codec);
+
+      world.destroyEntity(b);
+      snapshot.restoreInto(world);
+
+      final back = world.findEntityByName('B')!;
+      expect(parentOf(back), 'A');
+      expect(a.getComponent<ChildrenComponent>()!.childIds, [back.id]);
+    });
+
+    test('an id handed out again during play does not keep what play made', () {
+      final a = _block(world, 'A', 0);
+      final b = _block(world, 'B', 0);
+      link(b, a);
+      final snapshot = PlaySnapshot.capture(world, scope.codec);
+
+      // Everything goes and ids start again: the new entity gets A's id.
+      world.destroyAllEntities();
+      final impostor = _block(world, 'Runtime', 0);
+      expect(impostor.id, a.id);
+      snapshot.restoreInto(world);
+
+      expect(world.findEntityByName('Runtime'), isNull);
+      expect(tree(), {'A': null, 'B': 'A'});
+    });
+  });
 }

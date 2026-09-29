@@ -275,7 +275,6 @@ abstract final class BuiltInCommands {
       ('history', 'History'),
       ('animator', 'Animator'),
       ('search', 'Search the scene'),
-      ('uitheme', 'Theme'),
     ])
       DesignerCommand(
         id: 'dock.open.$id',

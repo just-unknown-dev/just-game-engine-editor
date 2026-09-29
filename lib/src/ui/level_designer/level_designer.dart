@@ -61,7 +61,4 @@ export 'tools/tiles/tile_tool_base.dart';
 export 'tools/tool_registry.dart';
 export 'tools/level_tool.dart';
 export 'state/editor_history.dart';
-export 'ui_mode/ui_device.dart';
-export 'ui_mode/ui_mode_overlay.dart';
-export 'ui_mode/ui_mode_session.dart';
-export 'ui_mode/ui_workspace.dart';
+export '../tileset/built_in_workspaces.dart';

@@ -35,6 +35,7 @@ class TilesetEditor extends StatefulWidget {
     this.onSaved,
     this.fullScreen,
     this.onToggleFullScreen,
+    this.setCloseGuard,
     this.loadImage,
     this.readText,
     this.writeText,
@@ -58,6 +59,10 @@ class TilesetEditor extends StatefulWidget {
   final ValueListenable<bool>? fullScreen;
   final VoidCallback? onToggleFullScreen;
 
+  /// Where to leave the question to ask before the editor opens something
+  /// else over this; see [WorkspaceContext.setCloseGuard].
+  final void Function(Future<bool> Function()? guard)? setCloseGuard;
+
   // Seams for tests.
   final TilesetImageLoader? loadImage;
   final TilesetTextReader? readText;
@@ -71,7 +76,6 @@ class TilesetEditorState extends State<TilesetEditor> {
   TilesetSession? _session;
   String? _error;
   bool _creating = false;
-  final FocusNode _focus = FocusNode(debugLabel: 'TilesetEditor');
   VoidCallback? _stopMessages;
   String? _toast;
   Timer? _toastTimer;
@@ -97,6 +101,7 @@ class TilesetEditorState extends State<TilesetEditor> {
   @override
   void initState() {
     super.initState();
+    widget.setCloseGuard?.call(_mayLeave);
     final path = widget.path;
     if (path == null || !path.toLowerCase().endsWith('.tileset.json')) {
       _creating = true;
@@ -163,10 +168,10 @@ class TilesetEditorState extends State<TilesetEditor> {
 
   @override
   void dispose() {
+    widget.setCloseGuard?.call(null);
     _toastTimer?.cancel();
     _stopMessages?.call();
     _session?.dispose();
-    _focus.dispose();
     super.dispose();
   }
 
@@ -201,29 +206,22 @@ class TilesetEditorState extends State<TilesetEditor> {
     }
   }
 
+  /// Whether it is fine to go: nothing unsaved, or the author said what
+  /// to do with it.
+  Future<bool> _mayLeave() => mayLeaveUnsaved(
+    context,
+    dirty: _session?.isDirty ?? false,
+    title: 'Save changes to this tileset?',
+    save: save,
+  );
+
   Future<void> close() async {
-    final s = _session;
-    if (s != null && s.isDirty) {
-      final choice = await askToSaveChanges(
-        context,
-        title: 'Save changes to this tileset?',
-      );
-      if (choice == null) return;
-      if (choice == UnsavedChoice.save && !await save()) return;
-    }
-    widget.onClose?.call();
+    if (await _mayLeave()) widget.onClose?.call();
   }
 
-  static bool get _isTyping {
-    final context = FocusManager.instance.primaryFocus?.context;
-    if (context == null) return false;
-    return context.widget is EditableText ||
-        context.findAncestorWidgetOfExactType<EditableText>() != null;
-  }
-
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+  KeyEventResult _onKey(KeyEvent event) {
     final s = _session;
-    if (s == null || event is! KeyDownEvent || _isTyping) {
+    if (s == null || event is! KeyDownEvent) {
       return KeyEventResult.ignored;
     }
     final keys = HardwareKeyboard.instance;
@@ -361,7 +359,7 @@ class TilesetEditorState extends State<TilesetEditor> {
     if (_creating) {
       return Column(
         children: [
-          _barShell(title: 'Tileset Editor', children: const []),
+          _barShell(),
           Expanded(
             child: CreateTilesetForm(
               root: widget.root,
@@ -398,104 +396,63 @@ class TilesetEditorState extends State<TilesetEditor> {
         ),
       );
     }
-    return Focus(
-      focusNode: _focus,
-      autofocus: true,
-      onKeyEvent: _onKey,
-      child: Listener(
-        onPointerDown: (_) {
-          if (!_isTyping) _focus.requestFocus();
-        },
-        child: Material(
-          color: EditorTheme.panelBg,
-          child: SignalConsumer(
-            signals: [s.revision, s.selection, s.image],
-            builder: (context, _) => Column(
-              children: [
-                _bar(s),
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: _grid(s)),
-                      VerticalDivider(width: 1, color: EditorTheme.border),
-                      SizedBox(width: 310, child: _inspector(s)),
-                    ],
-                  ),
+    return WorkspaceKeyScope(
+      onKey: _onKey,
+      child: Material(
+        color: EditorTheme.panelBg,
+        child: SignalConsumer(
+          signals: [s.revision, s.selection, s.image],
+          builder: (context, _) => Column(
+            children: [
+              _bar(s),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: _grid(s)),
+                    VerticalDivider(width: 1, color: EditorTheme.border),
+                    SizedBox(width: 310, child: _inspector(s)),
+                  ],
                 ),
-                _messageLine(
-                  _toast ??
-                      '${s.data.columns} × ${s.data.rows} tiles of '
-                          '${s.data.tileWidth} × ${s.data.tileHeight} px · '
-                          'Shift+click a range, Ctrl+click to add, drag a block',
-                ),
-              ],
-            ),
+              ),
+              _messageLine(
+                _toast ??
+                    '${s.data.columns} × ${s.data.rows} tiles of '
+                        '${s.data.tileWidth} × ${s.data.tileHeight} px · '
+                        'Shift+click a range, Ctrl+click to add, drag a block',
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _barShell({required String title, required List<Widget> children}) =>
-      Container(
-        height: 34,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          color: EditorTheme.surfaceDark,
-          border: Border(bottom: BorderSide(color: EditorTheme.border)),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.grid_view, size: 15, color: EditorTheme.primary),
-            const SizedBox(width: 6),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: EditorTheme.textBright,
-              ),
-            ),
-            const SizedBox(width: 12),
-            ...children,
-            const Spacer(),
-            if (widget.fullScreen != null && widget.onToggleFullScreen != null)
-              ValueListenableBuilder<bool>(
-                valueListenable: widget.fullScreen!,
-                builder: (context, full, _) => _BarButton(
-                  icon: full ? Icons.fullscreen_exit : Icons.fullscreen,
-                  tooltip: full ? 'Back to a window' : 'Fill the editor',
-                  onTap: widget.onToggleFullScreen,
-                ),
-              ),
-            if (widget.onClose != null)
-              _BarButton(icon: Icons.close, tooltip: 'Close', onTap: close),
-          ],
-        ),
-      );
+  static const String _title = 'Tileset Editor';
 
-  Widget _bar(TilesetSession s) => _barShell(
-    title: s.title,
-    children: [
-      _BarButton(
-        icon: Icons.save_outlined,
-        tooltip: 'Save  (Ctrl+S)',
-        isOn: s.isDirty,
-        onTap: save,
-      ),
-      _BarButton(
-        icon: Icons.undo,
-        tooltip: 'Undo  (Ctrl+Z)',
-        onTap: s.canUndo ? s.undo : null,
-      ),
-      _BarButton(
-        icon: Icons.redo,
-        tooltip: 'Redo  (Ctrl+Y)',
-        onTap: s.canRedo ? s.redo : null,
-      ),
-      const SizedBox(width: 12),
-      _BarButton(
+  /// The header while an image is being cut into a new tileset.
+  Widget _barShell() => WorkspaceHeader(
+    icon: Icons.grid_view,
+    title: _title,
+    showHistory: false,
+    fullScreen: widget.fullScreen,
+    onToggleFullScreen: widget.onToggleFullScreen,
+    onClose: widget.onClose == null ? null : close,
+  );
+
+  Widget _bar(TilesetSession s) => WorkspaceHeader(
+    icon: Icons.grid_view,
+    title: _title,
+    file: s.fileName,
+    dirty: s.isDirty,
+    onSave: save,
+    onUndo: s.canUndo ? s.undo : null,
+    onRedo: s.canRedo ? s.redo : null,
+    fullScreen: widget.fullScreen,
+    onToggleFullScreen: widget.onToggleFullScreen,
+    onClose: widget.onClose == null ? null : close,
+    tools: [
+      EditorIconButton(
         icon: Icons.zoom_out,
         tooltip: 'Smaller',
         onTap: () => setState(() => _zoom = (_zoom / 1.5).clamp(0.5, 8)),
@@ -508,29 +465,29 @@ class TilesetEditorState extends State<TilesetEditor> {
           style: TextStyle(fontSize: 11, color: EditorTheme.textSecondary),
         ),
       ),
-      _BarButton(
+      EditorIconButton(
         icon: Icons.zoom_in,
         tooltip: 'Larger',
         onTap: () => setState(() => _zoom = (_zoom * 1.5).clamp(0.5, 8)),
       ),
       const SizedBox(width: 12),
-      _BarButton(
+      EditorIconButton(
         icon: Icons.border_outer,
         tooltip: 'Show collision on the tiles',
-        isOn: _showCollision,
+        isActive: _showCollision,
         onTap: () => setState(() => _showCollision = !_showCollision),
       ),
       const SizedBox(width: 12),
-      _BarButton(
+      EditorIconButton(
         icon: Icons.grid_on,
         tooltip: 'Tiles: collision, animation and properties',
-        isOn: !_terrainMode,
+        isActive: !_terrainMode,
         onTap: () => _setTerrainMode(false),
       ),
-      _BarButton(
+      EditorIconButton(
         icon: Icons.landscape_outlined,
         tooltip: 'Terrains: which corners and edges of which tiles are which',
-        isOn: _terrainMode,
+        isActive: _terrainMode,
         onTap: () => _setTerrainMode(true),
       ),
     ],
@@ -765,41 +722,6 @@ class _Warning extends StatelessWidget {
           ),
         ),
       ],
-    ),
-  );
-}
-
-class _BarButton extends StatelessWidget {
-  const _BarButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-    this.isOn = false,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onTap;
-  final bool isOn;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: Padding(
-        padding: const EdgeInsets.all(5),
-        child: Icon(
-          icon,
-          size: 16,
-          color: onTap == null
-              ? EditorTheme.textMuted.withValues(alpha: 0.4)
-              : isOn
-              ? EditorTheme.primaryBright
-              : EditorTheme.textSecondary,
-        ),
-      ),
     ),
   );
 }

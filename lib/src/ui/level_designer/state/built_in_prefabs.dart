@@ -30,7 +30,6 @@ abstract final class BuiltInPrefabs {
   static const String rectangleId = 'builtin.rectangle';
   static const String circleId = 'builtin.circle';
   static const String spriteId = 'builtin.sprite';
-  static const String textId = 'builtin.text';
   static const String emptyId = 'builtin.empty';
   static const String solidId = 'builtin.solid';
   static const String triggerId = 'builtin.trigger';
@@ -63,7 +62,6 @@ abstract final class BuiltInPrefabs {
     _rectangle,
     _circle,
     _sprite,
-    _text,
     _empty,
     _solid,
     _trigger,
@@ -151,22 +149,6 @@ abstract final class BuiltInPrefabs {
       // otherwise a freshly placed sprite is an invisible entity.
       _rect(size, shapeColor, filled: false),
       jge.SpriteComponent(spritePath: ''),
-    ],
-  );
-
-  static final _text = PrefabDefinition(
-    id: textId,
-    name: 'Text',
-    category: 'Shapes',
-    icon: Icons.text_fields,
-    color: shapeColor,
-    placement: PrefabPlacement.point,
-    defaultSize: const Size(160, 32),
-    description: 'A text label.',
-    namePrefix: 'Text',
-    build: (position, size) => [
-      ..._base(position),
-      jge.TextComponent(text: 'Text', size: size),
     ],
   );
 

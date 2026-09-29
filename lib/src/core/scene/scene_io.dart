@@ -171,10 +171,11 @@ class SceneIO {
       for (final item in entityList) {
         final entityData = item as Map<String, dynamic>;
         final entityName = entityData['name'] as String?;
-        final components = (entityData['components'] as List<dynamic>? ?? [])
-            .map((c) => scope.codec.decode(c as Map<String, dynamic>))
-            .whereType<Component>()
-            .toList();
+        // Anything no definition can read is kept as it was, so a save
+        // cannot quietly delete it.
+        final components = scope.codec.decodeAll(
+          entityData['components'] as List<dynamic>? ?? const [],
+        );
         if (components.isNotEmpty) {
           final made = world.createEntityWithComponents(
             components,

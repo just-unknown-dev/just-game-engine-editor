@@ -200,7 +200,7 @@ class FullEditorChrome extends StatelessWidget {
             gameInsets.bottom +
             gearMargin +
             SettingsGearButton.heightFor(settings) +
-            (quickSnap ? QuickSnapBar.heightFor(settings) + 6 : 0) +
+            (quickSnap ? QuickSnapBar.heightFor(settings) + 8 : 0) +
             8;
         // The same frame as the toolbar above it: radius, border, padding.
         plugin.gamePreviewStyle = GamePreviewStyle(
@@ -280,7 +280,8 @@ class FullEditorChrome extends StatelessWidget {
                 children: [
                   if (quickSnap) ...[
                     QuickSnapBar(scope: plugin.scope, settings: settings),
-                    const SizedBox(height: 6),
+                    // The gap between the frames of the column above.
+                    const SizedBox(height: 8),
                   ],
                   SettingsGearButton(scope: plugin.scope, settings: settings),
                 ],
@@ -333,6 +334,8 @@ class FullEditorChrome extends StatelessWidget {
                           fullScreen: plugin.scope.workspaceFullScreen,
                           onToggleFullScreen:
                               plugin.scope.toggleWorkspaceFullScreen,
+                          setCloseGuard: (guard) => plugin.scope
+                              .setWorkspaceCloseGuard(guard, of: open),
                         ),
                       ),
               ),

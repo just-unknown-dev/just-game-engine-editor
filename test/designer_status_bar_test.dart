@@ -57,6 +57,52 @@ void main() {
     expect(chosen, 64);
   });
 
+  testWidgets('its toggles sit inside the bar, apart from each other', (
+    tester,
+  ) async {
+    final world = World()..initialize();
+    addTearDown(world.dispose);
+    final session = LevelDesignerSession(
+      scope: testScope(world: world),
+      uniqueName: (p) => p,
+      onDuplicate: () {},
+      onDelete: () {},
+      onArray: (_, _) {},
+      readModifiers: () => const ModifierKeys(),
+    );
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: SizedBox(
+              height: DesignerStatusBar.height,
+              child: DesignerStatusBar(
+                session: session,
+                gridSize: 32,
+                onGridSizeChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final bar = tester.getRect(find.byType(DesignerStatusBar));
+    Rect toggle(String label) => tester.getRect(
+      find
+          .ancestor(of: find.text(label), matching: find.byType(Material))
+          .first,
+    );
+    final snap = toggle('Snap');
+    final smart = toggle('Smart');
+    // Not edge to edge: room above and below the lit fill.
+    expect(snap.top - bar.top, greaterThanOrEqualTo(4));
+    expect(bar.bottom - snap.bottom, greaterThanOrEqualTo(4));
+    expect(smart.left - snap.right, greaterThanOrEqualTo(6));
+  });
+
   testWidgets('a crowded bar in a narrow window does not overflow', (
     tester,
   ) async {

@@ -150,9 +150,16 @@ class WorkspaceContext {
     this.reloadAssets,
     this.fullScreen,
     this.onToggleFullScreen,
+    this.setCloseGuard,
   });
 
   final EditorScope scope;
+
+  /// Registers what to ask before the workspace goes — "save your
+  /// changes?" — when another is opened over it; null clears it. A
+  /// workspace with unsaved work sets one, and asks the same itself before
+  /// calling [onClose].
+  final void Function(Future<bool> Function()? guard)? setCloseGuard;
 
   /// Whether the workspace fills the editor right now, for a button that
   /// shows which way it will go. Null where the host has no such choice.

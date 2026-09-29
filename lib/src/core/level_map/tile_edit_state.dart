@@ -81,7 +81,9 @@ class TileEditState {
   /// shows as it is. A view, not an edit: called each frame.
   void syncHighlight(World world, {required bool active}) {
     final on = active && highlightLayer.value;
-    final mapId = mapEntityId.value;
+    // The map the tools would paint — the chosen one, else the level's own —
+    // found without choosing it, as the overlays find it.
+    final mapId = on ? peek(world)?.entity.id : null;
     for (final entity in world.query([LevelMapComponent])) {
       final runtime = entity.getComponent<LevelMapComponent>()?.runtime;
       if (runtime == null) continue;

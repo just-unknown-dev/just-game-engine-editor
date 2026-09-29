@@ -10,21 +10,52 @@ import '../serialization/scene_codec.dart';
 /// in place and the next save wrote it into the level — including the player
 /// play had spawned.
 class PlaySnapshot {
-  PlaySnapshot._(this.ids, this.entities, this.existing, this.codec);
+  PlaySnapshot._(
+    this._records,
+    this.entities,
+    this._existing,
+    this.existing,
+    this.codec,
+  );
 
   /// Captures every authored entity in [world], through [codec].
   factory PlaySnapshot.capture(World world, SceneCodec codec) {
-    final authoredEntities = authored(world);
+    // In the order a scene file is written — parents first — and encoded in
+    // that same order, so each record stays beside the entity it was taken
+    // from. Taking the entities in world order and the records in file order
+    // paired them wrongly as soon as the two differed (an entity made late
+    // but placed early), and stopping play then gave every entity after it
+    // its neighbour's name, components and place in the tree.
+    final ordered = SceneCodec.inTreeOrder(authored(world));
+    final encoded = codec.encodeInOrder(ordered);
+    final indexOf = <EntityId, int>{
+      for (var i = 0; i < ordered.length; i++) ordered[i].id: i,
+    };
+    final records = <_Record>[];
+    for (var i = 0; i < ordered.length; i++) {
+      final entity = ordered[i];
+      final parentId = entity.getComponent<ParentComponent>()?.parentId;
+      final parentIndex = parentId == null ? null : indexOf[parentId];
+      records.add(
+        _Record(
+          entity: entity,
+          json: encoded[i],
+          parentIndex: parentIndex,
+          // Parented to something play does not put back (a generated
+          // entity): that link is left alone.
+          outsideParent: parentId != null && parentIndex == null,
+        ),
+      );
+    }
+    final alive = world.entities.where((e) => e.isAlive).toList();
     return PlaySnapshot._(
-      [for (final e in authoredEntities) e.id],
-      codec.encodeEntities(authoredEntities),
-      {
-        // Everything that was there when play began — a transform query
-        // left every piece of interface out, and the tree then listed a
-        // HUD as something the running game had spawned.
-        for (final e in world.entities)
-          if (e.isAlive) e.id,
-      },
+      records,
+      encoded,
+      Set<Entity>.identity()..addAll(alive),
+      // Everything that was there when play began — a transform query
+      // left every piece of interface out, and the tree then listed a
+      // HUD as something the running game had spawned.
+      {for (final e in alive) e.id},
       codec,
     );
   }
@@ -48,8 +79,10 @@ class PlaySnapshot {
   static bool isGenerated(Entity entity) =>
       entity.hasComponent<GeneratedEntityComponent>();
 
+  final List<_Record> _records;
+
   /// Ids of the authored entities, parallel to [entities].
-  final List<EntityId> ids;
+  List<EntityId> get ids => [for (final r in _records) r.entity.id];
 
   /// The authored entities encoded exactly as a scene file stores them —
   /// which is also what a save during play writes.
@@ -57,6 +90,12 @@ class PlaySnapshot {
 
   /// Every entity that existed when play started, authored or not. Only
   /// entities outside this set are removed on restore.
+  ///
+  /// Held by identity: ids are handed out again once an entity is
+  /// destroyed, so an id alone could keep something play made.
+  final Set<Entity> _existing;
+
+  /// The ids of [_existing], for the scene tree's runtime divider.
   final Set<EntityId> existing;
 
   /// The codec the snapshot was taken with; restores decode through it.
@@ -70,59 +109,128 @@ class PlaySnapshot {
   /// physics body bound to it all stay valid. Only entities play destroyed are
   /// recreated, and only entities play created are removed.
   int restoreInto(World world) {
-    final kept = <EntityId>{};
-    final byName = <String, Entity>{};
-
-    for (var i = 0; i < ids.length; i++) {
-      final json = entities[i];
-      final name = json['name'] as String?;
-      final componentsJson = (json['components'] as List)
+    final restored = <Entity>[];
+    for (final record in _records) {
+      final name = record.json['name'] as String?;
+      final componentsJson = (record.json['components'] as List)
           .cast<Map<String, dynamic>>();
-      var entity = world.getEntity(ids[i]);
-      if (entity != null && entity.isAlive) {
-        EntitySpec(
-          name: name,
-          componentsJson: componentsJson,
-          codec: codec,
-        ).applyTo(entity);
-        // On again unless the scene says it is switched off: play may
-        // have disabled it, but being off is the author's choice.
-        entity.isActive = json['enabled'] != false;
+      final spec = EntitySpec(
+        name: name,
+        componentsJson: componentsJson,
+        codec: codec,
+      );
+      var entity = record.entity;
+      if (world.isEntityAlive(entity)) {
+        spec.applyTo(entity);
       } else {
-        entity = world.createEntityWithComponents(
-          EntitySpec(
-            name: name,
-            componentsJson: componentsJson,
-            codec: codec,
-          ).decode(),
-          name: name,
-        );
-        entity.isActive = json['enabled'] != false;
+        entity = world.createEntityWithComponents(spec.decode(), name: name);
       }
-      kept.add(entity.id);
-      if (name != null) byName[name] = entity;
+      // On again unless the scene says it is switched off: play may
+      // have disabled it, but being off is the author's choice.
+      entity.isActive = record.json['enabled'] != false;
+      restored.add(entity);
     }
 
+    final kept = Set<Entity>.identity()..addAll(restored);
     for (final e in world.entities.toList()) {
-      if (!kept.contains(e.id) && !existing.contains(e.id)) {
-        world.destroyEntity(e);
-      }
+      if (!kept.contains(e) && !_existing.contains(e)) world.destroyEntity(e);
     }
 
-    // Parents are stored by name; re-link as openScene does.
-    for (final json in entities) {
-      final parentName = json['parentName'] as String?;
-      final child = byName[json['name'] as String?];
-      final parent = parentName == null ? null : byName[parentName];
-      if (child == null || parent == null) continue;
-      child.getComponent<ParentComponent>()?.parentId = parent.id;
-      if (!parent.hasComponent<ChildrenComponent>()) {
-        parent.addComponent(ChildrenComponent());
-      }
-      final children = parent.getComponent<ChildrenComponent>()!;
-      if (!children.childIds.contains(child.id)) children.addChild(child.id);
-    }
-
-    return ids.length;
+    _relink(world, restored, kept);
+    return restored.length;
   }
+
+  /// Rebuilds every restored entity's place in the tree from the records.
+  ///
+  /// `applyTo` leaves an entity's links as they are, so this is the only
+  /// place they are put back: a parent the record has is set (and made, with
+  /// the record's local offset, where the entity has none); one it lacks is
+  /// removed; and each parent lists its restored children in record order —
+  /// the order a save writes them in — followed by any child play did not
+  /// own that still hangs from it.
+  void _relink(World world, List<Entity> restored, Set<Entity> kept) {
+    for (var i = 0; i < _records.length; i++) {
+      final record = _records[i];
+      final entity = restored[i];
+      final parentIndex = record.parentIndex;
+      if (parentIndex != null) {
+        final link = _savedLink(record) ?? ParentComponent();
+        link.parentId = restored[parentIndex].id;
+        entity.addComponent(link);
+      } else if (!record.outsideParent &&
+          entity.hasComponent<ParentComponent>()) {
+        entity.removeComponentByType(ParentComponent);
+      }
+    }
+
+    final childrenOf = <int, List<Entity>>{};
+    for (var i = 0; i < _records.length; i++) {
+      final parentIndex = _records[i].parentIndex;
+      if (parentIndex != null) {
+        (childrenOf[parentIndex] ??= []).add(restored[i]);
+      }
+    }
+    for (var i = 0; i < restored.length; i++) {
+      final parent = restored[i];
+      final previous = parent.getComponent<ChildrenComponent>()?.childIds;
+      final ids = [
+        for (final child in childrenOf[i] ?? const <Entity>[]) child.id,
+        // Children play did not put back — a generated collision body —
+        // that are still here and still point at this parent.
+        for (final id in previous ?? const <EntityId>[])
+          if (world.getEntity(id) case final other?
+              when !kept.contains(other) &&
+                  other.getComponent<ParentComponent>()?.parentId == parent.id)
+            id,
+      ];
+      if (ids.isEmpty) {
+        if (previous != null) {
+          parent.removeComponentByType(ChildrenComponent);
+        }
+        continue;
+      }
+      final children = parent.getComponent<ChildrenComponent>();
+      if (children == null) {
+        parent.addComponent(ChildrenComponent()..childIds.addAll(ids));
+      } else {
+        children.childIds
+          ..clear()
+          ..addAll(ids);
+      }
+    }
+  }
+
+  /// The parent link the record was saved with — its local offset and turn —
+  /// or null where it saved none.
+  ParentComponent? _savedLink(_Record record) {
+    for (final json in (record.json['components'] as List)
+        .cast<Map<String, dynamic>>()) {
+      if (json['type'] != 'ParentComponent') continue;
+      final decoded = codec.decode(json);
+      if (decoded is ParentComponent) return decoded;
+    }
+    return null;
+  }
+}
+
+/// One authored entity as play found it.
+class _Record {
+  const _Record({
+    required this.entity,
+    required this.json,
+    required this.parentIndex,
+    required this.outsideParent,
+  });
+
+  /// The entity the record was taken from, by identity.
+  final Entity entity;
+
+  /// The entity as a scene file stores it.
+  final Map<String, dynamic> json;
+
+  /// The record index of its parent, or null for a root.
+  final int? parentIndex;
+
+  /// Whether its parent is something the snapshot does not hold.
+  final bool outsideParent;
 }

@@ -38,8 +38,6 @@ class SceneTreePanel extends StatefulWidget {
     this.controller,
     this.authored,
     this.onFocusEntity,
-    this.onCreateUi,
-    this.contents = TreeContents.world,
     this.isHidden,
     this.isLocked,
     this.onToggleHidden,
@@ -61,12 +59,6 @@ class SceneTreePanel extends StatefulWidget {
 
   /// Puts the viewport on an entity — what double-clicking a row does.
   final void Function(jge.Entity entity)? onFocusEntity;
-
-  /// Makes a piece of interface of the given kind.
-  final void Function(String kind)? onCreateUi;
-
-  /// The world's tree, or the interface editor's own.
-  final TreeContents contents;
 
   final bool Function(jge.Entity entity)? isHidden;
   final bool Function(jge.Entity entity)? isLocked;
@@ -242,12 +234,9 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
       expanded: _tree.expanded.value,
       filter: _tree.filter.value,
       authored: widget.authored,
-      contents: widget.contents,
-      // A level map's layers and shapes, under it — the world's tree only.
-      mapOf: widget.contents == TreeContents.world
-          ? (entity) => entity.hasComponent<jge.LevelMapComponent>()
-                ? widget.scope.mapDocs.resolve(entity)?.data
-                : null
+      // A level map's layers and shapes, under it.
+      mapOf: (entity) => entity.hasComponent<jge.LevelMapComponent>()
+          ? widget.scope.mapDocs.resolve(entity)?.data
           : null,
       expandedLayers: _tree.expandedLayers.value,
       withProblems: _tree.filter.value.problems
@@ -280,22 +269,14 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         title: filtered ? 'Nothing matches' : 'Nothing in the scene yet',
         hint: filtered
             ? 'Clear the search or the filters to see everything again.'
-            : widget.contents == TreeContents.ui
-            ? 'Make a piece of interface with the button above.'
             : 'Make the first entity here, or drag an image in from Assets.',
-        actionLabel: filtered
-            ? 'Clear'
-            : widget.contents == TreeContents.ui
-            ? null
-            : 'Create an entity',
+        actionLabel: filtered ? 'Clear' : 'Create an entity',
         actionIcon: filtered ? Icons.clear_rounded : Icons.add_rounded,
         onAction: filtered
             ? () {
                 _search.clear();
                 _tree.filter.value = TreeFilter.none;
               }
-            : widget.contents == TreeContents.ui
-            ? null
             : widget.entities.createEntity,
       );
     }
@@ -331,12 +312,9 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   Widget _rowList(SceneTree tree) {
     return DragTarget<List<jge.Entity>>(
       // Dropped past the last row: out of everything, to the top level —
-      // which in the interface tree is no place at all, so there a drop
-      // on nothing does nothing.
-      // Nor while the Level Designer keeps to its Level Map: the top level
-      // is outside it.
-      onWillAcceptWithDetails: (_) =>
-          widget.contents != TreeContents.ui && _reaches(null),
+      // but not while the Level Designer keeps to its Level Map: the top
+      // level is outside it.
+      onWillAcceptWithDetails: (_) => _reaches(null),
       onAcceptWithDetails: (details) {
         if (_dragOver != null) return;
         widget.entities.reparentAll(details.data, null);
@@ -457,7 +435,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     return _Draggable(
       entity: entity,
       selection: selection,
-      enabled: reachable && _canDrag(selection),
+      enabled: reachable,
       onEnded: () => setState(() {
         _cancelPendingRename();
         _dragOver = null;
@@ -709,40 +687,17 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   /// Dropping *into* and dropping *between* are the same move with a
   /// different destination, so both go through one command: a drag that
   /// moved three things undoes as one drag.
-  /// Whether [entity] is a HUD — a canvas, which lives in the world and
-  /// is only the root of what the interface tree shows.
-  bool _isCanvas(jge.Entity entity) =>
-      entity.getComponent<jge.UiCanvasComponent>() != null;
-
-  /// Whether these rows can be dragged at all.
-  ///
-  /// A HUD belongs to the world: where it sits among the world's entities
-  /// is the world tree's business, and in here it is only ever the root
-  /// of a screen's contents.
-  bool _canDrag(List<jge.Entity> dragged) =>
-      widget.contents != TreeContents.ui || !dragged.any(_isCanvas);
-
   /// Whether this row could take [dragged] at all, wherever on it the
   /// pointer happens to be.
   bool _canAccept(List<jge.Entity> dragged, jge.Entity onto) =>
-      !dragged.any((e) => e.id == onto.id) &&
-      _canDrag(dragged) &&
-      _sceneState.canSelect(onto);
+      !dragged.any((e) => e.id == onto.id) && _sceneState.canSelect(onto);
 
   /// What a drop at [zone] on [onto] actually means.
   ///
-  /// Beside a HUD would mean beside it in the world, which would take the
-  /// interface out of every screen there is — so in the interface tree
-  /// the edges of a HUD's row mean *into* it, which is the only thing
-  /// they could sensibly mean.
-  ///
-  /// And beside something whose parent is out of reach would take what
-  /// is dropped out of reach too — beside the Level Map, while designing,
-  /// is the top level, outside it — so there the edges mean into it.
+  /// Beside something whose parent is out of reach would take what is
+  /// dropped out of reach too — beside the Level Map, while designing, is
+  /// the top level, outside it — so there the edges mean into it.
   DropZone _zoneFor(jge.Entity onto, DropZone zone) {
-    if (widget.contents == TreeContents.ui && _isCanvas(onto)) {
-      return DropZone.onto;
-    }
     if (zone != DropZone.onto && !_reaches(_parentOf(onto))) {
       return DropZone.onto;
     }
@@ -778,8 +733,6 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         ? _sceneState.rootOrder(_world)
         : parent.getComponent<jge.ChildrenComponent>()?.childIds ??
               const <jge.EntityId>[];
-    // Nothing in the interface tree belongs at the world's top level.
-    if (parent == null && widget.contents == TreeContents.ui) return;
     // Beside something on a map layer is on that layer too.
     final mapLayer = parent?.hasComponent<jge.LevelMapComponent>() ?? false
         ? onto.getComponent<jge.LayerComponent>()?.mapLayer
@@ -1112,12 +1065,11 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
     child: Row(
       children: [
-        // The title gives way first: in the interface editor this panel
-        // is 264 wide, and the buttons and the count are the parts worth
-        // keeping whole.
+        // The title gives way first: the buttons and the count are the
+        // parts worth keeping whole in a narrow panel.
         Expanded(
           child: Text(
-            widget.contents == TreeContents.ui ? 'INTERFACE' : 'SCENE TREE',
+            'SCENE TREE',
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: EditorTheme.primaryBright,
@@ -1132,8 +1084,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         const SizedBox(width: 4),
         // Its own builder, or it says what was true when the panel was
         // last rebuilt for some other reason. Flexible so that a narrow
-        // panel — the interface editor's is 264 — shortens it instead of
-        // overflowing the row.
+        // panel shortens it instead of overflowing the row.
         Flexible(
           flex: 0,
           child: SignalConsumer(
@@ -1151,14 +1102,6 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
           ),
         ),
         const SizedBox(width: 4),
-        if (widget.onCreateUi != null)
-          Builder(
-            builder: (context) => _HeaderButton(
-              icon: Icons.widgets_outlined,
-              tooltip: 'Create UI',
-              onPressed: () => _showCreateUiMenu(context),
-            ),
-          ),
         // Making a thing and gathering things are different jobs; they
         // used to sit in one undifferentiated cluster.
         Container(
@@ -1172,14 +1115,11 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
           tooltip: 'Group the selection',
           onPressed: widget.entities.groupSelection,
         ),
-        // A plain entity means nothing inside a HUD: it would sit in the
-        // interface tree carrying no interface and doing nothing.
-        if (widget.contents != TreeContents.ui)
-          _HeaderButton(
-            icon: Icons.add_rounded,
-            tooltip: 'Create an entity',
-            onPressed: widget.entities.createEntity,
-          ),
+        _HeaderButton(
+          icon: Icons.add_rounded,
+          tooltip: 'Create an entity',
+          onPressed: widget.entities.createEntity,
+        ),
       ],
     ),
   );
@@ -1224,8 +1164,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   /// Why most of the tree has gone faint: the Level Designer is open and
   /// only its Level Map can be worked on. Nothing when all of it can.
   Widget _reachNote() {
-    if (_sceneState.selectable.value == null ||
-        widget.contents != TreeContents.world) {
+    if (_sceneState.selectable.value == null) {
       return const SizedBox.shrink();
     }
     return Padding(
@@ -1244,27 +1183,6 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         ],
       ),
     );
-  }
-
-  Future<void> _showCreateUiMenu(BuildContext context) async {
-    final box = context.findRenderObject() as RenderBox?;
-    final at = box == null
-        ? Offset.zero
-        : box.localToGlobal(box.size.bottomLeft(Offset.zero));
-    final items = <PopupMenuEntry<String>>[];
-    var group = '';
-    for (final option in UiCreateOptions.all) {
-      if (option.group != group) {
-        if (items.isNotEmpty) items.add(editorMenuDivider());
-        items.add(editorMenuHeading<String>(option.group));
-        group = option.group;
-      }
-      items.add(
-        editorMenuItem<String>(option.id, option.label, icon: option.icon),
-      );
-    }
-    final chosen = await showEditorMenu<String>(context, at, items);
-    if (chosen != null) widget.onCreateUi?.call(chosen);
   }
 
   Future<void> _showMenu(

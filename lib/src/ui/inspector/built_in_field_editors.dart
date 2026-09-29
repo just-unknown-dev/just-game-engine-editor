@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../widgets/scrubbable_number_field.dart' show NumberScrubConfig;
-import 'ui_field_editors.dart';
+import 'edge_insets_row.dart';
 import 'field_editor.dart';
 import 'field_rows.dart';
 import 'physics_shape_editor.dart';
@@ -33,105 +33,9 @@ abstract final class BuiltInFieldEditors {
     jge.FieldTypes.color.id: _color,
     jge.FieldTypes.shapePaintStyle.id: _shapePaintStyle,
     jge.FieldTypes.physicsShape.id: (c) => PhysicsShapeEditor(ctx: c),
-    jge.FieldTypes.uiTextStyle.id: _uiTextStyle,
-    jge.FieldTypes.uiActions.id: _uiActions,
     jge.FieldTypes.edgeInsets.id: _edgeInsets,
-    jge.FieldTypes.uiAnchor.id: _uiAnchor,
-    jge.FieldTypes.uiText.id: _uiText,
-    jge.FieldTypes.uiStyleRole.id: _uiStyleRole,
-    jge.FieldTypes.uiColorRole.id: _uiColorRole,
     jge.FieldTypes.unknown.id: _readonly,
   };
-
-  /// Which of the theme's colours this element is drawn in.
-  ///
-  /// The palette's roles, plus whatever the scene already says — a game may
-  /// name a colour of its own, and opening the inspector must never quietly
-  /// rewrite it.
-  static Widget _uiColorRole(FieldEditorContext c) {
-    final current = c.value as String? ?? '';
-    if (c.readOnly) return ReadonlyRow(label: c.label, value: current);
-    return DropdownEditorRow(
-      label: c.label,
-      value: current.isEmpty ? jge.UiPalette.roles.first : current,
-      options: [
-        ...jge.UiPalette.roles,
-        if (current.isNotEmpty && !jge.UiPalette.roles.contains(current))
-          current,
-      ],
-      allowCustom: true,
-      onChanged: c.onChanged,
-    );
-  }
-
-  /// Which of the theme's text styles this element reads as.
-  ///
-  /// A name the theme does not carry stays listed — a game may name a role
-  /// of its own, and opening the inspector must never quietly rewrite it.
-  static Widget _uiStyleRole(FieldEditorContext c) {
-    final current = c.value as String? ?? '';
-    if (c.readOnly) return ReadonlyRow(label: c.label, value: current);
-    return DropdownEditorRow(
-      label: c.label,
-      value: current.isEmpty ? jge.UiTheme.textRoles.first : current,
-      options: [
-        ...jge.UiTheme.textRoles,
-        if (current.isNotEmpty && !jge.UiTheme.textRoles.contains(current))
-          current,
-      ],
-      allowCustom: true,
-      onChanged: c.onChanged,
-    );
-  }
-
-  static Widget _uiAnchor(FieldEditorContext c) => UiAnchorEditorRow(
-    label: c.label,
-    anchor: c.value is jge.UiAnchor
-        ? c.value! as jge.UiAnchor
-        : jge.UiAnchor.topLeft,
-    onChanged: c.onChanged,
-  );
-
-  static Widget _uiText(FieldEditorContext c) => c.readOnly
-      ? _readonly(c)
-      : UiTextEditorRow(
-          label: c.label,
-          value: c.value?.toString() ?? '',
-          bindings: jge.UiBindings.names,
-          onChanged: c.onChanged,
-        );
-
-  static Widget _uiTextStyle(FieldEditorContext c) {
-    // What this style layers over: the theme's style for the element's
-    // role, so the row can show what is set here and what is not.
-    final role = _roleOf(c.component);
-    return UiTextStyleEditorRow(
-      label: c.label,
-      style: c.value is jge.UiTextStyle
-          ? c.value! as jge.UiTextStyle
-          : const jge.UiTextStyle(),
-      fontFamilies: jge.UiFonts.families,
-      inherited: role == null ? null : jge.UiThemes.preview.textStyle(role),
-      inheritedFrom: role ?? '',
-      onChanged: c.onChanged,
-    );
-  }
-
-  /// The theme role the component this style belongs to reads as.
-  static String? _roleOf(jge.Component component) => switch (component) {
-    final jge.TextComponent text => text.styleRole,
-    final jge.ButtonComponent button => button.styleRole,
-    _ => null,
-  };
-
-  static Widget _uiActions(FieldEditorContext c) => UiActionsEditorRow(
-    label: c.label,
-    actions: c.value is jge.UiActionList
-        ? c.value! as jge.UiActionList
-        : jge.UiActionList.empty,
-    customNames: jge.UiActions.customNames,
-    onChanged: c.onChanged,
-  );
 
   static Widget _edgeInsets(FieldEditorContext c) => EdgeInsetsEditorRow(
     label: c.label,
@@ -321,61 +225,21 @@ abstract final class BuiltInFieldEditors {
   /// with a way to put it back where it is set.
   static Widget _color(FieldEditorContext c) {
     final set = c.value is Color;
-    final fallback = _fallbackColor(c);
+    // What the component draws when this is left unset, if anything does —
+    // a module's to say (a theme's panel colour), not the inspector's.
+    final inherited = c.editors.inheritedColor(c.component, c.field.name);
     return ColorEditorRow(
       label: c.label,
       paintStyle: jge.ShapePaintStyle(
         color: set
             ? c.value! as Color
-            : (fallback?.color ?? const Color(0x00000000)),
+            : (inherited?.color ?? const Color(0x00000000)),
       ),
       inherited: !set,
-      inheritedFrom: fallback?.from ?? (set ? '' : 'not set'),
-      onClear: set && fallback != null ? () => c.onChanged(null) : null,
+      inheritedFrom: set ? '' : (inherited?.from ?? 'not set'),
+      onClear: set && inherited != null ? () => c.onChanged(null) : null,
       onChanged: (s) => c.onChanged(s.color),
     );
-  }
-
-  /// What a colour field falls back to when it is not set, and what to
-  /// call that.
-  ///
-  /// The components decide — `colorUnder`, `borderColorUnder` — so what the
-  /// inspector says a colour inherits and what the screen actually draws
-  /// cannot drift apart.
-  static ({Color color, String from})? _fallbackColor(FieldEditorContext c) {
-    final theme = jge.UiThemes.preview;
-    final component = c.component;
-    final name = c.field.name;
-    return switch ((component, name)) {
-      (final jge.UiPanelComponent panel, 'color') => (
-        color: theme.color(
-          panel.colorRole,
-          fallbackColor: theme.palette.surface,
-        ),
-        from: panel.colorRole,
-      ),
-      (final jge.UiPanelComponent _, 'borderColor') => (
-        color: theme.palette.outline,
-        from: 'outline',
-      ),
-      (final jge.UiProgressComponent bar, 'color') => (
-        color: theme.color(bar.colorRole, fallbackColor: theme.palette.accent),
-        from: bar.colorRole,
-      ),
-      (final jge.UiProgressComponent _, 'trackColor') => (
-        color: theme.palette.outline,
-        from: 'outline',
-      ),
-      (final jge.ButtonComponent button, 'color') => (
-        color: theme.color(
-          button.colorRole,
-          fallbackColor: theme.palette.primary,
-        ),
-        from: button.colorRole,
-      ),
-      // A colour with nothing behind it: unset means no border, no tint.
-      _ => null,
-    };
   }
 
   static Widget _shapePaintStyle(FieldEditorContext c) => ColorEditorRow(

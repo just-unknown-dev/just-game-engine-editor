@@ -17,7 +17,6 @@ import '../profiler/profiler_dock.dart';
 import '../detail_cards.dart';
 import '../../../timeline/timeline_dock.dart';
 import '../../../timeline/timeline_session.dart';
-import '../theme/theme_dock.dart';
 import '../world/world_dock.dart';
 
 /// The editor's own docks, contributed the way a module's are: one
@@ -31,7 +30,6 @@ abstract final class BuiltInDocks {
   static const String problems = 'problems';
   static const String history = 'history';
   static const String animator = 'animator';
-  static const String theme = 'uitheme';
   static const String search = 'search';
 
   /// The arg a readout passes to open the Console on one level.
@@ -203,17 +201,6 @@ abstract final class BuiltInDocks {
             openPath: dock.args['path'] as String?,
           );
         },
-      ),
-      DockDefinition(
-        id: theme,
-        label: 'Theme',
-        icon: Icons.palette_outlined,
-        order: 35,
-        defaultHeight: 340,
-        build: (context, dock) => ThemeDock(
-          root: plugin.spriteAssets.root,
-          onSaved: plugin.reloadUiThemes,
-        ),
       ),
       DockDefinition(
         id: profiler,

@@ -10,7 +10,6 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../core/constants/editor_constants.dart';
 import '../../core/theme/editor_metrics.dart';
-import '../../core/entity/entity_ops.dart';
 import 'scene_tree_model.dart';
 
 /// Where a dragged row would land relative to the one under it.
@@ -229,17 +228,17 @@ class SceneTreeRowTile extends StatelessWidget {
             SizedBox(width: kSceneTreeRowTileHeight),
           const SizedBox(width: 2),
           Icon(
-            icon ?? uiIconFor(entity) ?? _worldIcon(entity),
+            icon ?? _worldIcon(entity),
             size: 14,
-            // The accent is for what the editor *knows*: a piece of
-            // interface, or something a module claimed as its own. A
-            // plain entity gets a plain colour, so the column carries
-            // something instead of being eleven pink glyphs.
+            // The accent is for what the editor *knows*: something a
+            // module claimed as its own. A plain entity gets a plain
+            // colour, so the column carries something instead of being
+            // eleven pink glyphs.
             color: !row.isMatch
                 ? EditorTheme.textMuted
                 : isSelected
                 ? EditorTheme.primaryBright
-                : (icon != null || uiIconFor(entity) != null)
+                : icon != null
                 ? EditorTheme.primaryMuted
                 : EditorTheme.textSecondary,
           ),

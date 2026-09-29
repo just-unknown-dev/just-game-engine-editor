@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/editor_constants.dart';
 import '../kit/fields.dart';
+import 'field_style.dart';
 
 /// Edits a list or a map field as rows, not as JSON.
 ///
@@ -67,7 +68,7 @@ class CollectionEditor extends StatelessWidget {
           children: [
             Text(
               label,
-              style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+              style: InspectorField.labelStyle,
             ),
             const SizedBox(width: 6),
             _CountPill(count),
@@ -476,7 +477,7 @@ class EntityLinkList extends StatelessWidget {
         children: [
           Text(
             label,
-            style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            style: InspectorField.labelStyle,
           ),
           const SizedBox(width: 6),
           _CountPill(names.length),

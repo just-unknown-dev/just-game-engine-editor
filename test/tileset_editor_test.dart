@@ -266,7 +266,7 @@ void main() {
 
       await tester.tap(find.byTooltip('Full'));
       await tester.pump();
-      expect(find.text('grass.tileset.json •'), findsOneWidget);
+      expect(find.byTooltip('Not saved'), findsOneWidget);
 
       await ctrl(tester, LogicalKeyboardKey.keyS);
       await tester.pump();
@@ -274,10 +274,11 @@ void main() {
       final json = jsonDecode(files[path]!) as Map<String, dynamic>;
       expect((json['tiles'] as Map)['5'], isNotNull);
       expect(find.text('grass.tileset.json'), findsOneWidget);
+      expect(find.byTooltip('Not saved'), findsNothing);
 
       // Its own undo.
       await ctrl(tester, LogicalKeyboardKey.keyZ);
-      expect(find.text('grass.tileset.json •'), findsOneWidget);
+      expect(find.byTooltip('Not saved'), findsOneWidget);
     });
 
     testWidgets('frames made from a selection list in the inspector, and a '
@@ -357,7 +358,8 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Create'));
       await tester.pump();
       await tester.pump();
-      expect(find.text('New tileset •'), findsOneWidget);
+      expect(find.text('New tileset'), findsOneWidget);
+      expect(find.byTooltip('Not saved'), findsOneWidget);
 
       await ctrl(tester, LogicalKeyboardKey.keyS);
       await tester.pump();

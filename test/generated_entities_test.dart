@@ -153,13 +153,29 @@ void main() {
       expect(JustGameEditorPlugin.canDropAsset('assets/a/hero.json'), true);
     });
 
+    test('nor a data file a module declared', () {
+      // The interface's screens and themes are its package's, not the
+      // editor's: it says which endings are its own.
+      ModuleDataFiles.replace(['.ui.json', '.uitheme.json']);
+      addTearDown(() => ModuleDataFiles.replace(const []));
+      for (final path in [
+        'assets/ui/pause.ui.json',
+        'assets/ui/default.uitheme.json',
+      ]) {
+        expect(
+          JustGameEditorPlugin.isSpriteAtlasPath(path),
+          isFalse,
+          reason: path,
+        );
+      }
+    });
+
     test('none of the editor\'s other data files', () {
       for (final path in [
         'assets/scenes/level_01.scene.json',
         'assets/scenes/scenes.json',
         'assets/sprites/player.animator.json',
         'assets/timelines/coin.timeline.json',
-        'assets/ui/default.uitheme.json',
       ]) {
         expect(
           JustGameEditorPlugin.isSpriteAtlasPath(path),

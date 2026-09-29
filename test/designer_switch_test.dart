@@ -52,6 +52,26 @@ class _GenreModule extends EditorModule {
   Object? createSessionState(DesignerToolContext context) => _State();
 }
 
+/// Only a palette entry for every designer: not a designer itself.
+class _SharedModule extends EditorModule {
+  @override
+  String get id => 'shared';
+  @override
+  String get name => 'Shared';
+
+  @override
+  List<PrefabDefinition> get sharedPrefabs => [
+    PrefabDefinition(
+      id: 'shared.text',
+      name: 'Text',
+      category: 'Shapes',
+      icon: Icons.text_fields,
+      color: Colors.grey,
+      build: (_, _) => [TransformComponent()],
+    ),
+  ];
+}
+
 /// Tools only: nothing the heuristic sees, so it must say so itself.
 class _ToolsOnlyModule extends EditorModule {
   _ToolsOnlyModule({this.declares = false});
@@ -133,6 +153,19 @@ void main() {
     expect(scope.prefabs.byId('genre.thing'), isNull);
     expect(scope.statusControls, isEmpty);
   });
+
+  test(
+    'a shared palette entry is in every designer, and makes no designer',
+    () {
+      final scope = testScope(modules: [_GenreModule(), _SharedModule()]);
+      expect(scope.designers.map((d) => d.id), ['genre']);
+      expect(scope.prefabs.byId('shared.text'), isNotNull);
+
+      scope.selectDesigner('genre');
+      expect(scope.prefabs.byId('shared.text'), isNotNull);
+      expect(scope.prefabs.byId('genre.thing'), isNotNull);
+    },
+  );
 
   test('an unknown id, or a module that went away, means the default', () {
     final module = _GenreModule();

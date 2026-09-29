@@ -12,7 +12,7 @@ import '../core/level_map/tiled_export.dart';
 import '../core/level_map/tiled_import.dart';
 import '../ui/inspector/component_extras.dart';
 import '../ui/level_designer/state/editor_commands.dart';
-import '../ui/level_designer/ui_mode/ui_workspace.dart';
+import '../ui/tileset/built_in_workspaces.dart';
 import '../ui/timeline/timeline_dialogs.dart';
 import 'editor_contributions.dart';
 

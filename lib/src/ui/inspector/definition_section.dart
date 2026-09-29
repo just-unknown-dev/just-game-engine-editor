@@ -10,8 +10,10 @@ import '../../core/theme/editor_metrics.dart';
 import '../kit/kit.dart';
 import 'package:just_signals/just_signals.dart';
 import '../../core/scope/editor_scope.dart';
+import '../../core/serialization/unknown_components.dart';
 import '../../core/state/editor_scene_state.dart';
 import '../level_designer/state/editor_commands.dart';
+import '../level_designer/state/editor_history.dart';
 import 'component_extras.dart';
 import '../widgets/scrubbable_number_field.dart';
 import 'field_editor.dart';
@@ -19,37 +21,108 @@ import 'field_rows.dart';
 
 /// One inspector section per component on [entity], built from each
 /// component's definition. A component with no definition (and no legacy
-/// descriptor) is not shown: it cannot be saved either.
+/// descriptor) is not shown: it cannot be saved either. The exception is
+/// what the file named but nothing could read, which is shown — read-only —
+/// because it *is* saved.
+///
+/// [history] and [world] are the scene's unless given: a workspace editing
+/// a document of its own (a screen) passes its own, with the [sceneState]
+/// it keeps for it, so its edits undo there and never mark the scene dirty.
+/// Only the scene's entities can be keyed on a timeline.
+///
+/// [hidden] leaves out components of those types, for a workspace whose
+/// own panels already show them — a screen's links, in its hierarchy.
 List<Widget> buildComponentSections({
   required jge.Entity entity,
   required EditorSceneState sceneState,
   required EditorScope scope,
-}) => [
-  for (final component in entity.components)
-    if (scope.definitionForInspector(component) case final definition?)
-      DefinitionSection(
-        entity: entity,
-        component: component,
-        definition: definition,
-        scope: scope,
-        // Through the history, so a removed component comes back on undo
-        // with every value it had.
-        onDelete: () => scope.history.push(
-          RemoveComponentCommand(
-            entity: entity,
-            component: component,
-            sceneState: sceneState,
+  EditorHistory? history,
+  jge.World? world,
+  Set<Type> hidden = const {},
+}) {
+  final ownDocument = history != null;
+  final undo = history ?? scope.history;
+  return [
+    for (final component in entity.components)
+      if (hidden.contains(component.runtimeType))
+        const SizedBox.shrink()
+      else if (component is UnknownComponents)
+        UnknownComponentsCard(component: component)
+      else if (scope.definitionForInspector(component) case final definition?)
+        DefinitionSection(
+          entity: entity,
+          component: component,
+          definition: definition,
+          scope: scope,
+          history: undo,
+          sceneState: sceneState,
+          world: world,
+          timelineKeys: !ownDocument,
+          // Through the history, so a removed component comes back on undo
+          // with every value it had.
+          onDelete: () => undo.push(
+            RemoveComponentCommand(
+              entity: entity,
+              component: component,
+              sceneState: sceneState,
+            ),
+          ),
+          onChanged: () {
+            sceneState.syncEntityNode(entity);
+            sceneState.markDirty();
+            // Before the refresh, so what is drawn is what was keyed.
+            if (!ownDocument) TimelineSession.of(scope).captureEdits();
+            sceneState.refresh();
+          },
+        ),
+  ];
+}
+
+/// What a scene named that nothing registered can read: listed, not
+/// editable, and saved back exactly as it came.
+class UnknownComponentsCard extends StatelessWidget {
+  const UnknownComponentsCard({super.key, required this.component});
+
+  final UnknownComponents component;
+
+  @override
+  Widget build(BuildContext context) => EditorCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.help_outline,
+              size: EditorMetrics.iconSm,
+              color: EditorTheme.warning,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                component.types.join(', '),
+                style: TextStyle(
+                  color: EditorTheme.textPrimary,
+                  fontSize: EditorMetrics.fontBody,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Nothing registered can read this. It is kept and saved as it '
+          'was; register what defines it to edit it here.',
+          style: TextStyle(
+            color: EditorTheme.textMuted,
+            fontSize: EditorMetrics.fontLabel,
           ),
         ),
-        onChanged: () {
-          sceneState.syncEntityNode(entity);
-          sceneState.markDirty();
-          // Before the refresh, so what is drawn is what was keyed.
-          TimelineSession.of(scope).captureEdits();
-          sceneState.refresh();
-        },
-      ),
-];
+      ],
+    ),
+  );
+}
 
 /// The inspector for one component: header from its hints, a control per
 /// field from the scope's editors, and whatever extras the editor adds.
@@ -62,10 +135,27 @@ class DefinitionSection extends StatelessWidget {
     required this.onDelete,
     required this.onChanged,
     this.entity,
+    this.history,
+    this.sceneState,
+    this.world,
+    this.timelineKeys = true,
   });
 
   /// Whose component this is; with it, fields get a timeline key button.
   final jge.Entity? entity;
+
+  /// Where edits are recorded, the scene's unless given.
+  final EditorHistory? history;
+
+  /// What an edit refreshes, the scene's unless given.
+  final EditorSceneState? sceneState;
+
+  /// Where names are offered from, the scene's world unless given.
+  final jge.World? world;
+
+  /// Whether fields offer a timeline key button — only the scene's
+  /// entities can be keyed.
+  final bool timelineKeys;
   final jge.Component component;
   final jge.ComponentDefinition definition;
   final EditorScope scope;
@@ -283,7 +373,7 @@ class DefinitionSection extends StatelessWidget {
   /// animate its [fields] on this entity.
   Widget _withKeyButton(Widget row, List<jge.SchemaField> fields) {
     final owner = entity;
-    if (owner == null) return row;
+    if (owner == null || !timelineKeys) return row;
     final session = TimelineSession.of(scope);
     if (session.asset.value == null || session.bindingFor(owner) == null) {
       return row;
@@ -388,8 +478,12 @@ class DefinitionSection extends StatelessWidget {
       component: component,
       readOnly: !hint.editable || field.write == null,
       editors: scope.fieldEditors,
+      world: world,
+      sceneState: sceneState,
       entityNames: () => [
-        for (final e in scope.world.query([jge.TransformComponent]))
+        for (final e in (world ?? scope.world).query([
+          jge.TransformComponent,
+        ]))
           if (e.isActive && e.name != null) e.name!,
       ],
       onChanged: (next) {
@@ -399,14 +493,16 @@ class DefinitionSection extends StatelessWidget {
         // other edit. `ComponentFieldCommand` merges consecutive writes to
         // the same field, which is what makes a scrub one undo step
         // instead of one per pixel.
-        scope.history.push(
+        (history ?? scope.history).push(
           ComponentFieldCommand(
             label: 'Change ${hint.label ?? field.name}',
             component: component,
             write: (c, v) => write(c, v),
             before: field.read(component),
             after: next,
-            sceneState: scope.sceneState,
+            // The state this section edits, not always the scene's: the
+            // refresh on undo has to reach whoever shows it.
+            sceneState: sceneState ?? scope.sceneState,
           ),
         );
         onChanged();

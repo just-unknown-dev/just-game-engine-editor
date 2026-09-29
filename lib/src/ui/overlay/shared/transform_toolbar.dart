@@ -109,6 +109,11 @@ class FloatingToolFrame extends StatelessWidget {
   final double borderWidth;
   final double horizontalPadding;
 
+  /// How tall a frame around [content] stands: its padding above and
+  /// below, and its line.
+  static double heightFor(double content, {double borderWidth = 1}) =>
+      content + EditorMetrics.space(6) + borderWidth * 2;
+
   @override
   Widget build(BuildContext context) => AnimatedContainer(
     duration: EditorMetrics.motionFast,
