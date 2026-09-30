@@ -19,6 +19,7 @@ class EntityInspectorPanel extends StatelessWidget {
     required this.scope,
     required this.onDetachFromParent,
     required this.onGroupSelection,
+    this.isLevelDesignerOpen = false,
   });
 
   final EditorSceneState sceneState;
@@ -28,6 +29,11 @@ class EntityInspectorPanel extends StatelessWidget {
   final EditorScope scope;
   final void Function(Entity entity) onDetachFromParent;
   final VoidCallback onGroupSelection;
+
+  /// Whether the Level Designer is open. The tiles selected with Select
+  /// tiles are shown only then: the selection outlives the designer, but
+  /// what is done with it is the designer's.
+  final bool isLevelDesignerOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -48,9 +54,12 @@ class EntityInspectorPanel extends StatelessWidget {
   }
 
   /// [content], under the tiles selected with Select tiles, when there are
-  /// any: what they are, and what can be done with them.
+  /// any and the Level Designer is open: what they are, and what can be
+  /// done with them.
   Widget _withTileSelection(Widget content) {
-    if (scope.tiles.selection.value.isEmpty) return content;
+    if (!isLevelDesignerOpen || scope.tiles.selection.value.isEmpty) {
+      return content;
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

@@ -93,7 +93,9 @@ class _Badge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(left: 4),
+    // Room after it, as the other row decorations leave, so the warning
+    // or mark that follows does not touch its border.
+    margin: const EdgeInsets.only(right: 8),
     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
     decoration: BoxDecoration(
       color: const Color(0xFF40E0D0).withValues(alpha: 0.18),

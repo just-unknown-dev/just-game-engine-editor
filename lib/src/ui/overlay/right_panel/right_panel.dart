@@ -107,6 +107,7 @@ class EditorRightPanel extends StatelessWidget {
                               onDetachFromParent:
                                   plugin.entities.detachFromParent,
                               onGroupSelection: plugin.entities.createGroup,
+                              isLevelDesignerOpen: designer != null,
                             ),
                           ),
                         ],

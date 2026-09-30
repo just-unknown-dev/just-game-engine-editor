@@ -171,7 +171,10 @@ void main() {
       (map: _, :ground) = mapWithSelection(world, scope);
     });
 
-    Future<void> pumpInspector(WidgetTester tester) async {
+    Future<void> pumpInspector(
+      WidgetTester tester, {
+      bool isLevelDesignerOpen = true,
+    }) async {
       tester.view
         ..physicalSize = const Size(320, 700)
         ..devicePixelRatio = 1;
@@ -185,11 +188,21 @@ void main() {
               scope: scope,
               onDetachFromParent: (_) {},
               onGroupSelection: () {},
+              isLevelDesignerOpen: isLevelDesignerOpen,
             ),
           ),
         ),
       );
     }
+
+    testWidgets('shows nothing of them with the Level Designer shut', (
+      tester,
+    ) async {
+      await pumpInspector(tester, isLevelDesignerOpen: false);
+      expect(find.text('2 tiles selected'), findsNothing);
+      expect(find.text('Make them an entity'), findsNothing);
+      expect(find.text('Nothing selected'), findsOneWidget);
+    });
 
     testWidgets('says what is selected, and copies and deletes it', (
       tester,
