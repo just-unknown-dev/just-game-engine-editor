@@ -44,6 +44,20 @@ void main() {
       ),
     ];
 
+    test('a line from another day shows its date', () {
+      // Earlier sessions' lines are loaded back: at a bare time, a
+      // week-old error read as one from a minute ago.
+      final now = DateTime(2026, 9, 30, 14);
+      expect(
+        consoleTimeLabel(DateTime(2026, 9, 30, 9, 5, 7), now: now),
+        '09:05:07',
+      );
+      expect(
+        consoleTimeLabel(DateTime(2026, 9, 23, 22, 8, 54), now: now),
+        '2026-09-23 22:08:54',
+      );
+    });
+
     test('a run of the same line is one row with a count', () {
       final rows = const ConsoleView().apply(entries);
       expect(rows.map((r) => (r.entry.message, r.count)), [

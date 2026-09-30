@@ -100,6 +100,21 @@ class ConsoleView {
   }
 }
 
+/// When a line was logged: the time, and the day too when that was not
+/// today ([now], the clock by default).
+///
+/// The Console loads earlier sessions' lines back, and at a bare time a
+/// week-old error read as one from a minute ago.
+String consoleTimeLabel(DateTime at, {DateTime? now}) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  final clock = '${two(at.hour)}:${two(at.minute)}:${two(at.second)}';
+  final today = now ?? DateTime.now();
+  if (at.year == today.year && at.month == today.month && at.day == today.day) {
+    return clock;
+  }
+  return '${at.year}-${two(at.month)}-${two(at.day)} $clock';
+}
+
 /// Runs what was typed on the Console's command line; returns what to print.
 typedef ConsoleCommandRunner = String Function(String input);
 
@@ -264,10 +279,7 @@ class _ConsoleDockState extends State<ConsoleDock> {
   List<EditorLogEntry> get _entries =>
       _frozen ?? widget.scope.log.entries.value;
 
-  static String _time(DateTime t) =>
-      '${t.hour.toString().padLeft(2, '0')}:'
-      '${t.minute.toString().padLeft(2, '0')}:'
-      '${t.second.toString().padLeft(2, '0')}';
+  static String _time(DateTime t) => consoleTimeLabel(t);
 
   static String _line(ConsoleRow row) {
     final e = row.entry;
