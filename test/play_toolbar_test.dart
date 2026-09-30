@@ -140,12 +140,14 @@ void main() {
       Engine.resetInstance();
     }
 
-    Future<void> pump(WidgetTester tester) async {
+    Future<void> pump(WidgetTester tester, {bool withScene = true}) async {
       Engine.resetInstance();
       final engine = Engine();
       await tester.runAsync(engine.initialize);
       plugin = JustGameEditorPlugin(engine: engine);
       await tester.runAsync(plugin.onInitialize);
+      // The transport and the view buttons show with a scene open.
+      if (withScene) plugin.sceneState.openScene(Scene(name: 'level'));
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -174,10 +176,7 @@ void main() {
       // Across a frame boundary the gap is wider than a button's air: the
       // transport ends, and the view-and-mode frame starts with the preview.
       final restart = rectOf(tester, 'Restart  (Shift+F5)');
-      final designer = rectOf(
-        tester,
-        'Level Designer — open a scene first  (F3)',
-      );
+      final designer = rectOf(tester, 'Open Level Designer  (F3)');
       final preview = rectOf(tester, 'Hide the game camera preview  (F4)');
       expect(preview.left - restart.right, greaterThan(14));
       // Inside that frame a divider parts what the viewport shows from what
@@ -202,7 +201,7 @@ void main() {
         'Pause  (F6)',
         'Step one frame  (F10)',
         'Restart  (Shift+F5)',
-        'Level Designer — open a scene first  (F3)',
+        'Open Level Designer  (F3)',
         'Hide the game camera preview  (F4)',
       ]) {
         expect(find.byTooltip(message), findsOneWidget, reason: message);
@@ -243,6 +242,21 @@ void main() {
       await tester.tap(find.text('0.25×'));
       await tester.pumpAndSettle();
       expect(plugin.playController.speed.value, 0.25);
+      done();
+    });
+
+    testWidgets('with no scene open, only what the modules add stays', (
+      tester,
+    ) async {
+      await pump(tester, withScene: false);
+      expect(find.byTooltip('Play  (F5)'), findsNothing);
+      expect(find.byType(EditorDropdown<double>), findsNothing);
+      expect(find.byIcon(Icons.map_outlined), findsNothing);
+
+      plugin.sceneState.openScene(Scene(name: 'level'));
+      await tester.pump();
+      expect(find.byTooltip('Play  (F5)'), findsOneWidget);
+      expect(find.byIcon(Icons.map_outlined), findsOneWidget);
       done();
     });
   });

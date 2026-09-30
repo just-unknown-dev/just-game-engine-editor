@@ -347,7 +347,50 @@ class SceneStore {
     await File(_manifestPath).writeAsString(_pretty.convert({'scenes': names}));
   }
 
+  // ── Play order ───────────────────────────────────────────────────────────
+
+  /// The scenes the game plays, in order: the manifest's names that have a
+  /// file. The first is where the shipped game starts.
+  List<String> playOrder() {
+    final onDisk = listSceneNames().toSet();
+    return _readManifest().where(onDisk.contains).toList();
+  }
+
+  /// Makes [names] the game's play order: the manifest lists exactly these,
+  /// in this order. A scene left out stays on disk, unlisted.
+  Future<void> writePlayOrder(List<String> names) => _editManifest(
+    (list) => list
+      ..clear()
+      ..addAll(names),
+  );
+
   // ── Read ─────────────────────────────────────────────────────────────────
+
+  /// What the Scenes list tells about [name] without opening it: its mode,
+  /// how many entities it holds and when it was last saved. Null when the
+  /// file is missing; a file that is not valid JSON has no mode or count.
+  ///
+  /// Read at once, like [listSceneNames]: a list of levels is a handful of
+  /// small files, and the rows show what is in them from the first frame.
+  SceneSummary? summaryOf(String name) {
+    final file = File(_jsonPath(name));
+    if (!file.existsSync()) return null;
+    final saved = file.lastModifiedSync();
+    try {
+      final json = jsonDecode(file.readAsStringSync());
+      if (json is! Map<String, dynamic>) {
+        return SceneSummary(name: name, savedAt: saved);
+      }
+      return SceneSummary(
+        name: name,
+        mode: SceneMode.fromId(json['mode']),
+        entityCount: (json['entities'] as List?)?.length ?? 0,
+        savedAt: saved,
+      );
+    } on FormatException {
+      return SceneSummary(name: name, savedAt: saved);
+    }
+  }
 
   /// The raw JSON for [sceneName], or null if it is missing or unreadable.
   Future<Map<String, dynamic>?> loadRawSidecar(String sceneName) async {
@@ -388,4 +431,28 @@ class SceneStore {
     final listed = _readManifest().where(onDisk.contains).toList();
     return [...listed, ...(onDisk.difference(listed.toSet()).toList()..sort())];
   }
+}
+
+/// A scene as the Scenes list shows it, read from its file.
+class SceneSummary {
+  const SceneSummary({
+    required this.name,
+    required this.savedAt,
+    this.mode,
+    this.entityCount,
+  });
+
+  final String name;
+
+  /// How it is authored; null when the file could not be read.
+  final SceneMode? mode;
+
+  /// Every entity in it, children too; null when unreadable.
+  final int? entityCount;
+
+  /// When its file was last written.
+  final DateTime savedAt;
+
+  /// Whether the file could be read as a scene.
+  bool get isReadable => mode != null;
 }

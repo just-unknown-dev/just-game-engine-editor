@@ -45,6 +45,8 @@ import '../../ui/level_designer/painters/designer_canvas.dart';
 import '../constants/editor_constants.dart';
 import '../theme/viewport_look.dart';
 import '../prefs/editor_prefs.dart';
+import '../prefs/recent_scenes.dart';
+import '../../ui/kit/key_claim.dart';
 import '../../ui/overlay/settings/overlay_ui_settings.dart';
 
 export '../play/play_controller.dart' show EditorPlayState, EntitySpawner;
@@ -626,6 +628,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (scope.chrome.capturingKeys) return false;
     // Holding a key keeps nudging; nothing else acts on a repeat.
     if (event is KeyRepeatEvent) {
+      if (EditorKeyClaim.focusedClaims(event)) return false;
       return scope.activeWorkspace.value == null &&
           isAuthoring.value &&
           !_isTypingInTextField &&
@@ -658,6 +661,9 @@ class JustGameEditorPlugin implements EnginePlugin {
       }
       return false;
     }
+    // A focused panel that keeps a key for itself — the Scenes list's F2
+    // renames, its Delete deletes a scene — has it.
+    if (EditorKeyClaim.focusedClaims(event)) return false;
     // F2: the dock panel. The status bar itself comes and goes with the
     // editor, so there is nothing else for this key to switch.
     if (key == _statusPanelToggleKey) {
@@ -964,7 +970,9 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   static bool _isFont(String lower) =>
-      lower.endsWith('.ttf') || lower.endsWith('.otf') || lower.endsWith('.ttc');
+      lower.endsWith('.ttf') ||
+      lower.endsWith('.otf') ||
+      lower.endsWith('.ttc');
 
   /// An animator graph changed on disk: animators running it start over
   /// with the new one.
@@ -1619,9 +1627,12 @@ class JustGameEditorPlugin implements EnginePlugin {
     false,
   );
 
-  void _rememberScene() => unawaited(
-    scope.prefs.set(_lastScenePref, sceneState.activeScene.value?.name ?? ''),
-  );
+  void _rememberScene() {
+    final name = sceneState.activeScene.value?.name ?? '';
+    unawaited(scope.prefs.set(_lastScenePref, name));
+    // The Scenes list's Recent, and the start card's Reopen.
+    if (name.isNotEmpty) unawaited(RecentScenes.touch(scope.prefs, name));
+  }
 
   // Opening another scene shuts the designer and opens it again: it ends
   // as it was, and so does what is remembered.

@@ -1,26 +1,85 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' show SceneMode;
 import '../../core/constants/editor_constants.dart';
+import '../../core/theme/editor_metrics.dart';
 
 import '../../core/dev/editor_dev_flags.dart';
 import '../../core/serialization/scene_store.dart';
 import '../../core/serialization/scene_name_validator.dart';
-import '../kit/controls.dart';
+import '../kit/kit.dart';
 
-/// Full-panel overlay shown when the editor is open but no scene is loaded.
+/// Asks for a new scene — see [CreateSceneOverlay] — and writes it. The
+/// name it was created with, or null when the dialog was cancelled.
+Future<String?> showNewSceneDialog(
+  BuildContext context, {
+  required SceneStore store,
+}) => showDialog<String>(
+  context: context,
+  barrierColor: Colors.black54,
+  builder: (context) => EditorLook(
+    child: Dialog(
+      backgroundColor: EditorTheme.dialogBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(EditorMetrics.radiusLg),
+        side: BorderSide(color: EditorTheme.borderStrong),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 10, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'New scene',
+                      style: TextStyle(
+                        color: EditorTheme.textPrimary,
+                        fontSize: EditorMetrics.fontTitle,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  EditorIconButton(
+                    icon: Icons.close_rounded,
+                    tooltip: 'Cancel',
+                    onTap: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: CreateSceneOverlay(
+                store: store,
+                onCancel: () => Navigator.of(context).pop(),
+                onSceneCreated: (name) async => Navigator.of(context).pop(name),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  ),
+);
+
+/// The New scene form.
 ///
-/// Presents a name input field with inline validation, a choice of scene
-/// type — 2-D, or 3-D (disabled until 3-D authoring ships, unless
-/// [EditorDevFlags.allow3DSceneMode] is on) — and a "Create Scene" button.
-/// On success it:
-/// 1. Writes `assets/scenes/{name}.scene.json` via [SceneStore], in the
-///    chosen mode.
-/// 2. Calls [onSceneCreated] with the validated name.
+/// A name, checked as it is typed and suggested from the scenes there are —
+/// `level_04` after `level_03` — and a choice of scene type: 2-D, or 3-D
+/// (disabled until 3-D authoring ships, unless
+/// [EditorDevFlags.allow3DSceneMode] is on). Create:
+/// 1. writes `assets/scenes/{name}.scene.json` via [SceneStore], in the
+///    chosen mode, at the end of the play order;
+/// 2. calls [onSceneCreated] with the name.
 class CreateSceneOverlay extends StatefulWidget {
   const CreateSceneOverlay({
     super.key,
     required this.onSceneCreated,
     required this.store,
+    this.onCancel,
   });
 
   /// Where the new scene is written.
@@ -28,6 +87,29 @@ class CreateSceneOverlay extends StatefulWidget {
 
   /// Called with the new scene name after the files have been written.
   final Future<void> Function(String sceneName) onSceneCreated;
+
+  /// Shows a Cancel beside Create, when given.
+  final VoidCallback? onCancel;
+
+  /// A free name that follows [after] — the last scene in the play order,
+  /// where a new one goes — or else the last of [existing]: `level_03` →
+  /// `level_04`, `cave` → `cave_2`; `level_01` when there are none.
+  static String suggestName(List<String> existing, {String? after}) {
+    final taken = {for (final n in existing) n.toLowerCase()};
+    String free(String stem, int from, int width) {
+      for (var i = from; ; i++) {
+        final name = '$stem${i.toString().padLeft(width, '0')}';
+        if (!taken.contains(name.toLowerCase())) return name;
+      }
+    }
+
+    final last = after ?? (existing.isEmpty ? null : existing.last);
+    if (last == null) return free('level_', 1, 2);
+    final numbered = RegExp(r'^(.*?)(\d+)$').firstMatch(last);
+    if (numbered == null) return free('${last}_', 2, 1);
+    final digits = numbered.group(2)!;
+    return free(numbered.group(1)!, int.parse(digits) + 1, digits.length);
+  }
 
   @override
   State<CreateSceneOverlay> createState() => _CreateSceneOverlayState();
@@ -53,6 +135,16 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
   void initState() {
     super.initState();
     _existingNames = SceneNameValidator.existingSceneNames(widget.store);
+    // Ready to go: Enter makes it, typing replaces it.
+    final order = widget.store.playOrder();
+    final suggested = CreateSceneOverlay.suggestName(
+      _existingNames,
+      after: order.isEmpty ? null : order.last,
+    );
+    _controller.value = TextEditingValue(
+      text: suggested,
+      selection: TextSelection(baseOffset: 0, extentOffset: suggested.length),
+    );
   }
 
   @override
@@ -63,7 +155,7 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
 
   void _onNameChanged(String value) {
     final error = SceneNameValidator.validate(
-      value,
+      value.trim(),
       existingNames: _existingNames,
     );
     setState(() => _errorMessage = error);
@@ -102,93 +194,56 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
       _controller.text.trim().isNotEmpty &&
       !_isCreating;
 
+  Widget _caption(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      text,
+      style: TextStyle(
+        color: EditorTheme.textMuted,
+        fontSize: EditorMetrics.fontCaption,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.6,
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
+    final typed = _controller.text.trim();
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const SizedBox(height: 12),
-          Text(
-            'No scene is open',
-            style: TextStyle(
-              color: EditorTheme.textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Create a scene to start placing and editing entities.',
-            style: TextStyle(color: EditorTheme.primaryBright, fontSize: 12),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'SCENE NAME',
-            style: TextStyle(
-              color: EditorTheme.primaryBright,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 6),
+          _caption('SCENE NAME'),
           TextField(
             controller: _controller,
             onChanged: _onNameChanged,
             onSubmitted: (_) => _canCreate ? _onCreate() : null,
             autofocus: true,
+            cursorColor: EditorTheme.primaryBright,
             style: TextStyle(color: EditorTheme.textPrimary, fontSize: 13),
-            decoration: InputDecoration(
-              hintText: 'e.g. level_1',
-              hintStyle: TextStyle(color: EditorTheme.primaryMuted),
-              filled: true,
-              fillColor: EditorTheme.surfaceDark,
+            decoration: editorFieldDecoration(
+              hint: 'e.g. level_01',
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
+                horizontal: 10,
                 vertical: 10,
               ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: BorderSide(color: EditorTheme.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: BorderSide(
-                  color: _errorMessage != null
-                      ? EditorTheme.error
-                      : EditorTheme.border,
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: BorderSide(
-                  color: _errorMessage != null
-                      ? EditorTheme.error
-                      : EditorTheme.primaryActive,
-                ),
-              ),
-            ),
-          ),
-          if (_errorMessage != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              _errorMessage!,
-              style: TextStyle(color: EditorTheme.errorLight, fontSize: 11),
-            ),
-          ],
-          const SizedBox(height: 16),
-          Text(
-            'SCENE TYPE',
-            style: TextStyle(
-              color: EditorTheme.primaryBright,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
             ),
           ),
           const SizedBox(height: 6),
+          Text(
+            _errorMessage ??
+                'Letters, digits and underscores; a letter or _ first.',
+            style: TextStyle(
+              color: _errorMessage != null
+                  ? EditorTheme.errorLight
+                  : EditorTheme.textMuted,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _caption('SCENE TYPE'),
           EditorSegmented<SceneMode>(
             value: _mode,
             options: const [(SceneMode.twoD, '2D'), (SceneMode.threeD, '3D')],
@@ -206,14 +261,14 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
                 Icon(
                   Icons.info_outline,
                   size: 13,
-                  color: EditorTheme.primaryMuted,
+                  color: EditorTheme.textMuted,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     threeDUnavailable,
                     style: TextStyle(
-                      color: EditorTheme.primaryMuted,
+                      color: EditorTheme.textMuted,
                       fontSize: 11,
                     ),
                   ),
@@ -222,47 +277,35 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
             ),
           ],
           const SizedBox(height: 16),
-          SizedBox(
-            height: 38,
-            child: ElevatedButton(
-              onPressed: _canCreate ? _onCreate : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: EditorTheme.primaryActive,
-                disabledBackgroundColor: EditorTheme.border,
-                foregroundColor: EditorTheme.textPrimary,
-                disabledForegroundColor: EditorTheme.primaryMuted,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                elevation: 0,
-              ),
-              child: _isCreating
-                  ? SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: EditorTheme.textPrimary,
-                      ),
-                    )
-                  : const Text(
-                      'Create Scene',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+          Text(
+            'Saved as assets/scenes/${typed.isEmpty ? '{name}' : typed}'
+            '.scene.json and added at the end of the play order '
+            '(scenes.json). It ships with the game as it is.',
+            style: TextStyle(
+              color: EditorTheme.textMuted,
+              fontSize: 11,
+              height: 1.5,
             ),
           ),
           const SizedBox(height: 16),
-          Text(
-            'Creates assets/scenes/{name}.scene.json and adds it to\n'
-            'assets/scenes/scenes.json. It ships with the game as it is.',
-            style: TextStyle(
-              color: EditorTheme.primaryMuted,
-              fontSize: 11,
-              height: 1.6,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (widget.onCancel != null) ...[
+                EditorButton(
+                  label: 'Cancel',
+                  kind: EditorButtonKind.ghost,
+                  onPressed: widget.onCancel,
+                ),
+                const SizedBox(width: 8),
+              ],
+              EditorButton(
+                label: _isCreating ? 'Creating…' : 'Create scene',
+                kind: EditorButtonKind.primary,
+                icon: Icons.add_rounded,
+                onPressed: _canCreate ? _onCreate : null,
+              ),
+            ],
           ),
         ],
       ),

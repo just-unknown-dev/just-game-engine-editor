@@ -101,6 +101,9 @@ class PlayControlsToolbar extends StatelessWidget {
           EditorPlayState.stopped => EditorTheme.accent,
         };
         final hasScene = plugin.sceneState.hasScene;
+        // With no scene open there is nothing to play or to look at: only
+        // the modules' tools, which need none, stay.
+        final levelTools = hasScene || running;
         final side = buttonSize(settings);
 
         Widget button(
@@ -142,100 +145,100 @@ class PlayControlsToolbar extends StatelessWidget {
           spacing: EditorMetrics.space(4),
           children: [
             // ── Transport ──────────────────────────────────────────────
-            frame([
-              button(
-                Icons.play_arrow_rounded,
-                state == EditorPlayState.paused ? 'Resume' : 'Play',
-                _playing,
-                commandId: 'editor.playToggle',
-                isActive: state == EditorPlayState.playing,
-                onTap: state == EditorPlayState.playing ? null : play.play,
-              ),
-              button(
-                Icons.pause_rounded,
-                'Pause',
-                EditorTheme.warning,
-                commandId: 'editor.pauseToggle',
-                isActive: state == EditorPlayState.paused,
-                onTap: state == EditorPlayState.playing ? play.pause : null,
-              ),
-              button(
-                Icons.skip_next_rounded,
-                'Step one frame',
-                EditorTheme.warning,
-                commandId: 'editor.playStep',
-                onTap: running ? play.step : null,
-              ),
-              button(
-                Icons.stop_rounded,
-                'Stop',
-                EditorTheme.error,
-                commandId: 'editor.playToggle',
-                onTap: running ? play.stop : null,
-              ),
-              button(
-                Icons.replay_rounded,
-                'Restart',
-                _playing,
-                commandId: 'editor.playRestart',
-                onTap: running ? play.restart : null,
-              ),
-              const SizedBox(width: 4),
-              EditorDropdown<double>(
-                value: play.speed.value,
-                tooltip: 'Play speed',
-                isExpanded: false,
-                height: 24,
-                fontSize: 10,
-                options: [
-                  for (final speed in PlayController.speeds)
-                    EditorDropdownOption(
-                      value: speed,
-                      label:
-                          '${speed == speed.roundToDouble() ? speed.toInt() : speed}×',
-                    ),
-                ],
-                onChanged: play.setSpeed,
-              ),
-              if (running)
-                _StateChip(
-                  state: state,
-                  color: frameColour,
-                  clock: _clock(play.elapsedSeconds.value),
+            if (levelTools)
+              frame([
+                button(
+                  Icons.play_arrow_rounded,
+                  state == EditorPlayState.paused ? 'Resume' : 'Play',
+                  _playing,
+                  commandId: 'editor.playToggle',
+                  isActive: state == EditorPlayState.playing,
+                  onTap: state == EditorPlayState.playing ? null : play.play,
                 ),
-              const SizedBox(width: 2),
-            ]),
+                button(
+                  Icons.pause_rounded,
+                  'Pause',
+                  EditorTheme.warning,
+                  commandId: 'editor.pauseToggle',
+                  isActive: state == EditorPlayState.paused,
+                  onTap: state == EditorPlayState.playing ? play.pause : null,
+                ),
+                button(
+                  Icons.skip_next_rounded,
+                  'Step one frame',
+                  EditorTheme.warning,
+                  commandId: 'editor.playStep',
+                  onTap: running ? play.step : null,
+                ),
+                button(
+                  Icons.stop_rounded,
+                  'Stop',
+                  EditorTheme.error,
+                  commandId: 'editor.playToggle',
+                  onTap: running ? play.stop : null,
+                ),
+                button(
+                  Icons.replay_rounded,
+                  'Restart',
+                  _playing,
+                  commandId: 'editor.playRestart',
+                  onTap: running ? play.restart : null,
+                ),
+                const SizedBox(width: 4),
+                EditorDropdown<double>(
+                  value: play.speed.value,
+                  tooltip: 'Play speed',
+                  isExpanded: false,
+                  height: 24,
+                  fontSize: 10,
+                  options: [
+                    for (final speed in PlayController.speeds)
+                      EditorDropdownOption(
+                        value: speed,
+                        label:
+                            '${speed == speed.roundToDouble() ? speed.toInt() : speed}×',
+                      ),
+                  ],
+                  onChanged: play.setSpeed,
+                ),
+                if (running)
+                  _StateChip(
+                    state: state,
+                    color: frameColour,
+                    clock: _clock(play.elapsedSeconds.value),
+                  ),
+                const SizedBox(width: 2),
+              ]),
             // ── View and mode ──────────────────────────────────────────
             // What the viewport shows and what it is for: the game camera
             // over the level, the level being built, or the interface
             // drawn over it.
-            frame([
-              button(
-                Icons.camera,
-                plugin.showGamePreview.value
-                    ? 'Hide the game camera preview'
-                    : 'Show the game camera preview',
-                EditorTheme.primaryBright,
-                commandId: 'editor.togglePreview',
-                isActive: plugin.showGamePreview.value,
-                onTap: () => plugin.showGamePreview.value =
-                    !plugin.showGamePreview.value,
-              ),
-              button(
-                Icons.map_outlined,
-                !hasScene
-                    ? 'Level Designer — open a scene first'
-                    : plugin.isLevelDesignerOpen
-                    ? 'Close Level Designer'
-                    : 'Open Level Designer',
-                EditorTheme.primaryBright,
-                commandId: 'editor.toggleDesigner',
-                isActive: plugin.isLevelDesignerOpen,
-                // Needs a scene: there is nothing to design into otherwise,
-                // and the session holds entity references from one.
-                onTap: hasScene ? plugin.toggleLevelDesigner : null,
-              ),
-            ]),
+            if (levelTools)
+              frame([
+                button(
+                  Icons.camera,
+                  plugin.showGamePreview.value
+                      ? 'Hide the game camera preview'
+                      : 'Show the game camera preview',
+                  EditorTheme.primaryBright,
+                  commandId: 'editor.togglePreview',
+                  isActive: plugin.showGamePreview.value,
+                  onTap: () => plugin.showGamePreview.value =
+                      !plugin.showGamePreview.value,
+                ),
+                button(
+                  Icons.map_outlined,
+                  plugin.isLevelDesignerOpen
+                      ? 'Close Level Designer'
+                      : 'Open Level Designer',
+                  EditorTheme.primaryBright,
+                  commandId: 'editor.toggleDesigner',
+                  isActive: plugin.isLevelDesignerOpen,
+                  // Needs a scene: there is nothing to design into otherwise,
+                  // and the session holds entity references from one.
+                  onTap: hasScene ? plugin.toggleLevelDesigner : null,
+                ),
+              ]),
             // ── What the modules add ───────────────────────────────────
             if (modules.isNotEmpty)
               frame([

@@ -172,9 +172,9 @@ void main() {
       expect(session.controller.toolId.value, BuiltInTools.draw);
       key(LogicalKeyboardKey.keyM);
       expect(session.controller.toolId.value, BuiltInTools.measure);
-      // V is the editor's All, which picks the select tool up: a command,
+      // Q is the editor's All, which picks the select tool up: a command,
       // not a tool's key (see transform_toolbar_test).
-      expect(session.tools.byShortcut('V'), isNull);
+      expect(session.tools.byShortcut('Q'), isNull);
     });
 
     test('Shift+R replaces with the active prefab, same place, size and '

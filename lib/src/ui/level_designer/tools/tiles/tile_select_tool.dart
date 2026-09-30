@@ -18,7 +18,7 @@ import '../level_tool.dart';
 import 'tile_tool_base.dart';
 
 /// Selects cells of the layer being painted: a dragged box, the connected
-/// run of one tile (the wand), or every cell holding one tile. Q again
+/// run of one tile (the wand), or every cell holding one tile. V again
 /// cycles between them.
 ///
 /// Shift adds to the selection and Ctrl takes away. Dragging the selection
@@ -39,7 +39,7 @@ class TileSelectTool extends TileTool {
   IconData get icon => Icons.highlight_alt;
   @override
   // W, E and R are Move, Scale and Rotate.
-  String? get shortcut => 'Q';
+  String? get shortcut => 'V';
   @override
   int get order => 240;
 
@@ -96,7 +96,7 @@ class TileSelectTool extends TileTool {
   @override
   String? get description =>
       'Select tiles: a box, the connected run of a tile, or every cell of a '
-      'tile (Q again switches). Shift adds, Ctrl takes away, drag to move. '
+      'tile (V again switches). Shift adds, Ctrl takes away, drag to move. '
       'Ctrl+C / Ctrl+X copy and cut, Delete clears, Enter makes an entity.';
 
   TileAim? _aim;
@@ -479,7 +479,7 @@ class TileSelectTool extends TileTool {
     final c = context;
     final m = c.modifiers;
     final bare = !m.control && !m.alt && !m.shift;
-    if (key == LogicalKeyboardKey.keyQ && bare) {
+    if (key == LogicalKeyboardKey.keyV && bare) {
       final modes = TileSelectMode.values;
       final next = modes[(state.selectMode.value.index + 1) % modes.length];
       state.selectMode.value = next;

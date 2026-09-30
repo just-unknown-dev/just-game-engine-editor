@@ -217,6 +217,10 @@ abstract final class OverlaySettingsPrefKeys {
   // Where the last session left off — kept, not settings: never exported.
   static const String sessionLastScene = 'editor.session.lastScene';
   static const String sessionDesignerOpen = 'editor.session.designerOpen';
+  static const String sessionRecentScenes = 'editor.session.recentScenes';
+
+  // How the Scenes list is sorted — kept with the session, not a setting.
+  static const String scenesSort = 'editor.scenes.sort';
 }
 
 // ── Editor log service ────────────────────────────────────────────────────────

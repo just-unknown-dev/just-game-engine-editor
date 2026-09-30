@@ -144,6 +144,8 @@ void main() {
     );
     await tester.runAsync(plugin.onInitialize);
     plugin.setVisible(true);
+    // F5 plays the scene open.
+    plugin.sceneState.openScene(Scene(name: 'level'));
 
     await tester.pumpWidget(
       MaterialApp(

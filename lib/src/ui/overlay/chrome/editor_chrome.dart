@@ -134,6 +134,8 @@ class FullEditorChrome extends StatelessWidget {
         plugin.designer,
         plugin.gridSize,
         plugin.isStatusPanelVisible,
+        // No scene, no level tools: the start card has the viewport.
+        plugin.sceneState.activeScene,
         // The docks take room from the designer: its panels stop where the
         // dock panel starts, and the level's view is inset by it.
         plugin.scope.dockController.openId,
@@ -195,7 +197,8 @@ class FullEditorChrome extends StatelessWidget {
         // on it while editing, and above them the messages; the transform
         // column and tool strip stop short of them.
         final gearMargin = designer != null ? MinimapLayout.margin : 16.0;
-        final quickSnap = !plugin.playController.isRunning;
+        final quickSnap =
+            !plugin.playController.isRunning && plugin.sceneState.hasScene;
         final aboveGear =
             gameInsets.bottom +
             gearMargin +

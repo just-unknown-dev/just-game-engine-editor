@@ -31,6 +31,22 @@ class SceneManager {
   /// Every scene in `assets/scenes/`, sorted by name.
   List<String> listScenes() => store.listSceneNames()..sort();
 
+  /// The scenes the game plays, in order; the first is where it starts.
+  List<String> playOrder() => store.playOrder();
+
+  /// Makes [names] the game's play order. Each must be a scene on disk.
+  Future<void> setPlayOrder(List<String> names) async {
+    final onDisk = store.listSceneNames().toSet();
+    final missing = names.where((n) => !onDisk.contains(n)).toList();
+    if (missing.isNotEmpty) {
+      throw SceneManagerException('No scene named "${missing.first}".');
+    }
+    if (names.toSet().length != names.length) {
+      throw SceneManagerException('A scene can be in the play order once.');
+    }
+    await store.writePlayOrder(names);
+  }
+
   bool isProtected(String name) => protectedSceneNames.contains(name);
 
   /// Validates a candidate scene name, excluding [ignoring] (the scene's own
@@ -47,8 +63,7 @@ class SceneManager {
   Future<void> deleteScene(String name) async {
     if (isProtected(name)) {
       throw SceneManagerException(
-        '"$name" is used by the shipped game (lib/game/world_setup.dart) '
-        'and cannot be deleted.',
+        '"$name" is used by the game\'s own code and cannot be deleted.',
       );
     }
     await store.deleteSceneFiles(name);
@@ -59,8 +74,7 @@ class SceneManager {
   Future<void> renameScene(String oldName, String newName) async {
     if (isProtected(oldName)) {
       throw SceneManagerException(
-        '"$oldName" is used by the shipped game (lib/game/world_setup.dart) '
-        'and cannot be renamed.',
+        '"$oldName" is used by the game\'s own code and cannot be renamed.',
       );
     }
     final error = validateName(newName, ignoring: oldName);

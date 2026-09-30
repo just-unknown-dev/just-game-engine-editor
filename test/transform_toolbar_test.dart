@@ -1,4 +1,4 @@
-// All, Move, Scale and Rotate — V, W, E and R — in the editor and the
+// All, Move, Scale and Rotate — Q, W, E and R — in the editor and the
 // Level Designer: what each can act on, the keys and the toolbar that pick
 // one, and the gizmo the selection then shows — on entities, on a piece of
 // a map, and on tiles picked with Select tiles.
@@ -228,11 +228,11 @@ void main() {
       control = false;
     }
 
-    test('it starts on All, and V goes back to it with the select tool', () {
+    test('it starts on All, and Q goes back to it with the select tool', () {
       expect(scope.view.transformMode.value, TransformMode.all);
       scope.view.transformMode.value = TransformMode.scale;
       session.setTool(BuiltInTools.draw);
-      expect(press(LogicalKeyboardKey.keyV), isTrue);
+      expect(press(LogicalKeyboardKey.keyQ), isTrue);
       expect(scope.view.transformMode.value, TransformMode.all);
       expect(session.controller.toolId.value, BuiltInTools.select);
     });
@@ -271,8 +271,8 @@ void main() {
       expect(session.controller.toolId.value, TileTools.select);
     });
 
-    test('the old keys moved: Q selects tiles, Shift+R replaces', () {
-      expect(session.selectToolByShortcut('Q'), isTrue);
+    test('the old keys moved: V selects tiles, Shift+R replaces', () {
+      expect(session.selectToolByShortcut('V'), isTrue);
       expect(session.controller.toolId.value, TileTools.select);
       expect(
         scope.commands.bindingsFor('designer.replace').map((k) => k.shortcut),
@@ -521,7 +521,7 @@ void main() {
     testWidgets('four buttons down a column with their keys, All first; '
         'live with nothing selected, and with something', (tester) async {
       await pump(tester);
-      const tips = ['All  (V)', 'Move  (W)', 'Scale  (E)', 'Rotate  (R)'];
+      const tips = ['All  (Q)', 'Move  (W)', 'Scale  (E)', 'Rotate  (R)'];
       for (final tip in tips) {
         expect(button(tester, tip).enabled, isTrue, reason: tip);
       }
@@ -529,7 +529,7 @@ void main() {
         for (final tip in tips) tester.getRect(find.byTooltip(tip)).top,
       ];
       expect(tops, orderedEquals([...tops]..sort()), reason: 'a column');
-      expect(button(tester, 'All  (V)').isActive, isTrue);
+      expect(button(tester, 'All  (Q)').isActive, isTrue);
 
       final box = _block(plugin.engine.world, 'Box', 0, 0);
       plugin.sceneState.selectEntity(box);
@@ -552,12 +552,12 @@ void main() {
       plugin.scope.view.transformMode.value = TransformMode.scale;
       plugin.sceneState.selectEntity(map);
       await tester.pump();
-      expect(button(tester, 'All  (V)').enabled, isTrue);
+      expect(button(tester, 'All  (Q)').enabled, isTrue);
       expect(button(tester, 'Move  (W)').enabled, isTrue);
       expect(button(tester, 'Scale  (E)').enabled, isFalse);
       expect(button(tester, 'Rotate  (R)').enabled, isFalse);
       expect(plugin.shownTransformMode, TransformMode.all);
-      expect(button(tester, 'All  (V)').isActive, isTrue);
+      expect(button(tester, 'All  (Q)').isActive, isTrue);
       done();
     });
 

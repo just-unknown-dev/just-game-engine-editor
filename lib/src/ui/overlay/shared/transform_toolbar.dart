@@ -9,7 +9,7 @@ import '../../level_designer/level_designer_session.dart';
 import '../../level_designer/panels/tool_palette.dart';
 import '../settings/overlay_ui_settings.dart';
 
-/// All, Move, Scale and Rotate — V, W, E and R — in a column at the top
+/// All, Move, Scale and Rotate — Q, W, E and R — in a column at the top
 /// right of the viewport, in the editor and the Level Designer alike; the
 /// designer's tool strip hangs below it.
 ///
@@ -35,6 +35,7 @@ class TransformToolbar extends StatelessWidget {
     builder: (context, session, _) => SignalConsumer(
       signals: [
         plugin.isAuthoring,
+        plugin.sceneState.activeScene,
         plugin.scope.view.transformMode,
         plugin.sceneState.selectedEntity,
         plugin.sceneState.multiSelectedIds,
@@ -47,7 +48,10 @@ class TransformToolbar extends StatelessWidget {
   );
 
   Widget _bar() {
-    if (!plugin.isAuthoring.value) return const SizedBox.shrink();
+    // Nothing to transform with no scene open.
+    if (!plugin.isAuthoring.value || !plugin.sceneState.hasScene) {
+      return const SizedBox.shrink();
+    }
     final available = plugin.transformModesAvailable;
     final lit = plugin.isTransformToolInHand
         ? plugin.shownTransformMode ?? plugin.scope.view.transformMode.value
@@ -74,7 +78,7 @@ class TransformToolbar extends StatelessWidget {
     );
   }
 
-  /// The key bound to [mode]'s command: V, W, E, R unless a module rebound
+  /// The key bound to [mode]'s command: Q, W, E, R unless a module rebound
   /// it.
   String? _keyOf(TransformMode mode) {
     final bound = plugin.scope.commands.bindingsFor(mode.commandId);

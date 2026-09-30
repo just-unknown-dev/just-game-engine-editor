@@ -70,6 +70,8 @@ void main() {
       'Ctrl+, shut it', (tester) async {
     if (!kDebugMode) return;
     await start(tester);
+    // F5 plays the scene open.
+    plugin.sceneState.openScene(Scene(name: 'level'));
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.comma);

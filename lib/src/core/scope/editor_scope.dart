@@ -279,6 +279,7 @@ class EditorScope {
   final List<SettingsSection> _settingsSections = [];
   final List<DockDefinition> _docks = [];
   final List<ToolbarButton> _toolbarButtons = [];
+  final List<GettingStartedTip> _gettingStartedTips = [];
   final List<WorkspaceDefinition> _workspaces = [];
   final List<AssetAction> _assetActions = [];
   final List<TiledObjectMapper> _tiledObjectMappers = [];
@@ -434,6 +435,11 @@ class EditorScope {
 
   /// Module buttons appended after the built-in toolbar, by order.
   List<ToolbarButton> get toolbarButtons => List.unmodifiable(_toolbarButtons);
+
+  /// What modules say on the start card, shown while no scene is open, by
+  /// order.
+  List<GettingStartedTip> get gettingStartedTips =>
+      List.unmodifiable(_gettingStartedTips);
 
   /// Module entries in the scene tree's context menu, by order.
   List<SceneTreeAction> get sceneTreeActions =>
@@ -610,6 +616,7 @@ class EditorScope {
       _settingsSections,
       _docks,
       _toolbarButtons,
+      _gettingStartedTips,
       _workspaces,
       _assetActions,
       _tiledObjectMappers,
@@ -638,6 +645,7 @@ class EditorScope {
       _settingsSections.addAll(module.settingsSections);
       _docks.addAll(module.docks);
       _toolbarButtons.addAll(module.toolbarButtons);
+      _gettingStartedTips.addAll(module.gettingStartedTips);
       _workspaces.addAll(module.workspaces);
       _assetActions.addAll(module.assetActions);
       _tiledObjectMappers.addAll(module.tiledObjectMappers);
@@ -664,6 +672,7 @@ class EditorScope {
     _settingsSections.sort((a, b) => a.order.compareTo(b.order));
     _docks.sort((a, b) => a.order.compareTo(b.order));
     _toolbarButtons.sort((a, b) => a.order.compareTo(b.order));
+    _gettingStartedTips.sort((a, b) => a.order.compareTo(b.order));
     _workspaces.sort((a, b) => a.order.compareTo(b.order));
     _assetActions.sort((a, b) => a.order.compareTo(b.order));
     _tiledObjectMappers.sort((a, b) => a.order.compareTo(b.order));

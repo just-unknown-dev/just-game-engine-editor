@@ -274,6 +274,25 @@ class ToolbarButton {
   final void Function(EditorScope scope) onPressed;
 }
 
+/// A line a module adds to the start card, the guide shown over the
+/// viewport while no scene is open: how to work with what the module
+/// brings. One sentence, or two short ones.
+class GettingStartedTip {
+  const GettingStartedTip({
+    required this.id,
+    required this.text,
+    this.icon,
+    this.order = 100,
+  });
+
+  final String id;
+  final String text;
+
+  /// Drawn before the text; a light bulb when null.
+  final IconData? icon;
+  final int order;
+}
+
 /// An entry a module adds to an entity's context menu in the scene tree.
 class SceneTreeAction {
   const SceneTreeAction({

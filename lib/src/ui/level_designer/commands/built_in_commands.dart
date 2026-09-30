@@ -121,29 +121,35 @@ abstract final class BuiltInCommands {
     ],
     // Editor-wide: dispatched by the plugin after the designer has passed.
     // Play-test controls. Always in scope, and on function keys: during a
-    // play-test the letters and Space belong to the game.
+    // play-test the letters and Space belong to the game. There is nothing
+    // to play-test with no scene open — the start card is showing — but a
+    // play-test under way can always be paused and stopped.
     DesignerCommand(
       id: 'editor.playToggle',
       label: 'Play / Stop',
       scope: CommandScope.always,
+      isEnabled: _canPlay,
       run: (c) => c.plugin!.playController.togglePlay(),
     ),
     DesignerCommand(
       id: 'editor.pauseToggle',
       label: 'Pause / Resume',
       scope: CommandScope.always,
+      isEnabled: _canPlay,
       run: (c) => c.plugin!.playController.togglePause(),
     ),
     DesignerCommand(
       id: 'editor.playRestart',
       label: 'Restart play-test',
       scope: CommandScope.always,
+      isEnabled: _canPlay,
       run: (c) => c.plugin!.playController.restart(),
     ),
     DesignerCommand(
       id: 'editor.playStep',
       label: 'Step one frame',
       scope: CommandScope.always,
+      isEnabled: _canPlay,
       run: (c) => c.plugin!.playController.step(),
     ),
     DesignerCommand(
@@ -353,6 +359,14 @@ abstract final class BuiltInCommands {
         },
       ),
   ];
+
+  /// A scene is open to play-test, or a play-test is under way.
+  static bool _canPlay(CommandContext c) {
+    final plugin = c.plugin;
+    return plugin == null ||
+        plugin.sceneState.hasScene ||
+        plugin.playController.isRunning;
+  }
 
   static DesignerCommand _d(
     String id,

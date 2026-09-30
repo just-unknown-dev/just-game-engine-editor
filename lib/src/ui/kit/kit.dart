@@ -12,6 +12,7 @@ export 'controls.dart';
 export 'dialogs.dart';
 export 'fields.dart';
 export 'focus.dart';
+export 'key_claim.dart';
 export 'layout.dart';
 export 'look.dart';
 export 'workspace.dart';

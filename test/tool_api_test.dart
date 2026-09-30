@@ -210,9 +210,9 @@ void main() {
     expect(top('SHAPES'), lessThan(top('TILES')));
     expect(top('TILES'), lessThan(top('MEASURE')));
 
-    // Not V: the select tool is the transform column's, not the strip's.
+    // Not Q: the select tool is the transform column's, not the strip's.
     expect(find.byIcon(Icons.near_me), findsNothing);
-    for (final key in ['B', 'P', 'I', 'S', 'G', 'T', 'D', 'Q', 'M']) {
+    for (final key in ['B', 'P', 'I', 'S', 'G', 'T', 'D', 'V', 'M']) {
       expect(find.text(key), findsOneWidget, reason: 'the $key badge');
     }
     final active = tester

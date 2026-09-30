@@ -208,6 +208,11 @@ abstract class EditorModule {
   /// Buttons after the built-in play controls.
   List<ToolbarButton> get toolbarButtons => const [];
 
+  /// What the start card — shown over the viewport while no scene is open —
+  /// says about this module: where the player starts, the key that draws a
+  /// path.
+  List<GettingStartedTip> get gettingStartedTips => const [];
+
   /// Entries in an entity's scene-tree context menu.
   List<SceneTreeAction> get sceneTreeActions => const [];
 

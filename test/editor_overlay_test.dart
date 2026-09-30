@@ -85,8 +85,12 @@ void main() {
   testWidgets('no status badge, and the play controls sit top-left', (
     tester,
   ) async {
+    if (!kDebugMode) return;
     Engine.resetInstance();
-    final plugin = JustGameEditorPlugin(engine: Engine());
+    final engine = Engine();
+    await tester.runAsync(engine.initialize);
+    final plugin = JustGameEditorPlugin(engine: engine);
+    await tester.runAsync(plugin.onInitialize);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -97,13 +101,10 @@ void main() {
         ),
       ),
     );
-    if (!kDebugMode) {
-      plugin.dispose();
-      Engine.resetInstance();
-      return;
-    }
 
-    plugin.toggleVisibility();
+    plugin.setVisible(true);
+    // The play controls are the level's: they show with a scene open.
+    plugin.sceneState.openScene(Scene(name: 'level'));
     await tester.pumpAndSettle();
 
     expect(find.text('EDITOR: OPEN'), findsNothing);
@@ -119,6 +120,7 @@ void main() {
     expect(plugin.gamePreviewStyle.borderColor, ui.themeColor);
     expect(plugin.gamePreviewStyle.cornerRadius, ui.cornerRadius + 6);
 
+    await tester.pumpWidget(const SizedBox());
     plugin.dispose();
     Engine.resetInstance();
   });

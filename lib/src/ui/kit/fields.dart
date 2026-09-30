@@ -49,9 +49,13 @@ class EditorSearchField extends StatefulWidget {
     this.controller,
     this.focusNode,
     this.autofocus = false,
+    this.onSubmitted,
   });
 
   final ValueChanged<String> onChanged;
+
+  /// Enter pressed in the field: do the obvious thing with what it found.
+  final ValueChanged<String>? onSubmitted;
   final String initial;
   final String hint;
 
@@ -98,6 +102,7 @@ class _EditorSearchFieldState extends State<EditorSearchField> {
         widget.onChanged(v);
         setState(() {});
       },
+      onSubmitted: widget.onSubmitted,
       onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
       style: TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
       decoration: editorFieldDecoration(

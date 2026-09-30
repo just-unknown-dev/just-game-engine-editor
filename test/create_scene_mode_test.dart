@@ -61,7 +61,7 @@ void main() {
     await tester.enterText(find.byType(TextField), name);
     await tester.pump();
     await tester.runAsync(() async {
-      await tester.tap(find.text('Create Scene'));
+      await tester.tap(find.text('Create scene'));
       // The file is written off the test's fake clock.
       await Future<void>.delayed(const Duration(milliseconds: 200));
     });

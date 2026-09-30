@@ -178,6 +178,8 @@ void main() {
     ) async {
       if (!kDebugMode) return;
       await pump(tester);
+      // Play needs a scene to play-test.
+      plugin.sceneState.openScene(Scene(name: 'level'));
       expect(
         BuiltInDocks.runCommand(plugin, 'editor.playToggle'),
         contains('Ran'),

@@ -36,7 +36,7 @@ enum _Gesture { none, marquee, move, resize, rotate }
 ///     ratio, Alt resizes about the centre.
 ///   - Rotate: drag the ring to turn about the selection's centre, in 15
 ///     degree steps. A piece of a map turns its tiles, a quarter at a time.
-///   - All (V), where it starts: the resize handles and the knob above the
+///   - All (Q), where it starts: the resize handles and the knob above the
 ///     bounds that turns it, together.
 /// - Double-click open ground: the Level Map.
 ///
@@ -87,7 +87,7 @@ class SelectTool extends LevelToolHandler {
   IconData get icon => Icons.near_me;
 
   /// None of its own: the transform toolbar's All, Move, Scale and Rotate
-  /// (V, W, E, R) are this tool, each with its gizmo.
+  /// (Q, W, E, R) are this tool, each with its gizmo.
   @override
   String? get shortcut => null;
 

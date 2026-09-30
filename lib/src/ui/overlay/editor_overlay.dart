@@ -18,6 +18,7 @@ import 'chrome/editor_chrome.dart';
 import 'chrome_state.dart';
 import 'settings/overlay_ui_settings.dart';
 import 'viewport_menu.dart';
+import 'start/start_card.dart';
 import 'shared/snackbar.dart';
 import '../kit/dialogs.dart';
 
@@ -472,7 +473,7 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         _scheduleCanvasSizeUpdate(size);
 
-        return MouseRegion(
+        final canvas = MouseRegion(
           onExit: (_) => widget.plugin.viewport.onPointerExit(),
           child: Listener(
             onPointerDown: (event) {
@@ -518,6 +519,19 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
                 child: AbsorbPointer(absorbing: true, child: widget.gameChild),
               ),
             ),
+          ),
+        );
+        // With no scene open there is no level to show: the start card
+        // covers the game as it booted, and takes the presses.
+        final plugin = widget.plugin;
+        return SignalConsumer(
+          signals: [plugin.sceneState.activeScene],
+          builder: (context, _) => Stack(
+            fit: StackFit.expand,
+            children: [
+              canvas,
+              if (!plugin.sceneState.hasScene) EditorStartCover(plugin: plugin),
+            ],
           ),
         );
       },
