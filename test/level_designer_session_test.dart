@@ -56,7 +56,7 @@ class _TestExtension extends EditorModule {
 /// Entities this fixture's prefab created.
 List<jge.Entity> _blocks(jge.World world) => world
     .query([jge.TagComponent])
-    .where((e) => e.getComponent<jge.TagComponent>()!.tag == kBlockTag)
+    .where((e) => e.hasTag(kBlockTag))
     .toList();
 
 /// A session wired to a throwaway world, with unique names and the selection

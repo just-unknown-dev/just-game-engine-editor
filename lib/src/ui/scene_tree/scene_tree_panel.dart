@@ -818,12 +818,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
           component.runtimeType.toString(),
   };
 
-  Set<String> _tags() => {
-    for (final entity in _world.entities)
-      if (entity.isAlive)
-        if (entity.getComponent<jge.TagComponent>()?.tag case final tag?)
-          if (tag.isNotEmpty) tag,
-  };
+  Set<String> _tags() => _world.tagsInUse;
 
   Set<String> _layers() => {
     for (final entity in _world.entities)
@@ -852,17 +847,16 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
           (value) => _tree.filter.value = filter.copyWith(componentType: value),
         ),
       ),
-      if (tags.isNotEmpty || filter.tag.isNotEmpty)
+      if (tags.isNotEmpty || filter.wantedTags.isNotEmpty)
         _FilterChip(
-          label: filter.tag.isEmpty ? 'Tag' : filter.tag,
-          on: filter.tag.isNotEmpty,
-          count: filter.tag.isEmpty ? tags.length : null,
-          onPressed: (at) => _pickFilter(
-            at,
-            tags,
-            'Any tag',
-            (value) => _tree.filter.value = filter.copyWith(tag: value),
-          ),
+          label: switch (filter.wantedTags.toList()) {
+            [] => 'Tag',
+            [final only] => '#$only',
+            [final first, ...final rest] => '#$first +${rest.length}',
+          },
+          on: filter.wantedTags.isNotEmpty,
+          count: filter.wantedTags.isEmpty ? tags.length : null,
+          onPressed: (at) => _pickTags(at, tags, filter),
         ),
       if (layers.isNotEmpty || filter.layer.isNotEmpty)
         _FilterChip(
@@ -917,6 +911,37 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     ]);
     if (chosen == null) return;
     apply(chosen);
+  }
+
+  /// Tags to narrow the tree to — any of several, each ticked on or off.
+  Future<void> _pickTags(
+    Offset at,
+    Set<String> inScene,
+    TreeFilter filter,
+  ) async {
+    final wanted = filter.wantedTags;
+    final sorted = {...inScene, ...wanted}.toList()..sort();
+    final tags = widget.scope.tags;
+    final chosen = await showEditorMenu<String>(context, at, [
+      editorMenuItem('', 'Any tag', iconSlot: true),
+      if (sorted.isNotEmpty) editorMenuDivider(),
+      for (final tag in sorted)
+        editorMenuItem(
+          tag,
+          tag,
+          icon: wanted.contains(tag) ? Icons.check_rounded : Icons.circle,
+          iconColor: wanted.contains(tag) ? null : tags.colorOf(tag),
+        ),
+    ]);
+    if (chosen == null) return;
+    _tree.filter.value = filter.copyWith(
+      tag: '',
+      tags: chosen.isEmpty
+          ? const {}
+          : wanted.contains(chosen)
+          ? (wanted..remove(chosen))
+          : {...wanted, chosen},
+    );
   }
 
   // ── Renaming ─────────────────────────────────────────────────────────

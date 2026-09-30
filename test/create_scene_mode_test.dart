@@ -152,7 +152,7 @@ void main() {
       expect(centre.dx, closeTo(0, 1e-6));
       expect(centre.dy, closeTo(0, 1e-6));
       final spawn = entities.firstWhere((e) => e.name == 'PlayerSpawn');
-      expect(spawn.getComponent<SpawnComponent>()!.tag, 'player');
+      expect(spawn.getComponent<SpawnComponent>()!.spawner, 'player');
     });
   });
 }

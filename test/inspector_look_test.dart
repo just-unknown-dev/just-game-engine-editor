@@ -18,7 +18,10 @@ void main() {
     scope = testScope();
     entity = scope.world.createEntityWithComponents([
       TransformComponent(position: Vector3(2400, 416, 0)),
-      VirtualCameraComponent(priority: 10, followTag: 'player'),
+      VirtualCameraComponent(
+        priority: 10,
+        follow: const EntityTarget.tag('player'),
+      ),
       CameraFramingComponent(),
     ], name: 'Camera');
     tester.view.physicalSize = const Size(360, 1400);

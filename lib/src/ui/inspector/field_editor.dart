@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../../core/scope/editor_scope.dart';
 import '../../core/state/editor_scene_state.dart';
 import '../widgets/scrubbable_number_field.dart' show NumberScrubConfig;
 import 'field_rows.dart';
@@ -30,6 +31,7 @@ class FieldEditorContext {
     this.entityNames,
     this.world,
     this.sceneState,
+    this.scope,
   });
 
   /// The definition field being edited: name, kind, limits, read/write.
@@ -63,6 +65,10 @@ class FieldEditorContext {
   /// points at other entities looks them up here, not in the level.
   final jge.World? world;
   final EditorSceneState? sceneState;
+
+  /// The editor the inspector belongs to — its tag list, its spawners.
+  /// Null where there is none to ask.
+  final EditorScope? scope;
 
   /// Label to show: the hint's, else the field name.
   String get label => hint.label ?? field.name;
@@ -98,6 +104,9 @@ class FieldEditorContext {
     editors: editors,
     readOnly: readOnly,
     entityNames: entityNames,
+    world: world,
+    sceneState: sceneState,
+    scope: scope,
   );
 }
 

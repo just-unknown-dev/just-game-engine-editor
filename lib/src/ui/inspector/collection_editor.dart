@@ -25,9 +25,20 @@ class CollectionEditor extends StatelessWidget {
     this.readOnly = false,
     this.template,
     this.description,
+    this.itemCell,
   });
 
   final String label;
+
+  /// The whole row for one key of an object item, when that key needs more
+  /// than a plain cell — a target, a tag. Null, or a null answer, keeps the
+  /// plain cell.
+  final Widget? Function(
+    String key,
+    Object? value,
+    ValueChanged<Object?> onChanged,
+  )?
+  itemCell;
 
   /// A `List` or a `Map`; anything else is shown as text.
   final Object? value;
@@ -66,10 +77,7 @@ class CollectionEditor extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(
-              label,
-              style: InspectorField.labelStyle,
-            ),
+            Text(label, style: InspectorField.labelStyle),
             const SizedBox(width: 6),
             _CountPill(count),
             const Spacer(),
@@ -109,6 +117,7 @@ class CollectionEditor extends StatelessWidget {
                 index: i,
                 item: list[i] as Map,
                 readOnly: readOnly,
+                itemCell: readOnly ? null : itemCell,
                 onChanged: (next) => onChanged([...list]..[i] = next),
                 onRemove: () => onChanged([...list]..removeAt(i)),
               )
@@ -204,6 +213,7 @@ class _ItemCard extends StatelessWidget {
     required this.readOnly,
     required this.onChanged,
     required this.onRemove,
+    this.itemCell,
   });
 
   final int index;
@@ -211,6 +221,7 @@ class _ItemCard extends StatelessWidget {
   final bool readOnly;
   final ValueChanged<Map> onChanged;
   final VoidCallback onRemove;
+  final Widget? Function(String, Object?, ValueChanged<Object?>)? itemCell;
 
   @override
   Widget build(BuildContext context) {
@@ -239,30 +250,36 @@ class _ItemCard extends StatelessWidget {
           for (final entry in item.entries)
             Padding(
               padding: const EdgeInsets.only(top: 4, right: 4),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 64,
-                    child: Text(
-                      '${entry.key}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: EditorTheme.textMuted,
-                        fontSize: 10,
+              child:
+                  itemCell?.call(
+                    '${entry.key}',
+                    entry.value,
+                    (next) => onChanged({...item, entry.key: next}),
+                  ) ??
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 64,
+                        child: Text(
+                          '${entry.key}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: EditorTheme.textMuted,
+                            fontSize: 10,
+                          ),
+                        ),
                       ),
-                    ),
+                      Expanded(
+                        child: _Cell(
+                          value: entry.value,
+                          readOnly: readOnly,
+                          onChanged: (next) =>
+                              onChanged({...item, entry.key: next}),
+                        ),
+                      ),
+                    ],
                   ),
-                  Expanded(
-                    child: _Cell(
-                      value: entry.value,
-                      readOnly: readOnly,
-                      onChanged: (next) =>
-                          onChanged({...item, entry.key: next}),
-                    ),
-                  ),
-                ],
-              ),
             ),
         ],
       ),
@@ -475,10 +492,7 @@ class EntityLinkList extends StatelessWidget {
     children: [
       Row(
         children: [
-          Text(
-            label,
-            style: InspectorField.labelStyle,
-          ),
+          Text(label, style: InspectorField.labelStyle),
           const SizedBox(width: 6),
           _CountPill(names.length),
         ],

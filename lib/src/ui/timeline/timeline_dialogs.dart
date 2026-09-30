@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../core/constants/editor_constants.dart';
+import '../inspector/tag_field_editors.dart' show TagPicker;
 import '../overlay/docks/shared/dock_widgets.dart';
 import 'timeline_session.dart';
 
@@ -158,16 +159,19 @@ class _BindingDialogState extends State<_BindingDialog> {
                 'animate many entities.',
                 style: _body,
               )
-            else ...[
+            else if (_kind == jge.TrackBindingKind.tag) ...[
+              TagPicker(
+                scope: widget.session.scope,
+                value: _value.text,
+                hint: 'A tag — the first entity with it',
+                onChanged: (tag) => setState(() => _value.text = tag),
+              ),
+            ] else ...[
               TextField(
                 controller: _value,
                 autofocus: true,
                 style: _body.copyWith(color: EditorTheme.textPrimary),
-                decoration: _input(
-                  _kind == jge.TrackBindingKind.name
-                      ? 'The entity’s name'
-                      : 'A tag — the first entity with it',
-                ),
+                decoration: _input('The entity’s name'),
                 onSubmitted: (_) => Navigator.of(context).pop(_binding),
               ),
               if (_kind == jge.TrackBindingKind.name && names.isNotEmpty)

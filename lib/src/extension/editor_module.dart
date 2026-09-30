@@ -237,6 +237,11 @@ abstract class EditorModule {
   /// module knows — so the inspector can show it rather than a blank.
   List<InheritedColor> get inheritedColors => const [];
 
+  /// Tags this module's game code looks for by name — `enemy`, say. The
+  /// project's tag list shows them as built in: they cannot be renamed or
+  /// deleted there, since code would go on looking for the old name.
+  List<jge.TagDefinition> get tags => const [];
+
   /// Endings of the JSON files this module owns (`.ui.json`), so the editor
   /// never takes one for a sprite atlas — which is what it assumes of any
   /// `.json` it does not recognise.

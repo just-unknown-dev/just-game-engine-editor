@@ -22,6 +22,7 @@ Future<String?> promptSceneName(
   required String actionLabel,
   String initialValue = '',
   required String? Function(String) validate,
+  String hint = 'e.g. level_2',
 }) {
   return showDialog<String>(
     context: context,
@@ -32,6 +33,7 @@ Future<String?> promptSceneName(
         actionLabel: actionLabel,
         initialValue: initialValue,
         validate: validate,
+        hint: hint,
       ),
     ),
   );
@@ -43,12 +45,14 @@ class _SceneNamePromptDialog extends StatefulWidget {
     required this.actionLabel,
     required this.initialValue,
     required this.validate,
+    this.hint = 'e.g. level_2',
   });
 
   final String title;
   final String actionLabel;
   final String initialValue;
   final String? Function(String) validate;
+  final String hint;
 
   @override
   State<_SceneNamePromptDialog> createState() => _SceneNamePromptDialogState();
@@ -99,7 +103,7 @@ class _SceneNamePromptDialogState extends State<_SceneNamePromptDialog> {
               cursorColor: EditorTheme.primaryBright,
               style: TextStyle(color: EditorTheme.textPrimary, fontSize: 13),
               decoration: editorFieldDecoration(
-                hint: 'e.g. level_2',
+                hint: widget.hint,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 10,
                   vertical: 10,

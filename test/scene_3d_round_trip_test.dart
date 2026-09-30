@@ -80,7 +80,7 @@ void main() {
     expect(await io.save(), isTrue);
     final first = file.readAsStringSync();
     final saved = jsonDecode(first) as Map<String, dynamic>;
-    expect(saved['version'], 6);
+    expect(saved['version'], SceneFormat.current);
     expect(saved['mode'], '3d', reason: 'a 3-D scene stays 3-D');
     expect(saved.containsKey('root'), isFalse);
     final entities = (saved['entities'] as List).cast<Map>();

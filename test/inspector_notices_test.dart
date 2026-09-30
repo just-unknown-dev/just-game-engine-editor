@@ -69,7 +69,10 @@ void main() {
     );
     await pumpInspector(tester);
     expect(find.textContaining('Switched off'), findsOneWidget);
-    expect(find.textContaining('scene tree'), findsOneWidget);
+    expect(find.textContaining('tick above'), findsOneWidget);
+    // And the tick above is there, working, while the rest waits.
+    await tester.tap(find.byIcon(Icons.check_box_outline_blank_rounded));
+    expect(hero.isActive, isTrue);
   });
 
   testWidgets('pinned, it says so, with the way to unpin', (tester) async {

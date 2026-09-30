@@ -7,6 +7,7 @@ import '../../core/constants/editor_constants.dart';
 import '../../core/level_map/tile_selection_ops.dart';
 import '../../core/scope/editor_scope.dart';
 import '../inspector/definition_section.dart';
+import '../inspector/entity_header.dart';
 import '../../core/state/editor_scene_state.dart';
 import '../kit/kit.dart';
 
@@ -298,10 +299,13 @@ class _EntityInspector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Tags are in the header, with the entity; the Tag component's own
+    // card would only say the same thing again.
     final sections = buildComponentSections(
       entity: entity,
       sceneState: sceneState,
       scope: scope,
+      hidden: const {TagComponent},
     );
     sections.add(
       AddComponentPicker(entity: entity, sceneState: sceneState, scope: scope),
@@ -326,6 +330,15 @@ class _EntityInspector extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Outside the part a switched-off entity greys out: its tick is
+          // how it comes back on.
+          EntityHeader(
+            key: ValueKey(entity.id),
+            entity: entity,
+            scope: scope,
+            sceneState: sceneState,
+          ),
+          const SizedBox(height: 6),
           // Why the panel is behaving oddly, said in the panel itself:
           // showing something other than the selection, refusing edits,
           // or sitting over an entity the viewport will not give up.
@@ -334,8 +347,8 @@ class _EntityInspector extends StatelessWidget {
               icon: Icons.do_not_disturb_on_outlined,
               tint: EditorTheme.warning,
               message:
-                  'Switched off in the game. Turn it on with its tick in '
-                  'the scene tree to edit it.',
+                  'Switched off in the game. Turn it on with its tick '
+                  'above to edit it.',
             ),
             const SizedBox(height: 6),
           ],

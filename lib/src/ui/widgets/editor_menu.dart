@@ -104,6 +104,37 @@ PopupMenuDivider editorMenuDivider() => PopupMenuDivider(
 );
 
 /// Opens [items] at the global point [at].
+/// Opens [items] [gap] below the widget [anchor] is the context of: from
+/// its left edge, or — where there is no room to the right — its right
+/// edge, so a menu from a button at the end of a row opens inward instead
+/// of pressed against the header and the window's edge.
+Future<T?> showEditorMenuBelow<T>(
+  BuildContext anchor,
+  List<PopupMenuEntry<T>> items, {
+  double gap = 4,
+}) {
+  final box = anchor.findRenderObject()! as RenderBox;
+  final overlay =
+      Navigator.of(anchor).overlay!.context.findRenderObject()! as RenderBox;
+  final left = box.localToGlobal(Offset.zero, ancestor: overlay).dx;
+  final bottom =
+      box.localToGlobal(box.size.bottomLeft(Offset.zero), ancestor: overlay).dy +
+      gap;
+  return showMenu<T>(
+    context: anchor,
+    color: EditorTheme.menuBg,
+    position: RelativeRect.fromRect(
+      Rect.fromLTRB(left, bottom, left + box.size.width, bottom),
+      Offset.zero & overlay.size,
+    ),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(4),
+      side: BorderSide(color: EditorTheme.border),
+    ),
+    items: items,
+  );
+}
+
 Future<T?> showEditorMenu<T>(
   BuildContext context,
   Offset at,

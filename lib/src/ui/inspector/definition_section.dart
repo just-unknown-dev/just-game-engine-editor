@@ -484,6 +484,7 @@ class DefinitionSection extends StatelessWidget {
       editors: scope.fieldEditors,
       world: world,
       sceneState: sceneState,
+      scope: scope,
       entityNames: () => [
         for (final e in (world ?? scope.world).query([
           jge.TransformComponent,

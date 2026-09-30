@@ -212,11 +212,11 @@ class GizmoPainter {
       final spawn = entity.getComponent<SpawnComponent>();
       if (transform == null || spawn == null) continue;
       final screenPos = camera.worldToScreen(transform.position.toOffset());
-      _paintSpawnIcon(canvas, screenPos, spawn.tag);
+      _paintSpawnIcon(canvas, screenPos, spawn.spawner);
     }
   }
 
-  void _paintSpawnIcon(Canvas canvas, Offset center, String tag) {
+  void _paintSpawnIcon(Canvas canvas, Offset center, String spawner) {
     const iconData = Icons.person_pin_circle_rounded;
     const accent = Color(0xFFFFB74D);
     _paint
@@ -243,7 +243,7 @@ class GizmoPainter {
 
     final labelPainter = TextPainter(
       text: TextSpan(
-        text: tag,
+        text: spawner,
         style: const TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
@@ -256,6 +256,52 @@ class GizmoPainter {
       canvas,
       Offset(center.dx - labelPainter.width / 2, center.dy + 18),
     );
+  }
+
+  /// Rings every one of [entities] in [color] and labels it `#tag` — what
+  /// a tag being pointed at means in the level.
+  void paintTagHighlight(
+    Canvas canvas,
+    List<Entity> entities,
+    String tag,
+    Color color,
+    EditorView camera,
+    Size canvasSize,
+  ) {
+    if (entities.isEmpty || canvasSize == Size.zero) return;
+    camera.viewportSize = canvasSize;
+    final label = TextPainter(
+      text: TextSpan(
+        text: '#$tag',
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    for (final entity in entities) {
+      final transform = entity.getComponent<TransformComponent>();
+      if (transform == null) continue;
+      final bounds = _computeScreenBounds(entity, transform, camera);
+      final box = Rect.fromCenter(
+        center: bounds.center,
+        width: math.max(bounds.halfW * 2, 16) + 10,
+        height: math.max(bounds.halfH * 2, 16) + 10,
+      );
+      final shape = RRect.fromRectAndRadius(box, const Radius.circular(4));
+      _paint
+        ..style = PaintingStyle.fill
+        ..color = color.withValues(alpha: 0.12);
+      canvas.drawRRect(shape, _paint);
+      _paint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = color;
+      canvas.drawRRect(shape, _paint);
+      label.paint(canvas, Offset(box.left, box.top - label.height - 2));
+    }
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

@@ -33,8 +33,11 @@ import '../../ui/level_designer/state/selection_handle_layout.dart';
 import '../serialization/scene_codec.dart';
 import '../serialization/scene_store.dart';
 import '../services/editor_log_service.dart';
+import '../tags/project_tags.dart';
+import '../tags/tag_references.dart';
 import '../state/editor_scene_state.dart';
 import '../../extension/built_in_row_decorations.dart';
+import '../../extension/built_in_tag_contributions.dart';
 import '../entity/entity_ops.dart';
 import '../state/editor_view_state.dart';
 import '../level_map/tile_edit_state.dart';
@@ -156,7 +159,16 @@ class EditorScope {
         () => TileEditState(sceneState: sceneState, docs: mapDocs),
         dispose: (t) => t.dispose(),
       )
-      ..registerLazySingleton<LevelMapProvision>(() => LevelMapProvision(this));
+      ..registerLazySingleton<LevelMapProvision>(() => LevelMapProvision(this))
+      ..registerLazySingleton<ProjectTags>(() {
+        _tagsMade = true;
+        return ProjectTags(
+            path: ProjectTags.pathFor(scenesRoot: scenesRoot),
+            spawners: () => spawners.value,
+          )
+          ..setDeclared(_declaredTags())
+          ..load(seed: _tagsTheScenesCarry);
+      }, dispose: (t) => t.dispose());
     this.modules.registerAll(modules);
     reload();
     // Made now rather than when first asked for: it follows the selection
@@ -599,6 +611,56 @@ class EditorScope {
   /// Makes the scene's Level Map when something is first drawn on it.
   LevelMapProvision get mapProvision => container.get<LevelMapProvision>();
 
+  /// The project's tags: its tag file, the tags code declares, and the ones
+  /// the game's spawners give.
+  ProjectTags get tags => container.get<ProjectTags>();
+
+  /// Finds and rewrites tags in saved scenes and timelines, through
+  /// [definitions].
+  TagReferences get tagReferences =>
+      TagReferences(definitions.definitionByType);
+
+  bool _tagsMade = false;
+
+  /// The tag being pointed at — a chip under the mouse — whose entities the
+  /// viewport rings. Null when none is.
+  final Signal<String?> highlightedTag = Signal(
+    null,
+    debugLabel: 'highlightedTag',
+  );
+
+  /// What the game's spawn points can create, as the app registered it with
+  /// the editor: what Play spawns, what a spawn point's "Spawns" field
+  /// offers, and the tags that exist only once the game runs.
+  final Signal<List<Spawner>> spawners = Signal(
+    const [],
+    debugLabel: 'spawners',
+  );
+
+  List<TagDefinition> _declaredTags() => [
+    for (final module in modules.all) ...module.tags,
+  ];
+
+  /// The tags the project's scene files — and the open world — carry: what
+  /// a project that has no tag file yet already uses.
+  Set<String> _tagsTheScenesCarry() {
+    final found = <String>{};
+    try {
+      found.addAll(world.tagsInUse);
+    } on Object {
+      // No world yet: the files are enough.
+    }
+    final references = tagReferences;
+    for (final name in scenes.listSceneNames()) {
+      final raw = scenes.readRawSync(name);
+      if (raw == null) continue;
+      for (final use in references.inScene(SceneFormat.migrate(raw))) {
+        if (use.kind == TagUseKind.carried) found.add(use.tag);
+      }
+    }
+    return found;
+  }
+
   /// Rebuilds every scope-level registry from scratch: built-ins, then each
   /// module's contributions in registration order. Idempotent, so it is safe
   /// on every hot reload — and nothing a module stopped contributing survives.
@@ -633,6 +695,8 @@ class EditorScope {
     _sceneTreeActions.addAll(BuiltInCameraContributions.sceneTreeActions);
     _rowDecorations.addAll(BuiltInCameraContributions.rowDecorations);
     _rowDecorations.addAll(BuiltInRowDecorations.all);
+    _sceneTreeActions.addAll(BuiltInTagContributions.sceneTreeActions);
+    _rowDecorations.addAll(BuiltInTagContributions.rowDecorations);
     _entityIcons.addAll(BuiltInTileContributions.entityIcons);
     _assetActions.addAll(BuiltInTileContributions.assetActions);
     final context = EditorModuleContext(scope: this, isDebug: _isDebug);
@@ -661,6 +725,9 @@ class EditorScope {
     ModuleDataFiles.replace([
       for (final module in modules.all) ...module.dataFileSuffixes,
     ]);
+    // Made when first asked for — reading it scans the scenes — and kept
+    // in step with the modules from then on.
+    if (_tagsMade) tags.setDeclared(_declaredTags());
     // The bindings are as built: the keys changed in the settings go over
     // them, on this and every later rebuild.
     commands.markBuilt();
@@ -734,6 +801,8 @@ class EditorScope {
     activeDesigner.dispose();
     activeWorkspace.dispose();
     workspaceFullScreen.dispose();
+    spawners.dispose();
+    highlightedTag.dispose();
     container.close();
   }
 }

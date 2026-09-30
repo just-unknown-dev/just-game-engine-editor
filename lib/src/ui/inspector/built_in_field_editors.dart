@@ -10,6 +10,7 @@ import 'field_editor.dart';
 import 'field_rows.dart';
 import 'physics_shape_editor.dart';
 import 'collection_editor.dart';
+import 'tag_field_editors.dart';
 
 /// The editors for the engine's built-in field types, keyed by type id.
 ///
@@ -37,6 +38,7 @@ abstract final class BuiltInFieldEditors {
     jge.FieldTypes.physicsShape.id: (c) => PhysicsShapeEditor(ctx: c),
     jge.FieldTypes.edgeInsets.id: _edgeInsets,
     jge.FieldTypes.unknown.id: _readonly,
+    ...TagFieldEditors.all,
   };
 
   static Widget _edgeInsets(FieldEditorContext c) => EdgeInsetsEditorRow(
@@ -159,6 +161,36 @@ abstract final class BuiltInFieldEditors {
     template: c.hint.itemTemplate,
     description: c.hint.description,
     onChanged: c.onChanged,
+    itemCell: c.hint.itemKinds == null
+        ? null
+        : (key, json, onChanged) {
+            final kind = c.hint.itemKinds![key];
+            if (kind == null) return null;
+            // An item's key edited by its type's own editor: saved as that type
+            // saves, so the item stays the JSON the component reads.
+            return c.editors.build(
+              FieldEditorContext(
+                field: jge.SchemaField(
+                  name: key,
+                  kind: kind,
+                  read: (_) => null,
+                ),
+                hint: jge.FieldHint(
+                  label: key.isEmpty
+                      ? key
+                      : key[0].toUpperCase() + key.substring(1),
+                ),
+                value: kind.decodeAny(json, jge.FieldConstraints.none),
+                component: c.component,
+                onChanged: (next) => onChanged(kind.encodeAny(next)),
+                editors: c.editors,
+                entityNames: c.entityNames,
+                world: c.world,
+                sceneState: c.sceneState,
+                scope: c.scope,
+              ),
+            );
+          },
   );
 
   /// Compound numeric editors: one scrub row per axis, sharing the hint.

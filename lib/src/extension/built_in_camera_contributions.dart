@@ -52,14 +52,9 @@ abstract final class BuiltInCameraContributions {
       type: 'VirtualCameraComponent',
       summary: (c) {
         final vcam = c as jge.VirtualCameraComponent;
-        final target = vcam.followName.isNotEmpty
-            ? vcam.followName
-            : vcam.followTag.isNotEmpty
-            ? '#${vcam.followTag}'
-            : null;
         return [
           'priority ${vcam.priority}',
-          if (target != null) 'follows $target',
+          if (!vcam.follow.isNone) 'follows ${vcam.follow.label}',
           if (!vcam.enabled) 'off',
         ].join(' · ');
       },

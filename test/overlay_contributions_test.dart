@@ -64,9 +64,10 @@ void main() {
     final scope = testScope(modules: [_Module()]);
     expect(scope.docks.map((d) => d.id), ['test.waves']);
     expect(scope.toolbarButtons.map((b) => b.id), ['test.spawn']);
-    // After the editor's own: Solo camera.
+    // After the editor's own: Solo camera, select by tag.
     expect(scope.sceneTreeActions.map((a) => a.id), [
       BuiltInCameraContributions.soloActionId,
+      BuiltInTagContributions.selectTaggedId,
       'test.mark',
     ]);
     expect(scope.inspectorSections.map((s) => s.id), ['test.notes']);
@@ -90,7 +91,7 @@ void main() {
   test('a protection rule protects, and the camera stays protected', () {
     final scope = testScope(modules: [_Module()]);
     final spawn = scope.world.createEntity()
-      ..addComponent(SpawnComponent(tag: 'p'));
+      ..addComponent(SpawnComponent(spawner: 'p'));
     final block = scope.world.createEntity()
       ..addComponent(TransformComponent());
     expect(scope.isProtected(spawn), isTrue);

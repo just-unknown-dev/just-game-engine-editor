@@ -192,7 +192,7 @@ void main() {
       ], name: 'Level');
       final main = world.createEntityWithComponents([
         TransformComponent(),
-        VirtualCameraComponent(followTag: 'player'),
+        VirtualCameraComponent(follow: const EntityTarget.tag('player')),
         CameraFramingComponent(),
         CameraConfinerComponent(boundsName: 'Level'),
       ], name: 'Main');
@@ -285,14 +285,18 @@ void main() {
     );
     final trigger = zone.whereType<CameraTriggerComponent>().single;
     expect((trigger.width, trigger.height), (300, 200));
-    expect(trigger.targetTag, isEmpty, reason: 'the author names the target');
+    expect(
+      trigger.target.isNone,
+      isTrue,
+      reason: 'the author names the target',
+    );
   });
 
   testWidgets('an entity reference is picked from the scene', (tester) async {
     final scope = testScope();
     Object? written;
-    final field = CameraDefinitions.virtualCamera.fields.firstWhere(
-      (f) => f.name == 'followName',
+    final field = CameraDefinitions.trigger.fields.firstWhere(
+      (f) => f.name == 'cameraName',
     );
     await tester.pumpWidget(
       MaterialApp(
@@ -300,9 +304,9 @@ void main() {
           body: scope.fieldEditors.build(
             FieldEditorContext(
               field: field,
-              hint: const FieldHint(label: 'Follow'),
+              hint: const FieldHint(label: 'Camera'),
               value: 'Gone',
-              component: VirtualCameraComponent(followName: 'Gone'),
+              component: CameraTriggerComponent(cameraName: 'Gone'),
               editors: scope.fieldEditors,
               entityNames: () => ['Player', 'Boss'],
               onChanged: (v) => written = v,

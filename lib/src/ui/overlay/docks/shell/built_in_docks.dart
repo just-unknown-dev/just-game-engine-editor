@@ -17,6 +17,7 @@ import '../profiler/profiler_dock.dart';
 import '../detail_cards.dart';
 import '../../../timeline/timeline_dock.dart';
 import '../../../timeline/timeline_session.dart';
+import '../tags/tags_dock.dart';
 import '../world/world_dock.dart';
 
 /// The editor's own docks, contributed the way a module's are: one
@@ -31,6 +32,7 @@ abstract final class BuiltInDocks {
   static const String history = 'history';
   static const String animator = 'animator';
   static const String search = 'search';
+  static const String tags = 'tags';
 
   /// The arg a readout passes to open the Console on one level.
   static const String levelArg = 'level';
@@ -249,6 +251,13 @@ abstract final class BuiltInDocks {
         },
         build: (context, dock) =>
             ProblemsDock(scope: scope, scan: problemScanOf(plugin)),
+      ),
+      DockDefinition(
+        id: tags,
+        label: 'Tags',
+        icon: Icons.label_outline,
+        order: 65,
+        build: (context, dock) => TagsDock(scope: scope),
       ),
       DockDefinition(
         id: history,

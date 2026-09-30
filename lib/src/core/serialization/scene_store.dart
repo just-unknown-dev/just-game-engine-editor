@@ -85,7 +85,7 @@ class SceneStore {
           'components': encode([
             TransformComponent(position: Vector3(2000, 400, 0)),
             // Follows whatever the game tags 'player' once it is spawned.
-            VirtualCameraComponent(followTag: 'player'),
+            VirtualCameraComponent(follow: const EntityTarget.tag('player')),
             CameraFramingComponent(),
             CameraConfinerComponent(boundsName: 'LevelBounds'),
           ]),
@@ -103,7 +103,7 @@ class SceneStore {
           'parentName': null,
           'components': encode([
             TransformComponent(position: Vector3(200, 400, 0)),
-            SpawnComponent(tag: 'player'),
+            SpawnComponent(spawner: 'player'),
           ]),
         },
       ],
@@ -140,7 +140,7 @@ class SceneStore {
           'parentName': null,
           'components': encode([
             TransformComponent(),
-            SpawnComponent(tag: 'player'),
+            SpawnComponent(spawner: 'player'),
           ]),
         },
       ],
@@ -398,6 +398,21 @@ class SceneStore {
     if (!file.existsSync()) return null;
     try {
       return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// [raw] as its file holds it — for a backup of a scene about to be
+  /// rewritten.
+  String encodeRawText(Map<String, dynamic> raw) => _pretty.convert(raw);
+
+  /// [loadRawSidecar], read at once — for a check that cannot wait.
+  Map<String, dynamic>? readRawSync(String sceneName) {
+    final file = File(_jsonPath(sceneName));
+    if (!file.existsSync()) return null;
+    try {
+      return jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
     } on FormatException {
       return null;
     }

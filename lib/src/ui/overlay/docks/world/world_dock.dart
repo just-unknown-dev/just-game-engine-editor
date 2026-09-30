@@ -123,7 +123,7 @@ class _WorldDockState extends State<WorldDock> {
   }
 
   Widget _entitiesTable(List<jge.Entity> entities) {
-    String tagOf(jge.Entity e) => e.getComponent<jge.TagComponent>()?.tag ?? '';
+    String tagOf(jge.Entity e) => e.tags.join(', ');
     String layerOf(jge.Entity e) {
       final layer = e.getComponent<jge.LayerComponent>()?.layer;
       return layer == null ? '' : '$layer';

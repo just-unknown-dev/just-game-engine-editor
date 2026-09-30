@@ -60,7 +60,7 @@ void main() {
     expect((t.position.x, t.position.y), (96.0, 32.0));
     expect(t.angle, 0.5);
     expect(t.scale.x, 2.0);
-    expect(block.getComponent<TagComponent>()!.tag, 'ground');
+    expect(block.getComponent<TagComponent>()!.tags, ['ground']);
 
     expect(await io.save(), isTrue);
     final saved =
@@ -79,6 +79,6 @@ void main() {
     expect((t2.position.x, t2.position.y), (96.0, 32.0));
     expect(t2.angle, 0.5);
     expect(again.components.whereType<RectangleComponent>().single.width, 64);
-    expect(again.getComponent<TagComponent>()!.tag, 'ground');
+    expect(again.getComponent<TagComponent>()!.tags, ['ground']);
   });
 }

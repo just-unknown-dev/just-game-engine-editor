@@ -5,8 +5,20 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../scope/editor_scope.dart';
 import '../serialization/unknown_components.dart';
+import 'tag_checks.dart';
+
+export 'tag_checks.dart';
 
 enum ProblemSeverity { warning, error }
+
+/// A way to put a problem right in one click — `Use "player"`. Each one is
+/// an ordinary edit: it goes on the undo stack like any other.
+class ProblemFix {
+  const ProblemFix({required this.label, required this.apply});
+
+  final String label;
+  final void Function() apply;
+}
 
 /// Something wrong with the open scene, said in words an author can act on.
 class SceneProblem {
@@ -15,7 +27,11 @@ class SceneProblem {
     this.severity = ProblemSeverity.warning,
     this.entity,
     this.hint,
+    this.fixes = const [],
   });
+
+  /// Ways to fix it in one click, best first.
+  final List<ProblemFix> fixes;
 
   final String message;
   final ProblemSeverity severity;
@@ -87,6 +103,9 @@ abstract final class BuiltInValidators {
     animatorClips,
     timelines,
     camerasWithoutTargets,
+    TagChecks.unknownTags,
+    TagChecks.spawnPoints,
+    TagChecks.unresolvedTargets,
     drawnWithoutTransform,
     levelMaps,
     unshippedTileAssets,
@@ -492,8 +511,7 @@ abstract final class BuiltInValidators {
     final tags = <String>{};
     for (final e in context.world.entities) {
       if (e.name != null) names.add(e.name!);
-      final tag = e.getComponent<jge.TagComponent>()?.tag;
-      if (tag != null) tags.add(tag);
+      tags.addAll(e.tags);
     }
     final out = <SceneProblem>[];
     for (final entity in context.world.entities) {
@@ -654,15 +672,14 @@ abstract final class BuiltInValidators {
       [
         for (final e in context.world.entities)
           if (e.getComponent<jge.VirtualCameraComponent>() case final camera?
-              when camera.followName.trim().isEmpty &&
-                  camera.followTag.trim().isEmpty &&
+              when camera.follow.isNone &&
                   e.hasComponent<jge.CameraFramingComponent>())
             SceneProblem(
               entity: e,
               message:
                   '${_nameOf(e)} frames a target but follows nothing: it will '
                   'stay where it is.',
-              hint: 'Give it an entity name or a tag to follow.',
+              hint: 'Pick an entity or a tag for it to follow.',
             ),
       ];
 

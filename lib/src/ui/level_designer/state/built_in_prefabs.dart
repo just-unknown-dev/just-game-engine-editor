@@ -260,7 +260,7 @@ abstract final class BuiltInPrefabs {
       jge.CameraTriggerComponent(
         width: size.width,
         height: size.height,
-        targetTag: '',
+        target: jge.EntityTarget.none,
       ),
     ],
   );

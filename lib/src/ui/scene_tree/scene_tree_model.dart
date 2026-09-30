@@ -15,6 +15,7 @@ class TreeFilter {
     this.text = '',
     this.componentType = '',
     this.tag = '',
+    this.tags = const {},
     this.layer = '',
     this.problems = false,
   });
@@ -27,7 +28,15 @@ class TreeFilter {
   /// A component's definition type — `SpriteComponent`.
   final String componentType;
 
+  /// One tag to narrow to. See [tags].
   final String tag;
+
+  /// Tags to narrow to: an entity carrying any of them is kept.
+  final Set<String> tags;
+
+  /// [tags] and [tag] together.
+  Set<String> get wantedTags => {...tags, if (tag.isNotEmpty) tag};
+
   final String layer;
 
   /// Only entities something is wrong with.
@@ -39,6 +48,7 @@ class TreeFilter {
       text.trim().isEmpty &&
       componentType.isEmpty &&
       tag.isEmpty &&
+      tags.isEmpty &&
       layer.isEmpty &&
       !problems;
 
@@ -46,12 +56,14 @@ class TreeFilter {
     String? text,
     String? componentType,
     String? tag,
+    Set<String>? tags,
     String? layer,
     bool? problems,
   }) => TreeFilter(
     text: text ?? this.text,
     componentType: componentType ?? this.componentType,
     tag: tag ?? this.tag,
+    tags: tags ?? this.tags,
     layer: layer ?? this.layer,
     problems: problems ?? this.problems,
   );
@@ -72,9 +84,8 @@ class TreeFilter {
       );
       if (!has) return false;
     }
-    if (tag.isNotEmpty) {
-      if (entity.getComponent<jge.TagComponent>()?.tag != tag) return false;
-    }
+    final tagged = wantedTags;
+    if (tagged.isNotEmpty && !tagged.any(entity.hasTag)) return false;
     if (layer.isNotEmpty) {
       if (entity.getComponent<jge.LayerComponent>()?.layerId != layer) {
         return false;
@@ -258,7 +269,7 @@ abstract final class SceneTreeModel {
     final itemsFiltered =
         filtering &&
         filter.componentType.isEmpty &&
-        filter.tag.isEmpty &&
+        filter.wantedTags.isEmpty &&
         filter.layer.isEmpty &&
         !filter.problems;
     final words = filter.text.trim().toLowerCase();

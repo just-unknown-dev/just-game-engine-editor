@@ -228,7 +228,7 @@ class SceneTreeRowTile extends StatelessWidget {
             SizedBox(width: kSceneTreeRowTileHeight),
           const SizedBox(width: 2),
           Icon(
-            icon ?? _worldIcon(entity),
+            icon ?? defaultIcon(entity),
             size: 14,
             // The accent is for what the editor *knows*: something a
             // module claimed as its own. A plain entity gets a plain
@@ -245,7 +245,7 @@ class SceneTreeRowTile extends StatelessWidget {
           const SizedBox(width: 6),
           Expanded(
             child: isRenaming
-                ? _RenameBox(
+                ? EntityRenameBox(
                     initial: name,
                     error: renameError,
                     onCommit: onCommitRename,
@@ -346,8 +346,9 @@ class SceneTreeRowTile extends StatelessWidget {
         : box.localToGlobal(box.size.bottomLeft(Offset.zero));
   }
 
-  /// The icon for something in the world; a module can say better.
-  static IconData _worldIcon(jge.Entity entity) {
+  /// The icon for something in the world; a module can say better
+  /// (`EditorScope.iconFor`).
+  static IconData defaultIcon(jge.Entity entity) {
     if (entity.getComponent<jge.ChildrenComponent>()?.childIds.isNotEmpty ??
         false) {
       return Icons.folder_rounded;
@@ -359,9 +360,12 @@ class SceneTreeRowTile extends StatelessWidget {
 /// The height the list lays a row out at.
 double get kSceneTreeRowTileHeight => EditorMetrics.minTarget;
 
-/// The name, while it is being typed.
-class _RenameBox extends StatefulWidget {
-  const _RenameBox({
+/// An entity's name, while it is being typed: Enter or a click elsewhere
+/// takes it, Escape throws it away. The scene tree's rows and the
+/// inspector's header both rename with it.
+class EntityRenameBox extends StatefulWidget {
+  const EntityRenameBox({
+    super.key,
     required this.initial,
     this.error,
     this.onCommit,
@@ -374,10 +378,10 @@ class _RenameBox extends StatefulWidget {
   final VoidCallback? onCancel;
 
   @override
-  State<_RenameBox> createState() => _RenameBoxState();
+  State<EntityRenameBox> createState() => _EntityRenameBoxState();
 }
 
-class _RenameBoxState extends State<_RenameBox> {
+class _EntityRenameBoxState extends State<EntityRenameBox> {
   late final TextEditingController _controller = TextEditingController(
     text: widget.initial,
   );

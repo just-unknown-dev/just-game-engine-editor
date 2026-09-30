@@ -74,6 +74,14 @@ export 'src/core/constants/editor_constants.dart'
 // The inspector: which control edits which field type, and what the editor
 // adds to a component beyond its fields.
 export 'src/ui/inspector/field_editor.dart';
+export 'src/ui/inspector/tag_field_editors.dart';
+export 'src/ui/inspector/entity_header.dart';
+export 'src/core/tags/project_tags.dart';
+export 'src/core/tags/tag_references.dart';
+export 'src/core/tags/tag_refactor.dart';
+export 'src/core/tags/tag_edits.dart';
+export 'src/extension/built_in_tag_contributions.dart';
+export 'src/ui/overlay/docks/tags/tags_dock.dart';
 export 'src/ui/inspector/field_rows.dart';
 export 'src/ui/inspector/property_table_editor.dart';
 export 'src/ui/inspector/component_extras.dart';

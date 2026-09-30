@@ -78,6 +78,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     required Engine engine,
     EditorScope? scope,
     List<EditorModule> modules = const [],
+    List<Spawner> spawners = const [],
+    @Deprecated('Use spawners, which also say what each one is.')
     Map<String, Entity Function(World world, Entity spawnPoint)> spawnRegistry =
         const {},
     bool bindPhysicsBodies = true,
@@ -95,7 +97,11 @@ class JustGameEditorPlugin implements EnginePlugin {
              ),
          ownsScope: scope == null,
          lateModules: scope == null ? const [] : modules,
-         spawnRegistry: spawnRegistry,
+         spawners: [
+           ...spawners,
+           for (final s in Spawner.fromMap(spawnRegistry))
+             if (!spawners.any((x) => x.id == s.id)) s,
+         ],
          bindPhysicsBodies: bindPhysicsBodies,
          toggleKey: toggleKey,
          statusPanelToggleKey: statusPanelToggleKey,
@@ -108,7 +114,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     required this.scope,
     required bool ownsScope,
     required List<EditorModule> lateModules,
-    required this.spawnRegistry,
+    required this.spawners,
     required this.bindPhysicsBodies,
     required LogicalKeyboardKey toggleKey,
     required LogicalKeyboardKey statusPanelToggleKey,
@@ -127,6 +133,7 @@ class JustGameEditorPlugin implements EnginePlugin {
          protectedSceneNames: protectedSceneNames,
        ),
        _gizmoPainter = GizmoPainter() {
+    scope.spawners.value = spawners;
     // Modules handed to the plugin alongside a scope someone else built join
     // that scope; a scope the plugin built already has them.
     if (lateModules.isNotEmpty) {
@@ -148,13 +155,18 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// scene picker.
   final SceneManager sceneManager;
 
-  /// Maps a [SpawnComponent.tag] to a function that creates the entity for
-  /// it. The editor's Play button calls this for every [SpawnComponent]
-  /// entity in the world (once per play session) — the app owns what
-  /// actually gets created (a player, a zombie, ...), the editor just knows
-  /// where and when to ask for it.
-  final Map<String, Entity Function(World world, Entity spawnPoint)>
-  spawnRegistry;
+  /// What a spawn point can create, as the app registers it. The editor's
+  /// Play button calls the matching one for every [SpawnComponent] in the
+  /// world (once per play session) — the app owns what actually gets created
+  /// (a player, a zombie, ...), the editor just knows where and when to ask.
+  /// A spawn point's "Spawns" field offers these, and their [Spawner.tags]
+  /// tell the editor which tags exist only once the game is running.
+  final List<Spawner> spawners;
+
+  /// [spawners] by id, as the old constructor took them.
+  @Deprecated('Use spawners.')
+  Map<String, Entity Function(World world, Entity spawnPoint)>
+  get spawnRegistry => {for (final s in spawners) s.id: s.spawn};
 
   /// Whether to enable gizmo-drag-to-move authoring for physics bodies
   /// (registers [PhysicsBodyBindingSystem]/[PhysicsJointBindingSystem]).
@@ -254,7 +266,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   late final PlayController playController = PlayController(
     engine: engine,
     scope: scope,
-    spawnRegistry: spawnRegistry,
+    spawners: spawners,
   );
 
   /// Opens and saves scenes through the scope's store.
@@ -307,6 +319,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     required Engine engine,
     EditorScope? scope,
     List<EditorModule> modules = const [],
+    List<Spawner> spawners = const [],
+    @Deprecated('Use spawners, which also say what each one is.')
     Map<String, Entity Function(World world, Entity spawnPoint)> spawnRegistry =
         const {},
     bool bindPhysicsBodies = true,
@@ -321,6 +335,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       engine: engine,
       scope: scope,
       modules: modules,
+      spawners: spawners,
       spawnRegistry: spawnRegistry,
       bindPhysicsBodies: bindPhysicsBodies,
       toggleKey: toggleKey,
@@ -1209,6 +1224,24 @@ class JustGameEditorPlugin implements EnginePlugin {
       camera,
       size,
     );
+
+    final highlighted = scope.highlightedTag.value;
+    if (highlighted != null) {
+      final world = engine.world;
+      _gizmoPainter.paintTagHighlight(
+        canvas,
+        [
+          ...world.allTagged(highlighted).where(_isDrawn),
+          // Where something with the tag will be once the game spawns it.
+          for (final spawner in scope.tags.spawnersGiving(highlighted))
+            ...SpawnPoints.of(world, spawner.id).where(_isDrawn),
+        ],
+        highlighted,
+        scope.tags.colorOf(highlighted),
+        camera,
+        size,
+      );
+    }
 
     _paintGamePreview(canvas, size, engine.cameraSystem.mainCamera);
 

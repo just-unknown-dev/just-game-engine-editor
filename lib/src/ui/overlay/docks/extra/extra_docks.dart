@@ -144,6 +144,25 @@ class _ProblemsDockState extends State<ProblemsDock> {
                             fontSize: 10,
                           ),
                         ),
+                      if (p.fixes.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 3,
+                            children: [
+                              for (final fix in p.fixes)
+                                _FixButton(
+                                  label: fix.label,
+                                  onTap: () {
+                                    fix.apply();
+                                    widget.scan.refresh();
+                                    setState(() {});
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -160,6 +179,46 @@ class _ProblemsDockState extends State<ProblemsDock> {
       },
     );
   }
+}
+
+/// One way to fix a problem, as a small button under it.
+class _FixButton extends StatelessWidget {
+  const _FixButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: EditorTheme.primary.withValues(alpha: 0.12),
+    borderRadius: BorderRadius.circular(3),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(3),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.auto_fix_high_rounded,
+              size: 11,
+              color: EditorTheme.primaryBright,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: EditorTheme.primaryBright,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 // ── History ──────────────────────────────────────────────────────────────────
@@ -468,7 +527,8 @@ class _AnimatorMonitorDockState extends State<AnimatorMonitorDock> {
 // ── Search ───────────────────────────────────────────────────────────────────
 
 /// A query over the scene. Words match names, tags and component types; a
-/// term like `Health.health < 3` or `transform.x >= 100` compares a field.
+/// term like `Health.health < 3` or `transform.x >= 100` compares a field;
+/// `#enemy` is only what carries that tag, exactly.
 class SceneQuery {
   SceneQuery(String text) {
     final comparison = RegExp(
@@ -484,21 +544,28 @@ class SceneQuery {
       ));
       rest = rest.replaceFirst(m.group(0)!, ' ');
     }
-    _words.addAll(
-      rest.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty),
-    );
+    for (final word in rest.split(RegExp(r'\s+'))) {
+      if (word.isEmpty) continue;
+      if (word.startsWith('#') && word.length > 1) {
+        _tags.add(word.substring(1));
+      } else {
+        _words.add(word.toLowerCase());
+      }
+    }
   }
 
   final List<String> _words = [];
+  final List<String> _tags = [];
   final List<({String component, String field, String op, String value})>
   _comparisons = [];
 
-  bool get isEmpty => _words.isEmpty && _comparisons.isEmpty;
+  bool get isEmpty => _words.isEmpty && _tags.isEmpty && _comparisons.isEmpty;
 
   bool matches(jge.Entity entity, EditorScope scope) {
+    if (!_tags.every(entity.hasTag)) return false;
     final haystack = [
       entity.name ?? '',
-      entity.getComponent<jge.TagComponent>()?.tag ?? '',
+      ...entity.tags,
       for (final c in entity.components) '${c.runtimeType}',
     ].join(' ').toLowerCase();
     if (!_words.every(haystack.contains)) return false;
@@ -524,7 +591,10 @@ class SceneQuery {
           _ => null,
         };
         if (axis != null) return _compare(axis, q.op, q.value);
-        if (field.name.toLowerCase() != q.field) continue;
+        // `Tag.tag` still means the tag list it became.
+        final name = field.name.toLowerCase();
+        final plural = value is Iterable && name == '${q.field}s';
+        if (name != q.field && !plural) continue;
         return _compare(value, q.op, q.value);
       }
     }
@@ -544,7 +614,10 @@ class SceneQuery {
         _ => a == b,
       };
     }
-    final same = '$actual'.toLowerCase() == wanted.toLowerCase();
+    // A list — an entity's tags — holds the value when any item is it.
+    final same = actual is Iterable
+        ? actual.any((x) => '$x'.toLowerCase() == wanted.toLowerCase())
+        : '$actual'.toLowerCase() == wanted.toLowerCase();
     return op == '!=' ? !same : same;
   }
 }
@@ -612,9 +685,10 @@ class _SceneSearchDockState extends State<SceneSearchDock> {
                   icon: Icons.manage_search_rounded,
                   title: 'Search the scene',
                   hint:
-                      'Words match names, tags and component types.\n'
+                      'Words match names, tags and component types; '
+                      '#enemy is exactly what carries that tag.\n'
                       'Compare a field: Health.health < 3 · '
-                      'transform.x >= 100 · Tag.tag = enemy',
+                      'transform.x >= 100 · Tag.tags = enemy',
                 )
               : DockTable<jge.Entity>(
                   rows: found,
@@ -634,10 +708,9 @@ class _SceneSearchDockState extends State<SceneSearchDock> {
                       text: (e) => e.name ?? 'Entity ${e.id}',
                     ),
                     DockColumn(
-                      label: 'Tag',
+                      label: 'Tags',
                       flex: 2,
-                      text: (e) =>
-                          e.getComponent<jge.TagComponent>()?.tag ?? '',
+                      text: (e) => e.tags.join(', '),
                     ),
                     DockColumn(
                       label: 'Components',

@@ -284,6 +284,7 @@ void main() {
         'fps',
         'entities',
         'problems',
+        'tags',
         'search',
         'test.waves',
       ]);

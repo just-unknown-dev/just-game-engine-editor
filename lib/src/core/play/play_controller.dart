@@ -1,3 +1,4 @@
+import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 
@@ -8,7 +9,7 @@ import '../state/play_snapshot.dart';
 enum EditorPlayState { stopped, playing, paused }
 
 /// Creates the entity a [SpawnComponent] stands for, when play starts.
-typedef EntitySpawner = Entity Function(World world, Entity spawnPoint);
+typedef EntitySpawner = SpawnFunction;
 
 /// The editor's play-test: runs the real systems on the open scene, then puts
 /// everything back.
@@ -21,15 +22,15 @@ class PlayController {
   PlayController({
     required this.engine,
     required this.scope,
-    this.spawnRegistry = const {},
+    this.spawners = const [],
   });
 
   final Engine engine;
   final EditorScope scope;
 
-  /// Maps a [SpawnComponent.tag] to what creates the entity for it. The app
-  /// owns what gets created; the editor only knows where and when to ask.
-  final Map<String, EntitySpawner> spawnRegistry;
+  /// What a spawn point's [SpawnComponent.spawner] can name. The app owns
+  /// what gets created; the editor only knows where and when to ask.
+  final List<Spawner> spawners;
 
   /// The play-test state; the toolbar and the grid follow it.
   final Signal<EditorPlayState> state = Signal(
@@ -62,7 +63,7 @@ class PlayController {
   /// Starts (or resumes) simulating the currently open scene.
   ///
   /// The first call in a session (from [EditorPlayState.stopped]) spawns one
-  /// entity per [SpawnComponent] found in the world via [spawnRegistry],
+  /// entity per [SpawnComponent] found in the world through [spawners],
   /// tracking what it created so [stop] can clean up precisely — the spawn
   /// point entities themselves are never touched, same as the camera entity.
   /// Calling this again while already playing/paused just resumes time.
@@ -75,13 +76,21 @@ class PlayController {
       // Before anything spawns or moves — and with nothing previewed.
       scope.restoreAuthoredState();
       _snapshot = PlaySnapshot.capture(engine.world, scope.codec);
-      for (final spawnPoint in engine.world.query([SpawnComponent])) {
-        final tag = spawnPoint.getComponent<SpawnComponent>()!.tag;
-        final spawner = spawnRegistry[tag];
-        if (spawner == null) continue;
-        final spawned = spawner(engine.world, spawnPoint);
-        _spawned.add(spawned.id);
-      }
+      final spawned = SpawnPoints.spawnAll(
+        engine.world,
+        spawners,
+        onMissing: (point, id) => scope.log.log(
+          'Play: nothing spawned at ${point.name ?? 'a spawn point'} — no '
+          'spawner is called "$id".',
+          source: 'editor',
+          category: 'play',
+          level: DebuggerLogLevel.warning,
+          details: spawners.isEmpty
+              ? 'The game registered no spawners with the editor.'
+              : 'Spawners: ${spawners.map((s) => s.id).join(', ')}.',
+        ),
+      );
+      _spawned.addAll(spawned.map((e) => e.id));
       scope.log.log(
         'Play: spawned ${_spawned.length} entities.',
         source: 'editor',
