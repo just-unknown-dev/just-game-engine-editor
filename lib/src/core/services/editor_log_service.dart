@@ -304,6 +304,7 @@ class EditorLogService {
         source: 'flutter',
         category: 'framework',
         fallbackMessage: details.exceptionAsString(),
+        details: _flutterReport(details),
       );
     };
 
@@ -351,15 +352,40 @@ class EditorLogService {
     required String source,
     required String category,
     String? fallbackMessage,
+    String? details,
   }) {
     log(
       fallbackMessage ?? error.toString(),
       source: source,
       category: category,
       level: DebuggerLogLevel.error,
-      details: stack?.toString(),
+      details: details ?? stack?.toString(),
     );
   }
+
+  /// What Flutter prints for [details] — the widget at fault and the line
+  /// that made it, the hints, the stack — in place of the bare stack.
+  ///
+  /// An overflow has no stack at all, so its first line was all the log
+  /// kept: "A RenderFlex overflowed by 740 pixels", and never which one.
+  static String? _flutterReport(FlutterErrorDetails details) {
+    try {
+      final report = TextTreeRenderer(
+        wrapWidthProperties: FlutterError.wrapWidth,
+        maxDescendentsTruncatableNode: 5,
+      ).render(details.toDiagnosticsNode(style: DiagnosticsTreeStyle.error));
+      final trimmed = report.trimRight();
+      return trimmed.length <= _maxReportLength
+          ? trimmed
+          : '${trimmed.substring(0, _maxReportLength)}\n…';
+    } on Object {
+      return details.stack?.toString();
+    }
+  }
+
+  /// Enough for any report worth reading; an error thrown every frame with
+  /// a whole tree in it should not fill the log file.
+  static const int _maxReportLength = 16000;
 
   List<EditorLogEntry> _mergeEntries(
     List<EditorLogEntry> restored,

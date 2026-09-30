@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine_editor/src/core/services/editor_log_entry.dart';
@@ -132,6 +133,73 @@ void main() {
     } finally {
       await dir.delete(recursive: true);
     }
+  });
+
+  test('lines logged together are all kept, whole', () async {
+    // The service never waits for a write. Each append used to open the
+    // file on its own, and on Windows two of them wrote at the same end —
+    // the log filled with half-records and lines run together.
+    final dir = await Directory.systemTemp.createTemp('jge_log_append_test');
+    try {
+      final storage = createEditorLogStorageForPath(
+        '${dir.path}/editor_runtime.jsonl',
+      );
+      await Future.wait([
+        for (var i = 0; i < 200; i++)
+          storage.appendEntry(
+            EditorLogEntry(
+              message: 'line $i ${'x' * (i % 7 * 20)}',
+              source: 'test',
+              category: 'append',
+              level: DebuggerLogLevel.info,
+              timestamp: DateTime(2026, 9, 30),
+            ),
+          ),
+      ]);
+
+      final lines = await File(
+        '${dir.path}/editor_runtime.jsonl',
+      ).readAsLines();
+      expect(lines, hasLength(200));
+      final entries = await storage.loadEntries();
+      expect(
+        [for (final e in entries) e.message.split(' ')[1]],
+        [for (var i = 0; i < 200; i++) '$i'],
+      );
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  });
+
+  test('a Flutter error is logged with what Flutter says about it', () async {
+    // An overflow has no stack: its first line was all the log kept, and
+    // never said which widget.
+    final service = EditorLogService.withStorage(_MemoryEditorLogStorage());
+    await service.startSession(
+      controller: JustDebuggerController(overlayVisible: false),
+    );
+    final quiet = FlutterError.presentError;
+    FlutterError.presentError = (_) {};
+    try {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: FlutterError('A RenderFlex overflowed by 740 pixels.'),
+          library: 'rendering library',
+          informationCollector: () => [
+            ErrorDescription('The relevant error-causing widget was: Row'),
+          ],
+        ),
+      );
+    } finally {
+      FlutterError.presentError = quiet;
+    }
+
+    final entry = service.entries.value.lastWhere((e) => e.source == 'flutter');
+    expect(entry.message, 'A RenderFlex overflowed by 740 pixels.');
+    expect(entry.details, contains('The relevant error-causing widget was'));
+
+    service.stopSession();
+    service.resetForTesting();
   });
 
   test('IO log storage clear removes primary and backup files', () async {

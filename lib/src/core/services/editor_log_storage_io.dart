@@ -63,21 +63,53 @@ class _IoEditorLogStorage implements EditorLogStorage {
     return entries;
   }
 
+  /// Lines waiting for the write in progress to finish.
+  final StringBuffer _pending = StringBuffer();
+
+  /// The write in progress, which also takes whatever queues up meanwhile.
+  Future<void>? _writing;
+
+  /// Appends [entry] — after every line before it, never beside one.
+  ///
+  /// The service does not wait for a write. Each append used to open the
+  /// file itself, and on Windows two open at once both wrote where the end
+  /// had been: of 200 lines logged together, 4 survived, and the log was
+  /// left with half-records and lines run into each other.
   @override
-  Future<void> appendEntry(EditorLogEntry entry) async {
-    final file = await _resolvedFile();
-    await _ensureDir(file);
-    await _rotateIfNeeded(file);
-    await file.writeAsString(
-      '${jsonEncode(entry.toJson())}\n',
-      mode: FileMode.append,
-      encoding: utf8,
-      flush: true,
-    );
+  Future<void> appendEntry(EditorLogEntry entry) {
+    _pending.writeln(jsonEncode(entry.toJson()));
+    return _writing ??= _drain();
+  }
+
+  Future<void> _drain() async {
+    try {
+      while (_pending.isNotEmpty) {
+        final text = _pending.toString();
+        _pending.clear();
+        final file = await _resolvedFile();
+        await _ensureDir(file);
+        await _rotateIfNeeded(file);
+        await file.writeAsString(
+          text,
+          mode: FileMode.append,
+          encoding: utf8,
+          flush: true,
+        );
+      }
+    } finally {
+      _writing = null;
+    }
   }
 
   @override
   Future<void> clear() async {
+    // Nothing queued before the clear lands after it.
+    _pending.clear();
+    try {
+      await _writing;
+    } on Object {
+      // A failed write is the service's to report; the clear goes ahead.
+    }
     final file = await _resolvedFile();
     if (await file.exists()) {
       await file.writeAsString('', encoding: utf8, flush: true);
