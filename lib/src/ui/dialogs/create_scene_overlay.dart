@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:just_game_engine/just_game_engine.dart' show SceneMode;
 import '../../core/constants/editor_constants.dart';
 
+import '../../core/dev/editor_dev_flags.dart';
 import '../../core/serialization/scene_store.dart';
 import '../../core/serialization/scene_name_validator.dart';
+import '../kit/controls.dart';
 
 /// Full-panel overlay shown when the editor is open but no scene is loaded.
 ///
-/// Presents a name input field with inline validation and a "Create Scene"
-/// button.  On success it:
-/// 1. Writes `assets/scenes/{name}.scene.json` via [SceneStore].
+/// Presents a name input field with inline validation, a choice of scene
+/// type — 2-D, or 3-D (disabled until 3-D authoring ships, unless
+/// [EditorDevFlags.allow3DSceneMode] is on) — and a "Create Scene" button.
+/// On success it:
+/// 1. Writes `assets/scenes/{name}.scene.json` via [SceneStore], in the
+///    chosen mode.
 /// 2. Calls [onSceneCreated] with the validated name.
 class CreateSceneOverlay extends StatefulWidget {
   const CreateSceneOverlay({
@@ -33,6 +39,15 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
   bool _isCreating = false;
 
   List<String> _existingNames = [];
+
+  /// How the new scene is authored. 2-D unless 3-D is picked.
+  SceneMode _mode = SceneMode.twoD;
+
+  /// Why 3-D cannot be picked yet — on the page and in the tooltip.
+  static const String threeDUnavailable =
+      '3D scenes arrive in the next release.';
+
+  bool get _canPick3D => EditorDevFlags.allow3DSceneMode;
 
   @override
   void initState() {
@@ -67,7 +82,7 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
 
     setState(() => _isCreating = true);
     try {
-      await widget.store.writeInitialFiles(name);
+      await widget.store.writeInitialFiles(name, mode: _mode);
       await widget.onSceneCreated(name);
     } catch (e) {
       if (mounted) {
@@ -161,6 +176,49 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
             Text(
               _errorMessage!,
               style: TextStyle(color: EditorTheme.errorLight, fontSize: 11),
+            ),
+          ],
+          const SizedBox(height: 16),
+          Text(
+            'SCENE TYPE',
+            style: TextStyle(
+              color: EditorTheme.primaryBright,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 6),
+          EditorSegmented<SceneMode>(
+            value: _mode,
+            options: const [(SceneMode.twoD, '2D'), (SceneMode.threeD, '3D')],
+            disabled: _canPick3D ? const {} : const {SceneMode.threeD},
+            tooltips: _canPick3D
+                ? const {}
+                : const {SceneMode.threeD: threeDUnavailable},
+            expand: true,
+            onChanged: (mode) => setState(() => _mode = mode),
+          ),
+          if (!_canPick3D) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 13,
+                  color: EditorTheme.primaryMuted,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    threeDUnavailable,
+                    style: TextStyle(
+                      color: EditorTheme.primaryMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
           const SizedBox(height: 16),

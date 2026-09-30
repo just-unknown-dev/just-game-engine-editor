@@ -201,7 +201,7 @@ void main() {
         isNull,
         reason: 'no scene',
       );
-      plugin.sceneState.openScene(Scene(name: 'level'), const {});
+      plugin.sceneState.openScene(Scene(name: 'level'));
       final camera = plugin.engine.cameraSystem.mainCamera
         ..viewportSize = const Size(800, 600);
       final where = camera.screenToWorld(const Offset(200, 150));

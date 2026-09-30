@@ -62,8 +62,12 @@ class JustGameEditorPlugin implements EnginePlugin {
   @override
   void update(double dt) => onUpdate(dt);
 
+  /// The engine calls this over the world every frame (its plugin overlay
+  /// hook, order 100); the editor draws only while it is shown.
   @override
-  void renderOverlay(Canvas canvas, Size size) => onRender(canvas, size);
+  void renderOverlay(Canvas canvas, Size size) {
+    if (isVisible.value) onRender(canvas, size);
+  }
 
   @override
   void detach() {}
@@ -266,7 +270,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   late final ViewportInput viewport = ViewportInput(
     world: () => engine.world,
     sceneState: sceneState,
-    camera: () => engine.cameraSystem.mainCamera,
+    camera: () => scope.editorView,
     designer: () => designer.value,
     gridSize: () => gridSize.value,
     isActive: () => _isInitialized && isVisible.value,
@@ -562,7 +566,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     designer.value = LevelDesignerSession(
       scope: scope,
       uniqueName: entities.uniqueName.call,
-      camera: () => engine.cameraSystem.mainCamera,
+      camera: () => scope.editorView,
       onDuplicate: duplicateSelection,
       onDelete: deleteSelection,
       onArray: (count, step) => arraySelection(count: count, step: step),
@@ -1153,7 +1157,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (!_isInitialized || !isVisible.value) return;
     if (size == Size.zero) return;
 
-    final camera = engine.cameraSystem.mainCamera;
+    final camera = scope.editorView;
 
     if (isGridVisible.value) {
       scope.grid.paintGrid(canvas, camera, size, cellSize: gridSize.value);
@@ -1198,7 +1202,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       size,
     );
 
-    _paintGamePreview(canvas, size, camera);
+    _paintGamePreview(canvas, size, engine.cameraSystem.mainCamera);
 
     final selected = sceneState.selectedEntity.value;
     if (selected == null || !selected.isActive) return;

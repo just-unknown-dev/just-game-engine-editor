@@ -92,6 +92,10 @@ class EditorToggle extends StatelessWidget {
 
 /// One of a few: the choices side by side, the picked one lit. Narrower
 /// than its labels, the choices share what there is.
+///
+/// A choice in [disabled] shows greyed with a lock and cannot be picked;
+/// its [tooltips] entry says why — say it on the page too, since a tooltip
+/// alone is found only by pointing at it.
 class EditorSegmented<T> extends StatelessWidget {
   const EditorSegmented({
     super.key,
@@ -99,12 +103,25 @@ class EditorSegmented<T> extends StatelessWidget {
     required this.options,
     required this.onChanged,
     this.accent,
+    this.disabled = const {},
+    this.tooltips = const {},
+    this.expand = false,
   });
 
   final T value;
   final List<(T, String)> options;
   final ValueChanged<T> onChanged;
   final Color? accent;
+
+  /// Choices shown but not available.
+  final Set<T> disabled;
+
+  /// A tooltip for a choice — why it is disabled, say.
+  final Map<T, String> tooltips;
+
+  /// Whether the choices share all the width they are given, in equal
+  /// parts, rather than each taking what its label needs.
+  final bool expand;
 
   @override
   Widget build(BuildContext context) {
@@ -117,14 +134,17 @@ class EditorSegmented<T> extends StatelessWidget {
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
         children: [
           for (final (option, label) in options)
             Flexible(
+              fit: expand ? FlexFit.tight : FlexFit.loose,
               child: _Segment(
                 label: label,
                 selected: option == value,
                 accent: accent,
+                enabled: !disabled.contains(option),
+                tooltip: tooltips[option],
                 onTap: () => onChanged(option),
               ),
             ),
@@ -140,45 +160,75 @@ class _Segment extends StatelessWidget {
     required this.selected,
     required this.accent,
     required this.onTap,
+    this.enabled = true,
+    this.tooltip,
   });
 
   final String label;
   final bool selected;
   final Color accent;
   final VoidCallback onTap;
+  final bool enabled;
+  final String? tooltip;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    selected: selected,
-    button: true,
-    child: FocusOutline(
-      child: Material(
-        color: selected ? accent.withValues(alpha: 0.18) : Colors.transparent,
-        borderRadius: BorderRadius.circular(EditorMetrics.radiusSm),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          hoverColor: accent.withValues(alpha: 0.10),
-          child: Container(
-            height: EditorMetrics.minTarget,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: selected ? accent : EditorTheme.textSecondary,
-                fontSize: 11,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+  Widget build(BuildContext context) {
+    final color = !enabled
+        ? EditorTheme.textMuted
+        : selected
+        ? accent
+        : EditorTheme.textSecondary;
+    Widget segment = Semantics(
+      selected: selected,
+      enabled: enabled,
+      button: true,
+      child: FocusOutline(
+        child: Material(
+          color: selected ? accent.withValues(alpha: 0.18) : Colors.transparent,
+          borderRadius: BorderRadius.circular(EditorMetrics.radiusSm),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            // Still focusable, so the keyboard can reach the tooltip.
+            onTap: enabled ? onTap : null,
+            canRequestFocus: true,
+            hoverColor: accent.withValues(alpha: 0.10),
+            child: Container(
+              height: EditorMetrics.minTarget,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              alignment: Alignment.center,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 11,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                  if (!enabled) ...[
+                    const SizedBox(width: 4),
+                    Icon(Icons.lock_outline, size: 12, color: color),
+                  ],
+                ],
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+    final tip = tooltip;
+    if (tip != null) segment = Tooltip(message: tip, child: segment);
+    return segment;
+  }
 }
 
 /// A continuous value: a slider to drag, and the number beside it to type.

@@ -56,7 +56,7 @@ void main() {
       draw: DesignerCanvas(
         canvas: Canvas(recorder),
         size: const Size(400, 300),
-        camera: Camera(),
+        camera: GameCameraEditorView.of(Camera()),
       ),
       world: world,
       controller: session.controller,

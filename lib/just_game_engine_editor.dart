@@ -53,6 +53,9 @@ export 'src/core/ecs/systems/physics_body_binding_system.dart';
 // One editor's registries, services and state — and the modules that
 // contribute to it.
 export 'src/core/scope/editor_scope.dart';
+export 'src/core/view/editor_view.dart';
+export 'src/core/view/entity_picker.dart';
+export 'src/core/input/gizmo_drag_solver.dart';
 export 'src/extension/editor_module.dart';
 export 'src/extension/designer_contributions.dart';
 export 'src/extension/editor_contributions.dart';

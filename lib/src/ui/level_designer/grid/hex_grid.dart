@@ -1,12 +1,12 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../../extension/editor_module.dart';
 import '../state/designer_geometry.dart';
 import 'grid_topology.dart';
 import '../../../core/theme/viewport_look.dart';
+import '../../../core/view/editor_view.dart';
 
 /// Pointy-top hexagons, addressed by axial coordinates: [Point2.x] is `q`,
 /// [Point2.y] is `r`. The cell size is a hex's width, flat to flat, so a
@@ -165,7 +165,7 @@ class HexGrid extends GridTopology {
   @override
   void paintGrid(
     Canvas canvas,
-    jge.Camera camera,
+    EditorView camera,
     Size canvasSize, {
     required double cellSize,
   }) {

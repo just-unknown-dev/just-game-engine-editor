@@ -1,8 +1,8 @@
 import 'dart:ui';
 
-import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../state/designer_geometry.dart';
+import '../../../core/view/editor_view.dart';
 
 /// The shape of the cells the designer paints, snaps and fills on.
 ///
@@ -61,7 +61,7 @@ abstract class GridTopology {
   /// Draws the grid over the visible world.
   void paintGrid(
     Canvas canvas,
-    jge.Camera camera,
+    EditorView camera,
     Size canvasSize, {
     required double cellSize,
   });

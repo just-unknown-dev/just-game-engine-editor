@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:just_game_engine/just_game_engine.dart';
@@ -54,24 +55,29 @@ class SceneStore {
   // ── Write ────────────────────────────────────────────────────────────────
 
   /// Creates [sceneName] with a camera and a spawn point, and lists it in the
-  /// manifest. Never overwrites a scene that already exists.
-  Future<void> writeInitialFiles(String sceneName) async {
+  /// manifest. Never overwrites a scene that already exists. [mode] is how
+  /// it will be authored — 2-D unless 3-D authoring is switched on.
+  Future<void> writeInitialFiles(
+    String sceneName, {
+    SceneMode mode = SceneMode.twoD,
+  }) async {
     await _ensureRoot();
     final file = File(_jsonPath(sceneName));
     if (!file.existsSync()) {
-      await file.writeAsString(_buildInitialScene(sceneName));
+      await file.writeAsString(_buildInitialScene(sceneName, mode));
     }
     await _editManifest((names) {
       if (!names.contains(sceneName)) names.add(sceneName);
     });
   }
 
-  String _buildInitialScene(String sceneName) {
+  String _buildInitialScene(String sceneName, SceneMode mode) {
     List<Map<String, dynamic>> encode(List<Component> components) =>
         components.map(codec.encode).whereType<Map<String, dynamic>>().toList();
+    if (mode == SceneMode.threeD) return _build3DScene(sceneName, encode);
     return _pretty.convert({
       'version': SceneFormat.current,
-      ...Scene(name: sceneName).toJson(),
+      ...Scene(name: sceneName, mode: mode).toJson(),
       'entities': [
         {
           'name': 'MainCamera',
@@ -97,6 +103,43 @@ class SceneStore {
           'parentName': null,
           'components': encode([
             TransformComponent(position: Vector3(200, 400, 0)),
+            SpawnComponent(tag: 'player'),
+          ]),
+        },
+      ],
+    });
+  }
+
+  /// A 3-D scene to start from: a perspective camera set back from the
+  /// origin and tilted down to look at it, and a spawn point at the origin.
+  /// None of the 2-D starter's confiner or level bounds — they are 2-D-only.
+  String _build3DScene(
+    String sceneName,
+    List<Map<String, dynamic>> Function(List<Component>) encode,
+  ) {
+    // 600 back (−Z) and 200 up (−Y, since +Y is down), pitched so its
+    // forward axis passes through the origin.
+    const back = 600.0, up = 200.0;
+    return _pretty.convert({
+      'version': SceneFormat.current,
+      ...Scene(name: sceneName, mode: SceneMode.threeD).toJson(),
+      'entities': [
+        {
+          'name': 'MainCamera',
+          'parentName': null,
+          'components': encode([
+            TransformComponent(
+              position: Vector3(0, -up, -back),
+              euler: Vector3(-math.atan2(up, back), 0, 0),
+            ),
+            VirtualCameraComponent(projection: CameraProjection.perspective),
+          ]),
+        },
+        {
+          'name': 'PlayerSpawn',
+          'parentName': null,
+          'components': encode([
+            TransformComponent(),
             SpawnComponent(tag: 'player'),
           ]),
         },

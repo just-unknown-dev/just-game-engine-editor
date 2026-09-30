@@ -18,7 +18,7 @@ void main() {
     engine = Engine();
     await engine.initialize();
     plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
-    plugin.sceneState.openScene(Scene(name: 'level_test'), const {});
+    plugin.sceneState.openScene(Scene(name: 'level_test'));
     addTearDown(plugin.dispose);
   });
 

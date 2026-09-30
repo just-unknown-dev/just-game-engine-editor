@@ -4,6 +4,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import '../overlays/designer_overlay.dart';
 import '../state/level_designer_controller.dart';
 import 'designer_canvas.dart';
+import '../../../core/view/editor_view.dart';
 
 /// Draws the Level Designer's overlays onto the game canvas.
 ///
@@ -17,7 +18,7 @@ class LevelDesignerPainter {
   void paint(
     Canvas canvas,
     Size canvasSize,
-    jge.Camera camera,
+    EditorView camera,
     jge.World world,
     LevelDesignerController controller,
     List<DesignerOverlay> overlays,

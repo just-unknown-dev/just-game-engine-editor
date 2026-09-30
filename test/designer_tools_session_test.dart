@@ -101,7 +101,7 @@ void main() {
         key(LogicalKeyboardKey.keyZ);
       }
       expect([_pos(a), _pos(b)], before);
-      expect(a.getComponent<TransformComponent>()!.rotation, closeTo(0, 1e-9));
+      expect(a.getComponent<TransformComponent>()!.angle, closeTo(0, 1e-9));
     });
 
     test('X mirrors positions and flips a sprite with its entity', () {
@@ -275,7 +275,7 @@ void main() {
       // From straight up to just past straight right: a quarter turn.
       drag(bounds.center + Offset(0, -r), bounds.center + Offset(r, 3));
       expect(
-        a.getComponent<TransformComponent>()!.rotation,
+        a.getComponent<TransformComponent>()!.angle,
         closeTo(math.pi / 2, 1e-9),
       );
     });

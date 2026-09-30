@@ -39,6 +39,7 @@ import 'tools/tiles/tile_terrain_tool.dart';
 import 'tools/tiles/tile_tool_base.dart' show TileTools;
 import '../overlay/camera_rig_painter.dart';
 import 'tools/path_tool.dart';
+import '../../core/view/editor_view.dart';
 
 /// Owns the Level Designer's runtime: state, tools, history and painting.
 ///
@@ -54,7 +55,7 @@ class LevelDesignerSession {
     required this.onDelete,
     required this.onArray,
     ModifierKeys Function()? readModifiers,
-    jge.Camera Function()? camera,
+    EditorView Function()? camera,
   }) : history = scope.history,
        _uniqueName = uniqueName,
        _readModifiers = readModifiers ?? ModifierKeys.fromHardwareKeyboard,
@@ -87,11 +88,15 @@ class LevelDesignerSession {
   /// Selection and grid state shared with the rest of the editor.
   EditorSceneState get sceneState => scope.sceneState;
 
-  /// This session's viewport tools: the built-ins, then each module's.
-  final ToolRegistry tools = ToolRegistry();
+  /// This session's viewport tools: the built-ins, then each module's —
+  /// those that belong in the scene's mode.
+  late final ToolRegistry tools = ToolRegistry()
+    ..modeOf = () => scope.sceneState.editingMode;
 
-  /// This session's overlays, in paint order.
-  final OverlayRegistry overlays = OverlayRegistry();
+  /// This session's overlays, in paint order — those that belong in the
+  /// scene's mode.
+  late final OverlayRegistry overlays = OverlayRegistry()
+    ..modeOf = () => scope.sceneState.editingMode;
 
   /// Prefabs that exist only for this session: the eyedropper's samples.
   final PrefabRegistry sessionPrefabs = PrefabRegistry();
@@ -300,13 +305,15 @@ class LevelDesignerSession {
   /// the sake of three booleans.
   final ModifierKeys Function() _readModifiers;
 
-  final jge.Camera Function()? _camera;
-  late final jge.Camera _detachedCamera = jge.Camera();
+  final EditorView Function()? _camera;
+  late final EditorView _detachedCamera = GameCameraEditorView.of(
+    jge.Camera(),
+  );
 
   /// The viewport camera. The plugin supplies the engine's; a session built
   /// on its own — in a test, say — gets a private one, so framing and zoom
   /// still work rather than every caller checking for null.
-  jge.Camera get camera => _camera?.call() ?? _detachedCamera;
+  EditorView get camera => _camera?.call() ?? _detachedCamera;
   final MeasureTool _measureTool = MeasureTool();
   late final EyedropperTool _eyedropper = EyedropperTool(
     switchTool: setTool,
@@ -837,7 +844,7 @@ class LevelDesignerSession {
 
   /// Draws every designer overlay. Called from the plugin's render hook, after
   /// the world and before the base editor's gizmos.
-  void paint(Canvas canvas, Size canvasSize, jge.Camera camera) => _painter
+  void paint(Canvas canvas, Size canvasSize, EditorView camera) => _painter
       .paint(canvas, canvasSize, camera, world, controller, overlays.all);
 
   /// Releases what this session owns.

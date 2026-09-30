@@ -333,7 +333,7 @@ class TiledImporter {
         spec(name, [
           TransformComponent(
             position: Vector3(info.center.dx, info.center.dy, 0),
-            rotation: info.rotation * 3.141592653589793 / 180,
+            angle: info.rotation * 3.141592653589793 / 180,
           ),
         ], mapLayer: layer),
       );

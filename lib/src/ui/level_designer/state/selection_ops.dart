@@ -102,7 +102,7 @@ class SelectionOps {
       );
       t
         ..setPositionXY(to.dx, to.dy)
-        ..rotation = _normalise(t.rotation + turn);
+        ..angle = _normalise(t.angle + turn);
     });
   }
 
@@ -114,7 +114,7 @@ class SelectionOps {
   }) => _transform(
     entities,
     'Rotate ${_describe(entities)}',
-    (t) => t.rotation = radians,
+    (t) => t.angle = radians,
     mergeKey: mergeKey,
     // An angle, not a turn: what is under them keeps its own.
     carry: false,
@@ -200,7 +200,7 @@ class SelectionOps {
         );
         t
           ..setPositionXY(to.dx, to.dy)
-          ..rotation = _normalise(-t.rotation);
+          ..angle = _normalise(-t.angle);
       }
       // Whatever a component's own flip means (a sprite's flag, say), its
       // definition's extent knows; the editor does not.
@@ -254,7 +254,7 @@ class SelectionOps {
         built.add(jge.LayerComponent());
       }
       for (final c in built) {
-        if (c is jge.TransformComponent) c.rotation = t.rotation;
+        if (c is jge.TransformComponent) c.angle = t.angle;
         if (c is jge.LayerComponent && oldLayer != null) {
           c
             ..layerId = oldLayer.layerId

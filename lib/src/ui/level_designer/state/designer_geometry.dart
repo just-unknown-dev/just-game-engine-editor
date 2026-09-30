@@ -155,8 +155,8 @@ abstract final class DesignerGeometry {
     // The axis-aligned box around the rotated shape, so a platform turned a
     // quarter turn is hit-tested, snapped and aligned by the space it
     // actually occupies rather than the space it would if it were not turned.
-    final cos = math.cos(transform.rotation).abs();
-    final sin = math.sin(transform.rotation).abs();
+    final cos = math.cos(transform.angle).abs();
+    final sin = math.sin(transform.angle).abs();
     return Rect.fromCenter(
       center: Offset(transform.position.x, transform.position.y),
       width: width * cos + height * sin,

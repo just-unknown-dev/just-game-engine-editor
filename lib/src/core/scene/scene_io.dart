@@ -1,5 +1,6 @@
 import 'package:just_game_engine/just_game_engine.dart';
 
+import '../dev/editor_dev_flags.dart';
 import '../scope/editor_scope.dart';
 import '../state/editor_scene_state.dart';
 import '../state/play_snapshot.dart';
@@ -165,6 +166,14 @@ class SceneIO {
     final Scene scene = rawJson != null
         ? (Scene.fromJson(rawJson))
         : Scene(name: sceneName);
+    if (scene.mode == SceneMode.threeD && !EditorDevFlags.allow3DSceneMode) {
+      scope.log.log(
+        '$sceneName is a 3-D scene. 3-D authoring is not available yet, so '
+        'it opens with the 2-D view and tools; it stays 3-D when saved.',
+        source: 'editor',
+        category: 'scene',
+      );
+    }
 
     if (rawJson != null) {
       final entityList = (rawJson['entities'] as List<dynamic>? ?? []);
@@ -221,31 +230,20 @@ class SceneIO {
       }
     }
 
-    final entities = world
+    final placed = world
         .query([TransformComponent])
         .where((e) => e.isActive)
-        .toList();
+        .length;
 
-    final nodeMap = <EntityId, SceneNode>{};
-    for (final entity in entities) {
-      final transform = entity.getComponent<TransformComponent>()!;
-      final nodeName = entity.name ?? 'entity_${entity.id}';
-      SceneNode? node = scene.findNode(nodeName);
-      if (node == null) {
-        node = SceneNode(nodeName)
-          ..localPosition = transform.position.toOffset()
-          ..localRotation = transform.rotation
-          ..localScale = transform.scale.x;
-        scene.addNode(node);
-      }
-      nodeMap[entity.id] = node;
-    }
+    // Each child's offset from its parent follows from the world transforms
+    // the file holds — worked out now, since while authoring the game's
+    // clock (and with it the world's own pass) stands still.
+    world.transformHierarchy.propagate();
 
     // The file's order is the record of what order the roots are in: the
     // loader creates them in the order they are written.
     sceneState.openScene(
       scene,
-      nodeMap,
       rootOrder: [
         for (final entity in world.entities)
           if (entity.isActive &&
@@ -255,7 +253,7 @@ class SceneIO {
     );
     scope.modules.notifySceneOpened(sceneName);
     scope.log.log(
-      'Opened scene $sceneName with ${nodeMap.length} linked entities.',
+      'Opened scene $sceneName with $placed placed entities.',
       source: 'editor',
       category: 'scene',
     );

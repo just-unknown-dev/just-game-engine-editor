@@ -1,3 +1,4 @@
+import '../../core/state/scene_mode_filters.dart';
 import '../timeline/field_key_button.dart';
 import '../timeline/timeline_session.dart';
 import 'dart:math' as math;
@@ -297,7 +298,10 @@ class DefinitionSection extends StatelessWidget {
   bool _shown(jge.SchemaField f) {
     final hint = hints.fields[f.name];
     if (hint == null) return true;
-    return hint.visible && (hint.visibleWhen?.call(component) ?? true);
+    final mode = sceneState?.editingMode ?? jge.SceneMode.twoD;
+    return hint.visible &&
+        SceneModeFilters.fieldShown(hint, mode) &&
+        (hint.visibleWhen?.call(component) ?? true);
   }
 
   /// Ungrouped fields first, then each hinted group under a header. Names a

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:just_game_engine/just_game_engine.dart' as jge;
+import '../../../core/view/editor_view.dart';
 
 /// Drawing helpers for everything painted onto the level designer's viewport.
 ///
@@ -30,7 +30,7 @@ class DesignerCanvas {
   final Size size;
 
   /// Camera used for world/screen conversion.
-  final jge.Camera camera;
+  final EditorView camera;
 
   final Paint _stroke = Paint()..style = PaintingStyle.stroke;
   final Paint _fill = Paint()..style = PaintingStyle.fill;

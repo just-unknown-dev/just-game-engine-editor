@@ -15,7 +15,7 @@ void main() {
       final world = World()..initialize();
       addTearDown(world.dispose);
       final e = world.createEntityWithComponents([
-        TransformComponent(position: Vector3(0, 0, 0), rotation: math.pi / 2),
+        TransformComponent(position: Vector3(0, 0, 0), angle: math.pi / 2),
         RectangleComponent(width: 200, height: 20),
       ]);
       final b = DesignerGeometry.worldBounds(e)!;
@@ -116,7 +116,7 @@ void main() {
       final world = World()..initialize();
       addTearDown(world.dispose);
       final e = world.createEntityWithComponents([
-        TransformComponent(rotation: math.pi / 2),
+        TransformComponent(angle: math.pi / 2),
         RectangleComponent(width: 100, height: 20),
       ]);
       // Stretching in world X is stretching its local height.

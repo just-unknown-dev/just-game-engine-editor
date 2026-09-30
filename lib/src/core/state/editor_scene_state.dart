@@ -2,10 +2,14 @@ import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 
-/// Bridges the authoring scene graph ([Scene]/[SceneNode]) with the live ECS
-/// world ([Entity]/[TransformComponent]).
+import '../dev/editor_dev_flags.dart';
+
+/// The authoring state of the open [Scene]: selection, dirtiness, the
+/// order of the top-level entities, and the transform edits the gizmos and
+/// the inspector make on the live ECS world ([Entity]/[TransformComponent]).
 ///
-/// All mutations go through this class so both representations stay in sync.
+/// A scene's hierarchy is its entities (`ParentComponent`,
+/// `ChildrenComponent`); there is no separate node graph to keep in step.
 ///
 /// Every piece of state is a [Signal]. A panel watches the ones it reads and
 /// rebuilds for nothing else: the inspector follows [selectedEntity], the save
@@ -16,16 +20,26 @@ class EditorSceneState {
   /// The scene being edited, or null between scenes.
   final Signal<Scene?> activeScene = Signal(null, debugLabel: 'activeScene');
 
+  /// How the open scene is authored, from its file (2-D when it says
+  /// nothing). See [editingMode] for the mode the editor works in.
+  final Signal<SceneMode> sceneMode = Signal(
+    SceneMode.twoD,
+    debugLabel: 'sceneMode',
+  );
+
+  /// The mode the inspector, tools and pickers work in: the scene's own —
+  /// except that 3-D authoring is not switched on yet
+  /// ([EditorDevFlags.allow3DSceneMode]), so a 3-D scene is edited with the
+  /// 2-D defaults. Its mode is kept when it is saved.
+  SceneMode get editingMode =>
+      sceneMode.value == SceneMode.threeD && !EditorDevFlags.allow3DSceneMode
+      ? SceneMode.twoD
+      : sceneMode.value;
+
   /// The primary selection.
   final Signal<Entity?> selectedEntity = Signal(
     null,
     debugLabel: 'selectedEntity',
-  );
-
-  /// The authoring node of [selectedEntity].
-  final Signal<SceneNode?> selectedNode = Signal(
-    null,
-    debugLabel: 'selectedNode',
   );
 
   /// Whether there are unsaved changes.
@@ -70,8 +84,6 @@ class EditorSceneState {
     debugLabel: 'selectable',
   );
 
-  final Map<EntityId, SceneNode> _entityNodeMap = {};
-
   /// What order the scene's top-level entities are in.
   ///
   /// The world keeps no order, so without this the roots listed and saved
@@ -87,9 +99,6 @@ class EditorSceneState {
   // ── Derived reads ────────────────────────────────────────────────────────
 
   bool get hasScene => activeScene.value != null;
-
-  Map<EntityId, SceneNode> get entityNodeMap =>
-      Map.unmodifiable(_entityNodeMap);
 
   /// `true` when two or more entities are selected simultaneously.
   bool get hasMultiSelection => multiSelectedIds.value.length > 1;
@@ -128,7 +137,6 @@ class EditorSceneState {
         ..clear()
         ..addAll(kept);
       selectedEntity.value = anchor;
-      selectedNode.value = anchor == null ? null : _entityNodeMap[anchor.id];
       _setMultiSelection(kept.keys);
     });
   }
@@ -138,22 +146,15 @@ class EditorSceneState {
 
   // ── Scene lifecycle ──────────────────────────────────────────────────────
 
-  /// Open [scene] and link entity IDs to scene nodes via [entityNodeMap].
-  void openScene(
-    Scene scene,
-    Map<EntityId, SceneNode> entityNodeMap, {
-    List<EntityId> rootOrder = const [],
-  }) {
+  /// Open [scene], its top-level entities in [rootOrder].
+  void openScene(Scene scene, {List<EntityId> rootOrder = const []}) {
     batch(() {
       activeScene.value = scene;
+      sceneMode.value = scene.mode;
       _rootOrder
         ..clear()
         ..addAll(rootOrder);
-      _entityNodeMap
-        ..clear()
-        ..addAll(entityNodeMap);
       selectedEntity.value = null;
-      selectedNode.value = null;
       _multiSelectedEntities.clear();
       _setMultiSelection(const []);
       isDirty.value = false;
@@ -165,10 +166,9 @@ class EditorSceneState {
   void closeScene() {
     batch(() {
       activeScene.value = null;
+      sceneMode.value = SceneMode.twoD;
       _rootOrder.clear();
-      _entityNodeMap.clear();
       selectedEntity.value = null;
-      selectedNode.value = null;
       _multiSelectedEntities.clear();
       _setMultiSelection(const []);
       isDirty.value = false;
@@ -185,7 +185,6 @@ class EditorSceneState {
     }
     batch(() {
       selectedEntity.value = entity;
-      selectedNode.value = _entityNodeMap[entity.id];
       _multiSelectedEntities
         ..clear()
         ..[entity.id] = entity;
@@ -212,12 +211,10 @@ class EditorSceneState {
         _multiSelectedEntities.remove(entity.id);
         if (ids.isEmpty) {
           selectedEntity.value = null;
-          selectedNode.value = null;
         } else if (selectedEntity.value?.id == entity.id) {
           // Primary was removed — promote another remaining id as primary.
           final nextId = ids.first;
           selectedEntity.value = _multiSelectedEntities[nextId];
-          selectedNode.value = _entityNodeMap[nextId];
         }
       } else {
         // Add current primary to the set if it was a single-select before.
@@ -229,7 +226,6 @@ class EditorSceneState {
         ids.add(entity.id);
         _multiSelectedEntities[entity.id] = entity;
         selectedEntity.value = entity;
-        selectedNode.value = _entityNodeMap[entity.id];
       }
       _setMultiSelection(ids);
     });
@@ -258,7 +254,6 @@ class EditorSceneState {
         ..clear()
         ..addEntries(entities.map((e) => MapEntry(e.id, e)));
       selectedEntity.value = anchor;
-      selectedNode.value = _entityNodeMap[anchor.id];
       _setMultiSelection(entities.map((e) => e.id));
     });
   }
@@ -267,7 +262,6 @@ class EditorSceneState {
     if (!hasAnySelection) return;
     batch(() {
       selectedEntity.value = null;
-      selectedNode.value = null;
       _multiSelectedEntities.clear();
       _setMultiSelection(const []);
     });
@@ -336,7 +330,7 @@ class EditorSceneState {
     });
   }
 
-  // ── Transform mutations (keep ECS + SceneNode in sync) ───────────────────
+  // ── Transform mutations ──────────────────────────────────────────────────
 
   /// A transform edit: the world changed, so it is dirty and views redraw.
   void _edited() => batch(() {
@@ -344,16 +338,27 @@ class EditorSceneState {
     refresh();
   });
 
+  /// Bring [entity]'s part of the hierarchy up to date: its own offset from
+  /// its parent, and its children's places under it.
+  ///
+  /// Called before an edit — so the children's offsets are known even when
+  /// the game's clock has not run since the scene loaded — and after it, so
+  /// they follow. The world's own pass does the same once a frame, but while
+  /// authoring the game's time stands still.
+  void _settle(Entity entity) =>
+      entity.world?.transformHierarchy.propagateFrom(entity);
+
   /// Translate [entity] by [delta] in world space.
   void applyTranslation(Entity entity, Offset delta) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
+    _settle(entity);
     transform.translateXY(delta.dx, delta.dy);
     if (gridSnappingEnabled.value) {
       final snapped = _snapPosition(transform.position.toOffset());
       transform.setPositionXY(snapped.dx, snapped.dy);
     }
-    _entityNodeMap[entity.id]?.localPosition = transform.position.toOffset();
+    _settle(entity);
     _edited();
   }
 
@@ -376,9 +381,9 @@ class EditorSceneState {
   void applyRotation(Entity entity, double deltaRad) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
+    _settle(entity);
     transform.rotate(deltaRad);
-    final node = _entityNodeMap[entity.id];
-    if (node != null) node.localRotation += deltaRad;
+    _settle(entity);
     _edited();
   }
 
@@ -391,41 +396,34 @@ class EditorSceneState {
   void applyScale(Entity entity, double factor) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
+    _settle(entity);
     transform.scale.x = (transform.scale.x * factor).clamp(0.01, 50.0);
     transform.scale.y = (transform.scale.y * factor).clamp(0.01, 50.0);
     if (gridSnappingEnabled.value) {
       transform.scale.x = _snapScale(transform.scale.x);
       transform.scale.y = _snapScale(transform.scale.y);
     }
-    final node = _entityNodeMap[entity.id];
-    if (node != null) {
-      node.localScale = (transform.scale.x + transform.scale.y) / 2;
-    }
+    _settle(entity);
     _edited();
   }
 
-  /// Syncs the scene-graph node for [entity] from its current TransformComponent
-  /// values. Called after any inspector write so the canvas reflects changes.
-  void syncEntityNode(Entity entity) {
-    final transform = entity.getComponent<TransformComponent>();
-    if (transform == null) return;
-    final node = _entityNodeMap[entity.id];
-    if (node == null) return;
-    node.localPosition = transform.position.toOffset();
-    node.localRotation = transform.rotation;
-    node.localScale = (transform.scale.x + transform.scale.y) / 2;
-  }
+  /// Called after an edit made straight on [entity]'s components (the
+  /// inspector, a designer tool), for anything that mirrors them. Nothing
+  /// does now that the scene has no node graph; kept so callers need not
+  /// change. It must never move the hierarchy: designer tools carry
+  /// children themselves and would move them twice.
+  void syncEntityNode(Entity entity) {}
 
   /// Set [entity]'s position directly (used by inspector text fields).
   void setPosition(Entity entity, Offset position) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
+    _settle(entity);
     final nextPosition = gridSnappingEnabled.value
         ? _snapPosition(position)
         : position;
     transform.setPositionXY(nextPosition.dx, nextPosition.dy);
-    final node = _entityNodeMap[entity.id];
-    if (node != null) node.localPosition = nextPosition;
+    _settle(entity);
     _edited();
   }
 
@@ -433,9 +431,9 @@ class EditorSceneState {
   void setRotation(Entity entity, double radians) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
-    transform.rotation = radians;
-    final node = _entityNodeMap[entity.id];
-    if (node != null) node.localRotation = radians;
+    _settle(entity);
+    transform.angle = radians;
+    _settle(entity);
     _edited();
   }
 
@@ -443,12 +441,12 @@ class EditorSceneState {
   void setScale(Entity entity, Offset scale) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
+    _settle(entity);
     final sx = gridSnappingEnabled.value ? _snapScale(scale.dx) : scale.dx;
     final sy = gridSnappingEnabled.value ? _snapScale(scale.dy) : scale.dy;
     transform.scale.x = sx;
     transform.scale.y = sy;
-    final node = _entityNodeMap[entity.id];
-    if (node != null) node.localScale = (sx + sy) / 2;
+    _settle(entity);
     _edited();
   }
 
@@ -456,10 +454,10 @@ class EditorSceneState {
   void setScaleX(Entity entity, double x) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
+    _settle(entity);
     final sx = gridSnappingEnabled.value ? _snapScale(x) : x;
     transform.scale.x = sx;
-    final node = _entityNodeMap[entity.id];
-    if (node != null) node.localScale = (sx + transform.scale.y) / 2;
+    _settle(entity);
     _edited();
   }
 
@@ -467,10 +465,10 @@ class EditorSceneState {
   void setScaleY(Entity entity, double y) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
+    _settle(entity);
     final sy = gridSnappingEnabled.value ? _snapScale(y) : y;
     transform.scale.y = sy;
-    final node = _entityNodeMap[entity.id];
-    if (node != null) node.localScale = (transform.scale.x + sy) / 2;
+    _settle(entity);
     _edited();
   }
 
@@ -488,36 +486,16 @@ class EditorSceneState {
     return ((value / step).roundToDouble() * step).clamp(step, 50.0);
   }
 
-  /// Rename [entity] and keep the linked [SceneNode] in sync.
+  /// Rename [entity].
   void renameEntity(Entity entity, String newName) {
     final trimmed = newName.trim();
     if (trimmed.isEmpty) return;
     entity.name = trimmed;
-
-    batch(() {
-      final oldNode = _entityNodeMap[entity.id];
-      if (oldNode != null) {
-        final parent = oldNode.parent;
-        final newNode = SceneNode(trimmed)
-          ..localPosition = oldNode.localPosition
-          ..localRotation = oldNode.localRotation
-          ..localScale = oldNode.localScale
-          ..isActive = oldNode.isActive;
-        if (parent != null) {
-          parent.removeChild(oldNode);
-          parent.addChild(newNode);
-        }
-        _entityNodeMap[entity.id] = newNode;
-        if (selectedEntity.value?.id == entity.id) selectedNode.value = newNode;
-      }
-      _edited();
-    });
+    _edited();
   }
 
-  /// Register a newly discovered entity that has no matching [SceneNode] yet.
-  ///
-  /// Creates a [SceneNode] from the entity's current [TransformComponent] and
-  /// adds it as a child of [scene.root].
+  /// Register an entity just made in the open scene: it joins the end of
+  /// the top level unless it has a parent, and the scene becomes dirty.
   void registerEntity(Entity entity) {
     if (!hasScene) return;
     // A new entity is the last root until something parents it. The world
@@ -527,33 +505,21 @@ class EditorSceneState {
         !_rootOrder.contains(entity.id)) {
       _rootOrder.add(entity.id);
     }
-    if (_entityNodeMap.containsKey(entity.id)) return;
-
-    final transform = entity.getComponent<TransformComponent>();
-    final node = SceneNode(entity.name ?? 'entity_${entity.id}')
-      ..localPosition = transform?.position.toOffset() ?? Offset.zero
-      ..localRotation = transform?.rotation ?? 0.0
-      ..localScale = transform?.scale.x ?? 1.0;
-
-    activeScene.value!.addNode(node);
-    _entityNodeMap[entity.id] = node;
     markDirty();
   }
 
-  /// Removes the entity's authoring [SceneNode] from the scene graph.
+  /// Forgets an entity about to be destroyed: out of the top level and the
+  /// selection, and the scene becomes dirty.
   ///
   /// Called by [JustGameEditorPlugin.deleteEntity] before destroying the ECS
-  /// entity. Clears selection and marks the scene dirty.
+  /// entity.
   void removeEntityNode(EntityId id) {
     batch(() {
       _rootOrder.remove(id);
-      final node = _entityNodeMap.remove(id);
-      if (node != null) activeScene.value?.removeNode(node);
       _multiSelectedEntities.remove(id);
       _setMultiSelection(multiSelectedIds.value.where((e) => e != id));
       if (selectedEntity.value?.id == id) {
         selectedEntity.value = null;
-        selectedNode.value = null;
       }
       _edited();
     });
@@ -570,7 +536,7 @@ class EditorSceneState {
     for (final s in [
       activeScene,
       selectedEntity,
-      selectedNode,
+      sceneMode,
       isDirty,
       multiSelectedIds,
       gridSnappingEnabled,

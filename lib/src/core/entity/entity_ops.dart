@@ -8,6 +8,7 @@ import 'hierarchy_commands.dart';
 import '../scope/editor_scope.dart';
 import '../state/editor_scene_state.dart';
 import '../state/unique_namer.dart';
+import '../view/editor_view.dart';
 
 /// Creates, deletes, groups, re-parents and copies entities in the world
 /// being edited, keeping [sceneState] in step.
@@ -20,7 +21,7 @@ class EntityOps {
     required this.scope,
     required World Function() world,
     required this.sceneState,
-    required Camera Function() camera,
+    required EditorView Function() camera,
     this.onChanged,
   }) : _worldOf = world,
        cameraOf = camera;
@@ -33,8 +34,8 @@ class EntityOps {
   World get world => _worldOf();
   final EditorSceneState sceneState;
 
-  /// The viewport camera: where a new entity is placed.
-  final Camera Function() cameraOf;
+  /// The editor's view: a new entity is placed where it looks.
+  final EditorView Function() cameraOf;
 
   /// Called after an edit the scene state does not itself announce.
   final VoidCallback? onChanged;
@@ -421,8 +422,8 @@ class EntityOps {
     onChanged?.call();
   }
 
-  /// Makes [child] a child of [newParent], auto-computing localOffset.
-  /// Makes [child] a child of [newParent], as one undoable step.
+  /// Makes [child] a child of [newParent], as one undoable step. It keeps
+  /// its place in the world; its local transform is worked out from it.
   ///
   /// [index] puts it at a place among the new parent's children; without
   /// one it goes last.

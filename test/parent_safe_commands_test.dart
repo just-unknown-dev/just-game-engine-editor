@@ -23,9 +23,9 @@ void main() {
       scope: scope,
       world: () => world,
       sceneState: scope.sceneState,
-      camera: Camera.new,
+      camera: () => GameCameraEditorView.of(Camera()),
     );
-    scope.sceneState.openScene(Scene(name: 'level'), const {});
+    scope.sceneState.openScene(Scene(name: 'level'));
   });
 
   List<EntityId> childrenOf(Entity entity) =>

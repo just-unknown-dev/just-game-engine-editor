@@ -236,10 +236,11 @@ void main() {
         rotation,
       );
       final tracks = session.asset.value!.propertyTracks.toList();
+      // A 2-D scene: a position's x and y, a rotation's angle (its z).
       expect(tracks.map((t) => t.path), [
         'TransformComponent.position.x',
         'TransformComponent.position.y',
-        'TransformComponent.rotation',
+        'TransformComponent.rotation.z',
       ], reason: 'x was there already');
       expect(tracks[1].isRelative, isTrue);
       expect(tracks[2].isRelative, isFalse);
@@ -247,7 +248,7 @@ void main() {
 
       // A new key on an empty absolute track takes the field's value now.
       scope.world.createEntityWithComponents([
-        TransformComponent(rotation: 1.5),
+        TransformComponent(angle: 1.5),
       ], name: 'Lift');
       final index = session.asset.value!.tracks.indexOf(tracks[2]);
       expect(session.valueForNewKey(index, 0), 1.5);

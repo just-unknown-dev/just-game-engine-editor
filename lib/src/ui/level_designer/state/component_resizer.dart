@@ -21,7 +21,7 @@ abstract final class ComponentResizer {
   /// the factors are swapped for it. Returns false when nothing on the entity
   /// could be resized.
   static bool scale(jge.Entity entity, double sx, double sy) {
-    final rotation = entity.getComponent<jge.TransformComponent>()?.rotation;
+    final rotation = entity.getComponent<jge.TransformComponent>()?.angle;
     if (rotation != null && _isQuarterTurn(rotation)) {
       (sx, sy) = (sy, sx);
     }

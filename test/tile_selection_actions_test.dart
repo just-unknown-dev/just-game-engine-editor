@@ -111,7 +111,7 @@ void main() {
       final engine = Engine();
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
-      plugin.sceneState.openScene(Scene(name: 'level'), const {});
+      plugin.sceneState.openScene(Scene(name: 'level'));
       addTearDown(plugin.dispose);
     });
 
@@ -167,7 +167,7 @@ void main() {
     setUp(() {
       world = World()..initialize();
       scope = testScope(world: world);
-      scope.sceneState.openScene(Scene(name: 'level'), const {});
+      scope.sceneState.openScene(Scene(name: 'level'));
       (map: _, :ground) = mapWithSelection(world, scope);
     });
 

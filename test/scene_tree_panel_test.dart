@@ -25,11 +25,11 @@ void main() {
       scope: scope,
       world: () => scope.world,
       sceneState: scope.sceneState,
-      camera: Camera.new,
+      camera: () => GameCameraEditorView.of(Camera()),
     );
     controller = SceneTreeController(world: () => scope.world);
     addTearDown(controller.dispose);
-    scope.sceneState.openScene(Scene(name: 'level_test'), const {});
+    scope.sceneState.openScene(Scene(name: 'level_test'));
   });
 
   Entity node(String name, {Entity? under}) {

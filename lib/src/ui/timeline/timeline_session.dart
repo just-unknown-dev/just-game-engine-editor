@@ -10,6 +10,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../core/scope/editor_scope.dart';
+import '../../core/state/scene_mode_filters.dart';
 import 'dope_sheet.dart' show TimelineMetrics;
 import 'motion_path.dart';
 
@@ -395,7 +396,7 @@ class TimelineSession {
         componentType == 'TransformComponent' &&
         field.name == 'position';
     final added = <TimelineTrack>[
-      for (final channel in PropertyAccess.channelsOf(field))
+      for (final channel in _shownChannels(componentType, field))
         if (!current.propertyTracks.any(
           (t) =>
               t.binding == binding &&
@@ -1351,6 +1352,27 @@ class TimelineSession {
     return edits.length;
   }
 
+  /// The channels of [field] to make tracks for and key: those the scene's
+  /// mode shows (a 2-D scene keys a position's x and y, a rotation's z),
+  /// or the one value of a field that is one.
+  List<String> _shownChannels(String componentType, SchemaField field) {
+    final all = PropertyAccess.channelsOf(field);
+    if (field.kind.channels.isEmpty) return all;
+    final hint = scope.definitions
+        .definitionByType(componentType)
+        ?.hints
+        .fields[field.name];
+    final shown = SceneModeFilters.visibleChannels(
+      field,
+      hint,
+      scope.sceneState.editingMode,
+    );
+    return [
+      for (final c in all)
+        if (shown.contains(c)) c,
+    ];
+  }
+
   /// Keys [field] of [entity]'s [component] at the playhead with the value
   /// it has now, making its tracks if there are none: the inspector's key
   /// button. False when [entity] cannot be bound from this timeline.
@@ -1367,7 +1389,7 @@ class TimelineSession {
     for (final field in fields) {
       if (!PropertyAccess.canAnimate(field)) continue;
       final now = field.encodeFrom(component);
-      for (final channel in PropertyAccess.channelsOf(field)) {
+      for (final channel in _shownChannels(definition.type, field)) {
         final live = _channelOf(now, channel);
         if (live == null) continue;
         edits.add(

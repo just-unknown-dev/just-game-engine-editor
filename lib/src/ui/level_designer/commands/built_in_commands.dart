@@ -1,5 +1,6 @@
 import '../../timeline/timeline_session.dart';
 import 'package:flutter/widgets.dart' show Offset;
+import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../../core/state/transform_mode.dart';
 
@@ -22,6 +23,7 @@ abstract final class BuiltInCommands {
         id: id,
         label: label,
         repeats: true,
+        dimensions: jge.Dimensions.twoD,
         // Shift nudges one unit; otherwise the settings' distance, or the
         // step moving snaps in.
         run: (c) {
@@ -36,23 +38,23 @@ abstract final class BuiltInCommands {
           c.session!.ops.nudge(c.session!.selectionEntities(), delta * step);
         },
       ),
-    _d(
+    _d2(
       'designer.rotateClockwise',
       'Rotate a quarter turn',
       (c) => c.session!.ops.rotateQuarter(c.session!.selectionEntities(), 1),
     ),
-    _d(
+    _d2(
       'designer.rotateCounter',
       'Rotate a quarter turn back',
       (c) => c.session!.ops.rotateQuarter(c.session!.selectionEntities(), -1),
     ),
-    _d(
+    _d2(
       'designer.flipHorizontal',
       'Flip horizontally',
       (c) =>
           c.session!.ops.flip(c.session!.selectionEntities(), horizontal: true),
     ),
-    _d(
+    _d2(
       'designer.flipVertical',
       'Flip vertically',
       (c) => c.session!.ops.flip(
@@ -357,4 +359,16 @@ abstract final class BuiltInCommands {
     String label,
     void Function(CommandContext) run,
   ) => DesignerCommand(id: id, label: label, run: run);
+
+  /// A command that only means something in a 2-D scene.
+  static DesignerCommand _d2(
+    String id,
+    String label,
+    void Function(CommandContext) run,
+  ) => DesignerCommand(
+    id: id,
+    label: label,
+    run: run,
+    dimensions: jge.Dimensions.twoD,
+  );
 }

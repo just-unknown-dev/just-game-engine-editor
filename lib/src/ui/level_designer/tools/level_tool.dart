@@ -8,6 +8,7 @@ import '../grid/square_grid.dart';
 import '../state/level_designer_controller.dart';
 import '../state/modifier_keys.dart';
 import '../state/snap_provider.dart';
+import '../../../core/view/editor_view.dart';
 
 /// Which mouse button began a gesture.
 enum ToolButton { primary, secondary, middle }
@@ -133,7 +134,7 @@ class ToolContext {
   final ModifierKeys modifiers;
 
   /// The viewport camera, when the session has one.
-  final jge.Camera? camera;
+  final EditorView? camera;
 
   /// The canvas the event landed on; zero when unknown.
   final Size canvasSize;
@@ -229,6 +230,10 @@ abstract class LevelToolHandler {
 
   /// Palette ordering. Lower sorts first.
   int get order => 100;
+
+  /// Which scene modes the palette offers it in. 2-D unless it says
+  /// otherwise: tools work in 2-D world points.
+  jge.Dimensions get dimensions => jge.Dimensions.twoD;
 
   /// Which part of the strip it sits in: one of [ToolGroups], or a group of
   /// a module's own (`EditorModule.toolGroups`). The strip captions each

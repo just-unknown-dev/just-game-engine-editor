@@ -10,12 +10,12 @@ void main() {
 
   testWidgets('search filters by name and by component type', (tester) async {
     final scope = testScope();
-    scope.sceneState.openScene(Scene(name: 'level'), const {});
+    scope.sceneState.openScene(Scene(name: 'level'));
     final ops = EntityOps(
       scope: scope,
       world: () => scope.world,
       sceneState: scope.sceneState,
-      camera: Camera.new,
+      camera: () => GameCameraEditorView.of(Camera()),
     );
     scope.world
       ..createEntityWithComponents([

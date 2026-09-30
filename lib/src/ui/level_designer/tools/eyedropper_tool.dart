@@ -116,7 +116,7 @@ class EyedropperTool extends LevelToolHandler {
           if (c is jge.TransformComponent) {
             c
               ..setPositionXY(position.dx, position.dy)
-              ..rotation = transform?.rotation ?? 0;
+              ..angle = transform?.angle ?? 0;
           } else if (sx != 1 || sy != 1) {
             ComponentResizer.scaleComponent(c, sx, sy);
           }

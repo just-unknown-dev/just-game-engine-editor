@@ -465,7 +465,7 @@ void main() {
         'room for them', (tester) async {
       if (!kDebugMode) return;
       await pump(tester);
-      plugin.sceneState.openScene(Scene(name: 'level'), const {});
+      plugin.sceneState.openScene(Scene(name: 'level'));
       plugin.openLevelDesigner();
       await tester.pump();
       await tester.pump();
@@ -503,7 +503,7 @@ void main() {
         'stands on it, and on any dock opened', (tester) async {
       if (!kDebugMode) return;
       await pump(tester);
-      plugin.sceneState.openScene(Scene(name: 'level'), const {});
+      plugin.sceneState.openScene(Scene(name: 'level'));
       plugin.openLevelDesigner();
       await tester.pump();
       await tester.pump();

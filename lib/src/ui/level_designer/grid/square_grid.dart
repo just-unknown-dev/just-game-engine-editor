@@ -1,11 +1,11 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../state/designer_geometry.dart';
 import 'grid_topology.dart';
 import '../../../core/theme/viewport_look.dart';
+import '../../../core/view/editor_view.dart';
 
 /// The default grid: axis-aligned squares of [cellSize] on a side.
 class SquareGrid extends GridTopology {
@@ -154,7 +154,7 @@ class SquareGrid extends GridTopology {
   @override
   void paintGrid(
     Canvas canvas,
-    jge.Camera camera,
+    EditorView camera,
     Size canvasSize, {
     required double cellSize,
   }) {

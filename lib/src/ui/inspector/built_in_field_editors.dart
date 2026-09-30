@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../../core/state/scene_mode_filters.dart';
 import '../widgets/scrubbable_number_field.dart' show NumberScrubConfig;
 import 'edge_insets_row.dart';
 import 'field_editor.dart';
@@ -28,6 +29,7 @@ abstract final class BuiltInFieldEditors {
     jge.FieldTypes.map.id: _json,
     jge.FieldTypes.vector2.id: _vector2,
     jge.FieldTypes.vector3.id: _vector3,
+    jge.FieldTypes.euler.id: _euler,
     jge.FieldTypes.offset.id: _offset,
     jge.FieldTypes.offsetList.id: _offsetList,
     jge.FieldTypes.color.id: _color,
@@ -160,11 +162,24 @@ abstract final class BuiltInFieldEditors {
   );
 
   /// Compound numeric editors: one scrub row per axis, sharing the hint.
+  /// A vector's axes on one row: `(label, channel, value)` each. Only the
+  /// channels the scene's mode shows appear (a 2-D scene hides a position's
+  /// z); [build] still gets every value, the hidden ones unchanged.
   static Widget _axes(
     FieldEditorContext c,
-    List<(String, double)> axes,
+    List<(String, String, double)> all,
     Object Function(List<double> next) build,
   ) {
+    final visible = SceneModeFilters.visibleChannels(
+      c.field,
+      c.hint,
+      c.sceneState?.editingMode ?? jge.SceneMode.twoD,
+    );
+    final shownAt = [
+      for (var i = 0; i < all.length; i++)
+        if (visible.contains(all[i].$2)) i,
+    ];
+    final axes = [for (final i in shownAt) (all[i].$1, all[i].$3)];
     final values = [for (final a in axes) a.$2];
     // Axes scrub even when the hint asked for nothing: a vector typed as
     // text is the one thing nobody wants.
@@ -181,7 +196,13 @@ abstract final class BuiltInFieldEditors {
       values: values,
       scrubConfig: scrub,
       readOnly: c.readOnly,
-      onChanged: (next) => c.onChanged(build(next)),
+      onChanged: (next) {
+        final full = [for (final a in all) a.$3];
+        for (var k = 0; k < shownAt.length; k++) {
+          full[shownAt[k]] = next[k];
+        }
+        c.onChanged(build(full));
+      },
     );
   }
 
@@ -189,7 +210,10 @@ abstract final class BuiltInFieldEditors {
     final v = c.value is jge.Vector2
         ? c.value as jge.Vector2
         : jge.Vector2.zero();
-    return _axes(c, [('X', v.x), ('Y', v.y)], (n) => jge.Vector2(n[0], n[1]));
+    return _axes(c, [
+      ('X', 'x', v.x),
+      ('Y', 'y', v.y),
+    ], (n) => jge.Vector2(n[0], n[1]));
   }
 
   static Widget _vector3(FieldEditorContext c) {
@@ -197,15 +221,59 @@ abstract final class BuiltInFieldEditors {
         ? c.value as jge.Vector3
         : jge.Vector3.zero();
     return _axes(c, [
-      ('X', v.x),
-      ('Y', v.y),
-      ('Z', v.z),
+      ('X', 'x', v.x),
+      ('Y', 'y', v.y),
+      ('Z', 'z', v.z),
     ], (n) => jge.Vector3(n[0], n[1], n[2]));
+  }
+
+  /// A rotation's three angles, shown in degrees and kept in radians.
+  ///
+  /// A 2-D scene shows only the turn in the plane, as one number — called
+  /// "Angle", as a rotation always was there, unless the field is labelled
+  /// something other than "Rotation". The other two angles keep their values.
+  static Widget _euler(FieldEditorContext c) {
+    final v = c.value is jge.Vector3
+        ? c.value as jge.Vector3
+        : jge.Vector3.zero();
+    const toDegrees = 180 / math.pi;
+    final visible = SceneModeFilters.visibleChannels(
+      c.field,
+      c.hint,
+      c.sceneState?.editingMode ?? jge.SceneMode.twoD,
+    );
+    if (visible.length == 1 && visible.contains('z')) {
+      final label = (c.hint.label == null || c.hint.label == 'Rotation')
+          ? 'Angle'
+          : c.label;
+      final degrees = v.z * toDegrees;
+      if (c.readOnly) {
+        return ReadonlyRow(label: label, value: degrees.toStringAsFixed(1));
+      }
+      return ScrubFieldRow(
+        label: label,
+        value: degrees,
+        scrubConfig: c.scrub ?? const NumberScrubConfig(fractionDigits: 1),
+        onChanged: (d) => c.onChanged(jge.Vector3(v.x, v.y, d / toDegrees)),
+      );
+    }
+    return _axes(
+      c,
+      [
+        ('X', 'x', v.x * toDegrees),
+        ('Y', 'y', v.y * toDegrees),
+        ('Z', 'z', v.z * toDegrees),
+      ],
+      (n) => jge.Vector3(n[0] / toDegrees, n[1] / toDegrees, n[2] / toDegrees),
+    );
   }
 
   static Widget _offset(FieldEditorContext c) {
     final o = c.value is Offset ? c.value as Offset : Offset.zero;
-    return _axes(c, [('X', o.dx), ('Y', o.dy)], (n) => Offset(n[0], n[1]));
+    return _axes(c, [
+      ('X', 'dx', o.dx),
+      ('Y', 'dy', o.dy),
+    ], (n) => Offset(n[0], n[1]));
   }
 
   static Widget _offsetList(FieldEditorContext c) {

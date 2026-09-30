@@ -1,3 +1,5 @@
+import 'package:just_game_engine/just_game_engine.dart' as jge;
+
 import 'level_tool.dart';
 
 /// The tools available in the designer's left-hand palette.
@@ -12,9 +14,19 @@ class ToolRegistry {
     for (final g in ToolGroups.builtIn) g.id: g,
   };
 
-  /// All registered tools, in palette order: by group, then within it.
+  /// The mode of the scene being edited; tools that do not belong in it are
+  /// left out of [all] and [byShortcut]. Null offers everything.
+  jge.SceneMode Function()? modeOf;
+
+  bool _offered(LevelToolHandler tool) {
+    final mode = modeOf?.call();
+    return mode == null || tool.dimensions.allows(mode);
+  }
+
+  /// The registered tools for the scene's mode, in palette order: by group,
+  /// then within it.
   List<LevelToolHandler> get all {
-    final sorted = _tools.values.toList()
+    final sorted = _tools.values.where(_offered).toList()
       ..sort((a, b) {
         final byGroup = groupOf(
           a.group,
@@ -52,6 +64,7 @@ class ToolRegistry {
   LevelToolHandler? byShortcut(String shortcut) {
     final wanted = shortcut.toUpperCase();
     for (final tool in _tools.values) {
+      if (!_offered(tool)) continue;
       if (tool.shortcut?.toUpperCase() == wanted) return tool;
     }
     return null;

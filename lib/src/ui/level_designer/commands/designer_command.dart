@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../../core/plugin/editor_plugin.dart';
 import '../../../core/scope/editor_scope.dart';
@@ -50,7 +51,12 @@ class DesignerCommand {
     this.scope = CommandScope.designer,
     this.isEnabled,
     this.repeats = false,
+    this.dimensions = jge.Dimensions.both,
   });
+
+  /// Which scene modes it runs in. The 2-D layout commands — nudge, flip,
+  /// quarter turns, align — say [jge.Dimensions.twoD].
+  final jge.Dimensions dimensions;
 
   /// Stable id, namespaced: `'designer.nudgeLeft'`, `'mygame.spawnWave'`.
   final String id;
@@ -68,7 +74,9 @@ class DesignerCommand {
 
   final void Function(CommandContext context) run;
 
-  bool enabledIn(CommandContext context) => isEnabled?.call(context) ?? true;
+  bool enabledIn(CommandContext context) =>
+      dimensions.allows(context.scope.sceneState.editingMode) &&
+      (isEnabled?.call(context) ?? true);
 }
 
 /// A key chord that runs a command.

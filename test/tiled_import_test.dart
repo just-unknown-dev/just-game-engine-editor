@@ -323,7 +323,7 @@ void main() {
   group('in the editor', () {
     test('a map imported into the scene is one undo step', () async {
       final scope = testScope();
-      scope.sceneState.openScene(Scene(name: 'level'), const {});
+      scope.sceneState.openScene(Scene(name: 'level'));
       final memory = <String, String>{};
       final made = await BuiltInTileContributions.importIntoScene(
         scope,
@@ -362,7 +362,7 @@ void main() {
     test('into a scene whose Level Map is empty, the import takes its '
         'place, as one undo step', () async {
       final scope = testScope();
-      scope.sceneState.openScene(Scene(name: 'level'), const {});
+      scope.sceneState.openScene(Scene(name: 'level'));
       final blank = scope.world.createEntityWithComponents([
         TransformComponent(),
         LevelMapComponent(inline: BuiltInPrefabs.newLevelMap()),
@@ -391,7 +391,7 @@ void main() {
 
     test('a scene whose Level Map has something on it keeps it', () async {
       final scope = testScope();
-      scope.sceneState.openScene(Scene(name: 'level'), const {});
+      scope.sceneState.openScene(Scene(name: 'level'));
       final painted = BuiltInPrefabs.newLevelMap();
       painted.layers.single.cells.setCell(0, 0, TileCell.make(0, 1));
       scope.world.createEntityWithComponents([
@@ -511,7 +511,7 @@ void main() {
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine);
       await plugin.onInitialize();
-      plugin.sceneState.openScene(Scene(name: 'level'), const {});
+      plugin.sceneState.openScene(Scene(name: 'level'));
       plugin.engine.cameraSystem.mainCamera.viewportSize = const Size(800, 600);
     });
     tearDown(() {

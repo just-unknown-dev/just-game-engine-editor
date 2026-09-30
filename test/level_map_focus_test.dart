@@ -140,11 +140,11 @@ void main() {
         scope: scope,
         world: () => scope.world,
         sceneState: scope.sceneState,
-        camera: Camera.new,
+        camera: () => GameCameraEditorView.of(Camera()),
       );
       controller = SceneTreeController(world: () => scope.world);
       addTearDown(controller.dispose);
-      scope.sceneState.openScene(Scene(name: 'level'), const {});
+      scope.sceneState.openScene(Scene(name: 'level'));
       player = entity('Player');
       map = entity(LevelMaps.primaryName, isMap: true);
       crate = entity('Crate', under: map);
@@ -273,7 +273,7 @@ void main() {
       await plugin.onInitialize();
       plugin
         ..setVisible(true)
-        ..sceneState.openScene(Scene(name: 'level'), const {});
+        ..sceneState.openScene(Scene(name: 'level'));
       world = plugin.engine.world;
       // The game's own; the editor's filters go on it as the designer opens.
       world.addSystem(RenderSystem());

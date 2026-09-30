@@ -29,12 +29,14 @@ class ComponentEntry {
 /// knows.
 List<ComponentEntry> getComponentRegistryEntries(EditorScope scope) => [
   for (final d in scope.definitions.definitions)
-    ComponentEntry(
-      name: d.hints.name ?? d.type,
-      group: d.hints.group ?? 'Core',
-      description: d.hints.description ?? '',
-      factory: d.create,
-      componentTypeName: d.type,
-      allowMultiple: d.hints.allowMultiple,
-    ),
+    // Only what belongs in the scene's mode: no tile map in a 3-D scene.
+    if (d.hints.dimensions.allows(scope.sceneState.editingMode))
+      ComponentEntry(
+        name: d.hints.name ?? d.type,
+        group: d.hints.group ?? 'Core',
+        description: d.hints.description ?? '',
+        factory: d.create,
+        componentTypeName: d.type,
+        allowMultiple: d.hints.allowMultiple,
+      ),
 ];

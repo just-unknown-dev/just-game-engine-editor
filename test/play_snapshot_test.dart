@@ -109,11 +109,9 @@ void main() {
   });
 
   group('the tree comes back as it was', () {
-    /// Hangs [child] under [parent], both ends, at [dx] from it.
-    void link(Entity child, Entity parent, {double dx = 0}) {
-      child.addComponent(
-        ParentComponent(parentId: parent.id, localOffset: Vector3(dx, 0, 0)),
-      );
+    /// Hangs [child] under [parent], both ends, where it already is.
+    void link(Entity child, Entity parent) {
+      child.addComponent(ParentComponent(parentId: parent.id));
       if (!parent.hasComponent<ChildrenComponent>()) {
         parent.addComponent(ChildrenComponent());
       }
@@ -146,8 +144,8 @@ void main() {
         HealthComponent(maxHealth: 2),
       ], name: 'Coins');
       link(coins, hud);
-      final late = _block(world, 'Late', 40);
-      link(late, map, dx: -144);
+      final late = _block(world, 'Late', -144);
+      link(late, map);
 
       final snapshot = PlaySnapshot.capture(world, scope.codec);
       snapshot.restoreInto(world);
@@ -167,13 +165,17 @@ void main() {
         late.id,
       ]);
       expect(hud.getComponent<ChildrenComponent>()!.childIds, [coins.id]);
-      expect(late.getComponent<ParentComponent>()!.localOffset.x, -144);
+      // The link comes back fresh; its local offset follows from where
+      // things are.
+      world.transformHierarchy.propagate();
+      expect(late.getComponent<ParentComponent>()!.localPosition.x, -144);
+      expect(late.getComponent<TransformComponent>()!.position.x, -144);
     });
 
     test('links play changed are put back', () {
       final a = _block(world, 'A', 0);
-      final b = _block(world, 'B', 0);
-      link(b, a, dx: 8);
+      final b = _block(world, 'B', 8);
+      link(b, a);
       final c = _block(world, 'C', 0);
       final snapshot = PlaySnapshot.capture(world, scope.codec);
 
@@ -185,7 +187,8 @@ void main() {
 
       expect(tree(), {'A': null, 'B': 'A', 'C': null});
       expect(a.getComponent<ChildrenComponent>()!.childIds, [b.id]);
-      expect(b.getComponent<ParentComponent>()!.localOffset.x, 8);
+      world.transformHierarchy.propagate();
+      expect(b.getComponent<ParentComponent>()!.localPosition.x, 8);
       expect(c.hasComponent<ChildrenComponent>(), isFalse);
     });
 

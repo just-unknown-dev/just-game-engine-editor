@@ -20,9 +20,9 @@ void main() {
       scope: scope,
       world: () => scope.world,
       sceneState: scope.sceneState,
-      camera: Camera.new,
+      camera: () => GameCameraEditorView.of(Camera()),
     );
-    scope.sceneState.openScene(Scene(name: 'level_test'), const {});
+    scope.sceneState.openScene(Scene(name: 'level_test'));
   });
 
   Entity platform(String name, {double x = 0}) =>

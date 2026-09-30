@@ -41,7 +41,7 @@ void main() {
           ),
         ),
       );
-      plugin.sceneState.openScene(Scene(name: 'level'), const {});
+      plugin.sceneState.openScene(Scene(name: 'level'));
       await tester.pump();
     }
 

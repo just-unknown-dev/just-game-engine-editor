@@ -75,26 +75,13 @@ void placeEntity(
   final parent = world.getEntity(parentId);
   if (parent == null) return;
 
-  // The child keeps its place on screen: the offset is measured against
-  // the new parent, as the scene tree's re-parent has always done.
-  final childT = entity.getComponent<jge.TransformComponent>();
-  final parentT = parent.getComponent<jge.TransformComponent>();
-  final localOffset = (childT != null && parentT != null)
-      ? jge.Vector3.fromXY(
-          childT.position.x - parentT.position.x,
-          childT.position.y - parentT.position.y,
-        )
-      : jge.Vector3.zero();
-
+  // The child keeps its place in the world — position, turn and scale,
+  // in 3-D: its local transform is worked out against the new parent.
   final existing = entity.getComponent<jge.ParentComponent>();
   if (existing != null) {
-    existing
-      ..parentId = parent.id
-      ..localOffset = localOffset;
+    existing.parentId = parent.id;
   } else {
-    entity.addComponent(
-      jge.ParentComponent(parentId: parent.id, localOffset: localOffset),
-    );
+    entity.addComponent(jge.ParentComponent(parentId: parent.id));
   }
 
   var children = parent.getComponent<jge.ChildrenComponent>();
@@ -107,6 +94,7 @@ void placeEntity(
     slot.index < 0 ? ids.length : slot.index.clamp(0, ids.length),
     entity.id,
   );
+  world.transformHierarchy.adopt(entity);
 }
 
 /// Takes [entity] out of whatever holds it, leaving it parentless.

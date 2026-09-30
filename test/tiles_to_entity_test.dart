@@ -17,7 +17,7 @@ void main() {
   setUp(() {
     world = World()..initialize();
     scope = testScope(world: world);
-    scope.sceneState.openScene(Scene(name: 'level'), const {});
+    scope.sceneState.openScene(Scene(name: 'level'));
   });
 
   ({Entity map, LevelMapData data, MapLayerData layer}) level(

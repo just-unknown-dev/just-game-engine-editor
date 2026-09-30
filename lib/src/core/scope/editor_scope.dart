@@ -44,6 +44,7 @@ import '../../ui/tileset/built_in_workspaces.dart';
 import '../../extension/built_in_camera_contributions.dart';
 import '../../extension/tiled_object_mapper.dart';
 import '../../extension/built_in_tile_contributions.dart';
+import '../view/editor_view.dart';
 
 /// Everything one editor owns: its registries, services and state, in a
 /// `just_di` container that is disposed with it.
@@ -142,7 +143,7 @@ class EditorScope {
           scope: this,
           world: () => this.world,
           sceneState: sceneState,
-          camera: _mainCamera,
+          camera: () => editorView,
           onChanged: sceneState.refresh,
         ),
       )
@@ -324,6 +325,10 @@ class EditorScope {
   /// The camera the view is seen through; a bare one before the engine
   /// has a viewport.
   Camera get mainCamera => _mainCamera();
+
+  /// How the editor sees the scene — what everything that draws over the
+  /// viewport, picks or pans goes through. The 2-D view on [mainCamera].
+  late final EditorView editorView = GameCameraEditorView(_mainCamera);
 
   /// The workspace that has the viewport, with the file it was opened on;
   /// null while the level has it.

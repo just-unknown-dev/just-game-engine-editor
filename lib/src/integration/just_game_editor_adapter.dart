@@ -41,13 +41,8 @@ class JustGameEngineEditor extends StatefulWidget {
 }
 
 class _JustGameEngineEditorState extends State<JustGameEngineEditor> {
-  // Drawn through the rendering engine's overlay hook chain, after the world
-  // (which GameWidget adds itself). A chain, so nothing else that renders an
-  // overlay is displaced.
-  void _gizmoHook(Canvas canvas, Size size) {
-    final plugin = widget.plugin;
-    if (plugin != null && plugin.isVisible.value) plugin.onRender(canvas, size);
-  }
+  // The editor draws as an engine plugin: the engine calls every plugin's
+  // renderOverlay over the world (overlay hook order 100).
 
   @override
   void initState() {
@@ -65,22 +60,20 @@ class _JustGameEngineEditorState extends State<JustGameEngineEditor> {
     }
   }
 
-  /// Registers [plugin] with the engine and adds the gizmo hook. Both are
-  /// keyed, so this is safe to call again for the same plugin.
+  /// Registers [plugin] with the engine, which then draws it over the world.
+  /// Keyed, so this is safe to call again for the same plugin.
   void _install(JustGameEditorPlugin? plugin) {
     if (plugin == null) return;
     widget.engine.plugins.register(plugin);
-    final hooks = widget.engine.rendering.overlayHooks;
-    // The world must draw before the gizmos. GameWidget adds it when its
+    // The world must draw before the editor. GameWidget adds it when its
     // painter is built, which can be after this; add it here too so the
     // order holds whichever comes first.
-    hooks
-      ..addIfAbsent(widget.engine.world.render)
-      ..addIfAbsent(_gizmoHook, order: 100);
+    widget.engine.rendering.overlayHooks.addIfAbsent(
+      widget.engine.world.render,
+    );
   }
 
   void _uninstall(JustGameEditorPlugin? plugin) {
-    widget.engine.rendering.overlayHooks.remove(_gizmoHook);
     if (plugin != null && widget.engine.plugins.byId(plugin.id) == plugin) {
       widget.engine.plugins.unregister(plugin.id);
     }

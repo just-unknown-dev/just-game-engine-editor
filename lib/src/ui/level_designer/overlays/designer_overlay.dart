@@ -5,6 +5,7 @@ import '../painters/designer_canvas.dart';
 import '../state/editor_history.dart';
 import '../state/modifier_keys.dart';
 import '../state/level_designer_controller.dart';
+import '../../../core/view/editor_view.dart';
 
 /// Everything an overlay needs to draw itself.
 class OverlayPaintContext {
@@ -61,6 +62,9 @@ abstract class DesignerOverlay {
   /// Whether it starts visible.
   bool get defaultVisible => true;
 
+  /// Which scene modes it draws in. 2-D unless it says otherwise.
+  jge.Dimensions get dimensions => jge.Dimensions.twoD;
+
   /// Paint order. Lower draws first (further back).
   ///
   /// The built-in overlays occupy the [OverlayOrder] band; a project overlay
@@ -103,10 +107,18 @@ class OverlayRegistry {
 
   final Map<String, DesignerOverlay> _overlays = {};
 
-  /// All registered overlays, sorted back-to-front by [DesignerOverlay.order].
+  /// The mode of the scene being edited; overlays that do not belong in it
+  /// are left out of [all]. Null offers everything.
+  jge.SceneMode Function()? modeOf;
+
+  /// The registered overlays for the scene's mode, sorted back-to-front by
+  /// [DesignerOverlay.order].
   List<DesignerOverlay> get all {
-    final sorted = _overlays.values.toList()
-      ..sort((a, b) => a.order.compareTo(b.order));
+    final mode = modeOf?.call();
+    final sorted = [
+      for (final o in _overlays.values)
+        if (mode == null || o.dimensions.allows(mode)) o,
+    ]..sort((a, b) => a.order.compareTo(b.order));
     return List.unmodifiable(sorted);
   }
 
@@ -151,7 +163,7 @@ class OverlayPointerContext {
   /// The part of the canvas not covered by panels.
   final Rect area;
 
-  final jge.Camera camera;
+  final EditorView camera;
   final jge.World world;
   final LevelDesignerController controller;
 

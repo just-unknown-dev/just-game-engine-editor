@@ -246,7 +246,7 @@ abstract final class BuiltInValidators {
       final c = entity.getComponent<jge.LevelMapComponent>()!;
       final name = _nameOf(entity);
       final t = entity.getComponent<jge.TransformComponent>();
-      if (t != null && (t.rotation != 0 || t.scale.x != 1 || t.scale.y != 1)) {
+      if (t != null && (t.angle != 0 || t.scale.x != 1 || t.scale.y != 1)) {
         out.add(
           SceneProblem(
             entity: entity,

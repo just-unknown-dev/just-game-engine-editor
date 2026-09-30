@@ -27,7 +27,7 @@ void main() {
         ),
       );
       plugin.toggleVisibility();
-      plugin.sceneState.openScene(Scene(name: 'level'), const {});
+      plugin.sceneState.openScene(Scene(name: 'level'));
       await tester.pumpAndSettle();
 
       expect(find.text('Saved'), findsOneWidget);

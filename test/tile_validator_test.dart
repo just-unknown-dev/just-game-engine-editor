@@ -42,7 +42,7 @@ void main() {
 
   Entity place(LevelMapData map, {double rotation = 0}) =>
       world.createEntityWithComponents([
-        TransformComponent(rotation: rotation),
+        TransformComponent(angle: rotation),
         LevelMapComponent(inline: map),
       ], name: 'Map');
 

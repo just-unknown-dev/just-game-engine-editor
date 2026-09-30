@@ -29,7 +29,12 @@ class PrefabDefinition {
     this.namePrefix,
     this.aliases = const [],
     this.depth,
+    this.dimensions = jge.Dimensions.twoD,
   });
+
+  /// Which scene modes the palette offers it in. 2-D unless it says
+  /// otherwise: [build] places it by a 2-D point and size.
+  final jge.Dimensions dimensions;
 
   /// Stable identifier, used by the palette selection and in saved designer
   /// state. Changing it orphans anything that referenced it.

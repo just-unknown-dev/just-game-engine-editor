@@ -722,7 +722,7 @@ class SelectTool extends LevelToolHandler {
       final to = turn(Offset(before.x, before.y));
       entity.getComponent<jge.TransformComponent>()
         ?..setPositionXY(to.dx, to.dy)
-        ..rotation = before.rotation + angle;
+        ..angle = before.angle + angle;
       sceneState.syncEntityNode(entity);
     }
 

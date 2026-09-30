@@ -110,7 +110,9 @@ void main() {
         TransformComponent(),
         RectangleComponent(width: 64, height: 32),
       ], name: 'Box');
-      final camera = Camera()..viewportSize = const Size(400, 300);
+      final camera = GameCameraEditorView.of(
+        Camera()..viewportSize = const Size(400, 300),
+      );
       final middle = camera.worldToScreen(Offset.zero);
       GizmoHandle at(Offset offset, TransformMode mode) => GizmoHitTester()
           .hitTest(
@@ -148,7 +150,9 @@ void main() {
         TransformComponent(),
         RectangleComponent(width: 64, height: 32),
       ], name: 'Box');
-      final camera = Camera()..viewportSize = const Size(400, 300);
+      final camera = GameCameraEditorView.of(
+        Camera()..viewportSize = const Size(400, 300),
+      );
       final middle = camera.worldToScreen(Offset.zero);
       GizmoHandle at(Offset offset, {Set<TransformMode>? allows}) =>
           GizmoHitTester()
@@ -244,7 +248,7 @@ void main() {
       final r = (knob - bounds.center).distance;
       drag(knob, bounds.center + Offset(r, 3));
       expect(
-        box.getComponent<TransformComponent>()!.rotation,
+        box.getComponent<TransformComponent>()!.angle,
         closeTo(math.pi / 2, 0.3),
       );
     });
@@ -310,7 +314,7 @@ void main() {
         ..onPointerDown(onRingOverB, 32)
         ..onPointerUp(onRingOverB, 32);
       expect(session.sceneState.selectedEntity.value, b);
-      expect(a.getComponent<TransformComponent>()!.rotation, 0);
+      expect(a.getComponent<TransformComponent>()!.angle, 0);
       expect(scope.history.canUndo.value, isFalse);
     });
 
@@ -360,7 +364,7 @@ void main() {
       expect(layer.cells.cellAt(1, 0), TileCell.rotatedRight(b));
       expect(TileCell.isEmpty(layer.cells.cellAt(0, 0)), isTrue);
       expect(
-        piece.getComponent<TransformComponent>()!.rotation,
+        piece.getComponent<TransformComponent>()!.angle,
         0,
         reason: 'a map follows its position only',
       );
@@ -494,7 +498,7 @@ void main() {
       await tester.runAsync(plugin.onInitialize);
       plugin
         ..setVisible(true)
-        ..sceneState.openScene(Scene(name: 'level'), const {});
+        ..sceneState.openScene(Scene(name: 'level'));
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(

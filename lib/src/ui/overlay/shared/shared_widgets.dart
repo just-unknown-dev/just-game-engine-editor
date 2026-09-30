@@ -221,14 +221,6 @@ class PlayControlsToolbar extends StatelessWidget {
                 onTap: () => plugin.showGamePreview.value =
                     !plugin.showGamePreview.value,
               ),
-              Container(
-                width: 1,
-                height: side * 0.6,
-                margin: EdgeInsets.symmetric(
-                  horizontal: EditorMetrics.space(4),
-                ),
-                color: EditorTheme.borderStrong,
-              ),
               button(
                 Icons.map_outlined,
                 !hasScene
@@ -247,15 +239,30 @@ class PlayControlsToolbar extends StatelessWidget {
             // ── What the modules add ───────────────────────────────────
             if (modules.isNotEmpty)
               frame([
-                for (final extra in modules)
-                  button(
-                    extra.icon,
-                    extra.tooltip,
-                    EditorTheme.accent,
-                    isActive: extra.isActive?.call(plugin.scope) ?? false,
-                    onTap: (extra.isEnabled?.call(plugin.scope) ?? true)
-                        ? () => extra.onPressed(plugin.scope)
-                        : null,
+                for (int i = 0; i < modules.length; i++)
+                  Row(
+                    children: [
+                      button(
+                        modules[i].icon,
+                        modules[i].tooltip,
+                        EditorTheme.accent,
+                        isActive:
+                            modules[i].isActive?.call(plugin.scope) ?? false,
+                        onTap:
+                            (modules[i].isEnabled?.call(plugin.scope) ?? true)
+                            ? () => modules[i].onPressed(plugin.scope)
+                            : null,
+                      ),
+                      if (modules.length > 1 && i < modules.length - 1)
+                        Container(
+                          width: 1,
+                          height: side * 0.6,
+                          margin: EdgeInsets.symmetric(
+                            horizontal: EditorMetrics.space(4),
+                          ),
+                          color: EditorTheme.accent,
+                        ),
+                    ],
                   ),
               ]),
           ],

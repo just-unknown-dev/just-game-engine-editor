@@ -10,21 +10,48 @@ import '../../core/state/transform_mode.dart';
 import '../level_designer/grid/square_grid.dart';
 import 'transform_gizmo.dart';
 import '../../core/theme/viewport_look.dart';
+import '../../core/view/editor_view.dart';
 
 /// Gizmo handle identifier returned by [GizmoHitTester.hitTest].
 enum GizmoHandle {
-  none,
-  translateXY,
-  translateX,
-  translateY,
-  rotate,
-  scaleNW,
-  scaleNE,
-  scaleSE,
-  scaleSW,
-  scaleX,
-  scaleY,
-  body,
+  none(GizmoOp.none, 0),
+  translateXY(GizmoOp.translate, GizmoAxes.x | GizmoAxes.y),
+  translateX(GizmoOp.translate, GizmoAxes.x),
+  translateY(GizmoOp.translate, GizmoAxes.y),
+  rotate(GizmoOp.rotate, GizmoAxes.z),
+  scaleNW(GizmoOp.scale, GizmoAxes.x | GizmoAxes.y),
+  scaleNE(GizmoOp.scale, GizmoAxes.x | GizmoAxes.y),
+  scaleSE(GizmoOp.scale, GizmoAxes.x | GizmoAxes.y),
+  scaleSW(GizmoOp.scale, GizmoAxes.x | GizmoAxes.y),
+  scaleX(GizmoOp.scale, GizmoAxes.x),
+  scaleY(GizmoOp.scale, GizmoAxes.y),
+  body(GizmoOp.translate, GizmoAxes.x | GizmoAxes.y),
+
+  // A 3-D gizmo's own handles. Nothing in 2-D produces them.
+  translateZ(GizmoOp.translate, GizmoAxes.z),
+  rotateX(GizmoOp.rotate, GizmoAxes.x),
+  rotateY(GizmoOp.rotate, GizmoAxes.y),
+  scaleZ(GizmoOp.scale, GizmoAxes.z);
+
+  const GizmoHandle(this.op, this.axes);
+
+  /// What dragging it does.
+  final GizmoOp op;
+
+  /// Which axes it works along ([GizmoAxes] bits): a move handle's
+  /// directions, a turn handle's axis of rotation.
+  final int axes;
+
+  /// Whether it works along [axis] (one of the [GizmoAxes] bits).
+  bool uses(int axis) => axes & axis != 0;
+}
+
+/// What a gizmo handle does.
+enum GizmoOp { none, translate, rotate, scale }
+
+/// Axis bits for [GizmoHandle.axes].
+abstract final class GizmoAxes {
+  static const int x = 1, y = 2, z = 4;
 }
 
 /// Result of a [GizmoHitTester.hitTest] call.
@@ -60,7 +87,7 @@ class GizmoPainter {
   /// this stays for callers that only ever wanted squares.
   void paintInfiniteGrid(
     Canvas canvas,
-    Camera camera,
+    EditorView camera,
     Size canvasSize, {
     required double gridSize,
   }) => const SquareGrid().paintGrid(
@@ -79,7 +106,7 @@ class GizmoPainter {
   void paintGizmos(
     Canvas canvas,
     Entity entity,
-    Camera camera,
+    EditorView camera,
     Size canvasSize, {
     TransformMode mode = TransformMode.all,
     Set<TransformMode>? allows,
@@ -101,7 +128,7 @@ class GizmoPainter {
           canvas,
           screenPos,
           corners: bounds.corners,
-          rotation: transform.rotation,
+          rotation: transform.angle,
           scale: allows?.contains(TransformMode.scale) ?? true,
           rotate: allows?.contains(TransformMode.rotate) ?? true,
         );
@@ -115,7 +142,7 @@ class GizmoPainter {
           canvas,
           screenPos,
           _rotRadius,
-          angle: transform.rotation,
+          angle: transform.angle,
         );
     }
 
@@ -131,7 +158,7 @@ class GizmoPainter {
   void paintCameraMarkers(
     Canvas canvas,
     List<Entity> cameraEntities,
-    Camera camera,
+    EditorView camera,
     Size canvasSize,
   ) {
     if (cameraEntities.isEmpty || canvasSize == Size.zero) return;
@@ -175,7 +202,7 @@ class GizmoPainter {
   void paintSpawnMarkers(
     Canvas canvas,
     List<Entity> spawnPoints,
-    Camera camera,
+    EditorView camera,
     Size canvasSize,
   ) {
     if (spawnPoints.isEmpty || canvasSize == Size.zero) return;
@@ -271,7 +298,7 @@ const Size _defaultSelectionSize = GizmoConstants.defaultSelectionSize;
 _ScreenBounds _computeScreenBounds(
   Entity entity,
   TransformComponent transform,
-  Camera camera,
+  EditorView camera,
 ) {
   final baseSize = _largestComponentSize(entity);
   final center = camera.worldToScreen(transform.position.toOffset());
@@ -283,14 +310,14 @@ _ScreenBounds _computeScreenBounds(
     center,
     halfW,
     halfH,
-    transform.rotation,
+    transform.angle,
   );
 
   return _ScreenBounds(
     center: center,
     halfW: halfW,
     halfH: halfH,
-    rotation: transform.rotation,
+    rotation: transform.angle,
     corners: corners,
   );
 }
@@ -508,7 +535,7 @@ class GizmoHitTester {
     Offset screenPos,
     Entity? selected,
     List<Entity> entities,
-    Camera camera,
+    EditorView camera,
     Size canvasSize, {
     TransformMode mode = TransformMode.all,
     Set<TransformMode>? allows,
@@ -538,7 +565,7 @@ class GizmoHitTester {
   GizmoHitResult _hitTestHandles(
     Offset pos,
     Entity entity,
-    Camera camera,
+    EditorView camera,
     TransformMode mode,
     Set<TransformMode>? allows,
   ) {
@@ -557,7 +584,7 @@ class GizmoHitTester {
           pos,
           center,
           corners: _computeScreenBounds(entity, transform, camera).corners,
-          rotation: transform.rotation,
+          rotation: transform.angle,
           scale: allows?.contains(TransformMode.scale) ?? true,
           rotate: allows?.contains(TransformMode.rotate) ?? true,
         );

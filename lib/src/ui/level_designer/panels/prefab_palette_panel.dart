@@ -28,9 +28,15 @@ class PrefabPalettePanel extends StatelessWidget {
     // The scope's palette, then this session's samples, in the order the
     // categories were declared: a module's group lands where it asked to.
     final byCategory = <String, List<PrefabDefinition>>{};
+    final mode = session.scope.sceneState.editingMode;
     for (final registry in [session.scope.prefabs, session.sessionPrefabs]) {
       for (final entry in registry.byCategory.entries) {
-        byCategory.putIfAbsent(entry.key, () => []).addAll(entry.value);
+        final offered = [
+          for (final p in entry.value)
+            if (p.dimensions.allows(mode)) p,
+        ];
+        if (offered.isEmpty) continue;
+        byCategory.putIfAbsent(entry.key, () => []).addAll(offered);
       }
     }
     final categories = byCategory.keys.toList()

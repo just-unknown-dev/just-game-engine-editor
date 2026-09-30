@@ -168,11 +168,12 @@ void main() {
       );
       expect(s.keyStateOf(door, transform, rotation), FieldKeyState.none);
 
-      transform.rotation = 0.5;
+      transform.angle = 0.5;
       s.scrubTo(1);
       expect(s.keyField(door, transform, rotation), isTrue);
+      // A 2-D scene keys the rotation's angle: its z.
       expect(
-        track('TransformComponent.rotation')!.curve.keys.single.value,
+        track('TransformComponent.rotation.z')!.curve.keys.single.value,
         0.5,
       );
       expect(s.keyStateOf(door, transform, rotation), FieldKeyState.keyed);

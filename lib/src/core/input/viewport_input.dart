@@ -9,6 +9,8 @@ import '../../ui/level_designer/tools/level_tool.dart' show ToolButton;
 import '../../ui/overlay/gizmo_painter.dart';
 import '../state/editor_scene_state.dart';
 import '../state/transform_mode.dart';
+import '../view/editor_view.dart';
+import 'gizmo_drag_solver.dart';
 
 /// Turns pointer events on the game canvas into edits: gizmo drags, camera
 /// pan and zoom, and, when the Level Designer is open, its tools and chrome.
@@ -20,7 +22,7 @@ class ViewportInput {
   ViewportInput({
     required World Function() world,
     required this.sceneState,
-    required Camera Function() camera,
+    required EditorView Function() camera,
     required LevelDesignerSession? Function() designer,
     required this.gridSize,
     required this.isActive,
@@ -29,7 +31,9 @@ class ViewportInput {
     this.transformMode,
     this.transformModes,
     GizmoHitTester? hitTester,
+    GizmoDragSolver? dragSolver,
   }) : _worldOf = world,
+       dragSolver = dragSolver ?? PlanarGizmoDragSolver(sceneState),
        cameraOf = camera,
        designerOf = designer,
        hitTester = hitTester ?? GizmoHitTester();
@@ -52,7 +56,7 @@ class ViewportInput {
   /// until it initialises, and the overlay builds before that.
   World get world => _worldOf();
   final EditorSceneState sceneState;
-  final Camera Function() cameraOf;
+  final EditorView Function() cameraOf;
   final LevelDesignerSession? Function() designerOf;
   final double Function() gridSize;
 
@@ -64,29 +68,14 @@ class ViewportInput {
   final GizmoHitTester hitTester;
 
   GizmoHandle? _activeHandle;
-  Offset? _dragStartScreen;
 
-  /// Where a turn or a scale began, and what it began from: each is worked
-  /// out from there, not step by step, so a snapped one moves a whole step
-  /// when the pointer has gone far enough rather than never.
-  Offset? _dragOriginScreen;
-  double _startRotation = 0;
-  double _turned = 0;
-  Offset _startScale = const Offset(1, 1);
-  Offset _startPosition = Offset.zero;
+  /// What turns a drag of a gizmo handle into an edit.
+  final GizmoDragSolver dragSolver;
 
   /// Remembers where a drag of the selection began, and what it began from.
   void _beginDrag(Offset at) {
-    _dragStartScreen = at;
-    _dragOriginScreen = at;
-    final transform = sceneState.selectedEntity.value
-        ?.getComponent<TransformComponent>();
-    _startRotation = transform?.rotation ?? 0;
-    _turned = 0;
-    _startScale = transform == null
-        ? const Offset(1, 1)
-        : Offset(transform.scale.x, transform.scale.y);
-    _startPosition = transform?.position.toOffset() ?? Offset.zero;
+    final entity = sceneState.selectedEntity.value;
+    if (entity != null) dragSolver.begin(entity, at);
   }
 
   /// Size of the game canvas, updated each frame by the overlay.
@@ -298,125 +287,13 @@ class ViewportInput {
     final camera = cameraOf();
     camera.viewportSize = canvasSize;
 
-    switch (_activeHandle!) {
-      // Moves are measured from where the drag began, so a snapped one
-      // steps once the pointer has gone far enough — step by step, each
-      // small move would snap back to where it was.
-      case GizmoHandle.translateXY:
-        final worldNow = camera.screenToWorld(event.localPosition);
-        final worldStart = camera.screenToWorld(
-          _dragOriginScreen ?? _dragStartScreen!,
-        );
-        var dx = worldNow.dx - worldStart.dx;
-        var dy = worldNow.dy - worldStart.dy;
-
-        // Hold Shift to constrain free move to the dominant axis.
-        if (HardwareKeyboard.instance.isShiftPressed) {
-          if (dx.abs() >= dy.abs()) {
-            dy = 0;
-          } else {
-            dx = 0;
-          }
-        }
-
-        sceneState.setPosition(entity, _startPosition + Offset(dx, dy));
-        _dragStartScreen = event.localPosition;
-
-      case GizmoHandle.translateX:
-        final worldNow = camera.screenToWorld(event.localPosition);
-        final worldStart = camera.screenToWorld(
-          _dragOriginScreen ?? _dragStartScreen!,
-        );
-        sceneState.setPosition(
-          entity,
-          _startPosition + Offset(worldNow.dx - worldStart.dx, 0),
-        );
-        _dragStartScreen = event.localPosition;
-
-      case GizmoHandle.translateY:
-        final worldNow = camera.screenToWorld(event.localPosition);
-        final worldStart = camera.screenToWorld(
-          _dragOriginScreen ?? _dragStartScreen!,
-        );
-        sceneState.setPosition(
-          entity,
-          _startPosition + Offset(0, worldNow.dy - worldStart.dy),
-        );
-        _dragStartScreen = event.localPosition;
-
-      case GizmoHandle.rotate:
-        final transform = entity.getComponent<TransformComponent>();
-        if (transform == null) break;
-        final center = camera.worldToScreen(transform.position.toOffset());
-        final prev = _dragStartScreen! - center;
-        final curr = event.localPosition - center;
-        var delta = math.atan2(curr.dy, curr.dx) - math.atan2(prev.dy, prev.dx);
-        // Across the ±π seam the difference jumps by a whole turn.
-        if (delta > math.pi) delta -= 2 * math.pi;
-        if (delta < -math.pi) delta += 2 * math.pi;
-        _turned += delta;
-        final target = sceneState.snapRotation(_startRotation + _turned);
-        sceneState.applyRotation(entity, target - transform.rotation);
-        _dragStartScreen = event.localPosition;
-
-      case GizmoHandle.scaleNW:
-      case GizmoHandle.scaleNE:
-      case GizmoHandle.scaleSE:
-      case GizmoHandle.scaleSW:
-        final transform = entity.getComponent<TransformComponent>();
-        if (transform == null) break;
-        final center = camera.worldToScreen(transform.position.toOffset());
-        final fromDist =
-            ((_dragOriginScreen ?? _dragStartScreen!) - center).distance;
-        final currDist = (event.localPosition - center).distance;
-        if (fromDist > 0) {
-          final ratio = currDist / fromDist;
-          sceneState.setScale(
-            entity,
-            Offset(
-              (_startScale.dx * ratio).clamp(0.01, 50.0),
-              (_startScale.dy * ratio).clamp(0.01, 50.0),
-            ),
-          );
-        }
-        _dragStartScreen = event.localPosition;
-
-      case GizmoHandle.scaleX:
-        final transform = entity.getComponent<TransformComponent>();
-        if (transform == null) break;
-        final center = camera.worldToScreen(transform.position.toOffset());
-        final fromDistX =
-            ((_dragOriginScreen ?? _dragStartScreen!).dx - center.dx).abs();
-        final currDistX = (event.localPosition.dx - center.dx).abs();
-        if (fromDistX > 0.5) {
-          final newSx = (_startScale.dx * currDistX / fromDistX).clamp(
-            0.01,
-            50.0,
-          );
-          sceneState.setScaleX(entity, newSx);
-        }
-        _dragStartScreen = event.localPosition;
-
-      case GizmoHandle.scaleY:
-        final transform = entity.getComponent<TransformComponent>();
-        if (transform == null) break;
-        final center = camera.worldToScreen(transform.position.toOffset());
-        final fromDistY =
-            ((_dragOriginScreen ?? _dragStartScreen!).dy - center.dy).abs();
-        final currDistY = (event.localPosition.dy - center.dy).abs();
-        if (fromDistY > 0.5) {
-          final newSy = (_startScale.dy * currDistY / fromDistY).clamp(
-            0.01,
-            50.0,
-          );
-          sceneState.setScaleY(entity, newSy);
-        }
-        _dragStartScreen = event.localPosition;
-
-      case GizmoHandle.body:
-      case GizmoHandle.none:
-        break;
-    }
+    dragSolver.update(
+      _activeHandle!,
+      entity,
+      event.localPosition,
+      camera,
+      constrain: HardwareKeyboard.instance.isShiftPressed,
+    );
   }
 
   void onPointerUp(PointerUpEvent event) {
@@ -453,8 +330,7 @@ class ViewportInput {
   void _resetPointerDragState() {
     designerOf()?.onPointerCancel();
     _activeHandle = null;
-    _dragStartScreen = null;
-    _dragOriginScreen = null;
+    dragSolver.end();
     _isPanningCamera = false;
   }
 

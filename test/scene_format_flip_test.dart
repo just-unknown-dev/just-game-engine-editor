@@ -58,7 +58,7 @@ void main() {
     final block = scope.world.query([TransformComponent]).single;
     final t = block.getComponent<TransformComponent>()!;
     expect((t.position.x, t.position.y), (96.0, 32.0));
-    expect(t.rotation, 0.5);
+    expect(t.angle, 0.5);
     expect(t.scale.x, 2.0);
     expect(block.getComponent<TagComponent>()!.tag, 'ground');
 
@@ -77,7 +77,7 @@ void main() {
     final again = scope.world.query([TransformComponent]).single;
     final t2 = again.getComponent<TransformComponent>()!;
     expect((t2.position.x, t2.position.y), (96.0, 32.0));
-    expect(t2.rotation, 0.5);
+    expect(t2.angle, 0.5);
     expect(again.components.whereType<RectangleComponent>().single.width, 64);
     expect(again.getComponent<TagComponent>()!.tag, 'ground');
   });

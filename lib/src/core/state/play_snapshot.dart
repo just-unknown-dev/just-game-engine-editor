@@ -137,15 +137,19 @@ class PlaySnapshot {
     }
 
     _relink(world, restored, kept);
+    // Every link was made anew: work out each child's offset from where the
+    // restored world transforms put it.
+    world.transformHierarchy.propagate();
     return restored.length;
   }
 
   /// Rebuilds every restored entity's place in the tree from the records.
   ///
   /// `applyTo` leaves an entity's links as they are, so this is the only
-  /// place they are put back: a parent the record has is set (and made, with
-  /// the record's local offset, where the entity has none); one it lacks is
-  /// removed; and each parent lists its restored children in record order —
+  /// place they are put back: a parent the record has is set (and made where
+  /// the entity has none — its offset follows from the restored
+  /// transforms); one it lacks is removed; and each parent lists its
+  /// restored children in record order —
   /// the order a save writes them in — followed by any child play did not
   /// own that still hangs from it.
   void _relink(World world, List<Entity> restored, Set<Entity> kept) {
@@ -203,8 +207,8 @@ class PlaySnapshot {
   /// The parent link the record was saved with — its local offset and turn —
   /// or null where it saved none.
   ParentComponent? _savedLink(_Record record) {
-    for (final json in (record.json['components'] as List)
-        .cast<Map<String, dynamic>>()) {
+    for (final json
+        in (record.json['components'] as List).cast<Map<String, dynamic>>()) {
       if (json['type'] != 'ParentComponent') continue;
       final decoded = codec.decode(json);
       if (decoded is ParentComponent) return decoded;

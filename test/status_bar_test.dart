@@ -84,7 +84,7 @@ void main() {
     await refresh(tester);
     expect(find.text('No scene'), findsOneWidget);
 
-    plugin.sceneState.openScene(Scene(name: 'level_01'), const {});
+    plugin.sceneState.openScene(Scene(name: 'level_01'));
     final hero = plugin.engine.world.createEntityWithComponents([
       TransformComponent(position: Vector3(120, 48, 0)),
     ], name: 'Hero');

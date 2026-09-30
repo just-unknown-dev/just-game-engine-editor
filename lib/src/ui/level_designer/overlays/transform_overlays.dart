@@ -89,7 +89,7 @@ class SelectionHandlesOverlay extends DesignerOverlay {
         final angle = entities.length == 1
             ? entities.single
                       .getComponent<jge.TransformComponent>()
-                      ?.rotation ??
+                      ?.angle ??
                   0.0
             : 0.0;
         TransformGizmo.paintRotate(
