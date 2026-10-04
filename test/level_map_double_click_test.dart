@@ -28,8 +28,6 @@ class _Clicks extends LevelToolHandler {
 }
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   group('in the designer', () {
     late World world;
     late EditorScope scope;
@@ -100,17 +98,16 @@ void main() {
 
     setUp(() async {
       TestWidgetsFlutterBinding.ensureInitialized();
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine);
       await plugin.onInitialize();
-      plugin.sceneState.openScene(Scene(name: 'level'));
+      plugin.sceneState.openScene(EditorScene(name: 'level'));
     });
 
     tearDown(() {
       plugin.dispose();
-      Engine.resetInstance();
     });
 
     test('double-clicking the Level Map opens the designer on it, the '

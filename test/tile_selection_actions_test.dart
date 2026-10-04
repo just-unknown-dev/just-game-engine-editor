@@ -10,8 +10,6 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   /// A Level Map on [world] with two tiles on its Ground layer, both
   /// selected.
   ({Entity map, MapLayerData ground}) mapWithSelection(
@@ -107,11 +105,11 @@ void main() {
     late JustGameEditorPlugin plugin;
 
     setUp(() async {
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
-      plugin.sceneState.openScene(Scene(name: 'level'));
+      plugin.sceneState.openScene(EditorScene(name: 'level'));
       addTearDown(plugin.dispose);
     });
 
@@ -167,7 +165,7 @@ void main() {
     setUp(() {
       world = World()..initialize();
       scope = testScope(world: world);
-      scope.sceneState.openScene(Scene(name: 'level'));
+      scope.sceneState.openScene(EditorScene(name: 'level'));
       (map: _, :ground) = mapWithSelection(world, scope);
     });
 

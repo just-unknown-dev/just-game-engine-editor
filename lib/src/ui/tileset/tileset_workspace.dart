@@ -39,6 +39,7 @@ class TilesetEditor extends StatefulWidget {
     this.loadImage,
     this.readText,
     this.writeText,
+    this.collisionKinds,
   });
 
   /// The project folder paths are relative to.
@@ -62,6 +63,10 @@ class TilesetEditor extends StatefulWidget {
   /// Where to leave the question to ask before the editor opens something
   /// else over this; see [WorkspaceContext.setCloseGuard].
   final void Function(Future<bool> Function()? guard)? setCloseGuard;
+
+  /// The collision kinds tiles can be given: the edited engine's. The
+  /// engine's own when null.
+  final MapCollisionKinds? collisionKinds;
 
   // Seams for tests.
   final TilesetImageLoader? loadImage;
@@ -118,6 +123,7 @@ class TilesetEditorState extends State<TilesetEditor> {
         readText: widget.readText,
         loadImage: widget.loadImage,
         writeText: widget.writeText,
+        collisionKinds: widget.collisionKinds,
       );
       if (!mounted) return s.dispose();
       _adopt(s);
@@ -138,6 +144,7 @@ class TilesetEditorState extends State<TilesetEditor> {
         root: widget.root,
         loadImage: widget.loadImage,
         writeText: widget.writeText,
+        collisionKinds: widget.collisionKinds,
       );
       if (!mounted) return s.dispose();
       setState(() => _creating = false);
@@ -538,6 +545,7 @@ class TilesetEditorState extends State<TilesetEditor> {
                 size: Size(width.toDouble(), height.toDouble()),
                 painter: _GridPainter(
                   tileset: ts,
+                  collisionKinds: s.collisionKinds,
                   image: image,
                   zoom: _zoom,
                   selected: _terrainMode ? const {} : s.selection.value,
@@ -733,10 +741,14 @@ class _GridPainter extends CustomPainter {
     required this.zoom,
     required this.selected,
     required this.showCollision,
+    required this.collisionKinds,
     this.wang,
   });
 
   final TilesetData tileset;
+
+  /// What colours each tile's collision kind.
+  final MapCollisionKinds collisionKinds;
   final ui.Image? image;
   final double zoom;
   final Set<int> selected;
@@ -796,7 +808,7 @@ class _GridPainter extends CustomPainter {
       if (def == null) continue;
       final collision = def.collision;
       if (showCollision && collision != null) {
-        final color = Color(MapCollisionKinds.resolve(collision.kind).color);
+        final color = Color(collisionKinds.resolve(collision.kind).color);
         for (final shape in collision.shapes) {
           final path = Path()
             ..addPolygon([

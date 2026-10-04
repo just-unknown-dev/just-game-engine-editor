@@ -25,8 +25,8 @@ void main() {
         ..physicalSize = const Size(1400, 900)
         ..devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       plugin = JustGameEditorPlugin(engine: engine);
       await tester.runAsync(plugin.onInitialize);
@@ -41,7 +41,7 @@ void main() {
           ),
         ),
       );
-      plugin.sceneState.openScene(Scene(name: 'level'));
+      plugin.sceneState.openScene(EditorScene(name: 'level'));
       await tester.pump();
     }
 
@@ -50,7 +50,6 @@ void main() {
       plugin.closeLevelDesigner();
       await tester.pumpWidget(const SizedBox());
       plugin.dispose();
-      Engine.resetInstance();
     }
 
     Finder inBar(Finder f) =>

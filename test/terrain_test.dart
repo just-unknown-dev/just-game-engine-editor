@@ -49,8 +49,6 @@ ui.Image _image(int w, int h) {
 }
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   group('the tileset\'s terrains', () {
     TilesetSession session() => TilesetSession(
       TilesetData.fromImage(
@@ -155,9 +153,8 @@ void main() {
     final wang = _terrainTileset().wangSets.single;
 
     setUp(() {
-      TileAssets.clear();
-      TileAssets.putTileset(_path, _terrainTileset());
       world = World()..initialize();
+      world.context.tiles.putTileset(_path, _terrainTileset());
       scope = testScope(world: world);
       session = LevelDesignerSession(
         scope: scope,

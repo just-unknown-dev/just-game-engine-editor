@@ -16,8 +16,8 @@ void main() {
       ..physicalSize = const Size(1600, 900)
       ..devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    Engine.resetInstance();
     final engine = Engine();
+    addTearDown(engine.dispose);
     await tester.runAsync(engine.initialize);
     plugin = JustGameEditorPlugin(engine: engine);
     await tester.runAsync(plugin.onInitialize);
@@ -37,7 +37,6 @@ void main() {
   Future<void> done(WidgetTester tester) async {
     await tester.pumpWidget(const SizedBox());
     plugin.dispose();
-    Engine.resetInstance();
   }
 
   /// Facts refresh on a timer; give it a turn.
@@ -84,7 +83,7 @@ void main() {
     await refresh(tester);
     expect(find.text('No scene'), findsOneWidget);
 
-    plugin.sceneState.openScene(Scene(name: 'level_01'));
+    plugin.sceneState.openScene(EditorScene(name: 'level_01'));
     final hero = plugin.engine.world.createEntityWithComponents([
       TransformComponent(position: Vector3(120, 48, 0)),
     ], name: 'Hero');

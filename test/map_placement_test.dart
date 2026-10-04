@@ -11,8 +11,6 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   group('in the designer', () {
     late World world;
     late EditorScope scope;
@@ -194,18 +192,17 @@ void main() {
 
     setUp(() async {
       TestWidgetsFlutterBinding.ensureInitialized();
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine);
       await plugin.onInitialize();
-      plugin.sceneState.openScene(Scene(name: 'level'));
+      plugin.sceneState.openScene(EditorScene(name: 'level'));
       plugin.engine.cameraSystem.mainCamera.viewportSize = const Size(800, 600);
     });
 
     tearDown(() {
       plugin.dispose();
-      Engine.resetInstance();
     });
 
     test('while designing goes under the level\'s map; otherwise it is an '

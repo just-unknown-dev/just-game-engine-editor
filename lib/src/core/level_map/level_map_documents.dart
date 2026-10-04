@@ -76,7 +76,7 @@ class LevelMapTarget {
   TilesetData? tilesetAt(int slot) =>
       component.runtime?.tilesetAt(slot) ??
       (slot >= 0 && slot < data.tilesets.length && data.tilesets[slot] != null
-          ? TileAssets.loadedTileset(data.tilesets[slot]!)
+          ? entity.world?.context.tiles.loadedTileset(data.tilesets[slot]!)
           : null);
 }
 
@@ -106,6 +106,9 @@ class LevelMapDocuments {
 
   World get world => _world();
 
+  /// The edited engine's tilesets and map files (`world.context.tiles`).
+  TileAssets get tiles => world.context.tiles;
+
   /// Map files edited since they were last saved.
   final Signal<Set<String>> dirtyPaths = Signal(
     const {},
@@ -125,11 +128,9 @@ class LevelMapDocuments {
     if (c == null) return null;
     if (c.usesFile) {
       final path = c.mapPath.trim();
-      final data = TileAssets.loadedMap(path) ?? c.runtime?.base;
+      final data = tiles.loadedMap(path) ?? c.runtime?.base;
       if (data == null) {
-        unawaited(
-          TileAssets.map(path).then<void>((_) => _bump(), onError: (_) {}),
-        );
+        unawaited(tiles.map(path).then<void>((_) => _bump(), onError: (_) {}));
         return null;
       }
       return LevelMapTarget(
@@ -151,7 +152,7 @@ class LevelMapDocuments {
   /// scene — and the steps recorded on it still apply.
   LevelMapData? dataFor(LevelMapRef ref) {
     final path = ref.path;
-    if (path != null) return TileAssets.loadedMap(path);
+    if (path != null) return tiles.loadedMap(path);
     final own = world.getEntity(ref.entityId);
     if (own != null && own.hasComponent<LevelMapComponent>()) {
       return own.getComponent<LevelMapComponent>()!.inline;
@@ -178,9 +179,9 @@ class LevelMapDocuments {
   /// edits under its new name. Returns how many places changed.
   int renamed(String from, String to) {
     var changed = 0;
-    final moved = TileAssets.loadedMap(from);
+    final moved = tiles.loadedMap(from);
     if (moved != null) {
-      TileAssets.putMap(to, moved);
+      tiles.putMap(to, moved);
       if (dirtyPaths.value.contains(from)) {
         dirtyPaths.value = {
           for (final p in dirtyPaths.value) p == from ? to : p,
@@ -188,13 +189,11 @@ class LevelMapDocuments {
       }
     }
     if (from.toLowerCase().endsWith('.tileset.json') || moved != null) {
-      TileAssets.evict(from);
+      tiles.evict(from);
     }
     for (final e in world.query([LevelMapComponent])) {
       final c = e.getComponent<LevelMapComponent>()!;
-      final data = c.usesFile
-          ? TileAssets.loadedMap(c.mapPath.trim())
-          : c.inline;
+      final data = c.usesFile ? tiles.loadedMap(c.mapPath.trim()) : c.inline;
       if (data != null) {
         for (var i = 0; i < data.tilesets.length; i++) {
           if (data.tilesets[i] != from) continue;
@@ -221,7 +220,7 @@ class LevelMapDocuments {
   /// — a tileset saved in the Tileset Editor — so what shows them draws
   /// again. Cheap; called every frame.
   void pollAssets() {
-    var seen = TileAssets.revision;
+    var seen = tiles.revision;
     for (final e in world.query([LevelMapComponent])) {
       seen = Object.hash(
         seen,
@@ -236,7 +235,7 @@ class LevelMapDocuments {
   /// Writes every edited map file. Called when the scene is saved.
   Future<void> saveDirty() async {
     for (final path in dirtyPaths.value.toList()) {
-      final data = TileAssets.loadedMap(path);
+      final data = tiles.loadedMap(path);
       if (data == null) continue;
       await writeMap(path, data);
     }
@@ -259,7 +258,7 @@ class LevelMapDocuments {
     final data = c?.inline;
     if (c == null || data == null) return null;
     await writeMap(path, data);
-    TileAssets.putMap(path, data);
+    tiles.putMap(path, data);
     final command = MapSourceCommand(
       label: 'Move map to $path',
       docs: this,
@@ -281,7 +280,7 @@ class LevelMapDocuments {
     final c = entity.getComponent<LevelMapComponent>();
     if (c == null || !c.usesFile) return null;
     final path = c.mapPath.trim();
-    final data = TileAssets.loadedMap(path) ?? c.runtime?.base;
+    final data = tiles.loadedMap(path) ?? c.runtime?.base;
     if (data == null) return null;
     return MapSourceCommand(
       label: 'Keep map in the scene',

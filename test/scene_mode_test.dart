@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart' show IconData;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/core/dev/editor_dev_flags.dart';
+import 'package:just_game_engine_editor/src/core/scene/editor_scene.dart';
 import 'package:just_game_engine_editor/src/core/state/editor_scene_state.dart';
 import 'package:just_game_engine_editor/src/core/state/scene_mode_filters.dart';
 import 'package:just_game_engine_editor/src/ui/level_designer/commands/designer_command.dart';
@@ -28,7 +29,7 @@ void main() {
     final state = EditorSceneState();
     expect(state.editingMode, SceneMode.twoD);
 
-    state.openScene(Scene(name: 'deep', mode: SceneMode.threeD));
+    state.openScene(EditorScene(name: 'deep', mode: SceneMode.threeD));
     expect(state.sceneMode.value, SceneMode.threeD, reason: 'kept');
     EditorDevFlags.allow3DSceneModeOverride = false;
     expect(state.editingMode, SceneMode.twoD);
@@ -45,14 +46,15 @@ void main() {
       kind: FieldTypes.vector3,
       read: _none,
     );
-    expect(
-      SceneModeFilters.visibleChannels(field, null, SceneMode.twoD),
-      {'x', 'y'},
-    );
-    expect(
-      SceneModeFilters.visibleChannels(field, null, SceneMode.threeD),
-      {'x', 'y', 'z'},
-    );
+    expect(SceneModeFilters.visibleChannels(field, null, SceneMode.twoD), {
+      'x',
+      'y',
+    });
+    expect(SceneModeFilters.visibleChannels(field, null, SceneMode.threeD), {
+      'x',
+      'y',
+      'z',
+    });
     expect(
       SceneModeFilters.visibleChannels(
         field,

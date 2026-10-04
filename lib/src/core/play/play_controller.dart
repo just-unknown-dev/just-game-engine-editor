@@ -75,6 +75,12 @@ class PlayController {
       elapsedSeconds.value = 0;
       // Before anything spawns or moves — and with nothing previewed.
       scope.restoreAuthoredState();
+      // Each play-test starts the cameras from nothing, as the game does:
+      // no memory of the last run, impulse and noise seeds from the start —
+      // so a shake or a handheld drift plays the same way every time.
+      if (engine.cameraSystem.isInitialized) {
+        engine.cameraSystem.brain.reset();
+      }
       _snapshot = PlaySnapshot.capture(engine.world, scope.codec);
       final spawned = SpawnPoints.spawnAll(
         engine.world,
@@ -162,7 +168,9 @@ class PlayController {
 
     for (final id in _spawned) {
       final entity = engine.world.getEntity(id);
-      if (entity != null) engine.world.destroyEntity(entity);
+      if (entity != null) {
+        engine.world.destroyEntity(entity, withChildren: false);
+      }
     }
     scope.log.log(
       'Stop: destroyed ${_spawned.length} entities.',

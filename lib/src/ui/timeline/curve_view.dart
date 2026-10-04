@@ -258,7 +258,7 @@ class CurveViewState extends State<CurveView> {
         start,
         handle.$1,
         handle.$2 == CurveHandle.outgoing,
-        jge.Tangent(
+        jge.KeyTangent(
           timeAt(local.dx) - key.time,
           valueAt(local.dy) - key.number,
         ),

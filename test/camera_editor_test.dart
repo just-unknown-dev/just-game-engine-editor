@@ -22,8 +22,8 @@ void main() {
     CameraBrain brain() => engine.cameraSystem.brain;
 
     setUp(() async {
-      Engine.resetInstance();
       engine = Engine();
+      addTearDown(engine.dispose);
       await engine.initialize();
       registerCameraSystems(engine.world, engine.cameraSystem);
       brain().defaultBlend = CameraBlend.cut;
@@ -35,7 +35,6 @@ void main() {
 
     tearDown(() {
       plugin.dispose();
-      Engine.resetInstance();
     });
 
     Entity shot(String name, Offset at, {int priority = 10, double zoom = 1}) =>

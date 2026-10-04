@@ -16,8 +16,6 @@ import 'package:just_game_engine_editor/src/ui/panels/scene_row.dart';
 import 'support/memory_settings_store.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late Directory root;
   late SceneStore store;
   late SceneManager manager;
@@ -25,7 +23,10 @@ void main() {
 
   setUp(() async {
     root = Directory.systemTemp.createTempSync('scene_list_');
-    store = SceneStore(root: root.path, codec: SceneCodec.global);
+    store = SceneStore(
+      root: root.path,
+      codec: SceneCodec(ComponentDefinitionRegistry.core()),
+    );
     for (final name in ['level_01', 'level_02', 'level_03']) {
       await store.writeInitialFiles(name);
     }

@@ -26,8 +26,6 @@ Future<void> _pump(WidgetTester tester, Widget child) async {
 }
 
 void main() {
-  setUpAll(jge.registerCoreCodecs);
-
   testWidgets('a colour row keeps its picker at the end, whatever the value', (
     tester,
   ) async {

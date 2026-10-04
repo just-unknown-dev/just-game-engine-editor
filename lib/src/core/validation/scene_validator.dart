@@ -190,7 +190,8 @@ abstract final class BuiltInValidators {
       final c = entity.getComponent<jge.LevelMapComponent>()!;
       if (c.usesFile) check(entity, c.mapPath.trim(), 'the map file');
       final data = c.usesFile
-          ? (jge.TileAssets.loadedMap(c.mapPath.trim()) ?? c.runtime?.base)
+          ? (context.scope.context.tiles.loadedMap(c.mapPath.trim()) ??
+                c.runtime?.base)
           : c.inline;
       if (data == null) continue;
       for (final path in data.tilesets.whereType<String>()) {
@@ -276,7 +277,8 @@ abstract final class BuiltInValidators {
         );
       }
       final data = c.usesFile
-          ? (jge.TileAssets.loadedMap(c.mapPath.trim()) ?? c.runtime?.base)
+          ? (context.scope.context.tiles.loadedMap(c.mapPath.trim()) ??
+                c.runtime?.base)
           : c.inline;
       if (data == null) continue;
       if (data.layers.isEmpty) {
@@ -306,11 +308,12 @@ abstract final class BuiltInValidators {
         }
         // Not a file: loaded as it is — a built-in tileset, or one inside
         // a Tiled map.
+        final tiles = context.scope.context.tiles;
         final json = jge.TileAssets.isVirtual(path)
-            ? jge.TileAssets.loadedTileset(path)?.toJson()
+            ? tiles.loadedTileset(path)?.toJson()
             : context.readJson(path);
         tilesets[slot] = json == null
-            ? jge.TileAssets.loadedTileset(path)
+            ? tiles.loadedTileset(path)
             : jge.TilesetData.fromJson(json);
       }
       // Tiles no tileset can draw, counted per layer.
@@ -361,7 +364,8 @@ abstract final class BuiltInValidators {
         for (final def in ts.tiles.values) {
           final collision = def.collision;
           if (collision == null) continue;
-          if (jge.MapCollisionKinds.byId(collision.kind) == null) {
+          if (context.scope.context.collisionKinds.byId(collision.kind) ==
+              null) {
             kinds.add(collision.kind);
           }
           for (final shape in collision.shapes) {
@@ -559,7 +563,11 @@ abstract final class BuiltInValidators {
       } else {
         final json = context.readJson(path);
         if (json == null) continue; // missingAssets
-        asset = jge.TimelineAsset.fromJson(json);
+        asset = jge.TimelineAsset.fromJson(
+          json,
+          kinds: context.scope.context.trackKinds,
+          migrations: context.scope.context.migrations,
+        );
       }
       final what = path.isEmpty ? 'its timeline' : path;
       for (final problem in asset.validate()) {

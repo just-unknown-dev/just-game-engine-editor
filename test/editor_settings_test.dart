@@ -23,7 +23,6 @@ import 'support/test_scope.dart';
 
 void main() {
   const defaults = OverlayUiSettings.defaults();
-  setUpAll(registerCoreCodecs);
   tearDown(() {
     EditorMetrics.apply(defaults);
     ViewportLook.apply(defaults);
@@ -473,7 +472,7 @@ void main() {
       File('${scenes.path}/level.scene.json').writeAsStringSync(
         jsonEncode({
           'version': SceneFormat.current,
-          ...Scene(name: 'level').toJson(),
+          ...EditorScene(name: 'level').toJson(),
           'entities': [
             {
               'name': 'Platform',
@@ -573,8 +572,8 @@ void main() {
     late JustGameEditorPlugin plugin;
 
     Future<void> start(WidgetTester tester) async {
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       plugin = JustGameEditorPlugin(engine: engine);
       await tester.runAsync(plugin.onInitialize);
@@ -595,7 +594,6 @@ void main() {
     Future<void> stop(WidgetTester tester) async {
       await tester.pumpWidget(const SizedBox());
       plugin.dispose();
-      Engine.resetInstance();
     }
 
     testWidgets('stepping aside: the game has the window while it runs', (

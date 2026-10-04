@@ -9,10 +9,10 @@ void main() {
   testWidgets(
     'Saved when clean, UNSAVED when dirty, and Save explains itself',
     (tester) async {
-      Engine.resetInstance();
       // A scene is opened below, and the panel beside the footer lists the
       // world's entities — so the engine has to be a running one.
       final engine = Engine();
+      addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       final plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
       await tester.runAsync(plugin.onInitialize);
@@ -27,7 +27,7 @@ void main() {
         ),
       );
       plugin.toggleVisibility();
-      plugin.sceneState.openScene(Scene(name: 'level'));
+      plugin.sceneState.openScene(EditorScene(name: 'level'));
       await tester.pumpAndSettle();
 
       expect(find.text('Saved'), findsOneWidget);
@@ -50,7 +50,6 @@ void main() {
       expect(tester.getSize(button.first).height, 28);
 
       plugin.dispose();
-      Engine.resetInstance();
     },
   );
 

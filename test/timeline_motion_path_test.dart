@@ -27,8 +27,6 @@ PropertyTrack _position(
 );
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late EditorScope scope;
   late TimelineSession s;
   late Entity lift;

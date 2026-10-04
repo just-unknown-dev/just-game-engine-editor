@@ -156,7 +156,7 @@ class TimelineItemBar extends StatelessWidget {
             jge.KeyInterpolation.bezier.name,
             jge.KeyInterpolation.linear.name,
             jge.KeyInterpolation.step.name,
-            ...jge.KeyEasings.names.where((n) => n != 'linear'),
+            ...session.scope.context.easings.names.where((n) => n != 'linear'),
           ],
           text: (v) => switch (v) {
             'bezier' => 'Smooth',

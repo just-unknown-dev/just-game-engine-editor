@@ -184,15 +184,14 @@ void main() {
     late JustGameEditorPlugin plugin;
     setUp(() async {
       TestWidgetsFlutterBinding.ensureInitialized();
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine);
       await plugin.onInitialize();
     });
     tearDown(() {
       plugin.dispose();
-      Engine.resetInstance();
     });
 
     test('an image is a sprite there; an atlas or a project animates', () {
@@ -201,7 +200,7 @@ void main() {
         isNull,
         reason: 'no scene',
       );
-      plugin.sceneState.openScene(Scene(name: 'level'));
+      plugin.sceneState.openScene(EditorScene(name: 'level'));
       final camera = plugin.engine.cameraSystem.mainCamera
         ..viewportSize = const Size(800, 600);
       final where = camera.screenToWorld(const Offset(200, 150));

@@ -98,7 +98,9 @@ class _EntityHeaderState extends State<EntityHeader> {
             icon: on
                 ? Icons.check_box_rounded
                 : Icons.check_box_outline_blank_rounded,
-            tooltip: on ? 'On in the game' : 'Off in the game — click to turn on',
+            tooltip: on
+                ? 'On in the game'
+                : 'Off in the game — click to turn on',
             faded: !on,
             onPressed: _toggleEnabled,
           ),
@@ -296,11 +298,7 @@ class _EntityHeaderState extends State<EntityHeader> {
       width: 220,
       gap: 4,
       searchable: true,
-      options: TagFieldEditors.tagOptions(
-        scope,
-        scope.world,
-        exclude: carried,
-      ),
+      options: TagFieldEditors.tagOptions(scope, scope.world, exclude: carried),
       customValue: (typed) => typed,
       customLabel: TagFieldEditors.createLabel(scope),
     );

@@ -14,10 +14,6 @@ import 'unknown_components.dart';
 class SceneCodec {
   const SceneCodec(this.definitions);
 
-  /// Over the process-wide registry the game registers into at boot.
-  static SceneCodec get global =>
-      SceneCodec(ComponentDefinitionRegistry.instance);
-
   /// Where component definitions come from.
   final ComponentDefinitionRegistry definitions;
 
@@ -74,7 +70,10 @@ class SceneCodec {
     List<Entity> entities, {
     List<EntityId>? rootOrder,
   }) => encodeInOrder(
-    inTreeOrder(entities.where((e) => e.isAlive).toList(), rootOrder: rootOrder),
+    inTreeOrder(
+      entities.where((e) => e.isAlive).toList(),
+      rootOrder: rootOrder,
+    ),
   );
 
   /// Encodes [ordered] as it stands, one record per entity in the same

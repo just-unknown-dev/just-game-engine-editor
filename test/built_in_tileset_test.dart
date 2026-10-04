@@ -9,8 +9,6 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   test('the checks say nothing of a map painted with it', () {
     final world = World()..initialize();
     final scope = testScope(world: world);
@@ -56,6 +54,8 @@ void main() {
     map.addLayer(name: 'Ground').cells.setCell(0, 0, TileCell.make(0, 0));
     final text = <String, String>{};
     final bytes = <String, List<int>>{};
+    final tiles = EngineContext().tiles;
+    addTearDown(tiles.dispose);
     final written =
         await TiledExporter(
           TiledFiles(
@@ -66,7 +66,7 @@ void main() {
         ).export(
           map,
           to: 'export/level.tmx',
-          tilesetAt: (slot) => TileAssets.loadedTileset(map.tilesets[slot]!),
+          tilesetAt: (slot) => tiles.loadedTileset(map.tilesets[slot]!),
         );
     expect(written, [
       'export/basic_shapes.png',

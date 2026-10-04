@@ -134,10 +134,7 @@ class ColorEditorRow extends StatelessWidget {
       children: [
         SizedBox(
           width: InspectorField.labelWidth,
-          child: Text(
-            label,
-            style: InspectorField.labelStyle,
-          ),
+          child: Text(label, style: InspectorField.labelStyle),
         ),
         Expanded(
           child: InkWell(
@@ -271,9 +268,7 @@ class ReadonlyRow extends StatelessWidget {
         // left unfilled and quieter, since there is nothing in it to change.
         Expanded(
           child: Container(
-            constraints: const BoxConstraints(
-              minHeight: InspectorField.height,
-            ),
+            constraints: const BoxConstraints(minHeight: InspectorField.height),
             // Less the border's pixel on each side, which a box's padding
             // grows by: then one line comes out at the height of the rest.
             padding: InspectorField.padding - const EdgeInsets.all(1),
@@ -313,10 +308,7 @@ class BoolEditorRow extends StatelessWidget {
       children: [
         SizedBox(
           width: InspectorField.labelWidth,
-          child: Text(
-            label,
-            style: InspectorField.labelStyle,
-          ),
+          child: Text(label, style: InspectorField.labelStyle),
         ),
         Expanded(
           child: Semantics(
@@ -643,10 +635,7 @@ class TextEditorRow extends StatelessWidget {
           width: InspectorField.labelWidth,
           child: Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              label,
-              style: InspectorField.labelStyle,
-            ),
+            child: Text(label, style: InspectorField.labelStyle),
           ),
         ),
         Expanded(
@@ -693,10 +682,7 @@ class DropdownEditorRow extends StatelessWidget {
       children: [
         SizedBox(
           width: InspectorField.labelWidth,
-          child: Text(
-            label,
-            style: InspectorField.labelStyle,
-          ),
+          child: Text(label, style: InspectorField.labelStyle),
         ),
         Expanded(
           child: EditorDropdown<String>(
@@ -790,10 +776,7 @@ class _OffsetListEditorRowState extends State<OffsetListEditorRow> {
           width: InspectorField.labelWidth,
           child: Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              widget.label,
-              style: InspectorField.labelStyle,
-            ),
+            child: Text(widget.label, style: InspectorField.labelStyle),
           ),
         ),
         Expanded(
@@ -1155,10 +1138,7 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
           children: <Widget>[
             SizedBox(
               width: InspectorField.labelWidth,
-              child: Text(
-                widget.label,
-                style: InspectorField.labelStyle,
-              ),
+              child: Text(widget.label, style: InspectorField.labelStyle),
             ),
             Expanded(
               child: DragTarget<String>(

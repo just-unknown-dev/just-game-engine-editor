@@ -158,8 +158,8 @@ void main() {
     late JustGameEditorPlugin plugin;
 
     Future<void> start(WidgetTester tester) async {
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       plugin = JustGameEditorPlugin(engine: engine);
       await tester.runAsync(plugin.onInitialize);
@@ -180,7 +180,6 @@ void main() {
     Future<void> stop(WidgetTester tester) async {
       await tester.pumpWidget(const SizedBox());
       plugin.dispose();
-      Engine.resetInstance();
     }
 
     void set(OverlayUiSettings Function(OverlayUiSettings s) change) =>

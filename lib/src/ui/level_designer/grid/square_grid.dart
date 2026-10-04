@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
-
 import '../state/designer_geometry.dart';
 import 'grid_topology.dart';
 import '../../../core/theme/viewport_look.dart';

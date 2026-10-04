@@ -18,14 +18,16 @@ import 'package:just_game_engine_editor/src/ui/dialogs/create_scene_overlay.dart
 const _note = '3D scenes arrive in the next release.';
 
 void main() {
-  setUpAll(registerCoreCodecs);
   tearDown(() => EditorDevFlags.allow3DSceneModeOverride = null);
 
   late Directory root;
   late SceneStore store;
   setUp(() {
     root = Directory.systemTemp.createTempSync('new_scene_');
-    store = SceneStore(root: root.path, codec: SceneCodec.global);
+    store = SceneStore(
+      root: root.path,
+      codec: SceneCodec(ComponentDefinitionRegistry.core()),
+    );
   });
   tearDown(() {
     if (root.existsSync()) root.deleteSync(recursive: true);
@@ -122,10 +124,10 @@ void main() {
       await store.writeInitialFiles('deep', mode: SceneMode.threeD);
       final scene = read('deep');
       expect(scene['mode'], '3d');
-      expect(
-        (scene['entities'] as List).cast<Map>().map((e) => e['name']),
-        ['MainCamera', 'PlayerSpawn'],
-      );
+      expect((scene['entities'] as List).cast<Map>().map((e) => e['name']), [
+        'MainCamera',
+        'PlayerSpawn',
+      ]);
       expect(typesOf(scene, 'MainCamera'), [
         'TransformComponent',
         'VirtualCameraComponent',

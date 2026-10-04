@@ -224,7 +224,12 @@ class TagReferences {
         final next = <String>[];
         for (final t in value.whereType<String>()) {
           final replacement = visit(
-            TagUse(tag: t, kind: TagUseKind.carried, owner: owner, where: where),
+            TagUse(
+              tag: t,
+              kind: TagUseKind.carried,
+              owner: owner,
+              where: where,
+            ),
             value,
           );
           if (replacement != null) changed++;

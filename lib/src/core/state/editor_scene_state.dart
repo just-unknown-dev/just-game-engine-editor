@@ -3,8 +3,9 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../dev/editor_dev_flags.dart';
+import '../scene/editor_scene.dart';
 
-/// The authoring state of the open [Scene]: selection, dirtiness, the
+/// The authoring state of the open [EditorScene]: selection, dirtiness, the
 /// order of the top-level entities, and the transform edits the gizmos and
 /// the inspector make on the live ECS world ([Entity]/[TransformComponent]).
 ///
@@ -18,7 +19,10 @@ import '../dev/editor_dev_flags.dart';
 /// or removed — bumps [revision].
 class EditorSceneState {
   /// The scene being edited, or null between scenes.
-  final Signal<Scene?> activeScene = Signal(null, debugLabel: 'activeScene');
+  final Signal<EditorScene?> activeScene = Signal(
+    null,
+    debugLabel: 'activeScene',
+  );
 
   /// How the open scene is authored, from its file (2-D when it says
   /// nothing). See [editingMode] for the mode the editor works in.
@@ -147,7 +151,7 @@ class EditorSceneState {
   // ── Scene lifecycle ──────────────────────────────────────────────────────
 
   /// Open [scene], its top-level entities in [rootOrder].
-  void openScene(Scene scene, {List<EntityId> rootOrder = const []}) {
+  void openScene(EditorScene scene, {List<EntityId> rootOrder = const []}) {
     batch(() {
       activeScene.value = scene;
       sceneMode.value = scene.mode;

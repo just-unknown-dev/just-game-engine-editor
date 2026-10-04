@@ -880,7 +880,7 @@ class SelectTool extends LevelToolHandler {
       if (!copy.isAlive || world == null) continue;
       detachEntity(copy, world: world, sceneState: sceneState);
       sceneState.removeEntityNode(copy.id);
-      world.destroyEntity(copy);
+      world.destroyEntity(copy, withChildren: false);
     }
     _select(_originalSelection);
   }

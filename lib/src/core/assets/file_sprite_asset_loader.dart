@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show AssetBundle, rootBundle;
 import 'package:just_game_engine/just_game_engine.dart';
 
 /// Reads sprites from the project's files instead of the asset bundle.
@@ -13,13 +13,31 @@ import 'package:just_game_engine/just_game_engine.dart';
 /// — paths resolve against the project root — and fall back to the bundle for
 /// anything that is not a file there (a package's own assets).
 class FileSpriteAssetLoader extends SpriteAssetLoader {
-  FileSpriteAssetLoader({String? root, SpriteAssetLoader? fallback})
-    : root = (root ?? Directory.current.path).replaceAll(r'\', '/'),
-      _fallback = fallback ?? BundleSpriteAssetLoader();
+  /// Reads from [root] (the working directory by default). What is not a
+  /// file there comes from [context] — its sprite loader as it is now, so
+  /// the context can then be pointed at this one, and its bundle — or from
+  /// [fallback] and the app's bundle.
+  FileSpriteAssetLoader({
+    String? root,
+    EngineContext? context,
+    SpriteAssetLoader? fallback,
+  }) : root = (root ?? Directory.current.path).replaceAll(r'\', '/'),
+       _fallback = fallback ?? context?.sprites ?? BundleSpriteAssetLoader(),
+       _bundle = context?.bundle ?? rootBundle,
+       _trackKinds = context?.trackKinds,
+       _migrations = context?.migrations;
 
   /// The project root asset paths are relative to.
   final String root;
   final SpriteAssetLoader _fallback;
+  final AssetBundle _bundle;
+
+  /// The track kinds timelines are read with: the context's, else the
+  /// engine's own.
+  final TimelineTrackKinds? _trackKinds;
+
+  /// The packages' rules older timelines are migrated with.
+  final MigrationHooks? _migrations;
 
   final Map<String, Future<ui.Image>> _images = {};
   final Map<String, Future<SpriteAtlas>> _atlases = {};
@@ -77,7 +95,7 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
   Future<AnimatorGraph> loadGraph(String path) async {
     final file = _file(path);
     if (!await file.exists()) {
-      return AnimatorGraph.parse(await rootBundle.loadString(path));
+      return AnimatorGraph.parse(await _bundle.loadString(path));
     }
     return AnimatorGraph.parse(await file.readAsString());
   }
@@ -87,9 +105,17 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
   Future<TimelineAsset> loadTimeline(String path) async {
     final file = _file(path);
     if (!await file.exists()) {
-      return TimelineAsset.parse(await rootBundle.loadString(path));
+      return TimelineAsset.parse(
+        await _bundle.loadString(path),
+        kinds: _trackKinds,
+        migrations: _migrations,
+      );
     }
-    return TimelineAsset.parse(await file.readAsString());
+    return TimelineAsset.parse(
+      await file.readAsString(),
+      kinds: _trackKinds,
+      migrations: _migrations,
+    );
   }
 
   /// A text file — a tileset, a tile map, a Tiled map — from the project's
@@ -97,7 +123,7 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
   /// reads through while the editor runs.
   Future<String> readText(String path) async {
     final file = _file(path);
-    if (!await file.exists()) return rootBundle.loadString(path, cache: false);
+    if (!await file.exists()) return _bundle.loadString(path, cache: false);
     return file.readAsString();
   }
 

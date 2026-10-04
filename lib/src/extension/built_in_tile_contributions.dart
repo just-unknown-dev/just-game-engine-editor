@@ -261,14 +261,16 @@ abstract final class BuiltInTileContributions {
     TiledFiles? using,
   }) async {
     try {
-      final written = await TiledExporter(using ?? files(scope)).export(
-        map,
-        to: to,
-        tilesetAt: (slot) {
-          final path = map.tilesets[slot];
-          return path == null ? null : jge.TileAssets.loadedTileset(path);
-        },
-      );
+      final tiles = scope.context.tiles;
+      final written = await TiledExporter(using ?? files(scope), tiles: tiles)
+          .export(
+            map,
+            to: to,
+            tilesetAt: (slot) {
+              final path = map.tilesets[slot];
+              return path == null ? null : tiles.loadedTileset(path);
+            },
+          );
       _say(scope, 'Exported $to for Tiled (${written.length} files)');
       return written;
     } catch (e) {
@@ -284,9 +286,10 @@ abstract final class BuiltInTileContributions {
     TiledFiles? using,
   }) async {
     try {
-      final map = await jge.TileAssets.map(path);
+      final tiles = scope.context.tiles;
+      final map = await tiles.map(path);
       for (final ts in map.tilesets.whereType<String>()) {
-        await jge.TileAssets.tileset(ts);
+        await tiles.tileset(ts);
       }
       final to = '${jge.TileAssets.directoryOf(path)}/${tiledStem(path)}.tmx';
       return await exportMap(scope, map, to, using: using);

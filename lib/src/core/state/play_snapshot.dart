@@ -133,7 +133,10 @@ class PlaySnapshot {
 
     final kept = Set<Entity>.identity()..addAll(restored);
     for (final e in world.entities.toList()) {
-      if (!kept.contains(e) && !_existing.contains(e)) world.destroyEntity(e);
+      if (!kept.contains(e) && !_existing.contains(e)) {
+        // An authored entity parented under a play-spawned one survives.
+        world.destroyEntity(e, withChildren: false);
+      }
     }
 
     _relink(world, restored, kept);

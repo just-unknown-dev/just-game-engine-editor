@@ -108,9 +108,10 @@ class _CreateTilesetFormState extends State<CreateTilesetForm> {
       _name = imageBaseName(image);
     });
     try {
-      final picture = await (widget.loadImage ?? SpriteAssets.loader.loadImage)(
-        image,
-      );
+      final picture =
+          await (widget.loadImage ?? BundleSpriteAssetLoader().loadImage)(
+            image,
+          );
       if (!mounted || _image != image) return;
       setState(() {
         _picture = picture;

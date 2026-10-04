@@ -191,7 +191,15 @@ class TimelineSession {
     await _leave();
     try {
       final source = await File('$root/$file').readAsString();
-      _show(TimelineAsset.parse(source), path: file, owner: owner);
+      _show(
+        TimelineAsset.parse(
+          source,
+          kinds: scope.context.trackKinds,
+          migrations: scope.context.migrations,
+        ),
+        path: file,
+        owner: owner,
+      );
       return true;
     } catch (e) {
       _show(null, path: null, owner: owner);
@@ -458,7 +466,11 @@ class TimelineSession {
   /// relative track).
   Object valueForNewKey(int trackIndex, double time) {
     final track = asset.value!.tracks[trackIndex] as PropertyTrack;
-    final onCurve = track.curve.valueAt(time, isColor: track.isColor);
+    final onCurve = track.curve.valueAt(
+      time,
+      isColor: track.isColor,
+      easings: scope.context.easings,
+    );
     if (onCurve != null) return onCurve;
     if (track.isRelative) return 0.0;
     final entity = _resolve(track.binding);
@@ -1196,7 +1208,7 @@ class TimelineSession {
     TimelineAsset start,
     TimelineItemRef ref,
     bool outgoing,
-    Tangent tangent, {
+    KeyTangent tangent, {
     bool breakApart = false,
   }) {
     final track = start.tracks[ref.track];
@@ -1211,7 +1223,7 @@ class TimelineSession {
     final dt = outgoing
         ? tangent.dt.clamp(1e-4, room <= 0 ? 1e-4 : room).toDouble()
         : tangent.dt.clamp(room <= 0 ? -1e-4 : -room, -1e-4).toDouble();
-    final dragged = Tangent(dt, tangent.dv);
+    final dragged = KeyTangent(dt, tangent.dv);
 
     final mode = breakApart || key.tangentMode == TangentMode.broken
         ? TangentMode.broken
@@ -1219,7 +1231,7 @@ class TimelineSession {
     var other = outgoing ? key.inTangent : key.outTangent;
     if (mode == TangentMode.aligned) {
       // Same line through the key, its own reach in time.
-      other = Tangent(other.dt, other.dt * (dragged.dv / dragged.dt));
+      other = KeyTangent(other.dt, other.dt * (dragged.dv / dragged.dt));
     }
     final next = key.copyWith(
       tangentMode: mode,
@@ -1714,8 +1726,11 @@ class TimelineSession {
 
   Entity? _scratchOwner;
 
-  Future<TimelineAsset> _readTimeline(String file) async =>
-      TimelineAsset.parse(await File('$root/$file').readAsString());
+  Future<TimelineAsset> _readTimeline(String file) async => TimelineAsset.parse(
+    await File('$root/$file').readAsString(),
+    kinds: scope.context.trackKinds,
+    migrations: scope.context.migrations,
+  );
 
   void play() {
     if (asset.value == null) return;

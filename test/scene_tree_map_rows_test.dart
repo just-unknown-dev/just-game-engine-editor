@@ -14,8 +14,6 @@ import 'package:just_tiled/just_tiled.dart' as tiled;
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late EditorScope scope;
   late EntityOps ops;
   late SceneTreeController controller;
@@ -51,7 +49,7 @@ void main() {
     );
     controller = SceneTreeController(world: () => scope.world);
     addTearDown(controller.dispose);
-    scope.sceneState.openScene(Scene(name: 'level'));
+    scope.sceneState.openScene(EditorScene(name: 'level'));
     data = LevelMapData();
     back = data.addLayer(name: 'Back');
     front = data.addLayer(name: 'Front');

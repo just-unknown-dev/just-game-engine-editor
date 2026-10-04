@@ -1,9 +1,11 @@
+import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../dev/editor_dev_flags.dart';
 import '../scope/editor_scope.dart';
 import '../state/editor_scene_state.dart';
 import '../state/play_snapshot.dart';
+import 'editor_scene.dart';
 
 /// Opens and saves scenes: the world on one side, the scope's [SceneStore]
 /// on the other.
@@ -150,22 +152,45 @@ class SceneIO {
     if (rawJson != null &&
         SceneFormat.versionOf(rawJson) < SceneFormat.current) {
       final from = SceneFormat.versionOf(rawJson);
-      rawJson = SceneFormat.migrate(rawJson);
+      // With the packages' rules, as the game migrates it.
+      final migration = SceneFormat.migrateWithReport(
+        rawJson,
+        hooks: scope.context.migrations,
+      );
+      rawJson = migration.scene;
       scope.log.log(
         'Scene $sceneName is format v$from; migrated to v${SceneFormat.current} '
         'in memory. Save to persist.',
         source: 'editor',
         category: 'scene',
       );
+      for (final note in migration.notes) {
+        scope.log.log(
+          'Scene $sceneName: ${note.message}',
+          source: 'editor',
+          category: 'scene',
+          level: DebuggerLogLevel.warning,
+        );
+      }
+      if (migration.needsAtlas.isNotEmpty) {
+        scope.log.log(
+          'Scene $sceneName: ${migration.needsAtlas.join(', ')} animated a '
+          'sprite sheet with no atlas; export one for each before it '
+          'animates again.',
+          source: 'editor',
+          category: 'scene',
+          level: DebuggerLogLevel.warning,
+        );
+      }
     }
 
     // History, guides and hidden entities all refer to the scene being left.
     final editor = rawJson?['editor'];
     editorData = editor is Map ? editor.cast<String, dynamic>() : null;
 
-    final Scene scene = rawJson != null
-        ? (Scene.fromJson(rawJson))
-        : Scene(name: sceneName);
+    final EditorScene scene = rawJson != null
+        ? (EditorScene.fromJson(rawJson))
+        : EditorScene(name: sceneName);
     if (scene.mode == SceneMode.threeD && !EditorDevFlags.allow3DSceneMode) {
       scope.log.log(
         '$sceneName is a 3-D scene. 3-D authoring is not available yet, so '

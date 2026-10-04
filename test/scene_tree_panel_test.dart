@@ -11,8 +11,6 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late EditorScope scope;
   late EntityOps ops;
   late SceneTreeController controller;
@@ -29,7 +27,7 @@ void main() {
     );
     controller = SceneTreeController(world: () => scope.world);
     addTearDown(controller.dispose);
-    scope.sceneState.openScene(Scene(name: 'level_test'));
+    scope.sceneState.openScene(EditorScene(name: 'level_test'));
   });
 
   Entity node(String name, {Entity? under}) {

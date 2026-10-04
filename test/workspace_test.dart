@@ -135,8 +135,8 @@ void main() {
     tester,
   ) async {
     if (!kDebugMode) return;
-    Engine.resetInstance();
     final engine = Engine();
+    addTearDown(engine.dispose);
     await tester.runAsync(engine.initialize);
     final plugin = JustGameEditorPlugin(
       engine: engine,
@@ -145,7 +145,7 @@ void main() {
     await tester.runAsync(plugin.onInitialize);
     plugin.setVisible(true);
     // F5 plays the scene open.
-    plugin.sceneState.openScene(Scene(name: 'level'));
+    plugin.sceneState.openScene(EditorScene(name: 'level'));
 
     await tester.pumpWidget(
       MaterialApp(
@@ -179,7 +179,6 @@ void main() {
     plugin.playController.stop();
     await tester.pumpWidget(const SizedBox());
     plugin.dispose();
-    Engine.resetInstance();
   });
 
   group('how it sits in the editor', () {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:just_game_engine/just_game_engine.dart' hide Animation;
+import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../core/constants/editor_constants.dart';
 import '../../core/theme/editor_metrics.dart';

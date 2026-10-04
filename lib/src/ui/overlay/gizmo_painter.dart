@@ -8,6 +8,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import '../../core/constants/editor_constants.dart';
 import '../../core/state/transform_mode.dart';
 import '../level_designer/grid/square_grid.dart';
+import '../level_designer/state/designer_geometry.dart';
 import 'transform_gizmo.dart';
 import '../../core/theme/viewport_look.dart';
 import '../../core/view/editor_view.dart';
@@ -74,7 +75,15 @@ class GizmoHitResult {
 class GizmoPainter {
   /// The unscaled size the gizmo draws [component] at, or null. Through the
   /// extent on its definition first, so it is the marquee's answer too.
-  static Size? sizeOf(Component component) => _sizeFromComponent(component);
+  ///
+  /// [definitions] defaults to the engine's own.
+  static Size? sizeOf(
+    Component component, [
+    ComponentDefinitionRegistry? definitions,
+  ]) => _sizeFromComponent(
+    component,
+    definitions ?? DesignerGeometry.definitionsFor(null),
+  );
 
   static double get _rotRadius =>
       GizmoConstants.rotRadius * ViewportLook.gizmoScale;
@@ -352,12 +361,7 @@ _ScreenBounds _computeScreenBounds(
       (baseSize.width / 2) * camera.zoom * transform.scale.x.abs() + 2;
   final halfH =
       (baseSize.height / 2) * camera.zoom * transform.scale.y.abs() + 2;
-  final corners = _buildRotatedCorners(
-    center,
-    halfW,
-    halfH,
-    transform.angle,
-  );
+  final corners = _buildRotatedCorners(center, halfW, halfH, transform.angle);
 
   return _ScreenBounds(
     center: center,
@@ -384,20 +388,22 @@ Size _largestComponentSize(Entity entity) {
     }
   }
 
+  final definitions = DesignerGeometry.definitionsFor(entity);
   for (final component in entity.components) {
-    consider(_sizeFromComponent(component));
+    consider(_sizeFromComponent(component, definitions));
   }
 
   return best;
 }
 
-Size? _sizeFromComponent(Component component) {
+Size? _sizeFromComponent(
+  Component component,
+  ComponentDefinitionRegistry definitions,
+) {
   // The extent on the definition first: the same answer the marquee and
   // the resize handles use. The branches below remain for anything that
   // has no definition at all.
-  final extent = ComponentDefinitionRegistry.instance
-      .definitionFor(component)
-      ?.extent;
+  final extent = definitions.definitionFor(component)?.extent;
   if (extent != null) return extent.sizeOf(component);
 
   if (component is RectangleComponent) {

@@ -355,7 +355,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       engine.world.addSystem(SimpleMovementSystem(engine.input));
     }
     if (bindPhysicsBodies) {
-      // No PhysicsBridgeSystem here — PhysicsSystem (core engine) now owns
+      // No bridge system here — PhysicsSystem (core engine) owns
       // syncing PhysicsBody results back to TransformComponent itself, for
       // every PhysicsBodyComponent entity, not just editor-authored ones.
       if (!engine.world.systems.any(
@@ -383,15 +383,25 @@ class JustGameEditorPlugin implements EnginePlugin {
     // Sprites are shown and played by the engine's own systems, as in the
     // game — but read from the project's files, so a sheet saved a moment
     // ago shows without a rebuild.
-    _previousSpriteLoader = SpriteAssets.loader;
-    SpriteAssets.loader = spriteAssets;
-    AnimatorAssets.loader = spriteAssets.loadGraph;
-    TimelineAssets.loader = spriteAssets.loadTimeline;
-    TileAssets.readText = spriteAssets.readText;
+    // For this engine only: another engine in the process is not affected.
+    _loaders = engine.context.overrideLoaders(
+      sprites: spriteAssets,
+      animatorGraphs: spriteAssets.loadGraph,
+      timelines: spriteAssets.loadTimeline,
+      tileText: spriteAssets.readText,
+    );
     // Tile maps draw in the editor as in the game; their collision is built
     // only in a play-test (see _syncRuntimeSystems).
-    registerLevelMapSystems(engine.world);
-    registerSpriteSystems(engine.world);
+    // Each only if the game has not added it already.
+    registerDefaultSystems(
+      engine.world,
+      engine,
+      include: const {
+        DefaultSystem.sprites,
+        DefaultSystem.levelMaps,
+        DefaultSystem.mapCollision,
+      },
+    );
     // While authoring, the output camera is the editor's view: the brain
     // keeps thinking but does not write to it. Play hands it over.
     isAuthoring.addListener(_syncCameraOwnership);
@@ -602,6 +612,8 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// this filter was installed only then; everywhere else the engine
   /// drew the world and knew nothing of it.
   void _updateRenderFilter() {
+    // The engine may already be gone: an app closing disposes it first.
+    if (!engine.isInitialized) return;
     final render = engine.world.getSystem<RenderSystem>();
     if (render == null) return;
     render.shouldRender = _isDrawn;
@@ -719,8 +731,13 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// Where sprites are read from while the editor runs: the project's files.
-  final FileSpriteAssetLoader spriteAssets = FileSpriteAssetLoader();
-  SpriteAssetLoader? _previousSpriteLoader;
+  /// What they are not in comes from the engine's own loaders.
+  late final FileSpriteAssetLoader spriteAssets = FileSpriteAssetLoader(
+    context: engine.context,
+  );
+
+  /// What [onInitialize] pointed the engine's loaders at, to put back.
+  LoaderOverride? _loaders;
 
   /// A sprite file changed on disk: show the new one. [atlasPath] limits it
   /// to one atlas (and the sheet beside it); without it everything reloads.
@@ -873,7 +890,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   Entity? _dropTileset(String path) {
     final tiles = scope.tiles;
     final provision = scope.mapProvision;
-    final tileSize = TileAssets.loadedTileset(path)?.tileWidth;
+    final tileSize = engine.context.tiles.loadedTileset(path)?.tileWidth;
     final target = provision.ensure(engine.world, tileSize: tileSize);
     if (target == null) {
       logService.log('The Level Map is still loading.', source: 'assets');
@@ -1859,11 +1876,11 @@ class JustGameEditorPlugin implements EnginePlugin {
     keepsToLevelMap.removeListener(_syncLevelMapFocus);
     playController.state.removeListener(_focusGameOnPlay);
     playController.state.removeListener(_tellModulesPlayState);
-    if (identical(SpriteAssets.loader, spriteAssets)) {
-      SpriteAssets.loader = _previousSpriteLoader ?? BundleSpriteAssetLoader();
-      AnimatorAssets.useBundle();
-      TimelineAssets.useBundle();
-      TileAssets.useBundle();
+    if (_loaders case final loaders?) {
+      _loaders = null;
+      loaders.restore();
+      // What was read from the project's files is not the bundle's.
+      engine.context.tiles.clear();
     }
     if (engine.isInitialized && engine.cameraSystem.isInitialized) {
       engine.cameraSystem.brain.driveOutput = true;

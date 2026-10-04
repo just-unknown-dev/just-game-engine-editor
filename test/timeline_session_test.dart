@@ -34,8 +34,6 @@ TimelineAsset _slide({PropertyTrackMode mode = PropertyTrackMode.relative}) =>
     );
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late EditorScope scope;
   late TimelineSession session;
   late Directory root;

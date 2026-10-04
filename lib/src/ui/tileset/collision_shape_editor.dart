@@ -28,7 +28,7 @@ class CollisionEditor extends StatelessWidget {
     final w = ts.tileWidth;
     final h = ts.tileHeight;
     final preset = TileCollisionPreset.of(collision, w, h);
-    final kinds = MapCollisionKinds.all;
+    final kinds = session.collisionKinds.all;
     final kind = collision?.kind ?? MapCollisionKinds.solid.id;
     final single = session.selection.value.length == 1;
     return Column(
@@ -68,13 +68,13 @@ class CollisionEditor extends StatelessWidget {
                 child: Row(
                   children: [
                     _Swatch(
-                      color: Color(MapCollisionKinds.resolve(kind).color),
+                      color: Color(session.collisionKinds.resolve(kind).color),
                     ),
                     const SizedBox(width: 6),
                     Text(
                       collision == null
                           ? '—'
-                          : MapCollisionKinds.byId(kind)?.label ?? kind,
+                          : session.collisionKinds.byId(kind)?.label ?? kind,
                       style: _value,
                     ),
                     Icon(
@@ -465,7 +465,7 @@ class _ShapeCanvasState extends State<ShapeCanvas> {
     final h = ts.tileHeight * _scale;
     final collision = ts.tile(widget.tileId)?.collision;
     final color = Color(
-      MapCollisionKinds.resolve(collision?.kind ?? 'solid').color,
+      s.collisionKinds.resolve(collision?.kind ?? 'solid').color,
     );
     final selected = _shape != null && _shape! < _shapes.length;
     return Column(

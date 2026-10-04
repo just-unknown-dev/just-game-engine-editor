@@ -77,7 +77,6 @@ void main() {
   });
 
   test('a marquee takes what lies within its area of the world', () {
-    registerCoreCodecs();
     final world = World()..initialize();
     addTearDown(world.dispose);
     final inside = world.createEntityWithComponents([

@@ -14,6 +14,7 @@ export 'src/ui/overlay/shared/snackbar.dart'
         EditorSnackBarType;
 export 'src/core/plugin/editor_plugin.dart';
 export 'src/core/play/play_controller.dart';
+export 'src/core/scene/editor_scene.dart';
 export 'src/core/scene/scene_io.dart';
 export 'src/core/entity/entity_ops.dart';
 export 'src/core/entity/hierarchy_commands.dart';

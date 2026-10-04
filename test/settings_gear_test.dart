@@ -15,8 +15,8 @@ void main() {
   late JustGameEditorPlugin plugin;
 
   Future<void> start(WidgetTester tester) async {
-    Engine.resetInstance();
     final engine = Engine();
+    addTearDown(engine.dispose);
     await tester.runAsync(engine.initialize);
     plugin = JustGameEditorPlugin(engine: engine);
     await tester.runAsync(plugin.onInitialize);
@@ -38,7 +38,6 @@ void main() {
     plugin.playController.stop();
     await tester.pumpWidget(const SizedBox());
     plugin.dispose();
-    Engine.resetInstance();
   }
 
   final gear = find.byTooltip('Editor settings  (Ctrl+,)');
@@ -71,7 +70,7 @@ void main() {
     if (!kDebugMode) return;
     await start(tester);
     // F5 plays the scene open.
-    plugin.sceneState.openScene(Scene(name: 'level'));
+    plugin.sceneState.openScene(EditorScene(name: 'level'));
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.comma);

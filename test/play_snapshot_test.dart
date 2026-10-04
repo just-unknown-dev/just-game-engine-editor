@@ -118,12 +118,11 @@ void main() {
       parent.getComponent<ChildrenComponent>()!.addChild(child.id);
     }
 
-    String? parentOf(Entity e) => switch (e
-        .getComponent<ParentComponent>()
-        ?.parentId) {
-      final id? => world.getEntity(id)?.name,
-      null => null,
-    };
+    String? parentOf(Entity e) =>
+        switch (e.getComponent<ParentComponent>()?.parentId) {
+          final id? => world.getEntity(id)?.name,
+          null => null,
+        };
 
     Map<String?, String?> tree() => {
       for (final e in world.entities) e.name: parentOf(e),
@@ -212,10 +211,9 @@ void main() {
       link(b, a);
       final snapshot = PlaySnapshot.capture(world, scope.codec);
 
-      // Everything goes and ids start again: the new entity gets A's id.
+      // Everything goes, and an entity made at runtime takes its place.
       world.destroyAllEntities();
-      final impostor = _block(world, 'Runtime', 0);
-      expect(impostor.id, a.id);
+      _block(world, 'Runtime', 0);
       snapshot.restoreInto(world);
 
       expect(world.findEntityByName('Runtime'), isNull);

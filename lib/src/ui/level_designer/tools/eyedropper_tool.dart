@@ -118,7 +118,7 @@ class EyedropperTool extends LevelToolHandler {
               ..setPositionXY(position.dx, position.dy)
               ..angle = transform?.angle ?? 0;
           } else if (sx != 1 || sy != 1) {
-            ComponentResizer.scaleComponent(c, sx, sy);
+            ComponentResizer.scaleComponent(c, sx, sy, codec.definitions);
           }
         }
         return components;

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:just_game_engine/just_game_engine.dart';
 
+import '../scene/editor_scene.dart';
 import 'scene_codec.dart';
 
 /// Reads and writes the project's scene files.
@@ -77,7 +78,7 @@ class SceneStore {
     if (mode == SceneMode.threeD) return _build3DScene(sceneName, encode);
     return _pretty.convert({
       'version': SceneFormat.current,
-      ...Scene(name: sceneName, mode: mode).toJson(),
+      ...EditorScene(name: sceneName, mode: mode).toJson(),
       'entities': [
         {
           'name': 'MainCamera',
@@ -122,7 +123,7 @@ class SceneStore {
     const back = 600.0, up = 200.0;
     return _pretty.convert({
       'version': SceneFormat.current,
-      ...Scene(name: sceneName, mode: SceneMode.threeD).toJson(),
+      ...EditorScene(name: sceneName, mode: SceneMode.threeD).toJson(),
       'entities': [
         {
           'name': 'MainCamera',
@@ -150,7 +151,7 @@ class SceneStore {
   /// Saves [entities] as [sceneName].
   Future<void> writeJsonSidecar(
     String sceneName,
-    Scene scene,
+    EditorScene scene,
     List<Entity> entities,
   ) => writeSceneJson(sceneName, scene, codec.encodeEntities(entities));
 
@@ -161,7 +162,7 @@ class SceneStore {
   /// bookmarks — which the game's scene loader ignores.
   Future<void> writeSceneJson(
     String sceneName,
-    Scene scene,
+    EditorScene scene,
     List<Map<String, dynamic>> entities, {
     Map<String, dynamic>? editor,
   }) async {
@@ -177,7 +178,7 @@ class SceneStore {
   /// [scene] with [entities] — and [editor], the section the game ignores
   /// — exactly as its file holds them.
   String encodeScene(
-    Scene scene,
+    EditorScene scene,
     List<Map<String, dynamic>> entities, {
     Map<String, dynamic>? editor,
   }) => _pretty.convert({
@@ -419,11 +420,11 @@ class SceneStore {
   }
 
   /// The scene graph stored in [sceneName], or null.
-  Future<Scene?> loadFromSidecar(String sceneName) async {
+  Future<EditorScene?> loadFromSidecar(String sceneName) async {
     final raw = await loadRawSidecar(sceneName);
     if (raw == null) return null;
     try {
-      return Scene.fromJson(raw);
+      return EditorScene.fromJson(raw);
     } on Object {
       return null;
     }

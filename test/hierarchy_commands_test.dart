@@ -8,8 +8,6 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late EditorScope scope;
   late EntityOps ops;
 
@@ -21,7 +19,7 @@ void main() {
       sceneState: scope.sceneState,
       camera: () => GameCameraEditorView.of(Camera()),
     );
-    scope.sceneState.openScene(Scene(name: 'level_test'));
+    scope.sceneState.openScene(EditorScene(name: 'level_test'));
   });
 
   World world() => scope.world;

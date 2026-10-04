@@ -30,8 +30,6 @@ Offset _pos(Entity e) {
 }
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   group('what can be moved, scaled and turned', () {
     late World world;
     setUp(() => world = World()..initialize());
@@ -487,18 +485,17 @@ void main() {
 
     void done() {
       plugin.dispose();
-      Engine.resetInstance();
     }
 
     Future<void> pump(WidgetTester tester) async {
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       plugin = JustGameEditorPlugin(engine: engine);
       await tester.runAsync(plugin.onInitialize);
       plugin
         ..setVisible(true)
-        ..sceneState.openScene(Scene(name: 'level'));
+        ..sceneState.openScene(EditorScene(name: 'level'));
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(

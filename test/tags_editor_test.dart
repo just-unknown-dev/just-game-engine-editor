@@ -26,8 +26,8 @@ void main() {
   tearDown(() => root.deleteSync(recursive: true));
 
   /// A closed scene on disk, in the v6 format — tags were one string then.
-  void writeV6Scene(String name) => File('${scenesRoot()}/$name.scene.json')
-      .writeAsStringSync(
+  void writeV6Scene(String name) =>
+      File('${scenesRoot()}/$name.scene.json').writeAsStringSync(
         jsonEncode({
           'version': 6,
           'name': name,
@@ -58,8 +58,11 @@ void main() {
         }),
       );
 
-  Entity add(List<Component> components, {String? name}) => scope.world
-      .createEntityWithComponents([TransformComponent(), ...components], name: name);
+  Entity add(List<Component> components, {String? name}) =>
+      scope.world.createEntityWithComponents([
+        TransformComponent(),
+        ...components,
+      ], name: name);
 
   List<SceneProblem> problems() => BuiltInValidators.run(
     ValidationContext(scope: scope, projectRoot: root.path),
@@ -82,10 +85,10 @@ void main() {
       expect(tags.create('enemy'), isNotNull);
       expect(tags.hasFile, isTrue);
       final file = jsonDecode(File(tags.path).readAsStringSync()) as Map;
-      expect([for (final t in file['tags'] as List) t['name']], [
-        'enemy',
-        'player',
-      ]);
+      expect(
+        [for (final t in file['tags'] as List) t['name']],
+        ['enemy', 'player'],
+      );
       expect(tags.problemWithNew('Enemy'), contains('"enemy"'));
       expect(tags.problemWithNew('two words'), isNotNull);
       expect(tags.create('Enemy'), isNull);
@@ -108,8 +111,7 @@ void main() {
     });
   });
 
-  test('references are found wherever a definition says a field is a tag',
-      () {
+  test('references are found wherever a definition says a field is a tag', () {
     final scene = SceneFormat.migrate({
       'version': 6,
       'entities': [
@@ -208,7 +210,7 @@ void main() {
           ],
         }),
       );
-    scope.sceneState.openScene(Scene(name: 'level_01'));
+    scope.sceneState.openScene(EditorScene(name: 'level_01'));
     final coin = add([
       TagComponent.of(['coin', 'shiny']),
       VirtualCameraComponent(follow: const EntityTarget.tag('coin')),
@@ -249,24 +251,27 @@ void main() {
     );
   });
 
-  test('a delete takes the tag off entities and leaves what names it', () async {
-    scope.tags.create('coin');
-    scope.sceneState.openScene(Scene(name: 'level_01'));
-    final coin = add([
-      TagComponent('coin'),
-      VirtualCameraComponent(follow: const EntityTarget.tag('coin')),
-    ]);
-    final refactor = TagRefactor(scope, projectRoot: root.path);
-    await refactor.apply(refactor.plan('coin'));
-    expect(coin.tags, isEmpty);
-    expect(
-      coin.getComponent<VirtualCameraComponent>()!.follow,
-      const EntityTarget.tag('coin'),
-    );
-    expect(scope.tags.library.value.contains('coin'), isFalse);
-    // And now it is a problem to look at, not a silent break.
-    expect(problems().any((p) => p.message.contains('"coin"')), isTrue);
-  });
+  test(
+    'a delete takes the tag off entities and leaves what names it',
+    () async {
+      scope.tags.create('coin');
+      scope.sceneState.openScene(EditorScene(name: 'level_01'));
+      final coin = add([
+        TagComponent('coin'),
+        VirtualCameraComponent(follow: const EntityTarget.tag('coin')),
+      ]);
+      final refactor = TagRefactor(scope, projectRoot: root.path);
+      await refactor.apply(refactor.plan('coin'));
+      expect(coin.tags, isEmpty);
+      expect(
+        coin.getComponent<VirtualCameraComponent>()!.follow,
+        const EntityTarget.tag('coin'),
+      );
+      expect(scope.tags.library.value.contains('coin'), isFalse);
+      // And now it is a problem to look at, not a silent break.
+      expect(problems().any((p) => p.message.contains('"coin"')), isTrue);
+    },
+  );
 
   test('tag edits add the component when needed, one undo step each', () {
     final e = add(const []);

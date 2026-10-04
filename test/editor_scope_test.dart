@@ -77,7 +77,7 @@ void main() {
 
   test('every service resolves, on the same definitions the game uses', () {
     final scope = testScope();
-    expect(scope.definitions, same(ComponentDefinitionRegistry.instance));
+    expect(scope.definitions, same(scope.context.definitions));
     expect(scope.codec.definitions, same(scope.definitions));
     expect(scope.scenes.codec, same(scope.codec));
     expect(scope.fieldEditors.typeIds, isNotEmpty);
@@ -152,12 +152,10 @@ void main() {
   test(
     'the plugin forwards its ticks and scene opens to the modules',
     () async {
-      Engine.resetInstance();
       final module = _CountingModule();
       final plugin = JustGameEditorPlugin(engine: Engine(), modules: [module]);
       addTearDown(() {
         plugin.dispose();
-        Engine.resetInstance();
       });
 
       // What engine.plugins calls each frame, before the editor is even

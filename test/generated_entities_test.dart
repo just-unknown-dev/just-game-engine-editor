@@ -23,8 +23,6 @@ Entity _generated(World world, String name) =>
     ], name: name);
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   group('a generated entity', () {
     late World world;
     late EditorScope scope;
@@ -88,7 +86,7 @@ void main() {
       File('${scenes.path}/level_test.scene.json').writeAsStringSync(
         jsonEncode({
           'version': SceneFormat.current,
-          ...Scene(name: 'level_test').toJson(),
+          ...EditorScene(name: 'level_test').toJson(),
           'entities': [
             {
               'name': 'Platform',

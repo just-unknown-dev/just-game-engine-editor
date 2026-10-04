@@ -478,15 +478,14 @@ class _TilesetSection extends StatelessWidget {
   bool get _builtIn => jge.BuiltInTilesets.isBuiltIn(path);
 
   jge.TilesetData? get _tileset {
-    final builtIn = jge.BuiltInTilesets.tileset(path);
-    if (builtIn != null) return builtIn;
+    if (_builtIn) return session.scope.context.tiles.loadedTileset(path);
     final slot = this.slot;
     return slot == null ? null : target?.tilesetAt(slot);
   }
 
   ui.Image? _image(jge.TilesetData? ts) {
     if (ts == null) return null;
-    final drawn = jge.BuiltInTilesets.image(ts.image);
+    final drawn = session.scope.context.tiles.builtInImage(ts.image);
     if (drawn != null) return drawn;
     final slot = this.slot;
     return slot == null ? null : target?.component.runtime?.imageAt(slot);

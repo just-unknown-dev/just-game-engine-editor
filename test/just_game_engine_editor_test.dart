@@ -8,17 +8,14 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('plugin is hidden until initialized', () {
-    Engine.resetInstance();
     final plugin = JustGameEditorPlugin(engine: Engine());
 
     expect(plugin.isVisible.value, isFalse);
 
     plugin.dispose();
-    Engine.resetInstance();
   });
 
   test('plugin toggles editor visibility', () {
-    Engine.resetInstance();
     final plugin = JustGameEditorPlugin(engine: Engine());
 
     plugin.toggleVisibility();
@@ -28,17 +25,15 @@ void main() {
     expect(plugin.isVisible.value, isFalse);
 
     plugin.dispose();
-    Engine.resetInstance();
   });
 
   test('initializing opens the editor and its status panel', () async {
-    Engine.resetInstance();
     final engine = Engine();
+    addTearDown(engine.dispose);
     await engine.initialize();
     final plugin = JustGameEditorPlugin(engine: engine);
     if (!kDebugMode) {
       plugin.dispose();
-      Engine.resetInstance();
       return;
     }
 
@@ -48,17 +43,15 @@ void main() {
     expect(engine.time.timeScale, 0, reason: 'authoring pauses the game');
 
     plugin.dispose();
-    Engine.resetInstance();
   });
 
   test('startVisible: false leaves it closed until F1', () async {
-    Engine.resetInstance();
     final engine = Engine();
+    addTearDown(engine.dispose);
     await engine.initialize();
     final plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
     if (!kDebugMode) {
       plugin.dispose();
-      Engine.resetInstance();
       return;
     }
 
@@ -67,18 +60,16 @@ void main() {
     expect(plugin.isStatusPanelVisible.value, isFalse);
 
     plugin.dispose();
-    Engine.resetInstance();
   });
 
   test('plugin initialize registers systems only once', () async {
-    Engine.resetInstance();
     final engine = Engine();
+    addTearDown(engine.dispose);
     await engine.initialize();
     final plugin = JustGameEditorPlugin(engine: engine);
 
     if (!kDebugMode) {
       plugin.dispose();
-      Engine.resetInstance();
       return;
     }
 
@@ -93,18 +84,16 @@ void main() {
     expect(countSystem<EditorLogCaptureSystem>(), 1);
 
     plugin.dispose();
-    Engine.resetInstance();
   });
 
   test('plugin reassemble does not duplicate systems', () async {
-    Engine.resetInstance();
     final engine = Engine();
+    addTearDown(engine.dispose);
     await engine.initialize();
     final plugin = JustGameEditorPlugin(engine: engine);
 
     if (!kDebugMode) {
       plugin.dispose();
-      Engine.resetInstance();
       return;
     }
 
@@ -120,18 +109,16 @@ void main() {
     expect(countSystem<EditorLogCaptureSystem>(), 1);
 
     plugin.dispose();
-    Engine.resetInstance();
   });
 
   test('plugin only adds expected editor systems', () async {
-    Engine.resetInstance();
     final engine = Engine();
+    addTearDown(engine.dispose);
     await engine.initialize();
     final plugin = JustGameEditorPlugin(engine: engine);
 
     if (!kDebugMode) {
       plugin.dispose();
-      Engine.resetInstance();
       return;
     }
 
@@ -195,18 +182,16 @@ void main() {
     expect(engine.world.systems.whereType<EditorLogCaptureSystem>().length, 1);
 
     plugin.dispose();
-    Engine.resetInstance();
   });
 
   test('what a definition creates resolves back to that definition', () async {
-    Engine.resetInstance();
     final engine = Engine();
+    addTearDown(engine.dispose);
     await engine.initialize();
     final plugin = JustGameEditorPlugin(engine: engine);
 
     if (!kDebugMode) {
       plugin.dispose();
-      Engine.resetInstance();
       return;
     }
 
@@ -225,7 +210,6 @@ void main() {
     }
 
     plugin.dispose();
-    Engine.resetInstance();
   });
 
   test(

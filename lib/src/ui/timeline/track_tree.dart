@@ -137,7 +137,11 @@ class _TrackRow extends StatelessWidget {
     String readout = '';
     var keyHere = false;
     if (track is jge.PropertyTrack) {
-      final v = track.curve.valueAt(time, isColor: track.isColor);
+      final v = track.curve.valueAt(
+        time,
+        isColor: track.isColor,
+        easings: session.scope.context.easings,
+      );
       readout = switch (v) {
         null => '',
         final int c when track.isColor =>

@@ -118,7 +118,9 @@ Future<T?> showEditorMenuBelow<T>(
       Navigator.of(anchor).overlay!.context.findRenderObject()! as RenderBox;
   final left = box.localToGlobal(Offset.zero, ancestor: overlay).dx;
   final bottom =
-      box.localToGlobal(box.size.bottomLeft(Offset.zero), ancestor: overlay).dy +
+      box
+          .localToGlobal(box.size.bottomLeft(Offset.zero), ancestor: overlay)
+          .dy +
       gap;
   return showMenu<T>(
     context: anchor,

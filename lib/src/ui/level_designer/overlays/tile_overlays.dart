@@ -259,12 +259,15 @@ class TileGridOverlay extends DesignerOverlay {
                 geometry: target.geometry,
                 tilesetAt: runtime.tilesetAt,
                 offset: Offset(layer.offsetX, layer.offsetY),
+                kinds: runtime.context.collisionKinds,
               ),
             );
             _collision[key] = cached;
           }
           for (final spec in cached.$2) {
-            final color = Color(jge.MapCollisionKinds.resolve(spec.kind).color);
+            final color = Color(
+              runtime.context.collisionKinds.resolve(spec.kind).color,
+            );
             fill.color = color.withValues(alpha: 0.22);
             stroke.color = color.withValues(alpha: 0.9);
             final at = target.origin + spec.center;

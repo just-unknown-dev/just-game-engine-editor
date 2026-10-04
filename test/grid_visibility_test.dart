@@ -14,8 +14,8 @@ void main() {
   late JustGameEditorPlugin plugin;
 
   setUp(() async {
-    Engine.resetInstance();
     final engine = Engine();
+    addTearDown(engine.dispose);
     await engine.initialize();
 
     plugin = JustGameEditorPlugin(engine: engine);
@@ -31,7 +31,6 @@ void main() {
 
   tearDown(() {
     plugin.dispose();
-    Engine.resetInstance();
   });
 
   test('the grid is drawn while authoring', () {

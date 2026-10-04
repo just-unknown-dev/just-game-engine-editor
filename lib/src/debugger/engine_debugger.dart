@@ -95,7 +95,8 @@ extension JustGameEngineDebuggerIntegration on Engine {
           performanceStatsProvider ??
           () => <String, dynamic>{
             ..._safePerformanceStats(),
-            'currentFPS': gameLoop.currentFPS,
+            // Polled on a timer, which may outlive the engine.
+            'currentFPS': isInitialized ? gameLoop.currentFPS : 0,
             'systemTimesMs': _mergedSystemTimes(),
           },
       memoryStatsProvider: memoryStatsProvider ?? _buildMemoryStats,
@@ -105,7 +106,7 @@ extension JustGameEngineDebuggerIntegration on Engine {
         );
 
         try {
-          await cache.clearAll();
+          if (isInitialized) await cache.clearAll();
         } catch (_) {}
 
         controller.log(
@@ -178,7 +179,7 @@ extension JustGameEngineDebuggerIntegration on Engine {
         0,
         (sum, value) => sum + value,
       ),
-      'usingCacheFallback': cache.isUsingMemoryFallback,
+      'usingCacheFallback': isInitialized && cache.isUsingMemoryFallback,
       'cleanupAvailable': true,
       'totalPhysicalMemoryBytes': systemMemory.totalPhysicalMemoryBytes,
       'freePhysicalMemoryBytes': systemMemory.freePhysicalMemoryBytes,

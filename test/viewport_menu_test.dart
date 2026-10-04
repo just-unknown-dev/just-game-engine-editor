@@ -8,17 +8,15 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late Engine engine;
   late JustGameEditorPlugin plugin;
 
   setUp(() async {
-    Engine.resetInstance();
     engine = Engine();
+    addTearDown(engine.dispose);
     await engine.initialize();
     plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
-    plugin.sceneState.openScene(Scene(name: 'level_test'));
+    plugin.sceneState.openScene(EditorScene(name: 'level_test'));
     addTearDown(plugin.dispose);
   });
 

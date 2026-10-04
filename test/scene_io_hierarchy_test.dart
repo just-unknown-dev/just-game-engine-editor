@@ -11,8 +11,6 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late Directory project;
   late EditorScope scope;
   late SceneIO io;
@@ -22,7 +20,7 @@ void main() {
   Map<String, dynamic> sceneJson() => {
     'version': SceneFormat.current,
     // A scene file carries its own node graph beside the entities.
-    ...Scene(name: 'level_test').toJson(),
+    ...EditorScene(name: 'level_test').toJson(),
     'entities': [
       {
         'name': 'Platform',

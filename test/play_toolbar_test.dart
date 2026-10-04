@@ -17,8 +17,8 @@ void main() {
     PlayController play() => plugin.playController;
 
     setUp(() async {
-      Engine.resetInstance();
       engine = Engine();
+      addTearDown(engine.dispose);
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine);
       await plugin.onInitialize();
@@ -26,7 +26,6 @@ void main() {
     });
     tearDown(() {
       plugin.dispose();
-      Engine.resetInstance();
     });
 
     test('Step runs exactly one frame and stays paused', () {
@@ -137,17 +136,16 @@ void main() {
     // each test puts things back itself, with [done].
     void done() {
       plugin.dispose();
-      Engine.resetInstance();
     }
 
     Future<void> pump(WidgetTester tester, {bool withScene = true}) async {
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       plugin = JustGameEditorPlugin(engine: engine);
       await tester.runAsync(plugin.onInitialize);
       // The transport and the view buttons show with a scene open.
-      if (withScene) plugin.sceneState.openScene(Scene(name: 'level'));
+      if (withScene) plugin.sceneState.openScene(EditorScene(name: 'level'));
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -253,7 +251,7 @@ void main() {
       expect(find.byType(EditorDropdown<double>), findsNothing);
       expect(find.byIcon(Icons.map_outlined), findsNothing);
 
-      plugin.sceneState.openScene(Scene(name: 'level'));
+      plugin.sceneState.openScene(EditorScene(name: 'level'));
       await tester.pump();
       expect(find.byTooltip('Play  (F5)'), findsOneWidget);
       expect(find.byIcon(Icons.map_outlined), findsOneWidget);

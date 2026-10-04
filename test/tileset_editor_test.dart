@@ -406,7 +406,7 @@ void main() {
       final before = docs.revision.value;
       docs.pollAssets();
       expect(docs.revision.value, before, reason: 'nothing changed');
-      TileAssets.evict('assets/tilesets/grass.tileset.json');
+      world.context.tiles.evict('assets/tilesets/grass.tileset.json');
       docs.pollAssets();
       expect(docs.revision.value, before + 1);
     });

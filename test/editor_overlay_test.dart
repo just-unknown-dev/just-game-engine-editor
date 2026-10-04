@@ -6,7 +6,6 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 void main() {
   testWidgets('overlay hidden by default and visible after F1', (tester) async {
-    Engine.resetInstance();
     final plugin = JustGameEditorPlugin(engine: Engine());
 
     await tester.pumpWidget(
@@ -24,7 +23,6 @@ void main() {
 
     if (!kDebugMode) {
       plugin.dispose();
-      Engine.resetInstance();
       return;
     }
 
@@ -34,13 +32,11 @@ void main() {
     expect(find.text('Just Runtime Editor'), findsOneWidget);
 
     plugin.dispose();
-    Engine.resetInstance();
   });
 
   testWidgets('status panel is shown only while the editor is open', (
     tester,
   ) async {
-    Engine.resetInstance();
     final plugin = JustGameEditorPlugin(engine: Engine());
 
     await tester.pumpWidget(
@@ -58,7 +54,6 @@ void main() {
 
     if (!kDebugMode) {
       plugin.dispose();
-      Engine.resetInstance();
       return;
     }
 
@@ -79,15 +74,14 @@ void main() {
     expect(find.textContaining(' fps · '), findsNothing);
 
     plugin.dispose();
-    Engine.resetInstance();
   });
 
   testWidgets('no status badge, and the play controls sit top-left', (
     tester,
   ) async {
     if (!kDebugMode) return;
-    Engine.resetInstance();
     final engine = Engine();
+    addTearDown(engine.dispose);
     await tester.runAsync(engine.initialize);
     final plugin = JustGameEditorPlugin(engine: engine);
     await tester.runAsync(plugin.onInitialize);
@@ -104,7 +98,7 @@ void main() {
 
     plugin.setVisible(true);
     // The play controls are the level's: they show with a scene open.
-    plugin.sceneState.openScene(Scene(name: 'level'));
+    plugin.sceneState.openScene(EditorScene(name: 'level'));
     await tester.pumpAndSettle();
 
     expect(find.text('EDITOR: OPEN'), findsNothing);
@@ -122,6 +116,5 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
     plugin.dispose();
-    Engine.resetInstance();
   });
 }

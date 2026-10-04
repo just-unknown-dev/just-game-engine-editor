@@ -204,11 +204,9 @@ class SelectionOps {
       }
       // Whatever a component's own flip means (a sprite's flag, say), its
       // definition's extent knows; the editor does not.
+      final definitions = DesignerGeometry.definitionsFor(e);
       for (final c in e.components) {
-        jge.ComponentDefinitionRegistry.instance
-            .definitionFor(c)
-            ?.extent
-            ?.flip(c, horizontal: horizontal);
+        definitions.definitionFor(c)?.extent?.flip(c, horizontal: horizontal);
       }
     });
   }

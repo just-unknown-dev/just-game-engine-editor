@@ -27,6 +27,10 @@ abstract final class BuiltInWorkspaces {
         fullScreen: workspace.fullScreen,
         onToggleFullScreen: workspace.onToggleFullScreen,
         setCloseGuard: workspace.setCloseGuard,
+        // Through the edited engine's sprite seam: the project's files
+        // while the editor runs.
+        loadImage: (path) => workspace.scope.context.sprites.loadImage(path),
+        collisionKinds: workspace.scope.context.collisionKinds,
       ),
     ),
   ];

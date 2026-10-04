@@ -51,9 +51,6 @@ TilesetData _grass() {
 }
 
 void main() {
-  setUpAll(registerCoreCodecs);
-  setUp(TileAssets.clear);
-
   group('importing a map', () {
     test('tile layers, tilesets and objects come across', () async {
       final memory = <String, String>{};
@@ -323,7 +320,7 @@ void main() {
   group('in the editor', () {
     test('a map imported into the scene is one undo step', () async {
       final scope = testScope();
-      scope.sceneState.openScene(Scene(name: 'level'));
+      scope.sceneState.openScene(EditorScene(name: 'level'));
       final memory = <String, String>{};
       final made = await BuiltInTileContributions.importIntoScene(
         scope,
@@ -362,7 +359,7 @@ void main() {
     test('into a scene whose Level Map is empty, the import takes its '
         'place, as one undo step', () async {
       final scope = testScope();
-      scope.sceneState.openScene(Scene(name: 'level'));
+      scope.sceneState.openScene(EditorScene(name: 'level'));
       final blank = scope.world.createEntityWithComponents([
         TransformComponent(),
         LevelMapComponent(inline: BuiltInPrefabs.newLevelMap()),
@@ -391,7 +388,7 @@ void main() {
 
     test('a scene whose Level Map has something on it keeps it', () async {
       final scope = testScope();
-      scope.sceneState.openScene(Scene(name: 'level'));
+      scope.sceneState.openScene(EditorScene(name: 'level'));
       final painted = BuiltInPrefabs.newLevelMap();
       painted.layers.single.cells.setCell(0, 0, TileCell.make(0, 1));
       scope.world.createEntityWithComponents([
@@ -437,7 +434,7 @@ void main() {
         LevelMapComponent(inline: inline),
       ]);
       final file = LevelMapData()..addTileset('assets/tilesets/a.tileset.json');
-      TileAssets.putMap('assets/maps/one.tilemap.json', file);
+      world.context.tiles.putMap('assets/maps/one.tilemap.json', file);
       world.createEntityWithComponents([
         TransformComponent(),
         LevelMapComponent(mapPath: 'assets/maps/one.tilemap.json'),
@@ -461,7 +458,10 @@ void main() {
         'assets/maps/one.tilemap.json',
         'assets/maps/two.tilemap.json',
       );
-      expect(TileAssets.loadedMap('assets/maps/two.tilemap.json'), same(file));
+      expect(
+        world.context.tiles.loadedMap('assets/maps/two.tilemap.json'),
+        same(file),
+      );
       expect(scope.mapDocs.dirtyPaths.value, {'assets/maps/two.tilemap.json'});
     });
 
@@ -506,17 +506,16 @@ void main() {
     late JustGameEditorPlugin plugin;
     setUp(() async {
       TestWidgetsFlutterBinding.ensureInitialized();
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine);
       await plugin.onInitialize();
-      plugin.sceneState.openScene(Scene(name: 'level'));
+      plugin.sceneState.openScene(EditorScene(name: 'level'));
       plugin.engine.cameraSystem.mainCamera.viewportSize = const Size(800, 600);
     });
     tearDown(() {
       plugin.dispose();
-      Engine.resetInstance();
     });
 
     test('a tileset makes a map to paint with, or joins the one there', () {

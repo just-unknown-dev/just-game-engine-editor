@@ -233,8 +233,8 @@ void main() {
         ..physicalSize = const Size(1600, 1000)
         ..devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       module = _WavesModule();
       plugin = JustGameEditorPlugin(engine: engine, modules: [module]);
@@ -260,7 +260,6 @@ void main() {
     Future<void> done(WidgetTester tester) async {
       await tester.pumpWidget(const SizedBox());
       plugin.dispose();
-      Engine.resetInstance();
     }
 
     DockController dock() => plugin.scope.dockController;
@@ -466,7 +465,7 @@ void main() {
         'room for them', (tester) async {
       if (!kDebugMode) return;
       await pump(tester);
-      plugin.sceneState.openScene(Scene(name: 'level'));
+      plugin.sceneState.openScene(EditorScene(name: 'level'));
       plugin.openLevelDesigner();
       await tester.pump();
       await tester.pump();
@@ -504,7 +503,7 @@ void main() {
         'stands on it, and on any dock opened', (tester) async {
       if (!kDebugMode) return;
       await pump(tester);
-      plugin.sceneState.openScene(Scene(name: 'level'));
+      plugin.sceneState.openScene(EditorScene(name: 'level'));
       plugin.openLevelDesigner();
       await tester.pump();
       await tester.pump();

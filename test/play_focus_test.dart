@@ -9,8 +9,8 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 void main() {
   testWidgets('Play takes the keyboard back from a text field', (tester) async {
-    Engine.resetInstance();
     final engine = Engine();
+    addTearDown(engine.dispose);
     await tester.runAsync(engine.initialize);
     final plugin = JustGameEditorPlugin(engine: engine);
     await tester.runAsync(plugin.onInitialize);
@@ -62,6 +62,5 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     typing.dispose();
     plugin.dispose();
-    Engine.resetInstance();
   });
 }

@@ -25,8 +25,6 @@ PropertyTrack _track(String channel, List<TimelineKey> keys) => PropertyTrack(
 );
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late EditorScope scope;
   late TimelineSession s;
   late Entity entity;

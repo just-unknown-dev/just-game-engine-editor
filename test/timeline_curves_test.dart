@@ -13,8 +13,6 @@ import 'package:just_game_engine_editor/src/ui/timeline/timeline_session.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late EditorScope scope;
   late TimelineSession s;
 
@@ -68,11 +66,11 @@ void main() {
       final before = track().curve.numberAt(1.5);
       final start = s.beginDrag()!;
       const ref = TimelineItemRef(0, 1);
-      s.dragTangent(start, ref, true, const Tangent(0.5, 50));
+      s.dragTangent(start, ref, true, const KeyTangent(0.5, 50));
       s.endDrag(start);
       final key = track().curve.keys[1];
       expect(key.tangentMode, TangentMode.aligned);
-      expect(key.outTangent, const Tangent(0.5, 50));
+      expect(key.outTangent, const KeyTangent(0.5, 50));
       expect(key.inTangent.dv / key.inTangent.dt, closeTo(100, 1e-9));
       expect(key.inTangent.dt, lessThan(0), reason: 'its own reach, kept');
       expect(track().curve.numberAt(1.5), greaterThan(before));
@@ -80,9 +78,9 @@ void main() {
 
       // Past the next key, or backwards: held inside the segment.
       final again = s.beginDrag()!;
-      s.dragTangent(again, ref, true, const Tangent(9, 0));
+      s.dragTangent(again, ref, true, const KeyTangent(9, 0));
       expect(track().curve.keys[1].outTangent.dt, 1);
-      s.dragTangent(again, ref, true, const Tangent(-3, 0));
+      s.dragTangent(again, ref, true, const KeyTangent(-3, 0));
       expect(track().curve.keys[1].outTangent.dt, greaterThan(0));
       s.endDrag(again);
 
@@ -94,14 +92,14 @@ void main() {
         third,
         ref,
         true,
-        const Tangent(0.3, -80),
+        const KeyTangent(0.3, -80),
         breakApart: true,
       );
       s.endDrag(third);
       expect(track().curve.keys[1].tangentMode, TangentMode.broken);
       expect(track().curve.keys[1].inTangent, inBefore);
       s.setKey(0, 0.5, value: 1.0);
-      expect(track().curve.keys[2].outTangent, const Tangent(0.3, -80));
+      expect(track().curve.keys[2].outTangent, const KeyTangent(0.3, -80));
     });
   });
 

@@ -38,12 +38,9 @@ abstract final class TagChecks {
               if (closest != null)
                 ProblemFix(
                   label: 'Use "$closest"',
-                  apply: () => TagEdits.apply(
-                    scope.history,
-                    entity,
-                    [for (final t in entity.tags) t == tag ? closest : t],
-                    scope.sceneState,
-                  ),
+                  apply: () => TagEdits.apply(scope.history, entity, [
+                    for (final t in entity.tags) t == tag ? closest : t,
+                  ], scope.sceneState),
                 ),
               ProblemFix(
                 label: 'Add "$tag" to the list',

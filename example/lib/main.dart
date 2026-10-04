@@ -6,6 +6,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final engine = Engine();
+  // The editor attaches to a ready engine: its world and camera exist.
+  await engine.initialize();
   final plugin = await JustGameEditorPlugin.register(engine: engine);
 
   runApp(_ExampleApp(engine: engine, plugin: plugin));

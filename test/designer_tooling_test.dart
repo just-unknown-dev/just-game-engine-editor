@@ -8,8 +8,6 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 void main() {
   // Sizes come from the definitions' extents, which a game registers at
   // boot and an EditorScope registers for itself; these helpers run bare.
-  setUpAll(registerCoreCodecs);
-
   group('geometry', () {
     test('a quarter-turned platform is bounded by the space it occupies', () {
       final world = World()..initialize();

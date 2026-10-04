@@ -11,8 +11,6 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late World world;
   late EditorScope scope;
   late LevelDesignerSession session;
@@ -20,8 +18,8 @@ void main() {
   late LevelMapData data;
 
   setUp(() {
-    TileAssets.clear();
-    TileAssets.putTileset(
+    world = World()..initialize();
+    world.context.tiles.putTileset(
       'assets/tilesets/test.tileset.json',
       TilesetData(
         name: 'Grass',
@@ -34,7 +32,6 @@ void main() {
         tileCount: 8,
       )..tileOrNew(5).probability = 3,
     );
-    world = World()..initialize();
     registerLevelMapSystems(world);
     scope = testScope(world: world);
     session = LevelDesignerSession(

@@ -61,8 +61,10 @@ void main() {
 
     setUp(() async {
       root = Directory.systemTemp.createTempSync('start_card_');
-      final store = SceneStore(root: root.path, codec: SceneCodec.global);
-      registerCoreCodecs();
+      final store = SceneStore(
+        root: root.path,
+        codec: SceneCodec(ComponentDefinitionRegistry.core()),
+      );
       for (final name in ['level_01', 'level_02']) {
         await store.writeInitialFiles(name);
       }
@@ -76,8 +78,8 @@ void main() {
         ..physicalSize = const Size(1400, 900)
         ..devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       tools = _ToolsModule();
       scope = EditorScope(
@@ -107,7 +109,6 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       plugin.dispose();
       scope.dispose();
-      Engine.resetInstance();
     }
 
     Finder onCard(Finder f) =>
@@ -128,7 +129,7 @@ void main() {
       expect(find.byIcon(Icons.brush), findsWidgets);
 
       // A scene opened: the level and its tools are back.
-      plugin.sceneState.openScene(Scene(name: 'level'));
+      plugin.sceneState.openScene(EditorScene(name: 'level'));
       await tester.pump();
       expect(find.byType(EditorStartCover), findsNothing);
       expect(find.byTooltip('Play  (F5)'), findsOneWidget);
@@ -181,7 +182,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.f5);
       expect(plugin.playController.state.value, EditorPlayState.stopped);
 
-      plugin.sceneState.openScene(Scene(name: 'level'));
+      plugin.sceneState.openScene(EditorScene(name: 'level'));
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.f5);
       expect(plugin.playController.state.value, EditorPlayState.playing);

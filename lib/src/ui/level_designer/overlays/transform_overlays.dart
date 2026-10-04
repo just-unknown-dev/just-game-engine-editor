@@ -87,9 +87,7 @@ class SelectionHandlesOverlay extends DesignerOverlay {
         final zoom = draw.camera.zoom;
         // One thing shows which way it is turned; several, no one way.
         final angle = entities.length == 1
-            ? entities.single
-                      .getComponent<jge.TransformComponent>()
-                      ?.angle ??
+            ? entities.single.getComponent<jge.TransformComponent>()?.angle ??
                   0.0
             : 0.0;
         TransformGizmo.paintRotate(

@@ -23,8 +23,6 @@ final int b = TileCell.make(0, 2);
 final int c3 = TileCell.make(0, 3);
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late World world;
   late EditorScope scope;
   late _Keys keys;
@@ -39,7 +37,6 @@ void main() {
   String status() => session.controller.status.value;
 
   void useMap(LevelMapData d) {
-    TileAssets.clear();
     data = d;
     map = world.createEntityWithComponents([
       TransformComponent(),
@@ -682,7 +679,7 @@ void main() {
         });
 
         test('the overlays draw everything a tool shows', () {
-          TileAssets.putTileset(
+          world.context.tiles.putTileset(
             't.tileset.json',
             TilesetData(
                 name: 't',

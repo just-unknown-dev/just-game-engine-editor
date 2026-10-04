@@ -28,9 +28,11 @@ class TilesetSession {
     required this.root,
     TilesetImageLoader? loadImage,
     TilesetTextWriter? writeText,
-  }) : _data = data,
+    MapCollisionKinds? collisionKinds,
+  }) : collisionKinds = collisionKinds ?? MapCollisionKinds.builtIn,
+       _data = data,
        _saved = jsonEncode(data.toJson()),
-       _loadImage = loadImage ?? SpriteAssets.loader.loadImage,
+       _loadImage = loadImage ?? BundleSpriteAssetLoader().loadImage,
        _writeText = writeText {
     reloadImage();
   }
@@ -42,6 +44,7 @@ class TilesetSession {
     TilesetTextReader? readText,
     TilesetImageLoader? loadImage,
     TilesetTextWriter? writeText,
+    MapCollisionKinds? collisionKinds,
   }) async {
     if (BuiltInTilesets.isBuiltIn(path)) {
       throw StateError(
@@ -56,6 +59,7 @@ class TilesetSession {
       root: root,
       loadImage: loadImage,
       writeText: writeText,
+      collisionKinds: collisionKinds,
     );
   }
 
@@ -70,8 +74,9 @@ class TilesetSession {
     required String root,
     TilesetImageLoader? loadImage,
     TilesetTextWriter? writeText,
+    MapCollisionKinds? collisionKinds,
   }) async {
-    final load = loadImage ?? SpriteAssets.loader.loadImage;
+    final load = loadImage ?? BundleSpriteAssetLoader().loadImage;
     final picture = await load(image);
     final data = TilesetData.fromImage(
       name: name,
@@ -88,6 +93,7 @@ class TilesetSession {
       root: root,
       loadImage: load,
       writeText: writeText,
+      collisionKinds: collisionKinds,
     );
     // New, so unsaved even though nothing has been done to it yet.
     session._saved = '';
@@ -96,6 +102,9 @@ class TilesetSession {
 
   static TilesetTextReader _reader(String root) =>
       (path) => File('$root/$path').readAsString();
+
+  /// The collision kinds its tiles can be given: the edited engine's.
+  final MapCollisionKinds collisionKinds;
 
   /// Where it is saved, project-relative; null until it first is.
   String? path;

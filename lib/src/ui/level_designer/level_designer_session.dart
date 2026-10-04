@@ -306,9 +306,7 @@ class LevelDesignerSession {
   final ModifierKeys Function() _readModifiers;
 
   final EditorView Function()? _camera;
-  late final EditorView _detachedCamera = GameCameraEditorView.of(
-    jge.Camera(),
-  );
+  late final EditorView _detachedCamera = GameCameraEditorView.of(jge.Camera());
 
   /// The viewport camera. The plugin supplies the engine's; a session built
   /// on its own — in a test, say — gets a private one, so framing and zoom

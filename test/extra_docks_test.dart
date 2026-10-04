@@ -160,7 +160,7 @@ void main() {
     test('the scan is cached, and empty with no scene open', () {
       final scan = ProblemScan(scope);
       expect(scan.problems, isEmpty, reason: 'no scene');
-      scope.sceneState.openScene(Scene(name: 'level'));
+      scope.sceneState.openScene(EditorScene(name: 'level'));
       scan.refresh();
       expect(scan.problems, hasLength(1), reason: 'the module: no Spawn');
       expect(scan.errors, 0);

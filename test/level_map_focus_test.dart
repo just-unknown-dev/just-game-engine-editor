@@ -12,8 +12,6 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   group('what may be selected', () {
     late EditorSceneState state;
     late World world;
@@ -144,7 +142,7 @@ void main() {
       );
       controller = SceneTreeController(world: () => scope.world);
       addTearDown(controller.dispose);
-      scope.sceneState.openScene(Scene(name: 'level'));
+      scope.sceneState.openScene(EditorScene(name: 'level'));
       player = entity('Player');
       map = entity(LevelMaps.primaryName, isMap: true);
       crate = entity('Crate', under: map);
@@ -266,14 +264,14 @@ void main() {
 
     setUp(() async {
       TestWidgetsFlutterBinding.ensureInitialized();
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine);
       await plugin.onInitialize();
       plugin
         ..setVisible(true)
-        ..sceneState.openScene(Scene(name: 'level'));
+        ..sceneState.openScene(EditorScene(name: 'level'));
       world = plugin.engine.world;
       // The game's own; the editor's filters go on it as the designer opens.
       world.addSystem(RenderSystem());
@@ -297,7 +295,6 @@ void main() {
 
     tearDown(() {
       plugin.dispose();
-      Engine.resetInstance();
     });
 
     bool drawn(Entity e) => world.getSystem<RenderSystem>()!.shouldRender!(e);

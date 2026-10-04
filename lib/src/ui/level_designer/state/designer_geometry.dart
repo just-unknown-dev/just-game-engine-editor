@@ -112,6 +112,17 @@ abstract final class DesignerGeometry {
   static Rect rectFromDrag(Offset start, Offset end) =>
       Rect.fromPoints(start, end);
 
+  /// The definitions [entity]'s components are read with: its world's
+  /// (`world.context.definitions`). For no entity, or one in no world, the
+  /// engine's own definitions only.
+  static jge.ComponentDefinitionRegistry definitionsFor(jge.Entity? entity) =>
+      entity?.world?.context.definitions ?? _core;
+
+  /// The engine's own definitions, for components in no world. Never
+  /// registered into.
+  static final jge.ComponentDefinitionRegistry _core =
+      jge.ComponentDefinitionRegistry.core();
+
   /// The unscaled size implied by [entity]'s components, largest wins.
   ///
   /// One answer per component, from the extent on its definition: the same
@@ -119,8 +130,9 @@ abstract final class DesignerGeometry {
   /// an outline can never disagree about how big something is.
   static Size? componentSize(jge.Entity entity) {
     Size? best;
+    final definitions = definitionsFor(entity);
     for (final component in entity.components) {
-      final size = sizeOf(component);
+      final size = sizeOf(component, definitions);
       if (size == null) continue;
       final current = best;
       if (current == null ||
@@ -131,10 +143,12 @@ abstract final class DesignerGeometry {
     return best;
   }
 
-  /// The size [component] implies on its own, or null.
-  static Size? sizeOf(jge.Component component) => jge
-      .ComponentDefinitionRegistry
-      .instance
+  /// The size [component] implies on its own, or null — through its
+  /// definition in [definitions] (the engine's own when null).
+  static Size? sizeOf(
+    jge.Component component, [
+    jge.ComponentDefinitionRegistry? definitions,
+  ]) => (definitions ?? _core)
       .definitionFor(component)
       ?.extent
       ?.sizeOf(component);

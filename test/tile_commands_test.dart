@@ -11,13 +11,10 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late World world;
   late EditorScope scope;
 
   setUp(() {
-    TileAssets.clear();
     world = World()..initialize();
     scope = testScope(world: world);
   });

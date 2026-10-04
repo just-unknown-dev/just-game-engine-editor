@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import 'designer_geometry.dart';
+
 /// Changes how big an entity is, one size-bearing component at a time.
 ///
 /// Resizing is not scaling. A transform scale stretches the drawing but not
@@ -26,18 +28,25 @@ abstract final class ComponentResizer {
       (sx, sy) = (sy, sx);
     }
     var resized = false;
+    final definitions = DesignerGeometry.definitionsFor(entity);
     for (final component in entity.components.toList()) {
-      if (scaleComponent(component, sx, sy)) resized = true;
+      if (scaleComponent(component, sx, sy, definitions)) resized = true;
     }
     return resized;
   }
 
   /// Scales one component; see [scale].
   ///
-  /// Through the extent on its definition, so what the handles resize is
-  /// exactly what the marquee and the gizmo measure.
-  static bool scaleComponent(jge.Component component, double sx, double sy) {
-    final extent = jge.ComponentDefinitionRegistry.instance
+  /// Through the extent on its definition in [definitions] (the engine's
+  /// own when null), so what the handles resize is exactly what the marquee
+  /// and the gizmo measure.
+  static bool scaleComponent(
+    jge.Component component,
+    double sx,
+    double sy, [
+    jge.ComponentDefinitionRegistry? definitions,
+  ]) {
+    final extent = (definitions ?? DesignerGeometry.definitionsFor(null))
         .definitionFor(component)
         ?.extent;
     if (extent == null) return false;

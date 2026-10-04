@@ -125,7 +125,9 @@ class _TagsDockState extends State<TagsDock> {
         padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
         decoration: BoxDecoration(
           border: Border(
-            bottom: BorderSide(color: EditorTheme.border.withValues(alpha: 0.5)),
+            bottom: BorderSide(
+              color: EditorTheme.border.withValues(alpha: 0.5),
+            ),
           ),
         ),
         child: Row(
@@ -192,7 +194,10 @@ class _TagsDockState extends State<TagsDock> {
                     'spawned: ${spawned.map((s) => s.displayName).join(', ')}',
                 ].join(' · '),
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: EditorTheme.textSecondary, fontSize: 11),
+                style: TextStyle(
+                  color: EditorTheme.textSecondary,
+                  fontSize: 11,
+                ),
               ),
             ),
             Expanded(
@@ -423,7 +428,8 @@ class _TagsDockState extends State<TagsDock> {
                   group(
                     'The open scene (${plan.openScene})',
                     plan.openUses,
-                    note: 'Changed now, as one step you can undo; saved when '
+                    note:
+                        'Changed now, as one step you can undo; saved when '
                         'you save the scene.',
                   ),
                 for (final e in plan.scenes.entries)

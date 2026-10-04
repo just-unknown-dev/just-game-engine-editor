@@ -6,8 +6,6 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/ui/scene_tree/scene_tree_model.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late World world;
 
   setUp(() {
@@ -118,7 +116,10 @@ void main() {
         TransformComponent(),
         ParentComponent(parentId: root.id),
       ], name: 'Forgotten');
-      // The parent's list is empty, but the child points at it.
+      // The world lists a linked child with its parent; take it off the
+      // list by hand, so the parent's list is empty but the child still
+      // points at it.
+      root.getComponent<ChildrenComponent>()!.removeChild(child.id);
       expect(root.getComponent<ChildrenComponent>()!.childIds, isEmpty);
       expect(child.isActive, isTrue);
 

@@ -94,9 +94,7 @@ class ProjectTags {
   // ── Reading ──────────────────────────────────────────────────────────────
 
   /// Every tag the game's spawners give.
-  Set<String> get spawnedTags => {
-    for (final s in spawners) ...s.tags,
-  };
+  Set<String> get spawnedTags => {for (final s in spawners) ...s.tags};
 
   /// The spawners whose entities carry [tag].
   List<jge.Spawner> spawnersGiving(String tag) => [

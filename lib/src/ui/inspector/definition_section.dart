@@ -486,9 +486,7 @@ class DefinitionSection extends StatelessWidget {
       sceneState: sceneState,
       scope: scope,
       entityNames: () => [
-        for (final e in (world ?? scope.world).query([
-          jge.TransformComponent,
-        ]))
+        for (final e in (world ?? scope.world).query([jge.TransformComponent]))
           if (e.isActive && e.name != null) e.name!,
       ],
       onChanged: (next) {

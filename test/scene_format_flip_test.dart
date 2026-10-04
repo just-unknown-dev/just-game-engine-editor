@@ -13,7 +13,7 @@ import 'support/test_scope.dart';
 
 final _v0 = {
   'name': 'old',
-  'root': Scene(name: 'old').toJson()['root'],
+  'root': null,
   'entities': [
     {
       'name': 'Block',

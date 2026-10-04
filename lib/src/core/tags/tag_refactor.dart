@@ -8,6 +8,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../ui/level_designer/state/editor_commands.dart';
 import '../../ui/level_designer/state/editor_history.dart';
+import '../scene/editor_scene.dart';
 import '../scope/editor_scope.dart';
 import 'tag_references.dart';
 
@@ -58,10 +59,10 @@ class TagChangePlan {
   /// The files this would write: closed scenes, and timelines on a rename.
   int get fileCount =>
       (isRename
-              ? scenes.length
-              : scenes.values.where(
-                  (u) => u.any((x) => x.kind == TagUseKind.carried),
-                ).length) +
+          ? scenes.length
+          : scenes.values
+                .where((u) => u.any((x) => x.kind == TagUseKind.carried))
+                .length) +
       (isRename ? timelines.length : 0);
 }
 
@@ -117,9 +118,9 @@ class TagRefactor {
       for (final entity in scope.world.entities) {
         final owner = entity.name ?? 'Entity ${entity.id}';
         for (final component in entity.components) {
-          final json = scope.definitions.definitionFor(component)?.encode(
-            component,
-          );
+          final json = scope.definitions
+              .definitionFor(component)
+              ?.encode(component);
           if (json == null) continue;
           openUses.addAll(
             _references
@@ -134,7 +135,10 @@ class TagRefactor {
       if (name == open) continue;
       final raw = scope.scenes.readRawSync(name);
       if (raw == null) continue;
-      final uses = _references.inScene(jge.SceneFormat.migrate(raw), tag: tag);
+      final uses = _references.inScene(
+        jge.SceneFormat.migrate(raw, hooks: scope.context.migrations),
+        tag: tag,
+      );
       if (uses.isNotEmpty) scenes[name] = uses;
     }
     final timelines = <String, List<TagUse>>{};
@@ -168,21 +172,20 @@ class TagRefactor {
         final raw = scope.scenes.readRawSync(name);
         if (raw == null) continue;
         final before = scope.scenes.encodeRawText(raw);
-        final migrated = jge.SceneFormat.migrate(raw);
+        final migrated = jge.SceneFormat.migrate(
+          raw,
+          hooks: scope.context.migrations,
+        );
         final changed = to == null
             ? _references.removeFromScene(migrated, from)
             : _references.renameInScene(migrated, from, to);
         if (changed == 0) continue;
         await scope.scenes.writeBackup(name, before, keep: 20);
-        await scope.scenes.writeSceneJson(
-          name,
-          jge.Scene.fromJson(migrated),
-          [
-            for (final e in migrated['entities'] as List? ?? const [])
-              (e as Map).cast<String, dynamic>(),
-          ],
-          editor: (migrated['editor'] as Map?)?.cast<String, dynamic>(),
-        );
+        await scope.scenes
+            .writeSceneJson(name, EditorScene.fromJson(migrated), [
+              for (final e in migrated['entities'] as List? ?? const [])
+                (e as Map).cast<String, dynamic>(),
+            ], editor: (migrated['editor'] as Map?)?.cast<String, dynamic>());
         written.add('${scope.scenes.scenesRoot}/$name.scene.json');
       } on Object catch (e) {
         failures[name] = '$e';

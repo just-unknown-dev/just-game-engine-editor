@@ -17,10 +17,7 @@ const _stranger = {
   'fields': {'speed': 3, 'label': 'kept'},
 };
 
-const _other = {
-  'type': 'AnotherUnknown',
-  'fields': <String, dynamic>{},
-};
+const _other = {'type': 'AnotherUnknown', 'fields': <String, dynamic>{}};
 
 const _transform = {
   'type': 'TransformComponent',
@@ -30,10 +27,8 @@ const _transform = {
 };
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   group('the codec', () {
-    final codec = SceneCodec.global;
+    final codec = SceneCodec(ComponentDefinitionRegistry.core());
 
     test('keeps every unknown component in one holder', () {
       final components = codec.decodeAll([_stranger, _transform, _other]);
@@ -70,7 +65,7 @@ void main() {
       File(sceneFile()).writeAsStringSync(
         jsonEncode({
           'version': SceneFormat.current,
-          ...Scene(name: 'level_test').toJson(),
+          ...EditorScene(name: 'level_test').toJson(),
           'entities': [
             {
               'name': 'Mixed',

@@ -6,11 +6,9 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   testWidgets('search filters by name and by component type', (tester) async {
     final scope = testScope();
-    scope.sceneState.openScene(Scene(name: 'level'));
+    scope.sceneState.openScene(EditorScene(name: 'level'));
     final ops = EntityOps(
       scope: scope,
       world: () => scope.world,

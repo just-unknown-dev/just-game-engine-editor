@@ -129,11 +129,9 @@ class MinimapOverlay extends DesignerOverlay with InteractiveOverlay {
     for (final c in entity.components) {
       if (c is jge.RectangleComponent) return c.fillStyle.color;
     }
+    final definitions = DesignerGeometry.definitionsFor(entity);
     for (final c in entity.components) {
-      final accent = jge.ComponentDefinitionRegistry.instance
-          .definitionFor(c)
-          ?.hints
-          .accentColor;
+      final accent = definitions.definitionFor(c)?.hints.accentColor;
       if (accent != null) return accent;
     }
     return EditorTheme.textMuted;

@@ -27,9 +27,14 @@ String relativePath(String fromDir, String to) {
 /// paths relative to the files, as Tiled keeps them. A built-in tileset's
 /// picture, which is no file, is written beside them as a `.png`.
 class TiledExporter {
-  TiledExporter(this.files);
+  /// Writes through [files]. A built-in tileset's picture, which has no
+  /// file, is taken from [tiles] (an engine's), or drawn for the export.
+  TiledExporter(this.files, {this.tiles});
 
   final TiledFiles files;
+
+  /// Where built-in pictures already drawn are kept; null draws them.
+  final TileAssets? tiles;
 
   /// Writes [map] to [to]; its tilesets come from [tilesetAt]. Returns the
   /// files written, the map last.
@@ -65,9 +70,17 @@ class TiledExporter {
       final file = '$name.${json ? 'tsj' : 'tsx'}';
       names[slot] = file;
       var image = relativePath(dir, ts.image);
-      final drawn = BuiltInTilesets.image(ts.image);
+      final kept = tiles?.builtInImage(ts.image);
+      final builtIn = BuiltInTilesets.tilesetOfImage(ts.image);
+      final drawn =
+          kept ??
+          (builtIn == null
+              ? null
+              : BuiltInTilesets.draw(BuiltInTilesets.build(builtIn)!));
       if (drawn != null) {
         final png = await drawn.toByteData(format: ui.ImageByteFormat.png);
+        // Drawn here for the export: not wanted after it.
+        if (kept == null) drawn.dispose();
         if (png != null) {
           image = '$name.png';
           await files.writeBytes(inDir(image), png.buffer.asUint8List());

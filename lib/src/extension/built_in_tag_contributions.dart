@@ -32,9 +32,7 @@ abstract final class BuiltInTagContributions {
     final wanted = entity.tags;
     final found = [
       for (final e in scope.world.entities)
-        if (e.isAlive &&
-            wanted.any(e.hasTag) &&
-            scope.sceneState.canSelect(e))
+        if (e.isAlive && wanted.any(e.hasTag) && scope.sceneState.canSelect(e))
           e,
     ];
     if (found.isEmpty) return;

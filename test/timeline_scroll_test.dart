@@ -15,8 +15,6 @@ import 'package:just_game_engine_editor/src/ui/timeline/timeline_session.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late EditorScope scope;
   late TimelineSession s;
 

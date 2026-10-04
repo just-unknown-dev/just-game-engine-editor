@@ -9,15 +9,13 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late World world;
   late EditorScope scope;
 
   setUp(() {
     world = World()..initialize();
     scope = testScope(world: world);
-    scope.sceneState.openScene(Scene(name: 'level'));
+    scope.sceneState.openScene(EditorScene(name: 'level'));
   });
 
   ({Entity map, LevelMapData data, MapLayerData layer}) level(

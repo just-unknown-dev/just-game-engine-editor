@@ -12,8 +12,6 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'support/test_scope.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late World world;
   late EditorScope scope;
   late LevelDesignerSession session;

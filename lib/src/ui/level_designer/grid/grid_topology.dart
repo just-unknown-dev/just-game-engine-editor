@@ -1,6 +1,5 @@
 import 'dart:ui';
 
-
 import '../state/designer_geometry.dart';
 import '../../../core/view/editor_view.dart';
 

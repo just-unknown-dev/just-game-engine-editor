@@ -488,7 +488,9 @@ class DeleteEntitiesCommand extends EditorCommand {
       if (entity == null) continue;
       detachEntity(entity, world: world, sceneState: sceneState);
       sceneState.removeEntityNode(id);
-      world.destroyEntity(entity);
+      // Each id in the list is removed on its own; its children are not
+      // this command's to take.
+      world.destroyEntity(entity, withChildren: false);
     }
     sceneState
       ..clearSelection()

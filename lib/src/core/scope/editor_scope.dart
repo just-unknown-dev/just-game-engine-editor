@@ -53,9 +53,10 @@ import '../view/editor_view.dart';
 /// `just_di` container that is disposed with it.
 ///
 /// There are no process-wide registries. Two scopes in one process — two
-/// tests, or two editors side by side — share nothing except the engine's
-/// component definitions, which the *game* registers at boot and which the
-/// scope reads by default.
+/// tests, or two editors side by side — share nothing. Component definitions
+/// come from the edited engine's [context] (a bare world's own context in a
+/// test), which the *game* fills at boot through its extensions; the scope
+/// reads them from there, so the editor and the game cannot disagree.
 ///
 /// ```dart
 /// final scope = EditorScope(engine: engine, modules: [PlatformerModule()]);
@@ -67,7 +68,6 @@ class EditorScope {
     Engine? engine,
     World? world,
     List<EditorModule> modules = const [],
-    ComponentDefinitionRegistry? definitions,
     DiContainer? parent,
     EditorLogService? log,
     String? scenesRoot,
@@ -80,8 +80,7 @@ class EditorScope {
        _world = world,
        container = DiContainer(parent: parent),
        _isDebug = isDebug {
-    final defs = definitions ?? ComponentDefinitionRegistry.instance;
-    registerCoreCodecs(defs);
+    final defs = (engine?.context ?? world!.context).definitions;
     if (engine != null) container.registerSingleton<Engine>(engine);
     container
       ..registerSingleton<ComponentDefinitionRegistry>(defs)
@@ -215,6 +214,13 @@ class EditorScope {
   /// the plugin is built before that.
   World get world => _world ?? engine!.world;
 
+  /// What the edited engine knows — its component definitions, loaders and
+  /// hooks — or, for a scope over a bare [world], that world's context.
+  ///
+  /// Available before the engine initialises: an engine makes its context
+  /// when it is constructed.
+  EngineContext get context => engine?.context ?? _world!.context;
+
   /// Ways of putting the world back to the scene as authored, for whatever
   /// shows something else in it for a while — a timeline being previewed.
   final List<void Function()> authoredStateGuards = [];
@@ -238,7 +244,8 @@ class EditorScope {
   /// Resolves a service by type. Prefer the typed accessors on hot paths.
   T get<T extends Object>() => container.get<T>();
 
-  /// Component definitions: what can be saved, sized and drawn.
+  /// Component definitions: what can be saved, sized and drawn —
+  /// [context]'s.
   ComponentDefinitionRegistry get definitions =>
       container.get<ComponentDefinitionRegistry>();
 
@@ -654,7 +661,8 @@ class EditorScope {
     for (final name in scenes.listSceneNames()) {
       final raw = scenes.readRawSync(name);
       if (raw == null) continue;
-      for (final use in references.inScene(SceneFormat.migrate(raw))) {
+      final migrated = SceneFormat.migrate(raw, hooks: context.migrations);
+      for (final use in references.inScene(migrated)) {
         if (use.kind == TagUseKind.carried) found.add(use.tag);
       }
     }

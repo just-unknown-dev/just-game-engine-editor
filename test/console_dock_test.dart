@@ -105,8 +105,8 @@ void main() {
         ..physicalSize = const Size(1600, 1000)
         ..devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      Engine.resetInstance();
       final engine = Engine();
+      addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       plugin = JustGameEditorPlugin(engine: engine);
       await tester.runAsync(plugin.onInitialize);
@@ -133,7 +133,6 @@ void main() {
     Future<void> done(WidgetTester tester) async {
       await tester.pumpWidget(const SizedBox());
       plugin.dispose();
-      Engine.resetInstance();
     }
 
     void log(
@@ -193,7 +192,7 @@ void main() {
       if (!kDebugMode) return;
       await pump(tester);
       // Play needs a scene to play-test.
-      plugin.sceneState.openScene(Scene(name: 'level'));
+      plugin.sceneState.openScene(EditorScene(name: 'level'));
       expect(
         BuiltInDocks.runCommand(plugin, 'editor.playToggle'),
         contains('Ran'),

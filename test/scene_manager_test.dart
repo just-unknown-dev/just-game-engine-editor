@@ -11,14 +11,15 @@ import 'package:just_game_engine_editor/src/core/serialization/scene_manager.dar
 import 'package:just_game_engine_editor/src/core/serialization/scene_store.dart';
 
 void main() {
-  setUpAll(registerCoreCodecs);
-
   late Directory root;
   late SceneStore store;
 
   setUp(() {
     root = Directory.systemTemp.createTempSync('scenes_');
-    store = SceneStore(root: root.path, codec: SceneCodec.global);
+    store = SceneStore(
+      root: root.path,
+      codec: SceneCodec(ComponentDefinitionRegistry.core()),
+    );
   });
 
   tearDown(() {
