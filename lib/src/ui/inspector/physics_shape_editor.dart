@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
@@ -171,20 +173,37 @@ class PhysicsShapeEditor extends StatelessWidget {
           ),
         ],
         jge.CapsuleShape s => () {
-          final height = (s.center1 - s.center2).distance + s.radius * 2;
+          // Upright along Y, or lying along X: the two a level needs.
+          final lying =
+              s.center1.dy == s.center2.dy && s.center1.dx != s.center2.dx;
+          final length = (s.center1 - s.center2).distance + s.radius * 2;
+          jge.CapsuleShape make(double length, double radius, bool lying) {
+            final half = math.max(length / 2 - radius, 0.0);
+            return jge.CapsuleShape(
+              center1: lying ? Offset(-half, 0) : Offset(0, -half),
+              center2: lying ? Offset(half, 0) : Offset(0, half),
+              radius: radius,
+            );
+          }
+
           return [
+            DropdownEditorRow(
+              label: 'Direction',
+              value: lying ? 'lying' : 'upright',
+              options: const ['upright', 'lying'],
+              onChanged: (v) => set(make(length, s.radius, v == 'lying')),
+            ),
             num(
-              'Height',
-              height,
+              lying ? 'Length' : 'Height',
+              length,
               const NumberScrubConfig(fractionDigits: 1, min: 1),
-              (v) =>
-                  set(jge.CapsuleShape.vertical(height: v, radius: s.radius)),
+              (v) => set(make(v, s.radius, lying)),
             ),
             num(
               'Radius',
               s.radius,
               _radius,
-              (v) => set(jge.CapsuleShape.vertical(height: height, radius: v)),
+              (v) => set(make(length, v, lying)),
             ),
           ];
         }(),

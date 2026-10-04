@@ -17,6 +17,7 @@ import '../../core/theme/editor_metrics.dart';
 import '../widgets/scrubbable_number_field.dart';
 import '../widgets/editor_dropdown.dart';
 import '../kit/buttons.dart';
+import '../kit/controls.dart' show EditorSlider;
 import '../kit/fields.dart';
 
 // ── Colour ↔ ShapePaintStyle bridge ──────────────────────────────────────────
@@ -417,6 +418,68 @@ class _ScrubFieldRowState extends State<ScrubFieldRow> {
       labelWidth: InspectorField.labelWidth,
     );
   }
+}
+
+/// A number between two limits as a slider, with the value beside it to
+/// type: for a setting whose range matters more than its digits.
+class SliderFieldRow extends StatelessWidget {
+  const SliderFieldRow({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+    this.step = 0.05,
+    this.decimals = 2,
+    this.unit = '',
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final double step;
+  final int decimals;
+  final String unit;
+
+  /// Every value the drag passes through, and the one it ends on. (An
+  /// inspector edit merges consecutive writes, so a drag is one undo.)
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      SizedBox(
+        width: InspectorField.labelWidth,
+        child: Text(
+          label,
+          overflow: TextOverflow.ellipsis,
+          style: InspectorField.labelStyle,
+        ),
+      ),
+      Expanded(
+        child: SizedBox(
+          height: InspectorField.height,
+          child: EditorSlider(
+            value: value,
+            min: min,
+            max: max,
+            step: step,
+            decimals: decimals,
+            unit: unit,
+            accent: EditorTheme.primaryMutedLight,
+            onChanged: (v) {
+              if (v != value) onChanged(v);
+            },
+            onChangeEnd: (v) {
+              if (v != value) onChanged(v);
+            },
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 /// A vector on one row: the field's label, then a scrubbable cell per axis —

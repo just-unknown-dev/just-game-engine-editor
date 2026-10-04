@@ -44,7 +44,7 @@ class _TestExtension extends EditorModule {
         jge.RectangleComponent(width: size.width, height: size.height),
         jge.PhysicsBodyComponent(
           shape: jge.RectangleShape(size.width, size.height),
-          isStatic: true,
+          bodyType: jge.BodyType.static,
         ),
         jge.TagComponent(kBlockTag),
         jge.LayerComponent(),

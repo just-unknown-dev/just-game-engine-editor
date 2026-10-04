@@ -12,6 +12,7 @@ import '../../ui/level_designer/state/built_in_prefabs.dart';
 import '../../ui/level_designer/state/layer_preset.dart';
 import '../../ui/level_designer/state/prefab_registry.dart';
 import '../../ui/inspector/built_in_extras.dart';
+import '../../ui/inspector/physics/physics_body_extras.dart';
 import '../../ui/inspector/built_in_field_editors.dart';
 import '../../ui/inspector/component_extras.dart';
 import '../../ui/inspector/field_editor.dart';
@@ -33,6 +34,7 @@ import '../../ui/level_designer/state/selection_handle_layout.dart';
 import '../serialization/scene_codec.dart';
 import '../serialization/scene_store.dart';
 import '../services/editor_log_service.dart';
+import '../physics/project_physics_layers.dart';
 import '../tags/project_tags.dart';
 import '../tags/tag_references.dart';
 import '../state/editor_scene_state.dart';
@@ -167,7 +169,14 @@ class EditorScope {
           )
           ..setDeclared(_declaredTags())
           ..load(seed: _tagsTheScenesCarry);
-      }, dispose: (t) => t.dispose());
+      }, dispose: (t) => t.dispose())
+      ..registerLazySingleton<ProjectPhysicsLayers>(
+        () => ProjectPhysicsLayers(
+          path: ProjectPhysicsLayers.pathFor(scenesRoot: scenesRoot),
+          context: () => engine?.context ?? _world?.context,
+        )..load(),
+        dispose: (l) => l.dispose(),
+      );
     this.modules.registerAll(modules);
     reload();
     // Made now rather than when first asked for: it follows the selection
@@ -622,12 +631,29 @@ class EditorScope {
   /// the game's spawners give.
   ProjectTags get tags => container.get<ProjectTags>();
 
+  /// The project's collision layers: their names and which collide. Every
+  /// change is saved and reaches the running game.
+  ProjectPhysicsLayers get physicsLayers =>
+      container.get<ProjectPhysicsLayers>();
+
   /// Finds and rewrites tags in saved scenes and timelines, through
   /// [definitions].
   TagReferences get tagReferences =>
       TagReferences(definitions.definitionByType);
 
   bool _tagsMade = false;
+
+  /// Whether a play-test is on, paused or not — what an inspector showing
+  /// live values follows. The plugin keeps it.
+  final Signal<bool> isPlayTesting = Signal(false, debugLabel: 'playTesting');
+
+  /// The collision layer being pointed at — a chip, a picker, a row of the
+  /// Physics Layers dock — whose bodies the viewport rings. Null when none
+  /// is.
+  final Signal<int?> highlightedLayer = Signal(
+    null,
+    debugLabel: 'highlightedLayer',
+  );
 
   /// The tag being pointed at — a chip under the mouse — whose entities the
   /// viewport rings. Null when none is.
@@ -677,6 +703,7 @@ class EditorScope {
     fieldEditors.registerAll(BuiltInFieldEditors.all);
     extras.clear();
     extras.registerAll(BuiltInExtras.all);
+    extras.register(PhysicsBodyExtras.extras(this));
     extras.registerAll(BuiltInCameraContributions.extras);
     extras.registerAll(BuiltInTileContributions.extras);
     commands.clear();
@@ -811,6 +838,8 @@ class EditorScope {
     workspaceFullScreen.dispose();
     spawners.dispose();
     highlightedTag.dispose();
+    highlightedLayer.dispose();
+    isPlayTesting.dispose();
     container.close();
   }
 }

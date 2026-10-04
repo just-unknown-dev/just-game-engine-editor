@@ -169,8 +169,12 @@ class DefinitionSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SignalBuilder<Set<String>>(
     signal: scope.chrome.collapsedComponents,
-    builder: (context, collapsed, _) =>
-        _card(context, collapsed.contains(definition.type)),
+    builder: (context, collapsed, _) => SignalBuilder<Set<String>>(
+      // Which groups are open: a fold redraws the card.
+      signal: scope.chrome.flippedGroups,
+      builder: (context, _, _) =>
+          _card(context, collapsed.contains(definition.type)),
+    ),
   );
 
   Widget _card(BuildContext context, bool collapsed) {
@@ -281,7 +285,7 @@ class DefinitionSection extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ..._fieldWidgets(),
+                  ..._fieldWidgets(context),
                   if (section != null) ...[
                     const SizedBox(height: 8),
                     section(context, component),
@@ -304,9 +308,10 @@ class DefinitionSection extends StatelessWidget {
         (hint.visibleWhen?.call(component) ?? true);
   }
 
-  /// Ungrouped fields first, then each hinted group under a header. Names a
-  /// group lists that the definition lacks are ignored.
-  List<Widget> _fieldWidgets() {
+  /// Ungrouped fields first, then each hinted group under a header that
+  /// folds it. Names a group lists that the definition lacks are ignored;
+  /// a group none of whose fields is shown is left out, header and all.
+  List<Widget> _fieldWidgets(BuildContext context) {
     final byName = {for (final f in definition.fields) f.name: f};
     final groups = hints.fieldGroups ?? const <String, List<String>>{};
     final grouped = {for (final names in groups.values) ...names};
@@ -322,20 +327,21 @@ class DefinitionSection extends StatelessWidget {
       ];
       if (fields.isEmpty) continue;
       if (out.isNotEmpty) out.add(const SizedBox(height: 6));
-      out.add(
-        Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text(
-            entry.key.toUpperCase(),
-            style: TextStyle(
-              color: EditorTheme.primaryMuted,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
+      final folded = scope.chrome.isGroupFolded(
+        definition.type,
+        entry.key,
+        startsFolded: hints.foldedGroups.contains(entry.key),
       );
+      out.add(_groupHeader(entry.key, folded, fields.length));
+      if (folded) continue;
+      if (extras?.groupLeading[entry.key] case final leading?) {
+        out.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: leading(context, component),
+          ),
+        );
+      }
       out.addAll(_rows(fields));
     }
     if (out.isEmpty) {
@@ -349,6 +355,42 @@ class DefinitionSection extends StatelessWidget {
     return out;
   }
 
+  /// A group's title, which folds and opens it; folded, it says how many
+  /// settings are inside.
+  Widget _groupHeader(String name, bool folded, int count) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: InkWell(
+      onTap: () => scope.chrome.toggleGroup(definition.type, name),
+      borderRadius: BorderRadius.circular(3),
+      child: Row(
+        children: [
+          Icon(
+            folded ? Icons.chevron_right_rounded : Icons.expand_more_rounded,
+            size: 12,
+            color: EditorTheme.primaryMuted,
+          ),
+          const SizedBox(width: 2),
+          Text(
+            name.toUpperCase(),
+            style: TextStyle(
+              color: EditorTheme.primaryMuted,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+          if (folded) ...[
+            const SizedBox(width: 6),
+            Text(
+              '$count',
+              style: TextStyle(color: EditorTheme.textMuted, fontSize: 9),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+
   /// One row per field — except fields a [jge.FieldRowHint] gathers, which
   /// share the row where the first of them would be.
   List<Widget> _rows(List<jge.SchemaField> fields) {
@@ -358,15 +400,24 @@ class DefinitionSection extends StatelessWidget {
       if (done.contains(field.name)) continue;
       final together = _rowMates(field, fields);
       done.addAll([for (final f in together.$2) f.name]);
+      final description = together.$1 == null
+          ? hints.fields[field.name]?.description
+          : null;
+      Widget row = together.$1 == null
+          ? _row(field)
+          : _sharedRow(together.$1!, together.$2);
+      // What the setting does, on a hover that lingers.
+      if (description != null && description.isNotEmpty) {
+        row = Tooltip(
+          message: description,
+          waitDuration: const Duration(milliseconds: 700),
+          child: row,
+        );
+      }
       out.add(
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: _withKeyButton(
-            together.$1 == null
-                ? _row(field)
-                : _sharedRow(together.$1!, together.$2),
-            together.$2,
-          ),
+          child: _withKeyButton(row, together.$2),
         ),
       );
     }

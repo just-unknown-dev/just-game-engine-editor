@@ -276,12 +276,23 @@ class GizmoPainter {
     Color color,
     EditorView camera,
     Size canvasSize,
+  ) => paintHighlight(canvas, entities, '#$tag', color, camera, canvasSize);
+
+  /// Rings every one of [entities] in [color] and labels it [text] — what a
+  /// tag or a collision layer being pointed at means in the level.
+  void paintHighlight(
+    Canvas canvas,
+    List<Entity> entities,
+    String text,
+    Color color,
+    EditorView camera,
+    Size canvasSize,
   ) {
     if (entities.isEmpty || canvasSize == Size.zero) return;
     camera.viewportSize = canvasSize;
     final label = TextPainter(
       text: TextSpan(
-        text: '#$tag',
+        text: text,
         style: TextStyle(
           color: color,
           fontSize: 10,

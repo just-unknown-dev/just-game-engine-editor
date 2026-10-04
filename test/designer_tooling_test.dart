@@ -99,7 +99,10 @@ void main() {
       final e = world.createEntityWithComponents([
         TransformComponent(),
         RectangleComponent(width: 100, height: 20),
-        PhysicsBodyComponent(shape: RectangleShape(100, 20), isStatic: true),
+        PhysicsBodyComponent(
+          shape: RectangleShape(100, 20),
+          bodyType: BodyType.static,
+        ),
       ]);
       ComponentResizer.scale(e, 2, 3);
 

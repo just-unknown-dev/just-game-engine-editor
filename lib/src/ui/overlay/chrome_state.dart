@@ -76,6 +76,30 @@ class EditorChromeState {
     );
   }
 
+  /// Field groups opened or folded by hand, against how their component
+  /// starts them (`ComponentHints.foldedGroups`), as `type/group` — on
+  /// every entity, until the editor closes.
+  final Signal<Set<String>> flippedGroups = Signal<Set<String>>(
+    const {},
+    debugLabel: 'flippedGroups',
+  );
+
+  /// Whether [group] of [componentType] is folded, given whether it
+  /// [startsFolded].
+  bool isGroupFolded(
+    String componentType,
+    String group, {
+    required bool startsFolded,
+  }) => startsFolded != flippedGroups.value.contains('$componentType/$group');
+
+  void toggleGroup(String componentType, String group) {
+    final key = '$componentType/$group';
+    final now = flippedGroups.value;
+    flippedGroups.value = Set.unmodifiable(
+      now.contains(key) ? ({...now}..remove(key)) : {...now, key},
+    );
+  }
+
   /// Performance samples, kept across dock open/close.
   final List<PerfHistorySample> perfHistory = <PerfHistorySample>[];
 
@@ -107,6 +131,7 @@ class EditorChromeState {
     rightPanelWidth.dispose();
     settingsOpen.dispose();
     collapsedComponents.dispose();
+    flippedGroups.dispose();
     rightPanelTab.dispose();
   }
 }

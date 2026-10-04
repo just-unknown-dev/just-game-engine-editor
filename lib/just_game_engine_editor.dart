@@ -88,6 +88,12 @@ export 'src/ui/inspector/property_table_editor.dart';
 export 'src/ui/inspector/component_extras.dart';
 export 'src/ui/inspector/definition_section.dart';
 export 'src/ui/inspector/physics_shape_editor.dart';
+export 'src/ui/inspector/physics_field_editors.dart';
+export 'src/ui/inspector/physics/physics_body_extras.dart';
+export 'src/ui/inspector/physics/collider_edit_session.dart';
+export 'src/ui/overlay/docks/physics/physics_layers_dock.dart';
+export 'src/core/physics/project_physics_layers.dart';
+export 'src/core/physics/layer_refactor.dart';
 export 'src/ui/inspector/built_in_field_editors.dart';
 
 // Level Designer — the dedicated level-authoring workspace.

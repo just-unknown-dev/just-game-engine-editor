@@ -85,6 +85,7 @@ class FieldEditorContext {
       integer: s?.integer ?? field.kind.id == jge.FieldTypes.integer.id,
       min: field.min,
       max: field.max,
+      suffix: s?.suffix,
     );
   }
 

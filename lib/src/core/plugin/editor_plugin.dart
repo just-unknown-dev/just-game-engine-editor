@@ -9,6 +9,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../debugger/engine_debugger.dart';
+import '../../ui/inspector/physics/collider_edit_session.dart';
 import '../../ui/level_designer/state/editor_commands.dart';
 import '../assets/file_sprite_asset_loader.dart';
 import '../../ui/level_designer/state/map_placement.dart';
@@ -299,6 +300,7 @@ class JustGameEditorPlugin implements EnginePlugin {
         sceneState.canSelect(entity),
     transformMode: () => shownTransformMode ?? TransformMode.all,
     transformModes: () => transformModesAvailable,
+    colliderEdit: () => ColliderEditSession.of(scope),
   );
 
   // ── Focus nodes ───────────────────────────────────────────────────────────
@@ -719,6 +721,10 @@ class JustGameEditorPlugin implements EnginePlugin {
     // Ctrl+C, Ctrl+Z, every single-letter tool key. A HardwareKeyboard
     // handler sees keys before the focused widget does.
     if (_isTypingInTextField) return false;
+    // A collider being edited: Esc finishes, Delete takes a point away.
+    if (isAuthoring.value && ColliderEditSession.of(scope).handleKey(key)) {
+      return true;
+    }
     // Level-building keys, and only while authoring: during Play the keys
     // belong to the game.
     final session = designer.value;
@@ -1079,6 +1085,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   bool _modulesThinkPlaying = false;
   void _tellModulesPlayState() {
     final playing = playController.state.value != EditorPlayState.stopped;
+    scope.isPlayTesting.value = playing;
     if (playing == _modulesThinkPlaying) return;
     _modulesThinkPlaying = playing;
     for (final module in scope.modules.all) {
@@ -1260,10 +1267,35 @@ class JustGameEditorPlugin implements EnginePlugin {
       );
     }
 
+    final layer = scope.highlightedLayer.value;
+    if (layer != null) {
+      final layers = scope.physicsLayers.value;
+      _gizmoPainter.paintHighlight(
+        canvas,
+        [
+          for (final e in engine.world.query([PhysicsBodyComponent]))
+            if (e.getComponent<PhysicsBodyComponent>()!.layer == layer &&
+                !e.hasComponent<MapBodyComponent>() &&
+                _isDrawn(e))
+              e,
+        ],
+        layers.labelOf(layer),
+        layers.colorOf(layer),
+        camera,
+        size,
+      );
+    }
+
+    // A collider being edited, over everything in the level.
+    final collider = ColliderEditSession.of(scope);
+    if (isAuthoring.value) collider.paint(canvas, camera);
+
     _paintGamePreview(canvas, size, engine.cameraSystem.mainCamera);
 
     final selected = sceneState.selectedEntity.value;
     if (selected == null || !selected.isActive) return;
+    // Its handles are the ones to take hold of: no gizmo over them.
+    if (collider.isEditing(selected)) return;
     // The designer's select tool draws its own resize and rotate handles, and
     // claims every press — the base gizmo would be a second set of handles
     // that cannot be grabbed.

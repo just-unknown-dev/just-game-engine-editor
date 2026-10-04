@@ -17,6 +17,7 @@ import '../profiler/profiler_dock.dart';
 import '../detail_cards.dart';
 import '../../../timeline/timeline_dock.dart';
 import '../../../timeline/timeline_session.dart';
+import '../physics/physics_layers_dock.dart';
 import '../tags/tags_dock.dart';
 import '../world/world_dock.dart';
 
@@ -33,6 +34,7 @@ abstract final class BuiltInDocks {
   static const String animator = 'animator';
   static const String search = 'search';
   static const String tags = 'tags';
+  static const String physics = 'physics';
 
   /// The arg a readout passes to open the Console on one level.
   static const String levelArg = 'level';
@@ -258,6 +260,13 @@ abstract final class BuiltInDocks {
         icon: Icons.label_outline,
         order: 65,
         build: (context, dock) => TagsDock(scope: scope),
+      ),
+      DockDefinition(
+        id: physics,
+        label: 'Physics Layers',
+        icon: Icons.layers_outlined,
+        order: 66,
+        build: (context, dock) => PhysicsLayersDock(scope: scope),
       ),
       DockDefinition(
         id: history,

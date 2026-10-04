@@ -55,18 +55,32 @@ abstract final class InspectorField {
   /// What a text field in the inspector looks like. [prefix] rides inside
   /// the box, before the value — an axis letter, say — so every box on every
   /// row starts at the same place whether or not it has one.
-  static InputDecoration decoration({Widget? prefix, Color? borderColor}) =>
-      InputDecoration(
-        isDense: true,
-        contentPadding: padding,
-        filled: true,
-        fillColor: fill,
-        prefixIcon: prefix,
-        prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-        border: _border(borderColor ?? EditorTheme.border),
-        enabledBorder: _border(borderColor ?? EditorTheme.border),
-        focusedBorder: _border(EditorTheme.primaryMutedLight),
-      );
+  static InputDecoration decoration({
+    Widget? prefix,
+    String? suffix,
+    Color? borderColor,
+  }) => InputDecoration(
+    isDense: true,
+    contentPadding: padding,
+    filled: true,
+    fillColor: fill,
+    prefixIcon: prefix,
+    prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+    // A unit, quieter than the number it follows.
+    suffixIcon: suffix == null
+        ? null
+        : Padding(
+            padding: const EdgeInsets.only(left: 4, right: 8),
+            child: Text(
+              suffix,
+              style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
+            ),
+          ),
+    suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+    border: _border(borderColor ?? EditorTheme.border),
+    enabledBorder: _border(borderColor ?? EditorTheme.border),
+    focusedBorder: _border(EditorTheme.primaryMutedLight),
+  );
 
   /// The same box for what is not a text field.
   static BoxDecoration boxDecoration({Color? borderColor}) => BoxDecoration(

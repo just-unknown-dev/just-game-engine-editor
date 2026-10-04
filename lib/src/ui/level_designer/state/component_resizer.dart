@@ -6,11 +6,11 @@ import 'designer_geometry.dart';
 
 /// Changes how big an entity is, one size-bearing component at a time.
 ///
-/// Resizing is not scaling. A transform scale stretches the drawing but not
-/// the physics collider, which is built from the body's own shape — so a
-/// platform "resized" by scale looks wider than the floor it actually is.
-/// This rewrites the real sizes instead, and keeps the visual and the
-/// collider in agreement.
+/// Resizing is not scaling. A transform scale stretches the drawing and the
+/// collider together, but leaves the numbers saying a platform is 64 wide
+/// while it is 128 — and a texture or outline drawn at that size stretched.
+/// This rewrites the real sizes instead, the visual's and the collider's
+/// alike, and leaves the scale at 1.
 abstract final class ComponentResizer {
   /// Smallest extent a resize will produce, so a hard drag past the opposite
   /// edge cannot collapse an entity to nothing.

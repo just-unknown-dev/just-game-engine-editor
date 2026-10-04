@@ -40,7 +40,7 @@ Entity _block(
 }) => world.createEntityWithComponents([
   TransformComponent(position: Vector3(x, y, 0)),
   RectangleComponent(width: w, height: h),
-  PhysicsBodyComponent(shape: RectangleShape(w, h), isStatic: true),
+  PhysicsBodyComponent(shape: RectangleShape(w, h), bodyType: BodyType.static),
   LayerComponent(),
 ], name: name);
 

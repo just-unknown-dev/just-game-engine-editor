@@ -5,8 +5,10 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../scope/editor_scope.dart';
 import '../serialization/unknown_components.dart';
+import 'physics_checks.dart';
 import 'tag_checks.dart';
 
+export 'physics_checks.dart';
 export 'tag_checks.dart';
 
 enum ProblemSeverity { warning, error }
@@ -106,6 +108,7 @@ abstract final class BuiltInValidators {
     TagChecks.unknownTags,
     TagChecks.spawnPoints,
     TagChecks.unresolvedTargets,
+    ...PhysicsChecks.all,
     drawnWithoutTransform,
     levelMaps,
     unshippedTileAssets,

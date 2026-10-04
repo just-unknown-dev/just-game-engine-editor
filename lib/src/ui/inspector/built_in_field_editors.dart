@@ -11,6 +11,7 @@ import 'field_rows.dart';
 import 'physics_shape_editor.dart';
 import 'collection_editor.dart';
 import 'tag_field_editors.dart';
+import 'physics_field_editors.dart';
 
 /// The editors for the engine's built-in field types, keyed by type id.
 ///
@@ -39,6 +40,7 @@ abstract final class BuiltInFieldEditors {
     jge.FieldTypes.edgeInsets.id: _edgeInsets,
     jge.FieldTypes.unknown.id: _readonly,
     ...TagFieldEditors.all,
+    ...PhysicsFieldEditors.all,
   };
 
   static Widget _edgeInsets(FieldEditorContext c) => EdgeInsetsEditorRow(
@@ -73,6 +75,19 @@ abstract final class BuiltInFieldEditors {
 
     if (c.readOnly) return _readonly(c);
     final scrub = c.scrub;
+    final min = c.field.min, max = c.field.max;
+    if (c.hint.slider && min != null && max != null && !isInt) {
+      return SliderFieldRow(
+        label: c.label,
+        value: shown,
+        min: min,
+        max: max,
+        step: scrub?.step ?? 0.05,
+        decimals: scrub?.fractionDigits ?? 2,
+        unit: scrub?.suffix ?? '',
+        onChanged: (v) => c.onChanged(toValue(v)),
+      );
+    }
     if (scrub != null) {
       return ScrubFieldRow(
         label: c.label,

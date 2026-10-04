@@ -167,7 +167,7 @@ abstract final class BuiltInPrefabs {
       _rect(size, solidColor),
       jge.PhysicsBodyComponent(
         shape: jge.RectangleShape(size.width, size.height),
-        isStatic: true,
+        bodyType: jge.BodyType.static,
         fixedRotation: true,
         restitution: 0,
       ),
@@ -189,7 +189,7 @@ abstract final class BuiltInPrefabs {
       _rect(size, triggerColor, filled: false),
       jge.PhysicsBodyComponent(
         shape: jge.RectangleShape(size.width, size.height),
-        isStatic: true,
+        bodyType: jge.BodyType.static,
         isSensor: true,
         fixedRotation: true,
       ),

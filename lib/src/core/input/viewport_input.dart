@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
+import '../../ui/inspector/physics/collider_edit_session.dart';
 import '../../ui/level_designer/level_designer_session.dart';
 import '../../ui/level_designer/tools/level_tool.dart' show ToolButton;
 import '../../ui/overlay/gizmo_painter.dart';
@@ -30,6 +31,7 @@ class ViewportInput {
     this.isPickable,
     this.transformMode,
     this.transformModes,
+    this.colliderEdit,
     GizmoHitTester? hitTester,
     GizmoDragSolver? dragSolver,
   }) : _worldOf = world,
@@ -49,6 +51,19 @@ class ViewportInput {
 
   /// What the selection can take: All leaves off the handles of the rest.
   final Set<TransformMode> Function()? transformModes;
+
+  /// Editing a body's collider, when that is on: its handles take a press
+  /// before anything else, and the transform gizmo takes none.
+  final ColliderEditSession Function()? colliderEdit;
+
+  /// The collider session, while one is editing something and the editor
+  /// is authoring.
+  ColliderEditSession? get _collider {
+    final session = colliderEdit?.call();
+    return session != null && session.isActive && isAuthoring()
+        ? session
+        : null;
+  }
 
   final World Function() _worldOf;
 
@@ -157,6 +172,18 @@ class ViewportInput {
     final camera = cameraOf();
     camera.viewportSize = canvasSize;
 
+    // A collider being edited: its handles first, before any tool.
+    final collider = _collider;
+    if (collider != null &&
+        collider.onPointerDown(
+          event.localPosition,
+          camera,
+          remove: HardwareKeyboard.instance.isAltPressed,
+        )) {
+      _activeHandle = null;
+      return true;
+    }
+
     // The Level Designer's active tool gets first refusal. A tool that claims
     // the gesture (marquee, draw, paint) handles it entirely; one that
     // declines falls through to the gizmo handling below, which is what keeps
@@ -194,13 +221,20 @@ class ViewportInput {
 
     final hit = hitTester.hitTest(
       event.localPosition,
-      sceneState.selectedEntity.value,
+      // While a collider is edited the gizmo is not there to take hold of.
+      collider != null ? null : sceneState.selectedEntity.value,
       entities,
       camera,
       canvasSize,
       mode: transformMode?.call() ?? TransformMode.all,
       allows: transformModes?.call(),
     );
+
+    // A press on the entity whose collider is edited leaves it where it is.
+    if (collider != null && collider.isEditing(hit.entity)) {
+      _activeHandle = null;
+      return true;
+    }
 
     if (hit.handle == GizmoHandle.none) {
       sceneState.clearSelection();
@@ -236,6 +270,13 @@ class ViewportInput {
   /// Designer's tool may show what a click would do.
   void onPointerHover(PointerHoverEvent event) {
     if (!isActive() || canvasSize == Size.zero || !isAuthoring()) return;
+    final collider = _collider;
+    if (collider != null) {
+      collider.onHover(
+        event.localPosition,
+        cameraOf()..viewportSize = canvasSize,
+      );
+    }
     final designer = designerOf();
     if (designer == null || designer.hasActiveGesture) return;
     final camera = cameraOf()..viewportSize = canvasSize;
@@ -251,6 +292,15 @@ class ViewportInput {
   void onPointerExit() => designerOf()?.onPointerExit();
 
   void onPointerMove(PointerMoveEvent event) {
+    final collider = colliderEdit?.call();
+    if (collider != null && collider.isDragging) {
+      collider.onPointerMove(
+        event.localPosition,
+        cameraOf()..viewportSize = canvasSize,
+        symmetric: HardwareKeyboard.instance.isAltPressed,
+      );
+      return;
+    }
     final designer = designerOf();
     if (designer != null && designer.hasChromeGesture) {
       cameraOf().viewportSize = canvasSize;
@@ -297,6 +347,12 @@ class ViewportInput {
   }
 
   void onPointerUp(PointerUpEvent event) {
+    final collider = colliderEdit?.call();
+    if (collider != null && collider.isDragging) {
+      collider.onPointerUp();
+      _resetPointerDragState();
+      return;
+    }
     final designer = designerOf();
     if (designer != null && designer.hasChromeGesture) {
       designer.onChromePointerUp(
@@ -328,6 +384,7 @@ class ViewportInput {
   void onPointerCancel(PointerCancelEvent event) => _resetPointerDragState();
 
   void _resetPointerDragState() {
+    colliderEdit?.call().cancel();
     designerOf()?.onPointerCancel();
     _activeHandle = null;
     dragSolver.end();

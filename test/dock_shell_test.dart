@@ -284,6 +284,7 @@ void main() {
         'entities',
         'problems',
         'tags',
+        'physics',
         'search',
         'test.waves',
       ]);

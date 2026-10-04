@@ -14,6 +14,7 @@ class NumberScrubConfig {
     this.min,
     this.max,
     this.integer = false,
+    this.suffix,
   });
 
   final double step;
@@ -22,6 +23,9 @@ class NumberScrubConfig {
   final double? min;
   final double? max;
   final bool integer;
+
+  /// The unit shown after the value — `px`, `/s` — or none.
+  final String? suffix;
 }
 
 class ScrubbableNumberField extends StatefulWidget {
@@ -220,6 +224,7 @@ class _ScrubbableNumberFieldState extends State<ScrubbableNumberField> {
               padding: const EdgeInsets.only(left: 8, right: 6),
             )
           : null,
+      suffix: widget.config.suffix,
     ),
     keyboardType: const TextInputType.numberWithOptions(
       signed: true,

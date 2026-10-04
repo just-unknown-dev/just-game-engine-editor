@@ -35,6 +35,7 @@ class ComponentEditorExtras {
     this.section,
     this.fieldEditors = const {},
     this.summary,
+    this.groupLeading = const {},
   });
 
   /// The definition type this decorates.
@@ -53,6 +54,12 @@ class ComponentEditorExtras {
   /// room for no more: the timeline dock names the animation clip this way.
   final String Function(jge.Component component)? summary;
 
+  /// Drawn at the head of a field group, under its title, by the group's
+  /// name — a row of presets that fills the fields under it, say. Shown
+  /// while the group is (it hides with its fields).
+  final Map<String, Widget Function(BuildContext context, jge.Component c)>
+  groupLeading;
+
   /// These extras merged with [other]'s: actions appended, field editors
   /// overlaid, the later section winning.
   ComponentEditorExtras merge(ComponentEditorExtras other) =>
@@ -62,6 +69,7 @@ class ComponentEditorExtras {
         section: other.section ?? section,
         fieldEditors: {...fieldEditors, ...other.fieldEditors},
         summary: other.summary ?? summary,
+        groupLeading: {...groupLeading, ...other.groupLeading},
       );
 }
 
