@@ -7,6 +7,7 @@ import '../../../core/level_map/level_map_documents.dart';
 import '../../../core/level_map/tile_commands.dart';
 import '../../inspector/field_rows.dart';
 import '../../inspector/field_style.dart';
+import '../../inspector/live_preview.dart';
 import '../../widgets/editor_scrollbar.dart';
 import '../../widgets/scrubbable_number_field.dart';
 import '../controls/designer_controls.dart';
@@ -669,6 +670,14 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
             (_) => layer.tint = argb,
             mergeKey: key('tint'),
           ),
+          preview: LivePreview(
+            read: () => layer.tint,
+            write: (v) {
+              layer.tint = v as int?;
+              session.scope.mapDocs.dataFor(target.ref)?.touch();
+            },
+            scope: session.scope,
+          ),
         ),
         DropdownEditorRow(
           label: 'Draws in',
@@ -995,10 +1004,22 @@ class _EntitiesRow extends StatelessWidget {
 
 /// A layer's tint: a swatch, and a button to take it off.
 class _TintRow extends StatelessWidget {
-  const _TintRow({required this.tint, required this.onChanged});
+  const _TintRow({
+    required this.tint,
+    required this.onChanged,
+    required this.preview,
+  });
 
   final int? tint;
   final ValueChanged<int?> onChanged;
+
+  /// Shows a tint on the map while the picker is open.
+  final LivePreview preview;
+
+  static int? _argb(Color c) {
+    final argb = c.toARGB32();
+    return argb == 0xFFFFFFFF ? null : argb;
+  }
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -1016,10 +1037,10 @@ class _TintRow extends StatelessWidget {
           child: MiniColorField(
             color: Color(tint ?? 0xFFFFFFFF),
             inherited: tint == null,
-            onChanged: (c) {
-              final argb = c.toARGB32();
-              onChanged(argb == 0xFFFFFFFF ? null : argb);
-            },
+            title: 'Layer tint',
+            onPreview: (c) => preview.show(_argb(c)),
+            onPreviewEnd: preview.restore,
+            onChanged: (c) => onChanged(_argb(c)),
           ),
         ),
         if (tint != null)

@@ -353,8 +353,13 @@ class EditorStartCard extends StatelessWidget {
               : constraints.maxWidth >= 300
               ? 2
               : 1;
-          final width =
-              (constraints.maxWidth - gap * (columns - 1)) / columns - 0.01;
+          // Never below zero: squeezed by the docks (a phone held upright)
+          // the card can be narrower than its own padding, and a negative
+          // width fails the tiles' constraints.
+          final width = math.max(
+            0.0,
+            (constraints.maxWidth - gap * (columns - 1)) / columns - 0.01,
+          );
           return Wrap(
             spacing: gap,
             runSpacing: gap,

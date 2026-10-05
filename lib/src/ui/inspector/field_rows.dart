@@ -19,22 +19,30 @@ import '../widgets/editor_dropdown.dart';
 import '../kit/buttons.dart';
 import '../kit/controls.dart' show EditorSlider;
 import '../kit/fields.dart';
+import 'colour_picking.dart';
 
 // ── Colour ↔ ShapePaintStyle bridge ──────────────────────────────────────────
 
-jge.ShapePaintStyle selectionToShapePaintStyle(ColourSelection sel) {
-  if (!sel.useGradient) return jge.ShapePaintStyle(color: sel.color);
+/// [sel] as a shape's paint. A gradient's tint becomes the style's colour,
+/// which the engine multiplies over the gradient by [blendMode].
+jge.ShapePaintStyle selectionToShapePaintStyle(
+  ColourSelection sel, {
+  BlendMode blendMode = BlendMode.modulate,
+}) {
+  if (!sel.useGradient) {
+    return jge.ShapePaintStyle(color: sel.color, blendMode: blendMode);
+  }
   final cfg = sel.gradient;
   final colors = cfg.colors.isEmpty ? [sel.color] : cfg.colors;
   jge.ShapeGradient gradient;
   switch (cfg.type) {
     case GradientType.linear:
-      final rad = cfg.angle * math.pi / 180;
+      final (begin, end) = cfg.linearEnds;
       gradient = jge.ShapeGradient.linear(
         colors: colors,
         stops: cfg.stops,
-        begin: Alignment(math.cos(rad + math.pi), math.sin(rad + math.pi)),
-        end: Alignment(math.cos(rad), math.sin(rad)),
+        begin: begin,
+        end: end,
         tileMode: cfg.tileMode,
       );
     case GradientType.radial:
@@ -50,12 +58,21 @@ jge.ShapePaintStyle selectionToShapePaintStyle(ColourSelection sel) {
         colors: colors,
         stops: cfg.stops,
         center: cfg.center,
+        startAngle: cfg.startAngle * math.pi / 180,
+        endAngle: cfg.endAngle * math.pi / 180,
         tileMode: cfg.tileMode,
       );
   }
-  return jge.ShapePaintStyle(color: sel.color, gradient: gradient);
+  return jge.ShapePaintStyle(
+    color: sel.tint,
+    gradient: gradient,
+    blendMode: blendMode,
+  );
 }
 
+/// [style] as the picker's selection. With a gradient, the style's colour
+/// is the tint over it, and the solid colour to switch back to is the
+/// gradient's first.
 ColourSelection shapePaintStyleToSelection(jge.ShapePaintStyle style) {
   final g = style.gradient;
   if (g == null) return ColourSelection(color: style.color);
@@ -68,17 +85,19 @@ ColourSelection shapePaintStyleToSelection(jge.ShapePaintStyle style) {
     case jge.ShapeGradientKind.sweep:
       type = GradientType.sweep;
   }
-  final angle = type == GradientType.linear
-      ? math.atan2(
-              g.end is Alignment ? (g.end as Alignment).y : 0.0,
-              g.end is Alignment ? (g.end as Alignment).x : 1.0,
-            ) *
-            180 /
-            math.pi
-      : 0.0;
+  var angle = 0.0;
+  if (type == GradientType.linear) {
+    final begin = g.begin is Alignment
+        ? g.begin as Alignment
+        : Alignment.centerLeft;
+    final end = g.end is Alignment ? g.end as Alignment : Alignment.centerRight;
+    final d = math.atan2(end.y - begin.y, end.x - begin.x) * 180 / math.pi;
+    angle = d < 0 ? d + 360 : d;
+  }
   return ColourSelection(
-    color: style.color,
+    color: g.colors.isEmpty ? style.color : g.colors.first,
     useGradient: true,
+    tint: style.color,
     gradient: GradientConfig(
       type: type,
       colors: g.colors,
@@ -86,6 +105,8 @@ ColourSelection shapePaintStyleToSelection(jge.ShapePaintStyle style) {
       angle: angle,
       center: g.center is Alignment ? g.center as Alignment : Alignment.center,
       radius: g.radius,
+      startAngle: g.startAngle * 180 / math.pi,
+      endAngle: g.endAngle * 180 / math.pi,
       tileMode: g.tileMode,
     ),
   );
@@ -103,6 +124,8 @@ class ColorEditorRow extends StatelessWidget {
     this.inherited = false,
     this.inheritedFrom = '',
     this.onClear,
+    this.onPreview,
+    this.onPreviewEnd,
   });
 
   final String label;
@@ -124,6 +147,39 @@ class ColorEditorRow extends StatelessWidget {
   /// must always have one.
   final VoidCallback? onClear;
 
+  /// Shows a colour in the scene while the picker is open, unrecorded.
+  /// Without it the scene changes only when the picker closes.
+  final ValueChanged<jge.ShapePaintStyle>? onPreview;
+
+  /// Puts back what [onPreview] replaced; called as the picker closes,
+  /// before [onChanged] records the colour kept.
+  final VoidCallback? onPreviewEnd;
+
+  Future<void> _pick(BuildContext context) async {
+    final view = supportsGradient
+        ? ColourDialogView.both
+        : ColourDialogView.colourOnly;
+    final initial = ColourPickerPanel.normalize(
+      shapePaintStyleToSelection(paintStyle),
+      view,
+    );
+    jge.ShapePaintStyle styleOf(ColourSelection s) =>
+        selectionToShapePaintStyle(s, blendMode: paintStyle.blendMode);
+    final preview = onPreview;
+    final picked = await showEditorColourPicker(
+      context,
+      initial: initial,
+      view: view,
+      title: label,
+      showTint: supportsGradient,
+      onPreview: preview == null ? null : (s) => preview(styleOf(s)),
+    );
+    onPreviewEnd?.call();
+    // Opened and closed without a change is no edit — and must not turn a
+    // colour the field inherits into one set here.
+    if (picked != null && picked != initial) onChanged(styleOf(picked));
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasGradient = supportsGradient && paintStyle.gradient != null;
@@ -139,19 +195,7 @@ class ColorEditorRow extends StatelessWidget {
         ),
         Expanded(
           child: InkWell(
-            onTap: () async {
-              final initial = shapePaintStyleToSelection(paintStyle);
-              final picked = await JustColourDialog.show(
-                context,
-                initialSelection: initial,
-                view: supportsGradient
-                    ? ColourDialogView.both
-                    : ColourDialogView.colourOnly,
-              );
-              if (picked != null) {
-                onChanged(selectionToShapePaintStyle(picked));
-              }
-            },
+            onTap: () => _pick(context),
             borderRadius: BorderRadius.circular(4),
             child: Container(
               height: InspectorField.height,
@@ -1005,10 +1049,23 @@ class MiniColorField extends StatelessWidget {
     required this.onChanged,
     this.showHex = true,
     this.inherited = false,
+    this.title,
+    this.onPreview,
+    this.onPreviewEnd,
   });
 
   final Color color;
   final ValueChanged<Color> onChanged;
+
+  /// What the colour is for, shown at the top of the picker.
+  final String? title;
+
+  /// Shows a colour while the picker is open, unrecorded; see
+  /// [ColorEditorRow.onPreview].
+  final ValueChanged<Color>? onPreview;
+
+  /// Puts back what [onPreview] replaced, before [onChanged] records.
+  final VoidCallback? onPreviewEnd;
 
   /// Whether the value is written beside the swatch. Off where the row is
   /// tight and the swatch says enough.
@@ -1022,15 +1079,17 @@ class MiniColorField extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: () async {
-      final picked = await JustColourDialog.show(
+      final preview = onPreview;
+      final picked = await showEditorColourPicker(
         context,
-        initialSelection: shapePaintStyleToSelection(
-          jge.ShapePaintStyle(color: color),
-        ),
+        initial: ColourSelection(color: color),
         view: ColourDialogView.colourOnly,
+        title: title,
+        onPreview: preview == null ? null : (s) => preview(s.color),
       );
-      if (picked != null) {
-        onChanged(selectionToShapePaintStyle(picked).color);
+      onPreviewEnd?.call();
+      if (picked != null && picked.color.toARGB32() != color.toARGB32()) {
+        onChanged(picked.color);
       }
     },
     borderRadius: BorderRadius.circular(InspectorField.radius),

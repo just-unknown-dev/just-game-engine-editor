@@ -93,6 +93,10 @@ export 'src/ui/inspector/physics/physics_body_extras.dart';
 export 'src/ui/inspector/physics/collider_edit_session.dart';
 export 'src/ui/overlay/docks/physics/physics_layers_dock.dart';
 export 'src/core/physics/project_physics_layers.dart';
+export 'src/core/colours/project_colours.dart';
+export 'src/core/theme/editor_material_theme.dart';
+export 'src/ui/inspector/colour_picking.dart';
+export 'src/ui/inspector/live_preview.dart';
 export 'src/core/physics/layer_refactor.dart';
 export 'src/ui/inspector/built_in_field_editors.dart';
 

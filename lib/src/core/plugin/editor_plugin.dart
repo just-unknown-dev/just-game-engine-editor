@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -316,7 +317,21 @@ class JustGameEditorPlugin implements EnginePlugin {
   LogicalKeyboardKey get toggleKey => _toggleKey;
   LogicalKeyboardKey get statusPanelToggleKey => _statusPanelToggleKey;
 
+  /// Whether the editor can run here: on a desktop — Windows, macOS or
+  /// Linux — launched from the project folder, where the project's files
+  /// are on disk to read and save.
+  ///
+  /// A phone, a tablet or the web has only the copies of the assets packed
+  /// into the app, read-only, so there is no scene to list and nowhere to
+  /// save one. [register] returns null there, and a host that wants to say
+  /// why asks this.
+  static bool get supportsPlatform =>
+      !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+
   /// Factory for debug-only plugin registration.
+  ///
+  /// Null in a release build, and where the editor cannot run
+  /// ([supportsPlatform]): the host then shows just the game.
   static Future<JustGameEditorPlugin?> register({
     required Engine engine,
     EditorScope? scope,
@@ -332,6 +347,13 @@ class JustGameEditorPlugin implements EnginePlugin {
     bool startVisible = true,
   }) async {
     if (!kDebugMode) return null;
+    if (!supportsPlatform) {
+      debugPrint(
+        '[JustGameEditor] not started: the editor edits the project files '
+        'on disk and needs a desktop (Windows, macOS or Linux).',
+      );
+      return null;
+    }
 
     final plugin = JustGameEditorPlugin(
       engine: engine,
@@ -766,6 +788,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     LevelMapFiles.suffix,
     LevelMapFiles.legacySuffix,
     '/scenes.json',
+    '/palettes.json',
   ];
 
   /// Whether [path] is a sprite atlas: a `.json` that is none of the

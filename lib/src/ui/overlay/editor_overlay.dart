@@ -516,7 +516,14 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
                           width: 2,
                         ),
                 ),
-                child: AbsorbPointer(absorbing: true, child: widget.gameChild),
+                child: AbsorbPointer(
+                  absorbing: true,
+                  // What the colour picker's eyedropper reads pixels from.
+                  child: RepaintBoundary(
+                    key: widget.plugin.scope.viewportCaptureKey,
+                    child: widget.gameChild,
+                  ),
+                ),
               ),
             ),
           ),

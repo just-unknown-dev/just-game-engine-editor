@@ -7,6 +7,7 @@ import 'package:just_storage/just_storage.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../validation/scene_validator.dart';
+import '../colours/project_colours.dart';
 import '../../extension/editor_module.dart';
 import '../../ui/level_designer/state/built_in_prefabs.dart';
 import '../../ui/level_designer/state/layer_preset.dart';
@@ -176,6 +177,15 @@ class EditorScope {
           context: () => engine?.context ?? _world?.context,
         )..load(),
         dispose: (l) => l.dispose(),
+      )
+      ..registerLazySingleton<ProjectColours>(
+        () => ProjectColours(
+          path: ProjectColours.pathFor(scenesRoot: scenesRoot),
+          // A scope given its own settings store is a test's: it keeps its
+          // hands off this machine's storage.
+          storage: settingsStore == null ? JustStorage.standard : null,
+        )..load(),
+        dispose: (c) => c.dispose(),
       );
     this.modules.registerAll(modules);
     reload();
@@ -635,6 +645,14 @@ class EditorScope {
   /// change is saved and reaches the running game.
   ProjectPhysicsLayers get physicsLayers =>
       container.get<ProjectPhysicsLayers>();
+
+  /// The palettes and gradients the project keeps, and this user's recent
+  /// colours: what every colour picker in the editor offers.
+  ProjectColours get colours => container.get<ProjectColours>();
+
+  /// Around the game as the viewport shows it, so the colour picker's
+  /// eyedropper can read a pixel of it. Set on the viewport by the overlay.
+  final GlobalKey viewportCaptureKey = GlobalKey(debugLabel: 'viewport');
 
   /// Finds and rewrites tags in saved scenes and timelines, through
   /// [definitions].

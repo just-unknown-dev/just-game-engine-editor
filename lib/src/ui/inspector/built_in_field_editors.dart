@@ -354,6 +354,8 @@ abstract final class BuiltInFieldEditors {
       inheritedFrom: set ? '' : (inherited?.from ?? 'not set'),
       onClear: set && inherited != null ? () => c.onChanged(null) : null,
       onChanged: (s) => c.onChanged(s.color),
+      onPreview: c.preview == null ? null : (s) => c.preview!.show(s.color),
+      onPreviewEnd: c.preview?.restore,
     );
   }
 
@@ -364,5 +366,7 @@ abstract final class BuiltInFieldEditors {
         : const jge.ShapePaintStyle(),
     supportsGradient: true,
     onChanged: c.onChanged,
+    onPreview: c.preview?.show,
+    onPreviewEnd: c.preview?.restore,
   );
 }

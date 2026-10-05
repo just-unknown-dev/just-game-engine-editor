@@ -19,6 +19,7 @@ import 'component_extras.dart';
 import '../widgets/scrubbable_number_field.dart';
 import 'field_editor.dart';
 import 'field_rows.dart';
+import 'live_preview.dart';
 
 /// One inspector section per component on [entity], built from each
 /// component's definition. A component with no definition (and no legacy
@@ -540,6 +541,17 @@ class DefinitionSection extends StatelessWidget {
         for (final e in (world ?? scope.world).query([jge.TransformComponent]))
           if (e.isActive && e.name != null) e.name!,
       ],
+      preview: field.write == null
+          ? null
+          : LivePreview(
+              read: () => field.read(component),
+              write: (v) {
+                field.write!(component, v);
+                (sceneState ?? scope.sceneState).refresh();
+              },
+              scope: scope,
+              history: history ?? scope.history,
+            ),
       onChanged: (next) {
         final write = field.write;
         if (write == null) return;

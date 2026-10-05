@@ -73,9 +73,12 @@ void main() {
       if (root.existsSync()) root.deleteSync(recursive: true);
     });
 
-    Future<void> start(WidgetTester tester) async {
+    Future<void> start(
+      WidgetTester tester, {
+      Size size = const Size(1400, 900),
+    }) async {
       tester.view
-        ..physicalSize = const Size(1400, 900)
+        ..physicalSize = size
         ..devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       final engine = Engine();
@@ -138,6 +141,17 @@ void main() {
       plugin.sceneState.closeScene();
       await tester.pump();
       expect(find.byType(EditorStartCover), findsOneWidget);
+      await stop(tester);
+    });
+
+    testWidgets('squeezed by the docks, a phone held upright, the card '
+        'still lays out', (tester) async {
+      if (!kDebugMode) return;
+      // The docks leave the card narrower than its own padding: the
+      // asset-editor tiles must not ask for a negative width.
+      await start(tester, size: const Size(412, 915));
+      expect(tester.takeException(), isNull);
+      expect(find.text('Just Game Engine Editor'), findsOneWidget);
       await stop(tester);
     });
 

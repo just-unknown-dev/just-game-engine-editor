@@ -5,6 +5,7 @@ import '../../core/scope/editor_scope.dart';
 import '../../core/state/editor_scene_state.dart';
 import '../widgets/scrubbable_number_field.dart' show NumberScrubConfig;
 import 'field_rows.dart';
+import 'live_preview.dart';
 
 /// Builds the inspector control for one field.
 /// What [component]'s unset colour field [field] falls back to, or null
@@ -32,6 +33,7 @@ class FieldEditorContext {
     this.world,
     this.sceneState,
     this.scope,
+    this.preview,
   });
 
   /// The definition field being edited: name, kind, limits, read/write.
@@ -69,6 +71,11 @@ class FieldEditorContext {
   /// The editor the inspector belongs to — its tag list, its spawners.
   /// Null where there is none to ask.
   final EditorScope? scope;
+
+  /// Shows a value in the scene without recording it, for a control that
+  /// previews as it goes — a colour picker — before [onChanged] records
+  /// the one kept. Null where the field cannot be written.
+  final LivePreview? preview;
 
   /// Label to show: the hint's, else the field name.
   String get label => hint.label ?? field.name;
@@ -108,6 +115,9 @@ class FieldEditorContext {
     world: world,
     sceneState: sceneState,
     scope: scope,
+    // A part writes a different value than the whole; previewing through
+    // the whole's would write the wrong thing.
+    preview: onChanged == null ? preview : null,
   );
 }
 
