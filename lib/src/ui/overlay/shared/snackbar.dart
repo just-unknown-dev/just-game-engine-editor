@@ -30,10 +30,20 @@ extension EditorSnackBarTypeX on EditorSnackBarType {
 
 /// A single step update emitted into an [EditorSnackBarEntry.progressStream].
 class EditorSnackBarStep {
-  const EditorSnackBarStep({required this.message, this.isError = false});
+  const EditorSnackBarStep({
+    required this.message,
+    this.isError = false,
+    this.progress,
+  });
 
   final String message;
   final bool isError;
+
+  /// How far along the task is, 0 to 1, when it knows: the bar then shows
+  /// it instead of running back and forth. A step with the same [message]
+  /// as the one before it replaces that one in the log, so a download can
+  /// report its progress without filling the log.
+  final double? progress;
 }
 
 /// Data object describing a snackbar to show.
@@ -49,11 +59,20 @@ class EditorSnackBarEntry {
     this.type = EditorSnackBarType.info,
     this.duration = const Duration(seconds: 3),
     this.progressStream,
+    this.onCancel,
+    this.sticky = false,
   });
 
   final String message;
   final String? title;
   final EditorSnackBarType type;
+
+  /// When set, a running task shows a Cancel button that calls this.
+  final VoidCallback? onCancel;
+
+  /// A message that stays until it is dismissed — "restart the editor",
+  /// say — rather than going after [duration].
+  final bool sticky;
 
   /// How long a message-only snackbar stays. Ignored when [progressStream]
   /// is provided.
@@ -91,6 +110,19 @@ class EditorSnack {
 
   bool get hasProgress => entry.progressStream != null;
 
+  /// How far along the task is, 0 to 1, when its steps say; null while
+  /// they don't (the bar then runs back and forth).
+  double? get progress {
+    if (_done) return 1;
+    for (final s in _steps.reversed) {
+      if (s.progress != null) return s.progress!.clamp(0.0, 1.0);
+    }
+    return null;
+  }
+
+  /// Asks the task to stop, through [EditorSnackBarEntry.onCancel].
+  void cancel() => entry.onCancel?.call();
+
   /// How long a message stays: its own time, longer with longer timings.
   Duration get shownFor => entry.duration * EditorMetrics.messageTimeScale;
 
@@ -101,12 +133,20 @@ class EditorSnack {
     final stream = entry.progressStream;
     if (stream == null) {
       _done = true;
-      _timer = Timer(shownFor, () => _controller.dismiss(this));
+      if (!entry.sticky) {
+        _timer = Timer(shownFor, () => _controller.dismiss(this));
+      }
       return;
     }
     _sub = stream.listen(
       (step) {
-        _steps.add(step);
+        if (step.progress != null &&
+            _steps.isNotEmpty &&
+            _steps.last.message == step.message) {
+          _steps[_steps.length - 1] = step;
+        } else {
+          _steps.add(step);
+        }
         if (step.isError) _failed = true;
         _controller._publish();
       },
@@ -452,7 +492,7 @@ class _SnackCardState extends State<_SnackCard>
   void initState() {
     super.initState();
     final entry = widget.snack.entry;
-    if (entry.progressStream == null) {
+    if (entry.progressStream == null && !entry.sticky) {
       _left
         ..duration = widget.snack.shownFor
         ..forward();
@@ -556,6 +596,12 @@ class _SnackCardState extends State<_SnackCard>
                           ),
                         ),
                       ),
+                      if (entry.onCancel != null && !snack.isDone)
+                        EditorIconButton(
+                          icon: Icons.stop_circle_outlined,
+                          tooltip: 'Cancel',
+                          onTap: snack.cancel,
+                        ),
                       EditorIconButton(
                         icon: Icons.keyboard_arrow_down_rounded,
                         tooltip: 'Minimise to the status bar',
@@ -572,9 +618,10 @@ class _SnackCardState extends State<_SnackCard>
                 if (snack.hasProgress)
                   _SnackProgressBar(
                     color: accent,
-                    isIndeterminate: !snack.isDone,
+                    value: snack.progress,
+                    isIndeterminate: snack.progress == null,
                   )
-                else
+                else if (!entry.sticky)
                   AnimatedBuilder(
                     animation: _left,
                     builder: (context, _) => _SnackProgressBar(

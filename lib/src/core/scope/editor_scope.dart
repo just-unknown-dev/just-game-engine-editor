@@ -386,6 +386,14 @@ class EditorScope {
   void toggleWorkspaceFullScreen() =>
       workspaceFullScreen.value = !workspaceFullScreen.value;
 
+  /// Reloads what the editor shows from [paths] — project files or
+  /// `packages/<name>/…` keys — after a tool or a module wrote them, each
+  /// kind once. The plugin connects this; before it does, nothing happens.
+  void reloadAssets(Iterable<String> paths) => assetReloader?.call(paths);
+
+  /// What [reloadAssets] calls: set by the editor plugin while it runs.
+  void Function(Iterable<String> paths)? assetReloader;
+
   /// Opens the workspace called [id], on [path] if given. False when no
   /// module provides it.
   ///

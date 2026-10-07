@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
+import '../../core/assets/package_asset_paths.dart';
 import '../../core/constants/editor_constants.dart';
 import '../inspector/field_rows.dart';
 import 'tileset_session.dart';
@@ -28,24 +29,35 @@ class TilesetCut {
 }
 
 /// Every `.png` under [root]/assets, project-relative — the images a
-/// tileset could be cut from. Sprite Studio's `.original.png` backups are
-/// left out.
+/// tileset could be cut from — then those installed packages ship
+/// (`packages/<name>/…`). Sprite Studio's `.original.png` backups are left
+/// out.
 List<String> findImages(String root) {
   final dir = Directory('$root/assets');
-  if (!dir.existsSync()) return const [];
   final out = <String>[];
-  try {
-    for (final f in dir.listSync(recursive: true)) {
-      if (f is! File) continue;
-      final p = f.path.replaceAll(r'\', '/');
-      final lower = p.toLowerCase();
-      if (!lower.endsWith('.png') || lower.endsWith('.original.png')) continue;
-      out.add(p.startsWith('$root/') ? p.substring(root.length + 1) : p);
+  if (dir.existsSync()) {
+    try {
+      for (final f in dir.listSync(recursive: true)) {
+        if (f is! File) continue;
+        final p = f.path.replaceAll(r'\', '/');
+        final lower = p.toLowerCase();
+        if (!lower.endsWith('.png') || lower.endsWith('.original.png')) {
+          continue;
+        }
+        out.add(p.startsWith('$root/') ? p.substring(root.length + 1) : p);
+      }
+    } on FileSystemException {
+      out.clear();
     }
-  } on FileSystemException {
-    return const [];
   }
-  return out..sort();
+  out.sort();
+  return out
+    ..addAll([
+      for (final p in PackageAssetPaths.of(
+        root,
+      ).packageFiles(endings: const ['.png']))
+        if (!p.toLowerCase().endsWith('.original.png')) p,
+    ]);
 }
 
 /// The file name of [path] without its folder or `.png`.

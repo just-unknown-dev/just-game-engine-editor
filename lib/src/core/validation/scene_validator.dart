@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../assets/package_asset_paths.dart';
 import '../scope/editor_scope.dart';
 import '../serialization/unknown_components.dart';
 import 'physics_checks.dart';
@@ -67,15 +68,19 @@ class ValidationContext {
 
   jge.World get world => scope.world;
 
-  /// Whether the project-relative [path] is a file.
+  /// Where the project's packages are, for `packages/<name>/…` paths.
+  PackageAssetPaths get packages => PackageAssetPaths.of(projectRoot);
+
+  /// Whether the project-relative [path] is a file. A `packages/<name>/…`
+  /// path is looked for in that package's folder.
   bool fileExists(String path) =>
-      _fileExists?.call(path) ?? File('$projectRoot/$path').existsSync();
+      _fileExists?.call(path) ?? packages.file(path).existsSync();
 
   /// The text of [path], or null when it cannot be read.
   String? readText(String path) {
     if (_readText != null) return _readText(path);
     try {
-      return File('$projectRoot/$path').readAsStringSync();
+      return packages.file(path).readAsStringSync();
     } on FileSystemException {
       return null;
     }
@@ -120,36 +125,7 @@ abstract final class BuiltInValidators {
   static List<String>? shippedAssets(ValidationContext context) {
     final text = context.readText('pubspec.yaml');
     if (text == null) return null;
-    final out = <String>[];
-    var inFlutter = false;
-    var inAssets = false;
-    var assetsIndent = 0;
-    for (final raw in text.split('\n')) {
-      final line = raw.replaceAll('\r', '');
-      final trimmed = line.trim();
-      if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
-      final indent = line.length - line.trimLeft().length;
-      if (indent == 0) {
-        inFlutter = trimmed == 'flutter:';
-        inAssets = false;
-        continue;
-      }
-      if (!inFlutter) continue;
-      if (trimmed == 'assets:') {
-        inAssets = true;
-        assetsIndent = indent;
-        continue;
-      }
-      if (inAssets && indent <= assetsIndent) inAssets = false;
-      if (inAssets && trimmed.startsWith('-')) {
-        var entry = trimmed.substring(1).trim();
-        if (entry.startsWith('"') || entry.startsWith("'")) {
-          entry = entry.substring(1, entry.length - 1);
-        }
-        out.add(entry);
-      }
-    }
-    return out;
+    return PackageAssetPaths.parseAssetEntries(text);
   }
 
   /// Whether [path] is shipped by one of [assets]: listed itself, or in a
@@ -172,6 +148,27 @@ abstract final class BuiltInValidators {
     final seen = <String>{};
     void check(jge.Entity entity, String path, String what) {
       if (path.isEmpty || jge.TileAssets.isVirtual(path) || !seen.add(path)) {
+        return;
+      }
+      // A package's asset ships when the package is a dependency and its
+      // own pubspec lists the folder.
+      final package = PackageAssetPaths.packageOf(path);
+      if (package != null) {
+        if (context.packages.ships(path) ?? true) return;
+        final known = context.packages.packages.containsKey(package);
+        out.add(
+          SceneProblem(
+            entity: entity,
+            message:
+                '${_nameOf(entity)} uses $what "$path", which the game will '
+                'not find.',
+            hint: known
+                ? 'Package "$package" does not ship that folder: add it '
+                      'under flutter: assets: in the package\'s pubspec.yaml.'
+                : '"$package" is not a dependency of this project: install '
+                      'it from the Asset Store.',
+          ),
+        );
         return;
       }
       if (isShipped(path, shipped)) return;

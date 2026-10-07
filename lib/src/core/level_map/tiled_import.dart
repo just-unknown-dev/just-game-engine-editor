@@ -6,6 +6,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_tiled/just_tiled.dart' as tiled;
 
 import '../../extension/tiled_object_mapper.dart';
+import '../assets/package_asset_paths.dart';
 import '../../ui/level_designer/state/editor_commands.dart';
 import '../../ui/level_designer/state/prefab_registry.dart';
 import '../serialization/scene_codec.dart';
@@ -32,13 +33,16 @@ class TiledFiles {
   final Future<void> Function(String path, List<int> bytes)? _writeBytes;
   final bool Function(String path)? _exists;
 
+  /// [path]'s file: a package's own folder for `packages/<name>/…`.
+  File _file(String path) => PackageAssetPaths.of(root).file(path);
+
   Future<String> read(String path) =>
-      _read?.call(path) ?? File('$root/$path').readAsString();
+      _read?.call(path) ?? _file(path).readAsString();
 
   Future<void> write(String path, String text) async {
     final w = _write;
     if (w != null) return w(path, text);
-    final file = File('$root/$path');
+    final file = _file(path);
     await file.parent.create(recursive: true);
     await file.writeAsString(text);
   }
@@ -47,13 +51,13 @@ class TiledFiles {
   Future<void> writeBytes(String path, List<int> bytes) async {
     final w = _writeBytes;
     if (w != null) return w(path, bytes);
-    final file = File('$root/$path');
+    final file = _file(path);
     await file.parent.create(recursive: true);
     await file.writeAsBytes(bytes);
   }
 
   bool exists(String path) =>
-      _exists?.call(path) ?? File('$root/$path').existsSync();
+      _exists?.call(path) ?? _file(path).existsSync();
 }
 
 class _Provider implements tiled.TsxProvider {

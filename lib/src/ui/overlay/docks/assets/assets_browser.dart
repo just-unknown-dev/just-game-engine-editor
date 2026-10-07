@@ -398,8 +398,11 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
       for (final a in actions)
         item(a.label, a.icon, () => a.run(widget.scope, entry.path)),
       editorMenuDivider(),
-      item('Rename…', Icons.drive_file_rename_outline, () => _rename(entry)),
-      if (!entry.isDirectory)
+      // An installed package's files are its own: use them, don't edit them
+      // here (an update would bring the originals back).
+      if (!entry.isPackage)
+        item('Rename…', Icons.drive_file_rename_outline, () => _rename(entry)),
+      if (!entry.isDirectory && !entry.isPackage)
         item(
           'Duplicate',
           Icons.copy_rounded,
@@ -422,13 +425,15 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
           Icons.launch_rounded,
           () => _index.openExternally(entry.path),
         ),
-      editorMenuDivider(),
-      item(
-        'Delete',
-        Icons.delete_outline_rounded,
-        () => _delete(entry),
-        color: EditorTheme.error,
-      ),
+      if (!entry.isPackage) ...[
+        editorMenuDivider(),
+        item(
+          'Delete',
+          Icons.delete_outline_rounded,
+          () => _delete(entry),
+          color: EditorTheme.error,
+        ),
+      ],
     ]);
     run?.call();
   }
@@ -575,8 +580,10 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
         ),
         EditorIconButton(
           icon: Icons.create_new_folder_outlined,
-          tooltip: 'New folder',
-          onTap: _newFolder,
+          tooltip: AssetIndex.isPackagePath(_dir)
+              ? "An installed package's folders can't be changed"
+              : 'New folder',
+          onTap: AssetIndex.isPackagePath(_dir) ? null : _newFolder,
         ),
         EditorIconButton(
           icon: Icons.refresh_rounded,
@@ -674,7 +681,16 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
       );
     }
 
-    return SingleChildScrollView(child: node(_index.folder, 0));
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          node(_index.folder, 0),
+          // Installed packages' assets, by the keys the game loads them with.
+          if (_index.hasPackages) node(AssetIndex.packagesFolder, 0),
+        ],
+      ),
+    );
   }
 
   Widget _draggable(AssetEntry entry, Widget child) => entry.isDirectory
@@ -902,12 +918,13 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
                 onTap: () => _showReferences(entry),
               ),
               const Spacer(),
-              EditorIconButton(
-                icon: Icons.delete_outline_rounded,
-                tooltip: 'Delete (to the trash)',
-                color: EditorTheme.error,
-                onTap: () => _delete(entry),
-              ),
+              if (!entry.isPackage)
+                EditorIconButton(
+                  icon: Icons.delete_outline_rounded,
+                  tooltip: 'Delete (to the trash)',
+                  color: EditorTheme.error,
+                  onTap: () => _delete(entry),
+                ),
             ],
           ),
         ],

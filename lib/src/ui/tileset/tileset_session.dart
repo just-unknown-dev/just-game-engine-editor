@@ -1,10 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:ui' as ui;
 import 'dart:ui' show Offset, Rect;
 
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
+
+import '../../core/assets/package_asset_paths.dart';
 
 /// Reads a project-relative file as text.
 typedef TilesetTextReader = Future<String> Function(String path);
@@ -101,7 +102,7 @@ class TilesetSession {
   }
 
   static TilesetTextReader _reader(String root) =>
-      (path) => File('$root/$path').readAsString();
+      (path) => PackageAssetPaths.of(root).file(path).readAsString();
 
   /// The collision kinds its tiles can be given: the edited engine's.
   final MapCollisionKinds collisionKinds;
@@ -249,7 +250,7 @@ class TilesetSession {
     if (write != null) {
       await write(target, text);
     } else {
-      final file = File('$root/$target');
+      final file = PackageAssetPaths.of(root).file(target);
       await file.parent.create(recursive: true);
       await file.writeAsString('$text\n');
     }

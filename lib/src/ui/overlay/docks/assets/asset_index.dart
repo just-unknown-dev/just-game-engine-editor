@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../../core/assets/package_asset_paths.dart';
+
 /// What a file is, as far as the browser cares: how to draw it, what opens
 /// it, what it can be dropped on.
 enum AssetKind {
@@ -76,6 +78,10 @@ class AssetEntry {
 
   AssetKind get kind => AssetKind.of(path, isDirectory: isDirectory);
 
+  /// Whether it belongs to an installed package (`packages/…`): listed so
+  /// it can be used, but not renamed, moved or deleted here.
+  bool get isPackage => AssetIndex.isPackagePath(path);
+
   /// `12 B`, `3.4 KB`, `1.2 MB`.
   String get sizeLabel {
     if (size < 1024) return '$size B';
@@ -103,11 +109,23 @@ class AssetIndex {
   /// Where deleted files go, so a delete can be taken back.
   static const String trashFolder = '.editor_trash';
 
+  /// The folder installed packages' assets are listed under, as their keys
+  /// read: `packages/<name>/…`. It is not a folder on disk.
+  static const String packagesFolder = 'packages';
+
+  /// Whether [path] is in [packagesFolder].
+  static bool isPackagePath(String path) =>
+      path == packagesFolder || path.startsWith('$packagesFolder/');
+
+  /// Where the project's packages are.
+  PackageAssetPaths get packages => PackageAssetPaths.of(projectRoot);
+
   /// Bumped after every scan; what a view listens to.
   final ValueNotifier<int> revision = ValueNotifier(0);
 
   List<AssetEntry> _entries = const [];
   StreamSubscription<FileSystemEvent>? _watch;
+  final Map<String, StreamSubscription<FileSystemEvent>> _packageWatches = {};
   Timer? _rescan;
   bool _scanning = false;
   bool _scanAgain = false;
@@ -116,7 +134,12 @@ class AssetIndex {
 
   int get fileCount => _entries.where((e) => !e.isDirectory).length;
 
-  String absolute(String relative) => '$projectRoot/$relative';
+  /// Whether any installed package ships assets.
+  bool get hasPackages => _entries.any((e) => e.path == packagesFolder);
+
+  /// The file or folder at [relative]: in the project, or — for
+  /// `packages/<name>/…` — in that package's folder.
+  String absolute(String relative) => packages.absolute(relative);
 
   String relative(String absolutePath) {
     final p = absolutePath.replaceAll(r'\', '/');
@@ -157,6 +180,7 @@ class AssetIndex {
           }
         }
       }
+      found.addAll(await _scanPackages());
       found.sort((a, b) {
         if (a.isDirectory != b.isDirectory) return a.isDirectory ? -1 : 1;
         return a.path.toLowerCase().compareTo(b.path.toLowerCase());
@@ -172,19 +196,109 @@ class AssetIndex {
     }
   }
 
+  /// The installed packages' shipped files, under [packagesFolder]: each
+  /// package, its asset folders, and the files directly in them (Flutter
+  /// ships no deeper).
+  Future<List<AssetEntry>> _scanPackages() async {
+    packages.invalidate();
+    final out = <AssetEntry>[];
+    final folders = <String>{};
+    void folderAt(String path) {
+      var at = path;
+      while (at.isNotEmpty && folders.add(at)) {
+        out.add(AssetEntry(path: at, isDirectory: true));
+        final i = at.lastIndexOf('/');
+        at = i < 0 ? '' : at.substring(0, i);
+      }
+    }
+
+    for (final pkg in packages.withAssets) {
+      for (final assetFolder in pkg.assetFolders) {
+        if (!assetFolder.endsWith('/')) continue;
+        final dir = Directory('${pkg.path}/$assetFolder');
+        if (!await dir.exists()) continue;
+        final key =
+            '$packagesFolder/${pkg.name}/'
+            '${assetFolder.substring(0, assetFolder.length - 1)}';
+        folderAt(key);
+        try {
+          await for (final f in dir.list(followLinks: false)) {
+            if (f is! File) continue;
+            final stat = await f.stat();
+            out.add(
+              AssetEntry(
+                path: '$key/${f.uri.pathSegments.last}',
+                isDirectory: false,
+                size: stat.size,
+                modified: stat.modified,
+              ),
+            );
+          }
+        } on FileSystemException {
+          // Unreadable: nothing from it.
+        }
+      }
+    }
+    return out;
+  }
+
   /// Rescans, shortly, whenever something under the folder changes — a save
-  /// from the sprite editor, a file dropped in from outside.
+  /// from the sprite editor, a file dropped in from outside — or a package
+  /// is installed, updated or removed.
   void startWatching() {
     if (_watch != null) return;
     final root = Directory(absolute(folder));
     if (!root.existsSync()) return;
     try {
       _watch = root.watch(recursive: true).listen((_) {
-        _rescan?.cancel();
-        _rescan = Timer(const Duration(milliseconds: 250), scan);
+        _soon();
       }, onError: (_) {});
+      // The store's lockfile and pub's package list say which packages
+      // there are.
+      for (final (dir, name) in [
+        (projectRoot, 'just_store.lock.json'),
+        ('$projectRoot/.dart_tool', 'package_config.json'),
+      ]) {
+        final d = Directory(dir);
+        if (!d.existsSync()) continue;
+        _packageWatches['#$dir'] = d.watch().listen((e) {
+          if (e.path.replaceAll(r'\', '/').endsWith('/$name')) _soon();
+        }, onError: (_) {});
+      }
     } on FileSystemException {
       // Watching is a convenience; Refresh still works.
+    }
+    _watchPackages();
+    revision.addListener(_watchPackages);
+  }
+
+  void _soon() {
+    _rescan?.cancel();
+    _rescan = Timer(const Duration(milliseconds: 250), scan);
+  }
+
+  /// Watches the folders of the packages inside the project (the store's
+  /// items), so an edit there shows like one under assets/.
+  void _watchPackages() {
+    final wanted = {
+      for (final p in packages.withAssets)
+        if (!p.inPubCache) p.path,
+    };
+    for (final path in _packageWatches.keys.toList()) {
+      if (path.startsWith('#') || wanted.contains(path)) continue;
+      _packageWatches.remove(path)?.cancel();
+    }
+    for (final path in wanted) {
+      if (_packageWatches.containsKey(path)) continue;
+      final dir = Directory(path);
+      if (!dir.existsSync()) continue;
+      try {
+        _packageWatches[path] = dir
+            .watch(recursive: true)
+            .listen((_) => _soon(), onError: (_) {});
+      } on FileSystemException {
+        // Refresh still works.
+      }
     }
   }
 
@@ -235,7 +349,17 @@ class AssetIndex {
     return candidate;
   }
 
+  static void _writable(String path) {
+    if (isPackagePath(path)) {
+      throw FileSystemException(
+        "An installed package's files can't be changed here",
+        path,
+      );
+    }
+  }
+
   Future<String> newFolder(String dir, {String name = 'New folder'}) async {
+    _writable(dir);
     final path = '$dir/${freeName(dir, name)}';
     await Directory(absolute(path)).create(recursive: true);
     await scan();
@@ -245,6 +369,7 @@ class AssetIndex {
   /// Renames [path] to [newName] in the same folder. Throws
   /// [FileSystemException] when the name is taken or not a name.
   Future<String> rename(String path, String newName) async {
+    _writable(path);
     final name = newName.trim();
     if (name.isEmpty || name.contains('/') || name.contains(r'\')) {
       throw FileSystemException('Not a file name', name);
@@ -265,6 +390,7 @@ class AssetIndex {
   }
 
   Future<String> duplicate(String path) async {
+    _writable(path);
     final parent = path.substring(0, path.lastIndexOf('/'));
     final name = path.substring(path.lastIndexOf('/') + 1);
     final dot = name.lastIndexOf('.');
@@ -280,6 +406,7 @@ class AssetIndex {
   /// Moves [path] into the project's trash folder rather than deleting it.
   /// The result restores it.
   Future<TrashedAsset> trash(String path) async {
+    _writable(path);
     final stamp = DateTime.now().millisecondsSinceEpoch;
     final kept = '$trashFolder/$stamp/$path';
     final isDir = FileSystemEntity.isDirectorySync(absolute(path));
@@ -325,6 +452,10 @@ class AssetIndex {
   void dispose() {
     _rescan?.cancel();
     _watch?.cancel();
+    for (final w in _packageWatches.values) {
+      w.cancel();
+    }
+    _packageWatches.clear();
     revision.dispose();
   }
 }

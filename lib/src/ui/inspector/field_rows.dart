@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:just_colours/just_colours.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../../core/assets/package_asset_paths.dart';
 import '../../core/constants/editor_constants.dart';
 import '../../core/theme/editor_metrics.dart';
 import '../widgets/scrubbable_number_field.dart';
@@ -1184,23 +1185,30 @@ class _AssetRefEditorRowState extends State<AssetRefEditorRow>
   Future<void> _scanFiles() async {
     final base = Directory.current.path.replaceAll(r'\', '/');
     final assetsDir = Directory('$base/assets');
-    if (!await assetsDir.exists()) return;
     final exts = widget.extensions.map((e) => e.toLowerCase()).toSet();
     final paths = <String>[];
-    await for (final entity in assetsDir.list(
-      recursive: true,
-      followLinks: false,
-    )) {
-      if (entity is File) {
-        final ext = entity.path.split('.').last.toLowerCase();
-        if (exts.contains(ext)) {
-          final relative = entity.path
-              .replaceAll(r'\', '/')
-              .replaceFirst('$base/', '');
-          paths.add(relative);
+    if (await assetsDir.exists()) {
+      await for (final entity in assetsDir.list(
+        recursive: true,
+        followLinks: false,
+      )) {
+        if (entity is File) {
+          final ext = entity.path.split('.').last.toLowerCase();
+          if (exts.contains(ext)) {
+            final relative = entity.path
+                .replaceAll(r'\', '/')
+                .replaceFirst('$base/', '');
+            paths.add(relative);
+          }
         }
       }
     }
+    // Installed packages' assets too, as `packages/<name>/…`.
+    paths.addAll(
+      PackageAssetPaths.of(
+        base,
+      ).packageFiles(endings: [for (final e in exts) '.$e']),
+    );
     paths.sort();
     if (!mounted) return;
     setState(() => _filePaths = paths);

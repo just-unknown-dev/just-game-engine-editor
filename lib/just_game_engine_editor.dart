@@ -13,6 +13,9 @@ export 'src/ui/overlay/shared/snackbar.dart'
         EditorSnackBarStep,
         EditorSnackBarType;
 export 'src/core/plugin/editor_plugin.dart';
+// Where `packages/<name>/…` assets are on disk: the Asset Store's items, and
+// any other package that ships assets.
+export 'src/core/assets/package_asset_paths.dart';
 export 'src/core/play/play_controller.dart';
 export 'src/core/scene/editor_scene.dart';
 export 'src/core/scene/scene_io.dart';

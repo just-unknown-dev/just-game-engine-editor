@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
+import '../../../core/assets/package_asset_paths.dart';
 import '../../../core/constants/editor_constants.dart';
 import '../../../core/level_map/tile_commands.dart';
 import '../../../core/level_map/tile_edit_state.dart';
@@ -326,22 +327,28 @@ class _ThumbPainter extends CustomPainter {
       old.image != image || old.source != source;
 }
 
-/// Every `.tileset.json` under [root]/assets, project-relative.
+/// Every `.tileset.json` under [root]/assets, project-relative, then those
+/// installed packages ship (`packages/<name>/…`).
 List<String> findTilesets(String root) {
   final dir = Directory('$root/assets');
-  if (!dir.existsSync()) return const [];
   final out = <String>[];
-  try {
-    for (final f in dir.listSync(recursive: true)) {
-      if (f is! File) continue;
-      final p = f.path.replaceAll(r'\', '/');
-      if (!p.toLowerCase().endsWith('.tileset.json')) continue;
-      out.add(p.startsWith('$root/') ? p.substring(root.length + 1) : p);
+  if (dir.existsSync()) {
+    try {
+      for (final f in dir.listSync(recursive: true)) {
+        if (f is! File) continue;
+        final p = f.path.replaceAll(r'\', '/');
+        if (!p.toLowerCase().endsWith('.tileset.json')) continue;
+        out.add(p.startsWith('$root/') ? p.substring(root.length + 1) : p);
+      }
+    } on FileSystemException {
+      out.clear();
     }
-  } on FileSystemException {
-    return const [];
   }
-  return out..sort();
+  out.sort();
+  return out
+    ..addAll(
+      PackageAssetPaths.of(root).packageFiles(endings: const ['.tileset.json']),
+    );
 }
 
 /// What the list calls the tileset in [slot].

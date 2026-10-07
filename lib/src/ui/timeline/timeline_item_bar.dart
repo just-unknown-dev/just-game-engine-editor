@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../../core/assets/package_asset_paths.dart';
 import '../../core/constants/editor_constants.dart';
 import 'timeline_menu.dart';
 import 'timeline_session.dart';
@@ -318,14 +319,19 @@ class TimelineItemBar extends StatelessWidget {
     final extensions = track.valueExtensions;
     if (extensions.isEmpty) return const [];
     final assets = Directory('${session.root}/assets');
-    if (!assets.existsSync()) return const [];
     final prefix = '${session.root}/';
     return [
-      for (final f in assets.listSync(recursive: true).whereType<File>())
-        if (f.path.replaceAll('\\', '/') case final path
-            when extensions.any((x) => path.toLowerCase().endsWith('.$x')) &&
-                path != '$prefix${session.path}')
-          path.substring(prefix.length),
+      if (assets.existsSync())
+        for (final f in assets.listSync(recursive: true).whereType<File>())
+          if (f.path.replaceAll('\\', '/') case final path
+              when extensions.any((x) => path.toLowerCase().endsWith('.$x')) &&
+                  path != '$prefix${session.path}')
+            path.substring(prefix.length),
+      // Installed packages' files too, as `packages/<name>/…`.
+      for (final key in PackageAssetPaths.of(
+        session.root,
+      ).packageFiles(endings: [for (final x in extensions) '.$x']))
+        if (key != session.path) key,
     ]..sort();
   }
 }

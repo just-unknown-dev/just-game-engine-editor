@@ -9,6 +9,7 @@ import 'dart:ui' show Offset;
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 
+import '../../core/assets/package_asset_paths.dart';
 import '../../core/scope/editor_scope.dart';
 import '../../core/state/scene_mode_filters.dart';
 import 'dope_sheet.dart' show TimelineMetrics;
@@ -190,7 +191,7 @@ class TimelineSession {
   Future<bool> openFile(String file, {Entity? owner}) async {
     await _leave();
     try {
-      final source = await File('$root/$file').readAsString();
+      final source = await PackageAssetPaths.of(root).file(file).readAsString();
       _show(
         TimelineAsset.parse(
           source,
@@ -317,7 +318,7 @@ class TimelineSession {
     final current = asset.value, file = _path;
     if (current == null || file == null) return false;
     try {
-      final target = File('$root/$file');
+      final target = PackageAssetPaths.of(root).file(file);
       await target.parent.create(recursive: true);
       await target.writeAsString('${current.encode()}\n');
       isDirty.value = false;
@@ -1727,7 +1728,7 @@ class TimelineSession {
   Entity? _scratchOwner;
 
   Future<TimelineAsset> _readTimeline(String file) async => TimelineAsset.parse(
-    await File('$root/$file').readAsString(),
+    await PackageAssetPaths.of(root).file(file).readAsString(),
     kinds: scope.context.trackKinds,
     migrations: scope.context.migrations,
   );

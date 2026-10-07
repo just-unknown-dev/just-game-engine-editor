@@ -414,6 +414,8 @@ class JustGameEditorPlugin implements EnginePlugin {
       timelines: spriteAssets.loadTimeline,
       tileText: spriteAssets.readText,
     );
+    // What a module (the Asset Store, say) calls after writing files.
+    scope.assetReloader = reloadAssets;
     // Tile maps draw in the editor as in the game; their collision is built
     // only in a play-test (see _syncRuntimeSystems).
     // Each only if the game has not added it already.
@@ -1021,7 +1023,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       reloadSprites(path);
     } else if (lower.endsWith('.json')) {
       // Some other data file: nothing a sprite shows.
-    } else if (!_isFont(lower)) {
+    } else if (!_isFont(lower) && !_isAudio(lower)) {
       reloadSprites();
     }
     // And whatever a module shows from it — a theme, a font, a screen.
@@ -1030,10 +1032,57 @@ class JustGameEditorPlugin implements EnginePlugin {
     }
   }
 
+  /// Many files changed at once — a package installed, updated or removed:
+  /// each kind is reloaded once, not once per file.
+  void reloadAssets(Iterable<String> paths) {
+    var sprites = false;
+    var allMaps = false;
+    final maps = <String>{};
+    for (final path in paths) {
+      final lower = path.toLowerCase();
+      if (lower.endsWith('.animator.json')) {
+        reloadAnimators(path);
+      } else if (lower.endsWith('.timeline.json')) {
+        reloadTimelines(path);
+      } else if (lower.endsWith('.tsx') || lower.endsWith('.tsj')) {
+        allMaps = true;
+      } else if (lower.endsWith('.tileset.json') ||
+          LevelMapFiles.isMapFile(lower) ||
+          lower.endsWith('.tmx') ||
+          lower.endsWith('.tmj')) {
+        maps.add(path);
+      } else if (isSpriteAtlasPath(path)) {
+        sprites = true;
+      } else if (!lower.endsWith('.json') &&
+          !_isFont(lower) &&
+          !_isAudio(lower)) {
+        sprites = true;
+      }
+    }
+    if (allMaps) {
+      reloadLevelMaps();
+    } else {
+      maps.forEach(reloadLevelMaps);
+    }
+    if (sprites) reloadSprites();
+    for (final path in paths) {
+      for (final module in scope.modules.all) {
+        module.onAssetChanged(path);
+      }
+    }
+  }
+
   static bool _isFont(String lower) =>
       lower.endsWith('.ttf') ||
       lower.endsWith('.otf') ||
       lower.endsWith('.ttc');
+
+  static bool _isAudio(String lower) =>
+      lower.endsWith('.wav') ||
+      lower.endsWith('.mp3') ||
+      lower.endsWith('.ogg') ||
+      lower.endsWith('.flac') ||
+      lower.endsWith('.m4a');
 
   /// An animator graph changed on disk: animators running it start over
   /// with the new one.
@@ -1931,6 +1980,10 @@ class JustGameEditorPlugin implements EnginePlugin {
     keepsToLevelMap.removeListener(_syncLevelMapFocus);
     playController.state.removeListener(_focusGameOnPlay);
     playController.state.removeListener(_tellModulesPlayState);
+    // Tear-offs of one method on one object are equal, not identical.
+    if (scope.assetReloader == reloadAssets) {
+      scope.assetReloader = null;
+    }
     if (_loaders case final loaders?) {
       _loaders = null;
       loaders.restore();

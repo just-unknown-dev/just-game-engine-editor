@@ -5,6 +5,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/services.dart' show AssetBundle, rootBundle;
 import 'package:just_game_engine/just_game_engine.dart';
 
+import 'package_asset_paths.dart';
+
 /// Reads sprites from the project's files instead of the asset bundle.
 ///
 /// The bundle is a snapshot from when the app was built: a sheet a tool saved
@@ -42,7 +44,9 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
   final Map<String, Future<ui.Image>> _images = {};
   final Map<String, Future<SpriteAtlas>> _atlases = {};
 
-  File _file(String path) => File('$root/${path.replaceAll(r'\', '/')}');
+  /// The project file for [path] — a package's own folder for
+  /// `packages/<name>/…`, wherever the package is installed.
+  File _file(String path) => PackageAssetPaths.of(root).file(path);
 
   /// Loads once per path. A failure is not remembered: the file may appear.
   Future<T> _once<T>(

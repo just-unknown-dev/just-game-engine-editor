@@ -7,6 +7,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../ui/level_designer/state/editor_history.dart';
+import '../assets/package_asset_paths.dart';
 import '../state/editor_scene_state.dart';
 import 'tile_commands.dart';
 
@@ -244,7 +245,7 @@ class LevelMapDocuments {
 
   /// Writes [data] to the project file [path].
   Future<void> writeMap(String path, LevelMapData data) async {
-    final file = File('$projectRoot/$path');
+    final file = PackageAssetPaths.of(projectRoot).file(path);
     await file.parent.create(recursive: true);
     await file.writeAsString(
       const JsonEncoder.withIndent('  ').convert(data.toJson()),
