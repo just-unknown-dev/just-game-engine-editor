@@ -1,6 +1,6 @@
 name: just_game_engine_editor
 description: "Developer-only runtime level editor scaffolding for just_game_engine."
-version: 0.0.1
+version: 0.1.0
 homepage: https://justunknown.com
 publish_to: none
 
@@ -11,11 +11,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  just_game_engine: ^1.6.0
-  just_inputs: ^0.0.1
+  just_game_engine: ^2.0.0
+  just_tiled: ^0.4.0
+  just_signals: ^1.0.2
+  just_di: ^1.0.0
   just_debugger: ^0.0.1
   just_colours: ^0.1.0
-  just_database: ^1.4.2
   just_storage: ^1.2.1
   path_provider: ^2.1.2
 
