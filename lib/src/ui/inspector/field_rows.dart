@@ -978,18 +978,23 @@ class MiniNumberField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
+    // Kept on Enter, Tab or a click elsewhere, as every typed field is; a
+    // value that is not a number puts back the one it had. Keyed by the
+    // value, so a kept one shows as it is written.
+    return CommitTextField(
       key: ValueKey('$value:$inherited'),
-      initialValue: value.toStringAsFixed(fractionDigits),
+      value: value.toStringAsFixed(fractionDigits),
+      accept: (text) => double.tryParse(text.trim()) != null,
+      onCommit: (text) => onSubmitted(double.parse(text.trim())),
+      keyboardType: const TextInputType.numberWithOptions(
+        signed: true,
+        decimal: true,
+      ),
       style: TextStyle(
         color: inherited ? EditorTheme.textMuted : EditorTheme.textPrimary,
         fontSize: 11,
         fontStyle: inherited ? FontStyle.italic : FontStyle.normal,
       ),
-      onFieldSubmitted: (text) {
-        final parsed = double.tryParse(text.trim());
-        if (parsed != null) onSubmitted(parsed);
-      },
       decoration: InputDecoration(
         isDense: true,
         contentPadding: InspectorField.padding,
@@ -1012,25 +1017,32 @@ class MiniNumberField extends StatelessWidget {
   }
 }
 
-/// A bare line of text: the same box, no label column.
+/// A bare line of text: the same box, no label column. Kept on Enter, Tab or
+/// a click elsewhere, as every typed field is.
 class MiniTextField extends StatelessWidget {
   const MiniTextField({
     super.key,
     required this.value,
     required this.onSubmitted,
+    this.accept,
     this.hint = '',
   });
 
   final String value;
   final ValueChanged<String> onSubmitted;
+
+  /// Whether typed text can be kept; refused, the field shows [value]
+  /// again. See [CommitTextField.accept].
+  final bool Function(String text)? accept;
   final String hint;
 
   @override
-  Widget build(BuildContext context) => TextFormField(
+  Widget build(BuildContext context) => CommitTextField(
     key: ValueKey(value),
-    initialValue: value,
+    value: value,
+    accept: accept,
     style: InspectorField.valueStyle,
-    onFieldSubmitted: onSubmitted,
+    onCommit: onSubmitted,
     decoration: InspectorField.decoration().copyWith(
       hintText: hint.isEmpty ? null : hint,
       hintStyle: TextStyle(

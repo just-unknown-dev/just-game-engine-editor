@@ -2,7 +2,7 @@
 
 ## Install
 
-Add as a `dev_dependency` so tree-shaking strips it from production builds:
+Add it as a `dev_dependency`: only your developer entry point imports it, and a release build then also leaves out the native plugins only the editor brings.
 
 ```yaml
 dev_dependencies:
@@ -10,37 +10,53 @@ dev_dependencies:
     path: packages/just_game_engine_editor
 ```
 
-## 1. Register the plugin and wrap your game widget
+## 1. A developer entry point
+
+Keep the game's `lib/main.dart` free of the editor, and give the editor an entry point of its own — `flutter run -t lib/main_editor.dart -d windows`:
 
 ```dart
+import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
-// Inside your widget build / initState:
-final plugin = await JustGameEditorPlugin.register(engine: engine);
-
-Widget gameView = GameWidget(engine: engine);
-if (plugin != null) {
-  gameView = JustGameEditorOverlay(plugin: plugin, gameChild: gameView);
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (kDebugMode) {
+    await _runEditor();
+  } else {
+    runApp(const MyGame()); // a profile or release build is just the game
+  }
 }
 
-return gameView;
+Future<void> _runEditor() async {
+  final engine = await bootMyGame(); // the same boot the game uses
+  final plugin = await JustGameEditorPlugin.register(
+    engine: engine,
+    modules: [MyGameModule()],
+    onReassemble: (plugin) => rewire(engine, plugin), // see 2.
+  );
+  engine.start();
+  runApp(MaterialApp(
+    home: JustGameEngineEditor(engine: engine, plugin: plugin),
+  ));
+}
 ```
 
-`JustGameEditorPlugin.register()` returns `null` outside debug mode — production builds keep the plain `GameWidget` with no editor overhead.
+`JustGameEngineEditor` registers the plugin with the engine and lays the editor over a `GameWidget`; with a null plugin — no desktop, or not a debug build — it is the plain `GameWidget`. `kDebugMode` is a compile-time constant, so the compiler keeps one branch of that `if` and drops the other: a release build of this file holds no editor. (An early `if (!kDebugMode) { ...; return; }` does not do the same: code after a `return` is still compiled in.)
 
-## 2. Use the adapter shortcut (recommended)
+## 2. Hot reload
 
-`GameEditorAdapter` handles plugin creation, vsync ticking, and render overlay chaining automatically:
+A hot reload (**r**) runs nothing again — not `main`, not a constructor. The editor brings itself and your modules up to date; what your `main` handed it from code, do again in `onReassemble`:
 
 ```dart
-import 'package:just_game_engine_editor/just_game_engine_editor.dart';
-
-// Replace GameWidget with GameEditorAdapter during development:
-return GameEditorAdapter(engine: engine);
+void rewire(Engine engine, JustGameEditorPlugin plugin) {
+  plugin.syncModules([MyGameModule()]); // a module added since launch joins
+  plugin.scope.spawners.value = mySpawners; // read at the next Play
+}
 ```
 
-Switch back to `GameWidget` for release or ship with `GameEditorAdapter` — it degrades to zero overhead in non-debug builds either way.
+Write what is built from code as a getter, not a `static final`: component definitions, prefabs, styles. Make your engine extension a `RefreshableExtension` whose `refresh` registers its definitions with `context.definitions.refresh(...)`, and a field added to a component shows in the inspector after **r**. See the README's *Hot reload and hot restart*.
 
 ## 3. Register your components
 
@@ -103,7 +119,7 @@ final plugin = await JustGameEditorPlugin.register(
 );
 ```
 
-Everything a module contributes lives in the plugin's `EditorScope` and is rebuilt from the modules on every hot reload, so an edited module takes effect without restarting. A component with no registered schema is not shown and is **left out of the save**, with a warning in the log — the shipped game could not have loaded it.
+Everything a module contributes lives in the plugin's `EditorScope` and is rebuilt from the modules on every hot reload, so an edited module takes effect without restarting. Its `onRegister` runs once; put what must be done again after a reload in `onReassemble`. What your `main` hands the editor from code — modules, spawners, systems — a reload does not run again: do it again in `register(onReassemble: ...)` (see the README's *Hot reload and hot restart*). A component with no registered schema is not shown and is **left out of the save**, with a warning in the log — the shipped game could not have loaded it.
 
 ## 4. Open the editor
 

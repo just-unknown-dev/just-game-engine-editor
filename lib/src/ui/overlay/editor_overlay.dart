@@ -141,6 +141,27 @@ class JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
     _applyTheme();
   }
 
+  /// A hot reload. The one place the editor hears of it: everything it
+  /// built from code once — registries, definitions, docks, the palette —
+  /// is built again from the code as it now is, before the frame that
+  /// shows it.
+  @override
+  void reassemble() {
+    super.reassemble();
+    if (!kDebugMode) return;
+    widget.plugin.reassemble();
+    // The palette, as the code now makes it: a picked preset was made again
+    // by the plugin; an accent of the settings' own is made again here.
+    final scope = widget.plugin.scope;
+    if (scope.theme.currentId.value == null) {
+      scope.theme.set(
+        EditorThemeData.classic.withAccent(scope.prefs.settings.value.accent),
+      );
+    }
+    _themeSource = null;
+    _syncTheme();
+  }
+
   EntityOps? _entities;
 
   Future<bool?> _askToRecover(String sceneName, DateTime when) {

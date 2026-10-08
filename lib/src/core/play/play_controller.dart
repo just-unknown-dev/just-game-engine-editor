@@ -19,18 +19,23 @@ typedef EntitySpawner = SpawnFunction;
 /// editor. While a play-test is on, [snapshot] is the level as authored,
 /// which is what a save during play writes.
 class PlayController {
+  /// [spawners], when given, become the scope's ([EditorScope.spawners]).
   PlayController({
     required this.engine,
     required this.scope,
-    this.spawners = const [],
-  });
+    List<Spawner>? spawners,
+  }) {
+    if (spawners != null) scope.spawners.value = spawners;
+  }
 
   final Engine engine;
   final EditorScope scope;
 
   /// What a spawn point's [SpawnComponent.spawner] can name. The app owns
-  /// what gets created; the editor only knows where and when to ask.
-  final List<Spawner> spawners;
+  /// what gets created; the editor only knows where and when to ask. Read
+  /// from the scope at Play, so spawners handed over after a hot reload are
+  /// the ones used.
+  List<Spawner> get spawners => scope.spawners.value;
 
   /// The play-test state; the toolbar and the grid follow it.
   final Signal<EditorPlayState> state = Signal(

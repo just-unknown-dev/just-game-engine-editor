@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/widgets.dart';
 import 'package:just_di/just_di.dart';
 import 'package:just_game_engine/just_game_engine.dart';
@@ -77,12 +78,12 @@ class EditorScope {
     DesignerConfig config = const DesignerConfig(),
     OverlaySettingsStore? settingsStore,
     SelectionHandleLayout handles = const SelectionHandleLayout(),
-    bool isDebug = true,
+    bool? isDebug,
   }) : assert(engine != null || world != null, 'Pass an engine or a world'),
        engine = engine,
        _world = world,
        container = DiContainer(parent: parent),
-       _isDebug = isDebug {
+       _isDebug = isDebug ?? kDebugMode {
     final defs = (engine?.context ?? world!.context).definitions;
     if (engine != null) container.registerSingleton<Engine>(engine);
     container
@@ -221,6 +222,10 @@ class EditorScope {
   final DiContainer container;
 
   final bool _isDebug;
+
+  /// The modules whose [EditorModule.onRegister] has run: once each, however
+  /// many times the registries are rebuilt.
+  final Set<EditorModule> _registered = Set.identity();
 
   /// The engine being edited, or null for a scope over a bare [world].
   final Engine? engine;
@@ -721,9 +726,24 @@ class EditorScope {
     return found;
   }
 
+  /// After a hot reload: the editor's own presets made again, each module
+  /// told ([EditorModule.onReassemble]), then every registry rebuilt from
+  /// the code as it now is ([reload]), and the palette in use shown as it
+  /// now is. `JustGameEditorPlugin.reassemble` calls this.
+  void reassemble() {
+    theme.resetPresets();
+    final context = EditorModuleContext(scope: this, isDebug: _isDebug);
+    for (final module in modules.all) {
+      if (_registered.contains(module)) module.onReassemble(context);
+    }
+    reload();
+    theme.refreshCurrent();
+  }
+
   /// Rebuilds every scope-level registry from scratch: built-ins, then each
   /// module's contributions in registration order. Idempotent, so it is safe
   /// on every hot reload — and nothing a module stopped contributing survives.
+  /// A module's [EditorModule.onRegister] runs on its first pass only.
   void reload() {
     fieldEditors.clear();
     fieldEditors.registerAll(BuiltInFieldEditors.all);
@@ -781,8 +801,11 @@ class EditorScope {
       if (module.protectionRule case final rule?) _protectionRules.add(rule);
       _inspectorSections.addAll(module.inspectorSections);
       module.themePresets.forEach(theme.register);
-      module.onRegister(context);
+      // Once per module: setup that loads files or installs into the engine
+      // must not run again on each rebuild — see [reassemble].
+      if (_registered.add(module)) module.onRegister(context);
     }
+    _registered.retainWhere(modules.all.contains);
     ModuleDataFiles.replace([
       for (final module in modules.all) ...module.dataFileSuffixes,
     ]);

@@ -395,8 +395,15 @@ class _NumberBoxState extends State<_NumberBox> {
   @override
   void initState() {
     super.initState();
+    // Kept on Enter, on leaving — Tab, a click elsewhere — and before Save
+    // while it is typed in.
     _focus.addListener(() {
-      if (!_focus.hasFocus) _submit();
+      if (_focus.hasFocus) {
+        PendingFieldEdits.join(_keep);
+      } else {
+        PendingFieldEdits.leave(_keep);
+        _submit();
+      }
     });
   }
 
@@ -407,13 +414,29 @@ class _NumberBoxState extends State<_NumberBox> {
   }
 
   void _submit() {
+    _keep();
+    // Not a number, or refused: shows what it still is.
+    _text.text = _shown;
+  }
+
+  void _keep() {
     final v = double.tryParse(_text.text.trim());
     if (v != null && v != widget.value) widget.onSubmitted(v);
+  }
+
+  /// Esc, with a change typed: what was there, and out of the field.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (!isEscapeDown(event) || _text.text == _shown) {
+      return KeyEventResult.ignored;
+    }
     _text.text = _shown;
+    _focus.unfocus();
+    return KeyEventResult.handled;
   }
 
   @override
   void dispose() {
+    PendingFieldEdits.leave(_keep);
     _text.dispose();
     _focus.dispose();
     super.dispose();
@@ -435,26 +458,31 @@ class _NumberBoxState extends State<_NumberBox> {
         SizedBox(
           width: widget.width,
           height: 20,
-          child: TextField(
-            controller: _text,
-            focusNode: _focus,
-            onSubmitted: (_) => _submit(),
-            style: TextStyle(
-              color: EditorTheme.textPrimary,
-              fontSize: 11,
-              fontFeatures: [FontFeature.tabularFigures()],
-            ),
-            decoration: InputDecoration(
-              isDense: true,
-              filled: true,
-              fillColor: EditorTheme.inputBg,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 5,
-                vertical: 5,
+          child: Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            onKeyEvent: _onKey,
+            child: TextField(
+              controller: _text,
+              focusNode: _focus,
+              onSubmitted: (_) => _submit(),
+              style: TextStyle(
+                color: EditorTheme.textPrimary,
+                fontSize: 11,
+                fontFeatures: [FontFeature.tabularFigures()],
               ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(3),
-                borderSide: BorderSide.none,
+              decoration: InputDecoration(
+                isDense: true,
+                filled: true,
+                fillColor: EditorTheme.inputBg,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 5,
+                  vertical: 5,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(3),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
           ),

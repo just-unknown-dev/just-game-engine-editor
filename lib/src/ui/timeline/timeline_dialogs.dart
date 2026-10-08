@@ -10,7 +10,7 @@ import '../inspector/tag_field_editors.dart' show TagPicker;
 import '../overlay/docks/shared/dock_widgets.dart';
 import 'timeline_session.dart';
 
-final _body = TextStyle(color: EditorTheme.textSecondary, fontSize: 12);
+TextStyle get _body => TextStyle(color: EditorTheme.textSecondary, fontSize: 12);
 
 InputDecoration _input(String? hint) => InputDecoration(
   isDense: true,

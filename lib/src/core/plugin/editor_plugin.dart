@@ -27,6 +27,8 @@ import '../state/editor_scene_state.dart';
 import '../state/play_snapshot.dart';
 import '../state/transform_mode.dart';
 import '../../ui/overlay/chrome_state.dart';
+import '../../ui/overlay/docks/extra/extra_docks.dart' show ProblemScan;
+import '../../ui/overlay/docks/shell/built_in_docks.dart' show BuiltInDocks;
 import '../../ui/overlay/gizmo_painter.dart';
 import '../../ui/overlay/settings/settings_dialog.dart';
 import '../../ui/level_designer/commands/designer_command.dart';
@@ -48,6 +50,7 @@ import '../constants/editor_constants.dart';
 import '../theme/viewport_look.dart';
 import '../prefs/editor_prefs.dart';
 import '../prefs/recent_scenes.dart';
+import '../../ui/kit/fields.dart' show PendingFieldEdits;
 import '../../ui/kit/key_claim.dart';
 import '../../ui/overlay/settings/overlay_ui_settings.dart';
 
@@ -89,6 +92,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
     Set<String> protectedSceneNames = const {},
     bool startVisible = true,
+    void Function(JustGameEditorPlugin plugin)? onReassemble,
   }) : this._(
          engine: engine,
          scope:
@@ -109,6 +113,7 @@ class JustGameEditorPlugin implements EnginePlugin {
          statusPanelToggleKey: statusPanelToggleKey,
          protectedSceneNames: protectedSceneNames,
          startVisible: startVisible,
+         onReassemble: onReassemble,
        );
 
   JustGameEditorPlugin._({
@@ -116,13 +121,15 @@ class JustGameEditorPlugin implements EnginePlugin {
     required this.scope,
     required bool ownsScope,
     required List<EditorModule> lateModules,
-    required this.spawners,
+    required List<Spawner> spawners,
     required this.bindPhysicsBodies,
     required LogicalKeyboardKey toggleKey,
     required LogicalKeyboardKey statusPanelToggleKey,
     required Set<String> protectedSceneNames,
     required bool startVisible,
+    required void Function(JustGameEditorPlugin plugin)? onReassemble,
   }) : _ownsScope = ownsScope,
+       _onReassemble = onReassemble,
        _toggleKey = toggleKey,
        _startVisible = startVisible,
        _statusPanelToggleKey = statusPanelToggleKey,
@@ -163,7 +170,13 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// (a player, a zombie, ...), the editor just knows where and when to ask.
   /// A spawn point's "Spawns" field offers these, and their [Spawner.tags]
   /// tell the editor which tags exist only once the game is running.
-  final List<Spawner> spawners;
+  ///
+  /// The scope's [EditorScope.spawners], read when they are needed: the
+  /// app's [onReassemble] can hand new ones over after a hot reload.
+  List<Spawner> get spawners => scope.spawners.value;
+
+  /// What the app does after each hot reload — see [register].
+  final void Function(JustGameEditorPlugin plugin)? _onReassemble;
 
   /// [spawners] by id, as the old constructor took them.
   @Deprecated('Use spawners.')
@@ -268,7 +281,6 @@ class JustGameEditorPlugin implements EnginePlugin {
   late final PlayController playController = PlayController(
     engine: engine,
     scope: scope,
-    spawners: spawners,
   );
 
   /// Opens and saves scenes through the scope's store.
@@ -330,8 +342,15 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Factory for debug-only plugin registration.
   ///
-  /// Null in a release build, and where the editor cannot run
+  /// Null in a profile or release build, and where the editor cannot run
   /// ([supportsPlatform]): the host then shows just the game.
+  ///
+  /// [onReassemble] runs after each hot reload, before the editor rebuilds
+  /// its registries: the place for the app to do again what its `main` did
+  /// once and a reload never repeats — register its interface bindings,
+  /// add systems it declared since, hand over its spawners
+  /// ([EditorScope.spawners]) and modules ([syncModules]). Keep it a call to
+  /// a named function, whose body a reload replaces.
   static Future<JustGameEditorPlugin?> register({
     required Engine engine,
     EditorScope? scope,
@@ -345,6 +364,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
     Set<String> protectedSceneNames = const {},
     bool startVisible = true,
+    void Function(JustGameEditorPlugin plugin)? onReassemble,
   }) async {
     if (!kDebugMode) return null;
     if (!supportsPlatform) {
@@ -366,6 +386,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       statusPanelToggleKey: statusPanelToggleKey,
       protectedSceneNames: protectedSceneNames,
       startVisible: startVisible,
+      onReassemble: onReassemble,
     );
     await plugin.onInitialize();
     return plugin;
@@ -438,9 +459,10 @@ class JustGameEditorPlugin implements EnginePlugin {
     playController.state.addListener(_tellModulesPlayState);
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
-    // Register game custom components and wire post-refresh re-registration.
+    // Register game custom components; a component refresh asked for by
+    // hand goes the way a hot reload does.
     _runComponentRegistrar();
-    sceneState.onComponentsRefreshed = _runComponentRegistrar;
+    sceneState.onComponentsRefreshed = reassemble;
     logService.log(
       'Runtime editor initialized.',
       source: 'editor',
@@ -478,9 +500,155 @@ class JustGameEditorPlugin implements EnginePlugin {
     );
   }
 
-  /// Called by [State.reassemble] on hot-reload to pick up edited
-  /// definitions and modules without restarting the app.
-  void reassemble() => _runComponentRegistrar();
+  /// What a hot reload must do for the editor to show the code as it now
+  /// is. The overlay calls it from its [State.reassemble]; a hot reload is
+  /// debug-only, and so is this.
+  ///
+  /// A reload swaps the code but runs nothing again: not `main`, not a
+  /// constructor, not a static initializer. So, in order — the app's own
+  /// wiring ([register]'s `onReassemble`), the component definitions, every
+  /// registry the editor and its modules fill, the Level Designer's tools,
+  /// the built-in docks; then live components whose definition changed are
+  /// brought up to it, and the systems are put back in priority order. Each
+  /// step stands alone: one that throws is logged, and the rest still run.
+  void reassemble() {
+    if (!kDebugMode) return;
+    final before = _definitionShapes();
+    var failed = 0;
+    void step(String what, void Function() run) {
+      try {
+        run();
+      } on Object catch (error, stack) {
+        failed++;
+        logService.log(
+          'Hot reload: $what were not brought up to date — $error',
+          source: 'editor',
+          category: 'reload',
+          level: DebuggerLogLevel.error,
+          details: '$stack',
+        );
+      }
+    }
+
+    step("the game's wiring", () => _onReassemble?.call(this));
+    step('the component definitions', scope.context.refreshDefinitions);
+    step("the editor's registries", scope.reassemble);
+    step("the Level Designer's tools", () => designer.value?.reloadModules());
+    step('the docks', () {
+      BuiltInDocks.invalidate(this);
+      ProblemScan.of(scope).refresh();
+    });
+    var adopted = (types: const <String>[], rebuilt: 0);
+    step('the components in the scene', () {
+      adopted = _adoptChangedDefinitions(before);
+    });
+    step('the systems', () {
+      if (engine.isInitialized) engine.world.sortSystems();
+    });
+    _updateRenderFilter();
+    sceneState.refresh();
+    final changed = adopted.types.isEmpty
+        ? ''
+        : ' Changed: ${adopted.types.join(', ')}'
+              '${adopted.rebuilt == 0 ? '' : ' (${adopted.rebuilt} rebuilt)'}.';
+    logService.log(
+      failed == 0
+          ? 'Hot reload: the editor is up to date.$changed'
+          : 'Hot reload: $failed step(s) failed; see above.$changed',
+      source: 'editor',
+      category: 'reload',
+      level: failed == 0 ? DebuggerLogLevel.info : DebuggerLogLevel.warning,
+    );
+  }
+
+  /// Each definition's fields — name and kind — by type: enough to tell
+  /// which ones a reload changed.
+  Map<String, List<(String, String)>> _definitionShapes() => {
+    for (final d in scope.definitions.definitions)
+      d.type: [for (final f in d.fields) (f.name, f.kind.id)],
+  };
+
+  /// Brings the scene's components up to definitions a reload changed.
+  ///
+  /// A component made before its class gained a field may not be able to
+  /// read it — its value was never set. Such a one is made again from what
+  /// it holds, through the new definition, as Stop puts a component back; the
+  /// new field takes its default. One that reads every field is kept as it
+  /// is, since undo steps hold it. Left alone during a play-test: Stop
+  /// restores through the new definitions anyway.
+  ({List<String> types, int rebuilt}) _adoptChangedDefinitions(
+    Map<String, List<(String, String)>> before,
+  ) {
+    final changed = <String>{};
+    for (final d in scope.definitions.definitions) {
+      final was = before[d.type];
+      if (was == null) continue;
+      final now = [for (final f in d.fields) (f.name, f.kind.id)];
+      if (!listEquals(was, now)) changed.add(d.type);
+    }
+    var rebuilt = 0;
+    if (changed.isEmpty || !engine.isInitialized || playController.isRunning) {
+      return (types: changed.toList(), rebuilt: rebuilt);
+    }
+    for (final entity in engine.world.entities.toList()) {
+      for (final component in entity.components.toList()) {
+        final d = scope.definitions.definitionFor(component);
+        if (d == null || !changed.contains(d.type)) continue;
+        if (_readsEveryField(d, component)) continue;
+        final fields = <String, Object?>{};
+        for (final f in d.fields) {
+          try {
+            fields[f.name] = f.encodeFrom(component);
+          } on Object {
+            // The field it never had: the new instance's default.
+          }
+        }
+        entity.addComponent(d.decode({'type': d.type, 'fields': fields}));
+        rebuilt++;
+      }
+    }
+    return (types: changed.toList(), rebuilt: rebuilt);
+  }
+
+  static bool _readsEveryField(ComponentDefinition d, Component component) {
+    try {
+      for (final f in d.fields) {
+        f.read(component);
+      }
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
+  /// Makes the editor's modules [fresh]: one whose id is new joins, one
+  /// whose id is gone leaves (and is disposed), and one still there keeps
+  /// its instance — and with it whatever it holds — unless [fresh] has an
+  /// instance of another class under that id. The registries are rebuilt
+  /// only when something changed.
+  ///
+  /// For the app's `onReassemble` ([register]), handing over its module
+  /// list as the code now makes it, so a module added to `main` shows after
+  /// a hot reload. A changed constructor argument of a module that stays
+  /// still needs a hot restart.
+  void syncModules(List<EditorModule> fresh) {
+    final ids = {for (final m in fresh) m.id};
+    var changed = false;
+    for (final old in scope.modules.all) {
+      if (!ids.contains(old.id)) {
+        scope.modules.unregister(old.id);
+        changed = true;
+      }
+    }
+    for (final module in fresh) {
+      final old = scope.modules.byId(module.id);
+      if (old != null && old.runtimeType == module.runtimeType) continue;
+      old?.dispose();
+      scope.modules.register(module);
+      changed = true;
+    }
+    if (changed) scope.reload();
+  }
 
   void _attachDebuggerIfReady() {
     if (_isDebuggerAttached || !engine.isInitialized) return;
@@ -737,7 +905,12 @@ class JustGameEditorPlugin implements EnginePlugin {
       gridSize: gridSize.value,
     );
     final commands = scope.commands;
-    // Save works even from inside a text field.
+    // Save works even from inside a text field — with what was typed there,
+    // kept first as leaving the field would keep it, not the value before.
+    if (commands.resolve(key, context.modifiers)?.scope ==
+        CommandScope.always) {
+      PendingFieldEdits.flush();
+    }
     if (commands.dispatch(key, context, scopes: const {CommandScope.always})) {
       return true;
     }

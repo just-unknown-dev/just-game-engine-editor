@@ -24,7 +24,7 @@ just_game_engine_editor/
     │   ├── dialogs/         ← AddComponentPicker, CreateSceneOverlay
     │   ├── widgets/         ← ScrubbableNumberField and shared widgets
     │   └── theme/           ← EditorTheme (colour palette)
-    ├── integration/         ← GameEditorAdapter (drop-in GameWidget replacement)
+    ├── integration/         ← JustGameEngineEditor (drop-in GameWidget replacement)
     └── debugger/            ← EngineDebugger bridge
 ```
 
@@ -34,11 +34,11 @@ just_game_engine_editor/
 The central orchestrator (`lib/src/core/plugin/editor_plugin.dart`). Implements `EnginePlugin` and wires together all editor subsystems.
 
 **Lifecycle:**
-- `register(engine)` — debug-gated factory; returns `null` in release builds
+- `register(engine)` — debug-gated factory; returns `null` in profile and release builds
 - `onInitialize()` — registers ECS systems, attaches debugger, loads component registry
 - `onUpdate(dt)` — ticks editor state each frame
 - `onRender(canvas)` — draws gizmos and grid overlay
-- `reassemble()` — rebuilds the scope's registries from the modules on hot-reload
+- `reassemble()` — called by the overlay's `State.reassemble` on a hot reload: the app's `onReassemble`, the component definitions (`EngineContext.refreshDefinitions`), the scope's registries (`EditorScope.reassemble`), the designer's tools, the built-in docks, and live components a changed definition no longer fits (see the README's *Hot reload and hot restart*)
 
 **Entity operations:** `createEntity`, `deleteEntity`, `createGroup`, `reparentEntity`, `copyEntity`, `pasteEntity`
 
@@ -64,7 +64,7 @@ All editor state is `just_signals`: `Signal` fields on the services (`PlayContro
 - **Grid snapping:** configurable grid size with automatic position/scale quantization
 
 ### `EditorScope`
-Everything one editor owns — component definitions, the `SceneCodec` and `SceneStore`, the field-editor, extras, prefab, layer, command and module registries, the log and the `EditorSceneState` — in a `just_di` container (`lib/src/core/scope/editor_scope.dart`). There are no process-wide registries: two scopes share nothing, and `reload()` rebuilds every registry from the built-ins and the registered `EditorModule`s, so nothing accumulates across hot reloads. `EditorScopeProvider` makes it available to a widget subtree.
+Everything one editor owns — component definitions, the `SceneCodec` and `SceneStore`, the field-editor, extras, prefab, layer, command and module registries, the log and the `EditorSceneState` — in a `just_di` container (`lib/src/core/scope/editor_scope.dart`). There are no process-wide registries: two scopes share nothing, and `reload()` rebuilds every registry from the built-ins and the registered `EditorModule`s, so nothing accumulates across hot reloads; a module's `onRegister` runs on its first pass only, and `reassemble()` (a hot reload) runs each module's `onReassemble` and remakes the theme presets before rebuilding. `EditorScopeProvider` makes it available to a widget subtree.
 
 ### The Level Designer's contribution points
 An `EditorModule` (`lib/src/extension/editor_module.dart`) declares what it adds and the scope folds it in on every `reload()`: prefabs and `prefabCategories` (what a prefab builds is placed under the Level Map, and `PrefabDefinition.depth` fixes the depth it goes to — see below), per-session `createTools` and the `toolGroups` they stand under, `overlays` (an `InteractiveOverlay` also takes pointer input, offered topmost-first before any tool — the rulers and minimap are two), `createSnapProviders` (resolved by priority against the entity and grid providers), `createSessionState` (reached from a tool through `ToolContext.stateOf<T>()`, kept across reloads), `saveEditorData`/`restoreEditorData` (namespaced by module id in the scene file's `editor` section), `commands` and `keyBindings` (a `CommandRegistry` per scope; the session and the plugin dispatch keys through it, and a module's chord beats a built-in's), `statusControls` and `designerPanels`. `prefabs` count only while their module is the Level Designer (`providesLevelDesigner`, picked with the designer switch); `sharedPrefabs` are offered by every Level Designer, whichever module is designing, and do not make their module a designer — the Interface module's Text is one. `DesignerConfig` and `SelectionHandleLayout` are scope services for what used to be literals. The designer's cells are a `GridTopology` (`lib/src/ui/level_designer/grid/`): `SquareGrid` by default, `HexGrid` when a module's `gridTopology` says so (`HexGridModule` ships in the package); tools reach it as `context.grid`.
@@ -139,8 +139,8 @@ Number input that supports mouse-drag scrubbing in addition to keyboard entry (`
 
 ## Integration Layer
 
-### `GameEditorAdapter`
-Drop-in replacement for `GameWidget` during development (`lib/src/integration/game_editor_adapter.dart`). Internally creates the plugin, drives `onUpdate` via a `Ticker`, and pipes `onRender` into the rendering engine's overlay hook. In non-debug builds it becomes a plain `GameWidget` at compile time.
+### `JustGameEngineEditor`
+Drop-in replacement for `GameWidget` during development (`lib/src/integration/just_game_editor_adapter.dart`). Registers the plugin with `engine.plugins`, which ticks it and draws its overlay, and lays `JustGameEditorOverlay` over the game. With no plugin — a profile or release build, where `register` returns null — it is a plain `GameWidget`.
 
 ## ECS Systems (editor-only)
 

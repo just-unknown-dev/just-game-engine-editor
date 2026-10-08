@@ -10,6 +10,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../core/assets/package_asset_paths.dart';
 import '../../core/constants/editor_constants.dart';
+import '../kit/fields.dart' show PendingFieldEdits, isEscapeDown;
 import 'timeline_menu.dart';
 import 'timeline_session.dart';
 
@@ -370,14 +371,16 @@ class _Suggest extends StatelessWidget {
   );
 }
 
-final _label = TextStyle(color: EditorTheme.textMuted, fontSize: 10);
-final _value = TextStyle(
+TextStyle get _label => TextStyle(color: EditorTheme.textMuted, fontSize: 10);
+TextStyle get _value => TextStyle(
   color: EditorTheme.textPrimary,
   fontSize: 11,
   fontFeatures: [FontFeature.tabularFigures()],
 );
 
-/// A small labelled text box that commits on Enter or on losing focus.
+/// A small labelled text box that commits on Enter or on losing focus — Tab,
+/// a click elsewhere — and before Save while it is typed in. Esc puts back
+/// what was there.
 class TimelineField extends StatefulWidget {
   const TimelineField({
     super.key,
@@ -408,7 +411,12 @@ class _TimelineFieldState extends State<TimelineField> {
   void initState() {
     super.initState();
     _focus.addListener(() {
-      if (!_focus.hasFocus) _submit();
+      if (_focus.hasFocus) {
+        PendingFieldEdits.join(_keep);
+      } else {
+        PendingFieldEdits.leave(_keep);
+        _submit();
+      }
     });
   }
 
@@ -421,14 +429,31 @@ class _TimelineFieldState extends State<TimelineField> {
   }
 
   void _submit() {
-    final v = _text.text.trim();
-    if (v != widget.text) widget.onSubmitted(v);
+    _keep();
     // Whatever was refused shows as it still is.
     if (mounted) _text.text = widget.text;
   }
 
+  /// What was typed, kept — before Save, the field still being typed in,
+  /// keeps it showing.
+  void _keep() {
+    final v = _text.text.trim();
+    if (v != widget.text) widget.onSubmitted(v);
+  }
+
+  /// Esc, with a change typed: what was there, and out of the field.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (!isEscapeDown(event) || _text.text.trim() == widget.text) {
+      return KeyEventResult.ignored;
+    }
+    _text.text = widget.text;
+    _focus.unfocus();
+    return KeyEventResult.handled;
+  }
+
   @override
   void dispose() {
+    PendingFieldEdits.leave(_keep);
     _text.dispose();
     _focus.dispose();
     super.dispose();
@@ -445,28 +470,32 @@ class _TimelineFieldState extends State<TimelineField> {
         SizedBox(
           width: widget.width,
           height: 20,
-          child: TextField(
-            controller: _text,
-            focusNode: _focus,
-            onSubmitted: (_) => _submit(),
-            style: _value,
-            decoration: InputDecoration(
-              isDense: true,
-              filled: true,
-              fillColor: EditorTheme.inputBg,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 5,
-                vertical: 5,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(3),
-                borderSide: BorderSide.none,
-              ),
-            ),
+          child: Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            onKeyEvent: _onKey,
+            child: _box(),
           ),
         ),
         const SizedBox(width: 10),
       ],
+    ),
+  );
+
+  Widget _box() => TextField(
+    controller: _text,
+    focusNode: _focus,
+    onSubmitted: (_) => _submit(),
+    style: _value,
+    decoration: InputDecoration(
+      isDense: true,
+      filled: true,
+      fillColor: EditorTheme.inputBg,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(3),
+        borderSide: BorderSide.none,
+      ),
     ),
   );
 }

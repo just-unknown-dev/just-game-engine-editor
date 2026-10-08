@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../core/constants/editor_constants.dart';
+import '../kit/fields.dart' show PendingFieldEdits, isEscapeDown;
 
 /// Drag-to-scrub configuration for numeric inspector fields.
 class NumberScrubConfig {
@@ -67,6 +68,71 @@ class _ScrubbableNumberFieldState extends State<ScrubbableNumberField> {
   double _dragStartX = 0;
   double _dragStartValue = 0;
 
+  /// The text when the field took the keyboard, or when it last kept a
+  /// value: what is not a change, and what Esc or a typo puts back.
+  String? _kept;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_onFocus);
+  }
+
+  @override
+  void didUpdateWidget(covariant ScrubbableNumberField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode != widget.focusNode) {
+      oldWidget.focusNode.removeListener(_onFocus);
+      widget.focusNode.addListener(_onFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.focusNode.removeListener(_onFocus);
+    PendingFieldEdits.leave(_keep);
+    super.dispose();
+  }
+
+  /// Taking the keyboard remembers what is there; leaving it — Tab, a click
+  /// anywhere else — keeps what was typed, as Enter does. A value typed and
+  /// left used to stay on screen without ever reaching the component.
+  void _onFocus() {
+    if (widget.focusNode.hasFocus) {
+      _kept = widget.controller.text;
+      PendingFieldEdits.join(_keep);
+    } else {
+      PendingFieldEdits.leave(_keep);
+      _keep();
+    }
+  }
+
+  /// Keeps what was typed, once per change: on Enter, on leaving the field,
+  /// and before a command that runs while it is typed in (Save). Text that
+  /// is not a number puts back what was there rather than writing 0.
+  void _keep() {
+    if (!mounted) return;
+    final text = widget.controller.text;
+    if (text == _kept) return;
+    if (double.tryParse(text.trim()) == null) {
+      if (_kept != null) widget.controller.text = _kept!;
+      return;
+    }
+    _commit();
+    _kept = widget.controller.text;
+  }
+
+  /// Esc, with a change typed: what was there, and out of the field. With
+  /// nothing typed Esc is left to whoever wants it.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    final kept = _kept;
+    if (!isEscapeDown(event) || kept == null) return KeyEventResult.ignored;
+    if (widget.controller.text == kept) return KeyEventResult.ignored;
+    widget.controller.text = kept;
+    widget.focusNode.unfocus();
+    return KeyEventResult.handled;
+  }
+
   double _parseCurrentValue() {
     return double.tryParse(widget.controller.text.trim()) ?? 0.0;
   }
@@ -112,6 +178,8 @@ class _ScrubbableNumberFieldState extends State<ScrubbableNumberField> {
 
     widget.controller.text = text;
     widget.onCommit();
+    // Scrubbed is kept: leaving the field after does not keep it again.
+    if (widget.focusNode.hasFocus) _kept = text;
     setState(() {});
   }
 
@@ -213,24 +281,30 @@ class _ScrubbableNumberFieldState extends State<ScrubbableNumberField> {
     );
   }
 
-  Widget _field(bool highlight) => TextField(
-    controller: widget.controller,
-    focusNode: widget.focusNode,
-    style: InspectorField.valueStyle,
-    decoration: InspectorField.decoration(
-      prefix: widget.labelInside
-          ? _handle(
-              highlight: highlight,
-              padding: const EdgeInsets.only(left: 8, right: 6),
-            )
-          : null,
-      suffix: widget.config.suffix,
+  Widget _field(bool highlight) => Focus(
+    canRequestFocus: false,
+    skipTraversal: true,
+    onKeyEvent: _onKey,
+    child: TextField(
+      controller: widget.controller,
+      focusNode: widget.focusNode,
+      style: InspectorField.valueStyle,
+      decoration: InspectorField.decoration(
+        prefix: widget.labelInside
+            ? _handle(
+                highlight: highlight,
+                padding: const EdgeInsets.only(left: 8, right: 6),
+              )
+            : null,
+        suffix: widget.config.suffix,
+      ),
+      keyboardType: const TextInputType.numberWithOptions(
+        signed: true,
+        decimal: true,
+      ),
+      // Enter keeps the value and the field keeps the keyboard. Once: this
+      // and onSubmitted both used to run, writing every Enter twice.
+      onEditingComplete: _keep,
     ),
-    keyboardType: const TextInputType.numberWithOptions(
-      signed: true,
-      decimal: true,
-    ),
-    onSubmitted: (_) => _commit(),
-    onEditingComplete: _commit,
   );
 }

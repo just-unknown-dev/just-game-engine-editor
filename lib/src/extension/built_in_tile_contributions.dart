@@ -388,7 +388,7 @@ class _LevelMapSection extends StatelessWidget {
 
   final jge.LevelMapComponent component;
 
-  static final _text = TextStyle(
+  static TextStyle get _text => TextStyle(
     color: EditorTheme.textSecondary,
     fontSize: 11,
   );

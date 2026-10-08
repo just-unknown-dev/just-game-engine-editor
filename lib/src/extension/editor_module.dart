@@ -30,8 +30,8 @@ class EditorModuleContext {
   /// The world being edited.
   jge.World get world => scope.world;
 
-  /// Always true in practice — the editor does not exist otherwise — but
-  /// explicit beats assumed.
+  /// Whether this is a debug build. Always true in practice — the editor
+  /// does not start otherwise — but explicit beats assumed.
   final bool isDebug;
 }
 
@@ -80,8 +80,10 @@ class DesignerToolContext {
 /// EditorScope(engine: engine, modules: [MyGameModule()]);
 /// ```
 ///
-/// Contributions are re-read on every reload, so an edited module takes
-/// effect on hot reload without restarting.
+/// Contributions are read again after every hot reload, so an edited getter
+/// takes effect without a restart: a new prefab, dock, command or key shows
+/// once the reload is done. See [onRegister] and [onReassemble] for what runs
+/// once and what runs each time.
 abstract class EditorModule {
   /// Stable identifier. Registering twice with the same id replaces the first.
   String get id;
@@ -247,8 +249,17 @@ abstract class EditorModule {
   /// `.json` it does not recognise.
   List<String> get dataFileSuffixes => const [];
 
-  /// Called once per registration pass, after the built-ins are in place.
+  /// Called once, when this module joins an editor, after the built-ins are
+  /// in place. One-time setup belongs here: loading files, installing into
+  /// the engine, recovering from a crash. A hot reload does not call it
+  /// again — see [onReassemble].
   void onRegister(EditorModuleContext context) {}
+
+  /// Called after each hot reload, before the editor reads this module's
+  /// contributions again. For anything [onRegister] set up from code that
+  /// may have changed — a loader it handed out, say — and must be done
+  /// again. Must not undo what a play-test in progress relies on.
+  void onReassemble(EditorModuleContext context) {}
 
   /// Called when a scene finishes loading.
   void onSceneOpened(String sceneName) {}

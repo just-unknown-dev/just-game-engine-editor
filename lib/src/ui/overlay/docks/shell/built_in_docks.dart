@@ -91,6 +91,12 @@ abstract final class BuiltInDocks {
     return _cache[plugin] ??= of(plugin);
   }
 
+  /// Forgets the docks [forPlugin] made, so the next ask makes them from the
+  /// code as it now is: after a hot reload, an edited label or header action
+  /// shows. What they share — the asset index, the frame capture, the undo
+  /// notifier — is kept.
+  static void invalidate(JustGameEditorPlugin plugin) => _cache[plugin] = null;
+
   /// Every dock there is: the editor's, then the modules', by order.
   static List<DockDefinition> allFor(JustGameEditorPlugin plugin) =>
       [...forPlugin(plugin), ...plugin.scope.docks]

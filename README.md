@@ -1,6 +1,6 @@
 # Just Game Engine Editor
 
-A developer-only runtime level editor overlay for [`just_game_engine`](../just_game_engine/). Designed for JIT/debug workflows — hot reload, live ECS state edits, and scene authoring — with zero runtime cost in production builds.
+A developer-only runtime level editor overlay for [`just_game_engine`](../just_game_engine/). It runs in a debug (JIT) build — hot reload and hot restart included, live ECS state edits, and scene authoring — and a profile or release (AOT) build of the game holds none of it.
 
 ## 📚 Documentation
 
@@ -25,25 +25,22 @@ A developer-only runtime level editor overlay for [`just_game_engine`](../just_g
 - **Dock panels** — console, assets, profiler, world, problems, history, search, and a **Timeline**: reusable timelines that animate any component field, with a dope sheet, curve editor, record mode and viewport motion paths
 - **Workspaces** — the Tileset Editor, and any a module brings, open over the editor in one frame (`WorkspaceHeader`): the file, whether it is saved, Save, Undo, Redo, full screen and close. A workspace with unsaved work is asked before another opens over it
 - **The in-game interface is a module** — the editor has no interface editor of its own. Add `UiEditorModule()` from the `just_ui_editor` package to the modules for the game's screens (`assets/ui/*.ui.json`) and themes, their checks in Problems, and a Text prefab in every Level Designer
-- **Hot-reload safe** — every registry is rebuilt from the modules on `reassemble()` without restarting the app
-- **Debug-gated** — all editor code is stripped in release/AOT builds via `kDebugMode`
+- **Hot reload, all the way** — a hot reload (r) brings the registries, the modules' contributions, the component definitions, the built-in docks and the palette up to the code as it now is, and a hot restart (R) starts clean ([below](#hot-reload-and-hot-restart))
+- **Debug only** — the editor runs in a debug (JIT) build; a profile or release (AOT) build of the game holds none of it ([below](#keeping-the-editor-out-of-a-release-build))
 
 ---
 
 ## Install
 
-Add as a `dev_dependency` so tree-shaking strips it from production builds:
-Add as a `dev_dependency` so tree-shaking strips it from production builds:
+Add it as a `dev_dependency`, beside the modules you use: only the developer entry point imports them, and a release build then also leaves out the native plugins only they bring (on Windows and Linux; see [below](#keeping-the-editor-out-of-a-release-build)):
 
 ```yaml
 dev_dependencies:
   just_game_engine_editor:
     path: packages/just_game_engine_editor
-  just_game_engine_editor:
-    path: packages/just_game_engine_editor
 ```
 
-See the [Quick Start Guide](QUICKSTART.md) for wiring up the plugin, the `GameEditorAdapter` shortcut, and registering custom components. Press **F1** at runtime to toggle the editor overlay.
+See the [Quick Start Guide](QUICKSTART.md) for wiring up the plugin, the `JustGameEngineEditor` widget, and registering custom components. Press **F1** at runtime to toggle the editor overlay.
 
 ---
 
@@ -358,16 +355,45 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full package layout — the `Edit
 
 ---
 
-## Debug Gating
+## Hot reload and hot restart
 
-Every public entry point that touches editor state is guarded:
+The editor runs in a debug (JIT) build, so a hot reload (**r**) and a hot restart (**R**) work on the running editor.
 
-```dart
-// In JustGameEditorPlugin.register():
-if (!kDebugMode) return null;
-```
+A hot reload swaps the code but runs nothing again — not `main`, not a constructor, not a static initializer. So the overlay's `State.reassemble` calls `JustGameEditorPlugin.reassemble`, which in turn:
 
-Flutter's tree shaker removes all dead branches in AOT/release builds. As long as you use `GameEditorAdapter` or guard `JustGameEditorOverlay` behind the null-check on `plugin`, the editor contributes zero code or overhead to shipping builds.
+1. calls the app's `onReassemble` (`register(onReassemble: ...)`), for what its `main` did once: register its interface bindings, add systems declared since launch, hand over its spawners (`scope.spawners.value = ...`) and its modules (`plugin.syncModules(...)`);
+2. puts the component definitions in place again (`EngineContext.refreshDefinitions`: the engine's, and each `RefreshableExtension`'s), so a field added to a component shows in the inspector and is saved;
+3. rebuilds every registry from the built-ins and the modules (`EditorScope.reassemble`): docks, commands and keys, toolbar buttons, prefabs, inspector sections, validators, settings pages, theme presets;
+4. reloads the Level Designer's tools, makes the built-in docks again, and re-checks the scene;
+5. brings live components up to a definition that changed — one that cannot read a new field is made again from what it holds; one that can is kept, as undo holds it (not during a play-test: Stop restores through the new definitions) — and puts the systems back in priority order.
+
+Each step stands alone: one that throws is logged in the Console, and the rest still run. The Console says what changed ("Hot reload: the editor is up to date. Changed: PatrolEnemyComponent.").
+
+For this to work, write what is built from code as a getter, not a `static final` (which is built once and kept): component definitions, prefabs, workspaces, styles that read `EditorTheme`. `EditorModule.onRegister` runs once per module — loading files, installing into the engine; `onReassemble` runs after each reload. Tests in the engine and here fail on a `static final` definition or style.
+
+Still a hot restart: a changed argument of a module or system that is already running, taking away an interface binding, and the engine's configuration. A hot restart starts the app afresh — the native physics, audio and gamepad plugins put themselves back as new, so it does not crash or leave the last session's sounds playing.
+
+## Keeping the editor out of a release build
+
+A profile or release (AOT) build of the game holds no editor:
+
+- **The game's entry point never imports it** (`lib/main.dart` in the template; its `test/release_imports_test.dart` walks the import graph).
+- **The editor's entry point is the game outside a debug build.** Make `main` one constant branch, so the compiler drops the other entirely — an early `return` is not enough, since code after it is still compiled in:
+
+  ```dart
+  Future<void> main() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    if (kDebugMode) {
+      await _runEditor(); // boot, register the plugin, runApp(editor)
+    } else {
+      runApp(const MyGame());
+    }
+  }
+  ```
+
+  `JustGameEditorPlugin.register` also returns null outside a debug build, and `JustGameEngineEditor` then renders a plain `GameWidget`.
+- **The editor packages are dev dependencies**, so a Windows or Linux release build leaves out the native plugins only they bring (the Sprite Studio's file dialogs). macOS links every plugin whatever the build (flutter/flutter#163874). A package that is only a dev dependency also has its own assets left out, even under `flutter run`; none of the editor packages has any.
+- **Check the build itself**: the template's `tool/check_release_build.dart --platform <windows|linux|macos|web>`, run right after `flutter build <platform> --release`, looks in the compiled snapshot for the editor's names and in the bundle for its plugins.
 
 ---
 

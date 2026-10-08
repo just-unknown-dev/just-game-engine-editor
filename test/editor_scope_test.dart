@@ -100,7 +100,7 @@ void main() {
     scope.reload();
     scope.reload();
     expect(scope.prefabs.all.length, count);
-    expect(module.registered, 3);
+    expect(module.registered, 1, reason: 'once, however often it is rebuilt');
 
     scope.modules.unregister(module.id);
     scope.reload();

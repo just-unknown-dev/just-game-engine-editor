@@ -110,14 +110,18 @@ class _PropertyTableEditorState extends State<PropertyTableEditor> {
                   )
                 : MiniTextField(
                     value: _show(props.typeOf(name)!, props[name]),
+                    // What does not read as the property's type is not kept:
+                    // the field shows the value it has again, and says why.
+                    accept: (v) {
+                      final type = props.typeOf(name)!;
+                      if (parse(type, v) != null) return true;
+                      widget.onInvalid?.call('"$v" is not a ${type.name}');
+                      return false;
+                    },
                     onSubmitted: (v) {
                       final type = props.typeOf(name)!;
                       final value = parse(type, v);
-                      if (value == null) {
-                        widget.onInvalid?.call('"$v" is not a ${type.name}');
-                        return;
-                      }
-                      widget.onSet(name, value, type);
+                      if (value != null) widget.onSet(name, value, type);
                     },
                   ),
           ),

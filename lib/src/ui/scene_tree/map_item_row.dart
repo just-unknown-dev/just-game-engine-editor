@@ -401,6 +401,13 @@ class _RenameFieldState extends State<_RenameField> {
         );
   bool _done = false;
 
+  /// Leaving the field — Tab, as well as a click elsewhere — keeps the
+  /// name, as Enter does.
+  late final FocusNode _focus = FocusNode()
+    ..addListener(() {
+      if (!_focus.hasFocus) _finish(_text.text);
+    });
+
   void _finish(String? text) {
     if (_done) return;
     _done = true;
@@ -409,6 +416,7 @@ class _RenameFieldState extends State<_RenameField> {
 
   @override
   void dispose() {
+    _focus.dispose();
     _text.dispose();
     super.dispose();
   }
@@ -420,6 +428,7 @@ class _RenameFieldState extends State<_RenameField> {
     },
     child: TextField(
       controller: _text,
+      focusNode: _focus,
       autofocus: true,
       style: TextStyle(fontSize: 11, color: EditorTheme.textPrimary),
       decoration: const InputDecoration(

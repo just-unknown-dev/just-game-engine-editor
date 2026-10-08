@@ -119,11 +119,11 @@ class CollisionEditor extends StatelessWidget {
   }
 }
 
-final TextStyle _label = TextStyle(
+TextStyle get _label => TextStyle(
   fontSize: 11,
   color: EditorTheme.textSecondary,
 );
-final TextStyle _value = TextStyle(
+TextStyle get _value => TextStyle(
   fontSize: 11,
   color: EditorTheme.textPrimary,
 );

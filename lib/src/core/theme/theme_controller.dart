@@ -12,7 +12,9 @@ import 'editor_theme_data.dart';
 /// [EditorThemeScope], which the overlay root provides.
 class ThemeController {
   ThemeController({EditorThemeData initial = EditorThemeData.classic})
-    : current = Signal(initial, debugLabel: 'theme');
+    : current = Signal(initial, debugLabel: 'theme') {
+    _presets.addAll(_builtInPresets());
+  }
 
   /// The five built-in accents, in the order they were once saved by index:
   /// id, label, colour.
@@ -24,7 +26,10 @@ class ThemeController {
     ('mono', 'Mono', Color(0xFFB7BDC8)),
   ];
 
-  final Map<String, ThemePreset> _presets = {
+  final Map<String, ThemePreset> _presets = {};
+
+  /// Made afresh each time, from the palette as the code now has it.
+  static Map<String, ThemePreset> _builtInPresets() => {
     for (final (id, label, accent) in builtIn)
       id: ThemePreset(
         id: id,
@@ -48,6 +53,25 @@ class ThemeController {
 
   /// Adds or replaces a preset.
   void register(ThemePreset preset) => _presets[preset.id] = preset;
+
+  /// Back to the built-in presets only, made again from the code as it now
+  /// is: a hot reload's first step, before the modules register theirs
+  /// anew — so a preset a module no longer offers is gone, and an edited
+  /// palette is the edited one.
+  void resetPresets() {
+    _presets
+      ..clear()
+      ..addAll(_builtInPresets());
+  }
+
+  /// Shows the selected preset's palette as it now is. After
+  /// [resetPresets] the same id can stand for a new palette, which
+  /// [select] would not look at again.
+  void refreshCurrent() {
+    final id = currentId.value;
+    final preset = id == null ? null : _presets[id];
+    if (preset != null) current.value = preset.data;
+  }
 
   /// Switches to the preset with [id]; unknown ids are ignored.
   void select(String id) {

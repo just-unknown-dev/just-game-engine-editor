@@ -2,7 +2,15 @@
 
 ## 0.1.0
 
-First release: a level editor that runs inside a `just_game_engine` game. It needs a desktop (Windows, macOS, Linux) in a debug or profile build; `JustGameEditorPlugin.register` returns null in a release build and on Android, iOS and the web (`supportsPlatform` says which).
+First release: a level editor that runs inside a `just_game_engine` game. It needs a desktop (Windows, macOS, Linux) in a debug build; `JustGameEditorPlugin.register` returns null in a profile or release build and on Android, iOS and the web (`supportsPlatform` says which).
+
+### Hot reload and hot restart
+
+- **A hot reload reaches the editor.** The overlay's `State.reassemble` calls `JustGameEditorPlugin.reassemble`, which brings the game's wiring, the component definitions, every registry, the Level Designer's tools and the built-in docks up to the code as it now is — nothing called it before. A field added to a component shows in the inspector, and a live component that cannot read it is made again from what it holds.
+- **`EditorModule.onRegister` runs once** per module, however often the registries are rebuilt; the new `onReassemble` runs after each hot reload. The Asset Store's install recovery, and the Interface module's font reload and screens-layer switch, no longer repeat on every rebuild.
+- **`register(onReassemble:)`**: what the app does again after each hot reload — its interface bindings, new systems, spawners (`EditorScope.spawners`, read at Play) and modules (`JustGameEditorPlugin.syncModules`).
+- **Built once, never again — fixed**: the built-in prefabs, the Tileset Editor workspace and the frozen inspector, timeline and tileset styles are getters now, so they follow a reload and a theme change; the built-in docks are made again (`BuiltInDocks.invalidate`); theme presets are made again and a module's dropped preset goes (`ThemeController.resetPresets`, `refreshCurrent`).
+- `EditorScope(isDebug:)` follows the build (`kDebugMode`) unless given.
 
 ### Scenes and play-testing
 
@@ -21,6 +29,7 @@ First release: a level editor that runs inside a `just_game_engine` game. It nee
 
 ### Inspector
 
+- **A typed value is kept when the field is left** — Enter, Tab, or a click anywhere else (another field, the viewport, the scene tree) — in every field, numbers included. Number fields (`ScrubbableNumberField`: every number and X·Y·Z row, a Physics Body's collider among them) and the compact `MiniNumberField` / `MiniTextField` used to keep it on Enter alone, leaving the typed number on screen and the component as it was. Esc puts back what was there; text that is not a number does too, rather than writing 0; Enter writes once, not twice; and Save from inside a field (Ctrl+S) keeps what was typed first (`PendingFieldEdits`). `CommitTextField` takes an `accept` check. Beyond the inspector: the Tileset Editor's fields (tile class and probability, offsets, terrain names and colours — the same compact fields), the Timeline's fields (which kept on leaving already, and now take Esc and Save too), and a map layer's rename in the scene tree (now kept on Tab as well). Dialogs, search boxes, "add" boxes and the console keep Enter as their action.
 - **Built from the game's `ComponentDefinition`s**, with an editor for every field type: vectors and related numbers in one row, lists and maps as rows, entity references as pickers, enums as dropdowns.
 - **Colour picker** beside the field, live in the scene, with gradients, project palettes and an eyedropper.
 - **Tags** from the project's `assets/project/tags.json`: tag and target pickers, a header with the entity's tags as chips, and spawners the game registers.

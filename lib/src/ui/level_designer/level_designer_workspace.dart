@@ -181,7 +181,7 @@ class _Header extends StatelessWidget {
   final LevelDesignerSession session;
   final VoidCallback onClose;
 
-  static final TextStyle _title = TextStyle(
+  static TextStyle get _title => TextStyle(
     color: EditorTheme.textBright,
     fontSize: 12,
     fontWeight: FontWeight.w700,

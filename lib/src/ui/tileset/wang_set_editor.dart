@@ -327,11 +327,11 @@ class _WangSetEditorState extends State<WangSetEditor> {
   };
 }
 
-final TextStyle _value = TextStyle(
+TextStyle get _value => TextStyle(
   fontSize: 11,
   color: EditorTheme.textPrimary,
 );
-final TextStyle _muted = TextStyle(fontSize: 11, color: EditorTheme.textMuted);
+TextStyle get _muted => TextStyle(fontSize: 11, color: EditorTheme.textMuted);
 
 class _Heading extends StatelessWidget {
   const _Heading(this.text);

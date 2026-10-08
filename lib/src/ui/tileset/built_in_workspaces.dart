@@ -11,7 +11,7 @@ abstract final class BuiltInWorkspaces {
   /// tileset from an image it is opened on.
   static const String tileset = 'tileset';
 
-  static final List<WorkspaceDefinition> all = [
+  static List<WorkspaceDefinition> get all => [
     WorkspaceDefinition(
       id: tileset,
       label: 'Tileset Editor',

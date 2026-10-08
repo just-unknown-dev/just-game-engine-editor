@@ -102,7 +102,7 @@ abstract final class BuiltInPrefabs {
 
   // ── Shapes ────────────────────────────────────────────────────────────────
 
-  static final _rectangle = PrefabDefinition(
+  static PrefabDefinition get _rectangle => PrefabDefinition(
     id: rectangleId,
     name: 'Rectangle',
     category: 'Shapes',
@@ -113,7 +113,7 @@ abstract final class BuiltInPrefabs {
     build: (position, size) => [..._base(position), _rect(size, shapeColor)],
   );
 
-  static final _circle = PrefabDefinition(
+  static PrefabDefinition get _circle => PrefabDefinition(
     id: circleId,
     name: 'Circle',
     category: 'Shapes',
@@ -134,7 +134,7 @@ abstract final class BuiltInPrefabs {
     ],
   );
 
-  static final _sprite = PrefabDefinition(
+  static PrefabDefinition get _sprite => PrefabDefinition(
     id: spriteId,
     name: 'Sprite',
     category: 'Shapes',
@@ -154,7 +154,7 @@ abstract final class BuiltInPrefabs {
 
   // ── Physics ───────────────────────────────────────────────────────────────
 
-  static final _solid = PrefabDefinition(
+  static PrefabDefinition get _solid => PrefabDefinition(
     id: solidId,
     name: 'Solid',
     category: 'Physics',
@@ -174,7 +174,7 @@ abstract final class BuiltInPrefabs {
     ],
   );
 
-  static final _trigger = PrefabDefinition(
+  static PrefabDefinition get _trigger => PrefabDefinition(
     id: triggerId,
     name: 'Trigger',
     category: 'Physics',
@@ -198,7 +198,7 @@ abstract final class BuiltInPrefabs {
 
   // ── Scene ─────────────────────────────────────────────────────────────────
 
-  static final _empty = PrefabDefinition(
+  static PrefabDefinition get _empty => PrefabDefinition(
     id: emptyId,
     name: 'Empty',
     category: 'Scene',
@@ -217,7 +217,7 @@ abstract final class BuiltInPrefabs {
 
   static const Color _cameraColor = Color(0xFF26C6DA);
 
-  static final _camera = PrefabDefinition(
+  static PrefabDefinition get _camera => PrefabDefinition(
     id: cameraId,
     name: 'Virtual camera',
     category: 'Camera',
@@ -238,7 +238,7 @@ abstract final class BuiltInPrefabs {
     ],
   );
 
-  static final _cameraZone = PrefabDefinition(
+  static PrefabDefinition get _cameraZone => PrefabDefinition(
     id: cameraZoneId,
     name: 'Camera zone',
     category: 'Camera',
@@ -265,7 +265,7 @@ abstract final class BuiltInPrefabs {
     ],
   );
 
-  static final _cameraBounds = PrefabDefinition(
+  static PrefabDefinition get _cameraBounds => PrefabDefinition(
     id: cameraBoundsId,
     name: 'Camera bounds',
     category: 'Camera',
@@ -284,7 +284,7 @@ abstract final class BuiltInPrefabs {
     ],
   );
 
-  static final _targetGroup = PrefabDefinition(
+  static PrefabDefinition get _targetGroup => PrefabDefinition(
     id: targetGroupId,
     name: 'Target group',
     category: 'Camera',
@@ -304,7 +304,7 @@ abstract final class BuiltInPrefabs {
     ],
   );
 
-  static final _dollyCamera = PrefabDefinition(
+  static PrefabDefinition get _dollyCamera => PrefabDefinition(
     id: dollyCameraId,
     name: 'Dolly camera',
     category: 'Camera',
@@ -330,7 +330,7 @@ abstract final class BuiltInPrefabs {
     ],
   );
 
-  static final _spawn = PrefabDefinition(
+  static PrefabDefinition get _spawn => PrefabDefinition(
     id: spawnId,
     name: 'Spawn Point',
     category: 'Scene',
@@ -343,7 +343,7 @@ abstract final class BuiltInPrefabs {
     build: (position, size) => [..._base(position), jge.SpawnComponent()],
   );
 
-  static final _marker = PrefabDefinition(
+  static PrefabDefinition get _marker => PrefabDefinition(
     id: markerId,
     name: 'Region',
     category: 'Scene',

@@ -147,7 +147,7 @@ class TileAnimationEditor extends StatelessWidget {
   }
 }
 
-final TextStyle _label = TextStyle(
+TextStyle get _label => TextStyle(
   fontSize: 11,
   color: EditorTheme.textSecondary,
 );

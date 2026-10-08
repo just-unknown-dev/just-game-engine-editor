@@ -34,15 +34,15 @@ abstract final class InspectorField {
   /// field and fails if this drifts from it.
   static const double height = 33;
 
-  static final Color fill = EditorTheme.inputBg;
+  static Color get fill => EditorTheme.inputBg;
 
-  static final TextStyle labelStyle = TextStyle(
+  static TextStyle get labelStyle => TextStyle(
     color: EditorTheme.textMuted,
     fontSize: 10,
     fontWeight: FontWeight.w500,
   );
 
-  static final TextStyle valueStyle = TextStyle(
+  static TextStyle get valueStyle => TextStyle(
     color: EditorTheme.textPrimary,
     fontSize: fontSize,
   );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/constants/editor_constants.dart';
 import '../../core/theme/editor_metrics.dart';
@@ -135,10 +136,38 @@ class _EditorSearchFieldState extends State<EditorSearchField> {
   );
 }
 
+/// The typed fields that have the keyboard, and what each keeps.
+///
+/// A field keeps what was typed when it is left; a command that runs while
+/// one is still being typed in — Save works even then — calls [flush]
+/// first, so what was typed is in what it acts on rather than lost behind
+/// it. A field [join]s while it has the focus and [leave]s when it goes.
+abstract final class PendingFieldEdits {
+  static final Set<VoidCallback> _keepers = {};
+
+  /// Keeps what every focused field holds, as leaving it would.
+  static void flush() {
+    for (final keep in [..._keepers]) {
+      keep();
+    }
+  }
+
+  /// [keep] is called by [flush] until [leave].
+  static void join(VoidCallback keep) => _keepers.add(keep);
+
+  /// Stops calling [keep].
+  static void leave(VoidCallback keep) => _keepers.remove(keep);
+}
+
+/// Whether [event] is Esc going down: what puts a field's value back.
+bool isEscapeDown(KeyEvent event) =>
+    event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape;
+
 /// A text field that keeps what was typed when Enter is pressed or when it
-/// loses the focus — the one rule every typed field in the editor follows —
-/// and shows a value changed from outside, an undo say, whenever it is not
-/// being typed in.
+/// loses the focus — Tab, a click anywhere else — the one rule every typed
+/// field in the editor follows, and shows a value changed from outside, an
+/// undo say, whenever it is not being typed in. Esc puts back what was
+/// there and leaves the field.
 ///
 /// [onCommit] runs once per change: not again for the focus leaving right
 /// after an Enter, and not at all when the text is what it was.
@@ -147,6 +176,7 @@ class CommitTextField extends StatefulWidget {
     super.key,
     required this.value,
     required this.onCommit,
+    this.accept,
     this.style,
     this.decoration,
     this.keyboardType = TextInputType.text,
@@ -158,6 +188,11 @@ class CommitTextField extends StatefulWidget {
 
   final String value;
   final ValueChanged<String> onCommit;
+
+  /// Whether typed text can be kept — a number that reads as one, say.
+  /// Text it refuses is not passed to [onCommit]: the field shows what it
+  /// had again. Null keeps any text.
+  final bool Function(String text)? accept;
   final TextStyle? style;
 
   /// [editorFieldDecoration] when null.
@@ -208,38 +243,65 @@ class _CommitTextFieldState extends State<CommitTextField> {
   @override
   void dispose() {
     _focus.removeListener(_onFocus);
+    PendingFieldEdits.leave(_commit);
     _ownFocus?.dispose();
     _text.dispose();
     super.dispose();
   }
 
   void _onFocus() {
-    if (!_focus.hasFocus && mounted) _commit();
+    if (_focus.hasFocus) {
+      PendingFieldEdits.join(_commit);
+    } else {
+      PendingFieldEdits.leave(_commit);
+      if (mounted) _commit();
+    }
   }
 
   void _commit() {
     final text = _text.text;
     if (text == _kept) return;
+    if (widget.accept?.call(text) == false) {
+      _text.text = _kept;
+      return;
+    }
     _kept = text;
     widget.onCommit(text);
   }
 
+  /// Esc, with a change typed: what was there, and out of the field. With
+  /// nothing typed Esc is left to whoever wants it — a dialog closing.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (!isEscapeDown(event) || _text.text == _kept) {
+      return KeyEventResult.ignored;
+    }
+    _text.text = _kept;
+    _focus.unfocus();
+    return KeyEventResult.handled;
+  }
+
   @override
-  Widget build(BuildContext context) => TextField(
-    controller: _text,
-    focusNode: _focus,
-    autofocus: widget.autofocus,
-    style:
-        widget.style ?? TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
-    decoration: widget.decoration ?? editorFieldDecoration(),
-    cursorColor: EditorTheme.primaryBright,
-    keyboardType: widget.keyboardType,
-    textAlign: widget.textAlign,
-    minLines: 1,
-    maxLines: widget.maxLines,
-    // Enter keeps the value, even in a field that wraps onto more lines.
-    textInputAction: TextInputAction.done,
-    onSubmitted: (_) => _commit(),
-    onTapOutside: (_) => _focus.unfocus(),
+  Widget build(BuildContext context) => Focus(
+    canRequestFocus: false,
+    skipTraversal: true,
+    onKeyEvent: _onKey,
+    child: TextField(
+      controller: _text,
+      focusNode: _focus,
+      autofocus: widget.autofocus,
+      style:
+          widget.style ??
+          TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
+      decoration: widget.decoration ?? editorFieldDecoration(),
+      cursorColor: EditorTheme.primaryBright,
+      keyboardType: widget.keyboardType,
+      textAlign: widget.textAlign,
+      minLines: 1,
+      maxLines: widget.maxLines,
+      // Enter keeps the value, even in a field that wraps onto more lines.
+      textInputAction: TextInputAction.done,
+      onSubmitted: (_) => _commit(),
+      onTapOutside: (_) => _focus.unfocus(),
+    ),
   );
 }
