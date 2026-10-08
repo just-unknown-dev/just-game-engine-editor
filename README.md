@@ -17,7 +17,7 @@ A developer-only runtime level editor overlay for [`just_game_engine`](../just_g
 - **Accessibility** — text size and bolder text, high contrast, colour-blind safe status colours, reduced motion, longer timings, bigger targets and always-visible keyboard focus
 - **One look throughout** — a kit of buttons, fields, toolbars and dialogs (`lib/src/ui/kit/`, exported) that follows the settings, for a module's docks and panels too
 - **Scene tree** — hierarchical entity list with reparenting, renaming, and multi-select; the Level Map opens to its layers, and each layer to the entities on it
-- **Entity inspector** — property editor generated from each component's runtime definition and its hints
+- **Entity inspector** — property editor generated from each component's runtime definition and its hints; drag a card by its grip, or use its ⋮ menu, to rearrange the components (Transform stays first; the order is saved with the scene)
 - **Physics bodies** — one Body type, only the settings that apply, material presets, Fit to visual, collider handles in the viewport, named collision layers with a Physics Layers dock, and a live readout while playing ([below](#physics-bodies))
 - **Level Designer** — a grouped tool strip with each tool's settings in the status bar, its panel as the right panel's Level tab, and the scene's **Level Map**: its tiles, and everything placed in the designer as an entity under the map, on one of its layers
 - **Scene I/O** — saves a `.level.dart` (spawnable entity code) + `.scene.json` (editor sidecar) pair

@@ -347,8 +347,9 @@ class EntitySpec {
   /// empty — they name entities by id — and a resize would cut a child
   /// loose, or an edit to a parent drop all of its children.
   void applyTo(jge.Entity entity) {
+    final decoded = decode();
     final components = [
-      for (final c in decode())
+      for (final c in decoded)
         if (!_isLink(c)) c,
     ];
     final kept = {for (final c in components) c.componentType};
@@ -361,6 +362,9 @@ class EntitySpec {
     for (final c in components) {
       entity.addComponent(c); // replaces the same component type
     }
+    // In the record's order: a replaced component keeps its old place, and
+    // the order is the entity's, rearranged in the inspector and saved.
+    entity.reorderComponents([for (final c in decoded) c.componentType]);
     entity.name = name;
   }
 
@@ -668,8 +672,13 @@ class RemoveComponentCommand extends EditorCommand {
   /// Notified so the inspector refreshes.
   final EditorSceneState sceneState;
 
+  /// The entity's order before the removal, so undo puts the component
+  /// back in its place rather than at the end.
+  List<Type>? _order;
+
   @override
   void redo() {
+    _order = entity.componentTypes;
     entity.removeComponentByType(component.componentType);
     sceneState
       ..markDirty()
@@ -679,6 +688,46 @@ class RemoveComponentCommand extends EditorCommand {
   @override
   void undo() {
     entity.addComponent(component);
+    if (_order case final order?) entity.reorderComponents(order);
+    sceneState
+      ..markDirty()
+      ..refresh();
+  }
+}
+
+/// Puts an entity's components in a new order — a card dragged, or moved
+/// from its menu, in the inspector. The order is the entity's
+/// (`Entity.reorderComponents`): what the inspector lists and what the scene
+/// saves; the game finds components by type, so it runs as before.
+class ReorderComponentsCommand extends EditorCommand {
+  ReorderComponentsCommand({
+    required this.entity,
+    required this.before,
+    required this.after,
+    required this.sceneState,
+    this.label = 'Rearrange components',
+  });
+
+  @override
+  final String label;
+
+  final jge.Entity entity;
+
+  /// The component types in order, as they were and as they are to be.
+  final List<Type> before;
+  final List<Type> after;
+
+  /// Notified so the inspector redraws.
+  final EditorSceneState sceneState;
+
+  @override
+  void redo() => _apply(after);
+
+  @override
+  void undo() => _apply(before);
+
+  void _apply(List<Type> order) {
+    entity.reorderComponents(order);
     sceneState
       ..markDirty()
       ..refresh();

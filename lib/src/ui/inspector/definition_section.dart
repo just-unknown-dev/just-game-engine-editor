@@ -16,6 +16,7 @@ import '../../core/state/editor_scene_state.dart';
 import '../level_designer/state/editor_commands.dart';
 import '../level_designer/state/editor_history.dart';
 import 'component_extras.dart';
+import 'component_reorder.dart';
 import '../widgets/scrubbable_number_field.dart';
 import 'field_editor.dart';
 import 'field_rows.dart';
@@ -44,38 +45,94 @@ List<Widget> buildComponentSections({
 }) {
   final ownDocument = history != null;
   final undo = history ?? scope.history;
+  // In the entity's order — rearranged by dragging a card or from its ⋮
+  // menu, and saved so — with Transform always first.
+  final components = entity.components.toList();
+  final ordered = [
+    for (final c in components)
+      if (isPinnedComponent(c.componentType)) c,
+    for (final c in components)
+      if (!isPinnedComponent(c.componentType)) c,
+  ];
+  String titleOf(jge.ComponentDefinition d) => d.hints.name ?? d.type;
+  final titles = <Type, String>{
+    for (final c in ordered)
+      if (scope.definitionForInspector(c) case final d?)
+        c.componentType: titleOf(d),
+  };
+  // The cards that move, in the order shown: what a move is measured by.
+  final shown = [
+    for (final c in ordered)
+      if (!hidden.contains(c.runtimeType) &&
+          c is! UnknownComponents &&
+          !isPinnedComponent(c.componentType) &&
+          titles.containsKey(c.componentType))
+        c.componentType,
+  ];
+  void move(Type type, {Type? before, Type? after}) {
+    final now = reorderedTypes(entity, type, before: before, after: after);
+    if (now == null) return;
+    undo.push(
+      ReorderComponentsCommand(
+        entity: entity,
+        before: entity.componentTypes,
+        after: now,
+        sceneState: sceneState,
+        label: 'Move ${titles[type] ?? 'component'}',
+      ),
+    );
+  }
+
   return [
-    for (final component in entity.components)
+    for (final component in ordered)
       if (hidden.contains(component.runtimeType))
         const SizedBox.shrink()
       else if (component is UnknownComponents)
         UnknownComponentsCard(component: component)
       else if (scope.definitionForInspector(component) case final definition?)
-        DefinitionSection(
+        // Keyed by type, so a card that moves keeps its own fields' state.
+        ComponentDropZone(
+          key: ValueKey(component.componentType),
           entity: entity,
-          component: component,
-          definition: definition,
-          scope: scope,
-          history: undo,
-          sceneState: sceneState,
-          world: world,
-          timelineKeys: !ownDocument,
-          // Through the history, so a removed component comes back on undo
-          // with every value it had.
-          onDelete: () => undo.push(
-            RemoveComponentCommand(
-              entity: entity,
-              component: component,
-              sceneState: sceneState,
+          type: component.componentType,
+          onDrop: (dragged, {required above}) => above
+              ? move(dragged, before: component.componentType)
+              : move(dragged, after: component.componentType),
+          child: DefinitionSection(
+            entity: entity,
+            component: component,
+            definition: definition,
+            scope: scope,
+            history: undo,
+            sceneState: sceneState,
+            world: world,
+            timelineKeys: !ownDocument,
+            placement: isPinnedComponent(component.componentType)
+                ? null
+                : ComponentPlacement(
+                    entity: entity,
+                    type: component.componentType,
+                    title: titleOf(definition),
+                    shown: shown,
+                    move: move,
+                  ),
+            // Through the history, so a removed component comes back on
+            // undo with every value it had, in its place.
+            onDelete: () => undo.push(
+              RemoveComponentCommand(
+                entity: entity,
+                component: component,
+                sceneState: sceneState,
+              ),
             ),
+            onChanged: () {
+              sceneState.syncEntityNode(entity);
+              sceneState.markDirty();
+              // Before the refresh, so what is drawn is what was keyed.
+              if (!ownDocument) TimelineSession.of(scope).captureEdits();
+              sceneState.refresh();
+            },
           ),
-          onChanged: () {
-            sceneState.syncEntityNode(entity);
-            sceneState.markDirty();
-            // Before the refresh, so what is drawn is what was keyed.
-            if (!ownDocument) TimelineSession.of(scope).captureEdits();
-            sceneState.refresh();
-          },
         ),
   ];
 }
@@ -141,10 +198,16 @@ class DefinitionSection extends StatelessWidget {
     this.sceneState,
     this.world,
     this.timelineKeys = true,
+    this.placement,
   });
 
   /// Whose component this is; with it, fields get a timeline key button.
   final jge.Entity? entity;
+
+  /// Its place among the entity's components: with it, the header has a
+  /// grip to drag the card by and a ⋮ menu to move it. Null for a card
+  /// that stays where it is — Transform, first.
+  final ComponentPlacement? placement;
 
   /// Where edits are recorded, the scene's unless given.
   final EditorHistory? history;
@@ -205,6 +268,8 @@ class DefinitionSection extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(2, 2, 4, 2),
             child: Row(
               children: [
+                if (placement case final place?)
+                  ComponentDragGrip(placement: place),
                 // Folds the card to this line — on every entity, so a
                 // component read once and left alone stays out of the way.
                 EditorIconButton(
@@ -259,6 +324,8 @@ class DefinitionSection extends StatelessWidget {
                       onChanged();
                     },
                   ),
+                if (placement case final place?)
+                  ComponentPlaceMenu(placement: place),
                 if (hints.deletable)
                   EditorIconButton(
                     icon: Icons.close,
