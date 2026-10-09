@@ -20,6 +20,8 @@ dependency_overrides:
     path: ../../just_game_engine
   just_debugger:
     path: ../../just_debugger
+  just_game_engine_formats:
+    path: ../../just_game_engine_formats
 
 dev_dependencies:
   flutter_test:

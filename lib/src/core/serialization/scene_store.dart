@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:just_game_engine/just_game_engine.dart';
@@ -72,81 +71,11 @@ class SceneStore {
     });
   }
 
-  String _buildInitialScene(String sceneName, SceneMode mode) {
-    List<Map<String, dynamic>> encode(List<Component> components) =>
-        components.map(codec.encode).whereType<Map<String, dynamic>>().toList();
-    if (mode == SceneMode.threeD) return _build3DScene(sceneName, encode);
-    return _pretty.convert({
-      'version': SceneFormat.current,
-      ...EditorScene(name: sceneName, mode: mode).toJson(),
-      'entities': [
-        {
-          'name': 'MainCamera',
-          'parentName': null,
-          'components': encode([
-            TransformComponent(position: Vector3(2000, 400, 0)),
-            // Follows whatever the game tags 'player' once it is spawned.
-            VirtualCameraComponent(follow: const EntityTarget.tag('player')),
-            CameraFramingComponent(),
-            CameraConfinerComponent(boundsName: 'LevelBounds'),
-          ]),
-        },
-        {
-          'name': 'LevelBounds',
-          'parentName': null,
-          'components': encode([
-            TransformComponent(position: Vector3(2000, 400, 0)),
-            CameraBoundsComponent(width: 4000, height: 800),
-          ]),
-        },
-        {
-          'name': 'PlayerSpawn',
-          'parentName': null,
-          'components': encode([
-            TransformComponent(position: Vector3(200, 400, 0)),
-            SpawnComponent(spawner: 'player'),
-          ]),
-        },
-      ],
-    });
-  }
-
-  /// A 3-D scene to start from: a perspective camera set back from the
-  /// origin and tilted down to look at it, and a spawn point at the origin.
-  /// None of the 2-D starter's confiner or level bounds — they are 2-D-only.
-  String _build3DScene(
-    String sceneName,
-    List<Map<String, dynamic>> Function(List<Component>) encode,
-  ) {
-    // 600 back (−Z) and 200 up (−Y, since +Y is down), pitched so its
-    // forward axis passes through the origin.
-    const back = 600.0, up = 200.0;
-    return _pretty.convert({
-      'version': SceneFormat.current,
-      ...EditorScene(name: sceneName, mode: SceneMode.threeD).toJson(),
-      'entities': [
-        {
-          'name': 'MainCamera',
-          'parentName': null,
-          'components': encode([
-            TransformComponent(
-              position: Vector3(0, -up, -back),
-              euler: Vector3(-math.atan2(up, back), 0, 0),
-            ),
-            VirtualCameraComponent(projection: CameraProjection.perspective),
-          ]),
-        },
-        {
-          'name': 'PlayerSpawn',
-          'parentName': null,
-          'components': encode([
-            TransformComponent(),
-            SpawnComponent(spawner: 'player'),
-          ]),
-        },
-      ],
-    });
-  }
+  // The starters are shared with `just scene new`, so a level made either
+  // way is the same file (test/scene_starters_parity_test.dart checks they
+  // still match the live components, encoded).
+  String _buildInitialScene(String sceneName, SceneMode mode) =>
+      SceneStarters.encode(SceneStarters.forMode(sceneName, mode: mode.id));
 
   /// Saves [entities] as [sceneName].
   Future<void> writeJsonSidecar(
@@ -333,19 +262,14 @@ class SceneStore {
   List<String> _readManifest() {
     final file = File(_manifestPath);
     if (!file.existsSync()) return [];
-    try {
-      final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-      return (json['scenes'] as List? ?? const []).cast<String>().toList();
-    } on FormatException {
-      return [];
-    }
+    return SceneManifest.parse(file.readAsStringSync());
   }
 
   Future<void> _editManifest(void Function(List<String> names) edit) async {
     await _ensureRoot();
     final names = _readManifest();
     edit(names);
-    await File(_manifestPath).writeAsString(_pretty.convert({'scenes': names}));
+    await File(_manifestPath).writeAsString(SceneManifest.encode(names));
   }
 
   // ── Play order ───────────────────────────────────────────────────────────

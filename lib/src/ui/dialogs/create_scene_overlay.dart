@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:just_game_engine/just_game_engine.dart' show SceneMode;
+import 'package:just_game_engine/just_game_engine.dart'
+    show SceneMode, SceneNames;
 import '../../core/constants/editor_constants.dart';
 import '../../core/theme/editor_metrics.dart';
 
@@ -94,22 +95,8 @@ class CreateSceneOverlay extends StatefulWidget {
   /// A free name that follows [after] — the last scene in the play order,
   /// where a new one goes — or else the last of [existing]: `level_03` →
   /// `level_04`, `cave` → `cave_2`; `level_01` when there are none.
-  static String suggestName(List<String> existing, {String? after}) {
-    final taken = {for (final n in existing) n.toLowerCase()};
-    String free(String stem, int from, int width) {
-      for (var i = from; ; i++) {
-        final name = '$stem${i.toString().padLeft(width, '0')}';
-        if (!taken.contains(name.toLowerCase())) return name;
-      }
-    }
-
-    final last = after ?? (existing.isEmpty ? null : existing.last);
-    if (last == null) return free('level_', 1, 2);
-    final numbered = RegExp(r'^(.*?)(\d+)$').firstMatch(last);
-    if (numbered == null) return free('${last}_', 2, 1);
-    final digits = numbered.group(2)!;
-    return free(numbered.group(1)!, int.parse(digits) + 1, digits.length);
-  }
+  static String suggestName(List<String> existing, {String? after}) =>
+      SceneNames.suggest(existing, after: after);
 
   @override
   State<CreateSceneOverlay> createState() => _CreateSceneOverlayState();

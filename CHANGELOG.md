@@ -4,6 +4,11 @@
 
 First release: a level editor that runs inside a `just_game_engine` game. It needs a desktop (Windows, macOS, Linux) in a debug build; `JustGameEditorPlugin.register` returns null in a profile or release build and on Android, iOS and the web (`supportsPlatform` says which).
 
+### Shared with the `just` tool
+
+- **New Scene writes the shared starters.** The 2-D and 3-D starter scenes, the play order in `scenes.json` and the naming rules come from `just_game_engine_formats` (`SceneStarters`, `SceneManifest`, `SceneNames`, re-exported by the engine), so a level made in the editor and one made by `just scene new` are the same file. `test/scene_starters_parity_test.dart` checks the starters still match the live components, encoded.
+- **The editor says it has the project open**: while it runs it touches `.dart_tool/just_cli/editor.lock` every few seconds (`EditorPresence`), and `just scene` and `just upgrade` wait until it is closed rather than write scenes the editor would save over. Off under `flutter test`.
+
 ### Hot reload and hot restart
 
 - **A hot reload reaches the editor.** The overlay's `State.reassemble` calls `JustGameEditorPlugin.reassemble`, which brings the game's wiring, the component definitions, every registry, the Level Designer's tools and the built-in docks up to the code as it now is — nothing called it before. A field added to a component shows in the inspector, and a live component that cannot read it is made again from what it holds.

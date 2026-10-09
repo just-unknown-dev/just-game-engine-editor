@@ -19,6 +19,7 @@ import '../ecs/systems/physics_body_binding_system.dart';
 import '../entity/entity_ops.dart';
 import '../input/viewport_input.dart';
 import '../play/play_controller.dart';
+import '../project/editor_presence.dart';
 import '../scene/scene_io.dart';
 import '../scope/editor_scope.dart';
 import '../serialization/scene_manager.dart';
@@ -392,9 +393,13 @@ class JustGameEditorPlugin implements EnginePlugin {
     return plugin;
   }
 
+  EditorPresence? _presence;
+
   Future<void> onInitialize() async {
     if (!kDebugMode || _isInitialized) return;
     _isInitialized = true;
+    // So `just scene` and `just upgrade` wait while the editor is open.
+    _presence = EditorPresence.start();
     await logService.startSession(controller: debuggerController);
     if (!engine.world.systems.any((system) => system is SimpleMovementSystem)) {
       engine.world.addSystem(SimpleMovementSystem(engine.input));
@@ -2140,6 +2145,8 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   void dispose() {
+    _presence?.stop();
+    _presence = null;
     for (final stop in _stopFollowing) {
       stop();
     }
