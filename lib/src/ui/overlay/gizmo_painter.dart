@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/material.dart' show IconData;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
@@ -12,6 +12,8 @@ import '../level_designer/state/designer_geometry.dart';
 import 'transform_gizmo.dart';
 import '../../core/theme/viewport_look.dart';
 import '../../core/view/editor_view.dart';
+import '../../extension/editor_marker.dart';
+import 'gizmo_3d.dart' show screenBoundsOf3D;
 
 /// Gizmo handle identifier returned by [GizmoHitTester.hitTest].
 enum GizmoHandle {
@@ -32,7 +34,10 @@ enum GizmoHandle {
   translateZ(GizmoOp.translate, GizmoAxes.z),
   rotateX(GizmoOp.rotate, GizmoAxes.x),
   rotateY(GizmoOp.rotate, GizmoAxes.y),
-  scaleZ(GizmoOp.scale, GizmoAxes.z);
+  scaleZ(GizmoOp.scale, GizmoAxes.z),
+  translateXZ(GizmoOp.translate, GizmoAxes.x | GizmoAxes.z),
+  translateYZ(GizmoOp.translate, GizmoAxes.y | GizmoAxes.z),
+  scaleUniform(GizmoOp.scale, GizmoAxes.x | GizmoAxes.y | GizmoAxes.z);
 
   const GizmoHandle(this.op, this.axes);
 
@@ -162,6 +167,29 @@ class GizmoPainter {
     canvas.drawCircle(screenPos, 3.5, _paint);
   }
 
+  /// Draws [marker]'s icon at each of [entities], regardless of selection,
+  /// so they can be found at a glance while editing. In 3-D at their place
+  /// in space; nothing for one behind the viewer.
+  void paintMarkers(
+    Canvas canvas,
+    EditorMarker marker,
+    List<Entity> entities,
+    EditorView camera,
+    Size canvasSize,
+  ) {
+    if (entities.isEmpty || canvasSize == Size.zero) return;
+    camera.viewportSize = canvasSize;
+    for (final entity in entities) {
+      final transform = entity.getComponent<TransformComponent>();
+      if (transform == null) continue;
+      final at = camera.isPlanar
+          ? camera.worldToScreen(transform.position.toOffset())
+          : camera.projectToScreen(transform.position);
+      if (at == null) continue;
+      _paintMarkerIcon(canvas, at, marker.icon, marker.color, marker.label?.call(entity));
+    }
+  }
+
   /// Draws a small camera icon at every camera entity's position, regardless
   /// of selection, so it's discoverable at a glance while editing.
   void paintCameraMarkers(
@@ -169,41 +197,7 @@ class GizmoPainter {
     List<Entity> cameraEntities,
     EditorView camera,
     Size canvasSize,
-  ) {
-    if (cameraEntities.isEmpty || canvasSize == Size.zero) return;
-    camera.viewportSize = canvasSize;
-    for (final entity in cameraEntities) {
-      final transform = entity.getComponent<TransformComponent>();
-      if (transform == null) continue;
-      final screenPos = camera.worldToScreen(transform.position.toOffset());
-      _paintCameraIcon(canvas, screenPos);
-    }
-  }
-
-  void _paintCameraIcon(Canvas canvas, Offset center) {
-    const iconData = Icons.videocam_rounded;
-    _paint
-      ..style = PaintingStyle.fill
-      ..color = const Color(0xFF40E0D0).withValues(alpha: 0.18);
-    canvas.drawCircle(center, 16, _paint);
-
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: String.fromCharCode(iconData.codePoint),
-        style: TextStyle(
-          fontSize: 20,
-          fontFamily: iconData.fontFamily,
-          package: iconData.fontPackage,
-          color: const Color(0xFF40E0D0),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    textPainter.paint(
-      canvas,
-      center - Offset(textPainter.width / 2, textPainter.height / 2),
-    );
-  }
+  ) => paintMarkers(canvas, EditorMarker.cameras, cameraEntities, camera, canvasSize);
 
   /// Draws a small icon + tag label at every spawn point entity's position,
   /// regardless of selection, so spawn points (player, zombie, ...) are
@@ -213,21 +207,9 @@ class GizmoPainter {
     List<Entity> spawnPoints,
     EditorView camera,
     Size canvasSize,
-  ) {
-    if (spawnPoints.isEmpty || canvasSize == Size.zero) return;
-    camera.viewportSize = canvasSize;
-    for (final entity in spawnPoints) {
-      final transform = entity.getComponent<TransformComponent>();
-      final spawn = entity.getComponent<SpawnComponent>();
-      if (transform == null || spawn == null) continue;
-      final screenPos = camera.worldToScreen(transform.position.toOffset());
-      _paintSpawnIcon(canvas, screenPos, spawn.spawner);
-    }
-  }
+  ) => paintMarkers(canvas, EditorMarker.spawnPoints, spawnPoints, camera, canvasSize);
 
-  void _paintSpawnIcon(Canvas canvas, Offset center, String spawner) {
-    const iconData = Icons.person_pin_circle_rounded;
-    const accent = Color(0xFFFFB74D);
+  void _paintMarkerIcon(Canvas canvas, Offset center, IconData iconData, Color accent, String? label) {
     _paint
       ..style = PaintingStyle.fill
       ..color = accent.withValues(alpha: 0.18);
@@ -249,11 +231,12 @@ class GizmoPainter {
       canvas,
       center - Offset(iconPainter.width / 2, iconPainter.height / 2),
     );
+    if (label == null || label.isEmpty) return;
 
     final labelPainter = TextPainter(
       text: TextSpan(
-        text: spawner,
-        style: const TextStyle(
+        text: label,
+        style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
           color: accent,
@@ -304,12 +287,24 @@ class GizmoPainter {
     for (final entity in entities) {
       final transform = entity.getComponent<TransformComponent>();
       if (transform == null) continue;
-      final bounds = _computeScreenBounds(entity, transform, camera);
-      final box = Rect.fromCenter(
-        center: bounds.center,
-        width: math.max(bounds.halfW * 2, 16) + 10,
-        height: math.max(bounds.halfH * 2, 16) + 10,
-      );
+      final Rect box;
+      if (camera.isPlanar) {
+        final bounds = _computeScreenBounds(entity, transform, camera);
+        box = Rect.fromCenter(
+          center: bounds.center,
+          width: math.max(bounds.halfW * 2, 16) + 10,
+          height: math.max(bounds.halfH * 2, 16) + 10,
+        );
+      } else {
+        // In space: the box its 3-D bounds cover on screen.
+        final screen = screenBoundsOf3D(entity, camera);
+        if (screen == null) continue;
+        box = Rect.fromCenter(
+          center: screen.center,
+          width: math.max(screen.width, 16) + 10,
+          height: math.max(screen.height, 16) + 10,
+        );
+      }
       final shape = RRect.fromRectAndRadius(box, const Radius.circular(4));
       _paint
         ..style = PaintingStyle.fill
@@ -443,8 +438,10 @@ Size? _sizeFromComponent(
     );
     return Size(rect.width, rect.height);
   }
-  if (component is PhysicsBodyComponent) {
-    final rect = component.shape.getBounds(Offset.zero);
+  if (component is Collider2D) {
+    final shape = ColliderGeometry.of(component);
+    if (shape == null) return null;
+    final rect = ColliderGeometry.boundsOf(shape);
     return Size(rect.width, rect.height);
   }
   if (component is RenderableComponent) {

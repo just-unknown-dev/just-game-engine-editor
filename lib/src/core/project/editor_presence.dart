@@ -7,12 +7,12 @@ import 'dart:io';
 /// holds the scenes in memory and saves them over the files, so `just
 /// scene` and `just upgrade` wait while the file is fresh. A heartbeat, not
 /// a pid: after a crash or a hot restart the file goes stale on its own.
-/// (just_cli's `EditorPresence` reads it; the two must agree on [path].)
+/// (just_game_engine_cli's `EditorPresence` reads it; the two must agree on [path].)
 final class EditorPresence {
   EditorPresence._(this._file, this._timer);
 
   /// The file, relative to the project root.
-  static const String path = '.dart_tool/just_cli/editor.lock';
+  static const String path = '.dart_tool/just_core_cli/editor.lock';
 
   /// How often it is touched.
   static const Duration beat = Duration(seconds: 5);

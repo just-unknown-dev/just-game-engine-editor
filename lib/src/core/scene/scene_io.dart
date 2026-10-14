@@ -1,7 +1,6 @@
 import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../dev/editor_dev_flags.dart';
 import '../scope/editor_scope.dart';
 import '../state/editor_scene_state.dart';
 import '../state/play_snapshot.dart';
@@ -191,15 +190,6 @@ class SceneIO {
     final EditorScene scene = rawJson != null
         ? (EditorScene.fromJson(rawJson))
         : EditorScene(name: sceneName);
-    if (scene.mode == SceneMode.threeD && !EditorDevFlags.allow3DSceneMode) {
-      scope.log.log(
-        '$sceneName is a 3-D scene. 3-D authoring is not available yet, so '
-        'it opens with the 2-D view and tools; it stays 3-D when saved.',
-        source: 'editor',
-        category: 'scene',
-      );
-    }
-
     if (rawJson != null) {
       final entityList = (rawJson['entities'] as List<dynamic>? ?? []);
       for (final item in entityList) {

@@ -1,8 +1,6 @@
 // The New Scene page's choice of 2-D or 3-D, and what each writes.
 //
-// In this release 3-D is shown but disabled, with the reason on the page and
-// in a tooltip; the developer switch (EditorDevFlags.allow3DSceneMode) lets a
-// 3-D scene be made in-house.
+// Both can be picked; 2-D is chosen to start with.
 
 import 'dart:convert';
 import 'dart:io';
@@ -10,16 +8,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_game_engine_editor/src/core/dev/editor_dev_flags.dart';
 import 'package:just_game_engine_editor/src/core/serialization/scene_codec.dart';
 import 'package:just_game_engine_editor/src/core/serialization/scene_store.dart';
 import 'package:just_game_engine_editor/src/ui/dialogs/create_scene_overlay.dart';
 
-const _note = '3D scenes arrive in the next release.';
-
 void main() {
-  tearDown(() => EditorDevFlags.allow3DSceneModeOverride = null);
-
   late Directory root;
   late SceneStore store;
   setUp(() {
@@ -71,37 +64,23 @@ void main() {
   }
 
   group('the page', () {
-    testWidgets('offers 2-D, chosen; 3-D is shown but disabled, and says why', (
-      tester,
-    ) async {
-      EditorDevFlags.allow3DSceneModeOverride = false;
+    testWidgets('offers 2-D, chosen, and makes a 2-D scene', (tester) async {
       final created = <String>[];
       await pumpPage(tester, created);
 
       expect(find.text('SCENE TYPE'), findsOneWidget);
       expect(find.text('2D'), findsOneWidget);
       expect(find.text('3D'), findsOneWidget);
-      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
-      expect(find.text(_note), findsOneWidget, reason: 'said on the page');
-      expect(find.byTooltip(_note), findsOneWidget, reason: 'and on hover');
-
-      // Picking 3-D does nothing: the scene is made 2-D.
-      await tester.tap(find.text('3D'));
-      await tester.pump();
+      expect(find.byIcon(Icons.lock_outline), findsNothing);
       await create(tester, 'level_a');
       expect(created, ['level_a']);
       expect(read('level_a')['mode'], '2d');
     });
 
-    testWidgets('with the developer switch, 3-D can be picked and is made', (
-      tester,
-    ) async {
-      EditorDevFlags.allow3DSceneModeOverride = true;
+    testWidgets('3-D can be picked and is made', (tester) async {
       final created = <String>[];
       await pumpPage(tester, created);
 
-      expect(find.byIcon(Icons.lock_outline), findsNothing);
-      expect(find.text(_note), findsNothing);
       await tester.tap(find.text('3D'));
       await tester.pump();
       await create(tester, 'level_b');

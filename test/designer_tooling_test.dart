@@ -99,18 +99,15 @@ void main() {
       final e = world.createEntityWithComponents([
         TransformComponent(),
         RectangleComponent(width: 100, height: 20),
-        PhysicsBodyComponent(
-          shape: RectangleShape(100, 20),
-          bodyType: BodyType.static,
-        ),
+        RigidBody2D(bodyType: BodyType.static),
+        Collider2D(size: Vector2(100, 20)),
       ]);
       ComponentResizer.scale(e, 2, 3);
 
       final rect = e.components.whereType<RectangleComponent>().single;
-      final shape =
-          e.getComponent<PhysicsBodyComponent>()!.shape as RectangleShape;
+      final collider = e.getComponent<Collider2D>()!;
       expect((rect.width, rect.height), (200.0, 60.0));
-      expect((shape.width, shape.height), (200.0, 60.0));
+      expect((collider.size.x, collider.size.y), (200.0, 60.0));
     });
 
     test('a quarter-turned entity is resized along its own axes', () {

@@ -49,9 +49,17 @@ import '../level_map/level_map_documents.dart';
 import '../level_map/level_map_provision.dart';
 import '../../ui/tileset/built_in_workspaces.dart';
 import '../../extension/built_in_camera_contributions.dart';
+import '../../extension/built_in_physics_3d_contributions.dart';
 import '../../extension/tiled_object_mapper.dart';
 import '../../extension/built_in_tile_contributions.dart';
 import '../view/editor_view.dart';
+import '../view/orbit_fly_editor_view.dart';
+import '../view/ray_entity_picker.dart';
+import '../../extension/asset_kind.dart';
+import '../../extension/editor_marker.dart';
+import '../../extension/prefab_variant.dart';
+import '../../extension/viewport_handles.dart';
+import '../../extension/viewport_overlay.dart';
 
 /// Everything one editor owns: its registries, services and state, in a
 /// `just_di` container that is disposed with it.
@@ -332,6 +340,39 @@ class EditorScope {
   final List<EntityIcon> _entityIcons = [];
   final List<EntityProtectionRule> _protectionRules = [];
   final List<InspectorSection> _inspectorSections = [];
+  final List<EditorMarker> _markers = [];
+  final List<EntityRayTest> _pickTests = [];
+
+  /// The icons the viewport draws at entities of a kind: the editor's own,
+  /// then each module's.
+  List<EditorMarker> get markers => List.unmodifiable(_markers);
+
+  /// What knows the real shape of some entities, for picking in 3-D.
+  List<EntityRayTest> get pickTests => List.unmodifiable(_pickTests);
+
+  final List<ViewportOverlay> _viewportOverlays = [];
+  final List<ViewportHandles> _viewportHandles = [];
+  final List<PrefabVariant> _prefabVariants = [];
+
+  /// What lets the author drag points of the selection in the viewport.
+  List<ViewportHandles> get viewportHandles => List.unmodifiable(_viewportHandles);
+
+  /// The other ways the prefabs offered in space are offered too.
+  List<PrefabVariant> get prefabVariants => List.unmodifiable(_prefabVariants);
+
+  /// What the modules draw over the viewport, back to front.
+  List<ViewportOverlay> get viewportOverlays =>
+      List.unmodifiable(_viewportOverlays);
+
+  /// The ids of the [viewportOverlays] turned off.
+  final ValueNotifier<Set<String>> hiddenOverlays = ValueNotifier(const {});
+
+  /// Turns the viewport overlay [id] on or off.
+  void toggleOverlay(String id) {
+    final hidden = {...hiddenOverlays.value};
+    if (!hidden.remove(id)) hidden.add(id);
+    hiddenOverlays.value = hidden;
+  }
 
   /// Palette groups, built-in first, then each module's in order.
   List<PrefabCategory> get prefabCategories =>
@@ -371,8 +412,44 @@ class EditorScope {
   Camera get mainCamera => _mainCamera();
 
   /// How the editor sees the scene — what everything that draws over the
-  /// viewport, picks or pans goes through. The 2-D view on [mainCamera].
-  late final EditorView editorView = GameCameraEditorView(_mainCamera);
+  /// viewport, picks or pans goes through: the view for the scene's mode
+  /// (a module's, see [EditorModule.viewFactories], else the 2-D view on
+  /// [mainCamera] or the 3-D [OrbitFlyEditorView] on it). One per mode,
+  /// kept; switching mode hands the camera to the other.
+  EditorView get editorView {
+    final mode = sceneState.editingMode;
+    final view = _views[mode] ??= (_viewFactories[mode] ?? _builtInView(mode))(this);
+    if (_viewMode != mode) {
+      _viewMode = mode;
+      _takeCamera(view);
+    }
+    return view;
+  }
+
+  final Map<SceneMode, EditorView Function(EditorScope)> _viewFactories = {};
+  final Map<SceneMode, EditorView> _views = {};
+  SceneMode? _viewMode;
+
+  static EditorView Function(EditorScope) _builtInView(SceneMode mode) => switch (mode) {
+    SceneMode.threeD => (scope) => OrbitFlyEditorView(scope._mainCamera),
+    SceneMode.twoD => (scope) => GameCameraEditorView(scope._mainCamera),
+  };
+
+  /// [view] becomes what the camera shows: a 3-D view puts its orbit on
+  /// it; the 2-D view takes it back to a flat camera.
+  void _takeCamera(EditorView view) {
+    if (view is OrbitFlyEditorView) {
+      view.sync();
+      return;
+    }
+    final camera = _mainCamera();
+    if (camera.isPlanar) return;
+    camera
+      ..lens = const CameraLens()
+      ..pitch = 0
+      ..yaw = 0
+      ..z = 0;
+  }
 
   /// The workspace that has the viewport, with the file it was opened on;
   /// null while the level has it.
@@ -633,10 +710,13 @@ class EditorScope {
   Camera _mainCamera() {
     final e = engine;
     if (e == null || !e.isInitialized || !e.cameraSystem.isInitialized) {
-      return Camera();
+      // One kept, so a view on it stays where it was put.
+      return _bareCamera;
     }
     return e.cameraSystem.mainCamera;
   }
+
+  late final Camera _bareCamera = Camera();
 
   /// The tile maps being edited: in the scene or in their own files, what
   /// has changed, saving. On the scope because tools, panels, the inspector
@@ -749,9 +829,12 @@ class EditorScope {
     fieldEditors.registerAll(BuiltInFieldEditors.all);
     extras.clear();
     extras.registerAll(BuiltInExtras.all);
-    extras.register(PhysicsBodyExtras.extras(this));
+    extras.registerAll(PhysicsBodyExtras.all(this));
     extras.registerAll(BuiltInCameraContributions.extras);
     extras.registerAll(BuiltInTileContributions.extras);
+    // 3-D physics tooling only where the engine has 3-D physics.
+    final physics3D = BuiltInPhysics3DContributions.appliesTo(this.context);
+    if (physics3D) extras.registerAll(BuiltInPhysics3DContributions.extras);
     commands.clear();
     commands.registerAll(BuiltInCommands.all);
     commands.bindAll(BuiltInBindings.of(config));
@@ -772,6 +855,15 @@ class EditorScope {
     ]) {
       l.clear();
     }
+    _viewFactories.clear();
+    _markers
+      ..clear()
+      ..addAll(EditorMarker.builtIn);
+    _pickTests.clear();
+    _viewportOverlays.clear();
+    _viewportHandles.clear();
+    _prefabVariants.clear();
+    final kinds = AssetKinds();
     // The editor's own camera tooling arrives the way a module's would.
     _sceneTreeActions.addAll(BuiltInCameraContributions.sceneTreeActions);
     _rowDecorations.addAll(BuiltInCameraContributions.rowDecorations);
@@ -780,6 +872,10 @@ class EditorScope {
     _rowDecorations.addAll(BuiltInTagContributions.rowDecorations);
     _entityIcons.addAll(BuiltInTileContributions.entityIcons);
     _assetActions.addAll(BuiltInTileContributions.assetActions);
+    if (physics3D) {
+      _viewportOverlays.addAll(BuiltInPhysics3DContributions.viewportOverlays);
+      _prefabVariants.addAll(BuiltInPhysics3DContributions.prefabVariants);
+    }
     final context = EditorModuleContext(scope: this, isDebug: _isDebug);
     for (final module in modules.all) {
       fieldEditors.registerAll(module.fieldEditors, override: true);
@@ -800,12 +896,23 @@ class EditorScope {
       _entityIcons.addAll(module.entityIcons);
       if (module.protectionRule case final rule?) _protectionRules.add(rule);
       _inspectorSections.addAll(module.inspectorSections);
+      _viewFactories.addAll(module.viewFactories);
+      _markers.addAll(module.markers);
+      _pickTests.addAll(module.pickTests);
+      module.assetKinds.forEach(kinds.add);
+      _viewportOverlays.addAll(module.viewportOverlays);
+      _viewportHandles.addAll(module.viewportHandles);
+      _prefabVariants.addAll(module.prefabVariants);
       module.themePresets.forEach(theme.register);
       // Once per module: setup that loads files or installs into the engine
       // must not run again on each rebuild — see [reassemble].
       if (_registered.add(module)) module.onRegister(context);
     }
     _registered.retainWhere(modules.all.contains);
+    _viewportOverlays.sort((a, b) => a.order.compareTo(b.order));
+    // What a file is, for the browser and drops: the editor's kinds and the
+    // modules'.
+    AssetKinds.active = kinds;
     ModuleDataFiles.replace([
       for (final module in modules.all) ...module.dataFileSuffixes,
     ]);
@@ -888,6 +995,7 @@ class EditorScope {
     spawners.dispose();
     highlightedTag.dispose();
     highlightedLayer.dispose();
+    hiddenOverlays.dispose();
     isPlayTesting.dispose();
     container.close();
   }

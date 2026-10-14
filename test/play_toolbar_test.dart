@@ -1,6 +1,8 @@
 // The play toolbar: transport that can be stepped and slowed, keys that work
 // while the game owns the letters, and buttons that are not glued together.
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,6 +43,50 @@ void main() {
       expect(engine.time.timeScale, 0);
       plugin.onUpdate(1 / 60);
       expect(engine.time.timeScale, 0, reason: 'and only that one');
+    });
+
+    test('a press on the play-test holds the pointer for a game that asks; '
+        'Pause and Stop let go', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      const channel = MethodChannel('just_inputs/pointer_lock');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final calls = <String>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call.method);
+        return call.method == 'lock' ? true : null;
+      });
+      addTearDown(() async {
+        messenger.setMockMethodCallHandler(channel, null);
+        await PointerLock.instance.dispose();
+        debugDefaultTargetPlatformOverride = null;
+      });
+      const press = PointerDownEvent(
+        kind: PointerDeviceKind.mouse,
+        buttons: kPrimaryMouseButton,
+      );
+      engine.input.lockPointerOnClick = true;
+
+      plugin.pressedPlayingGame(press);
+      await pumpEventQueue();
+      expect(calls, isEmpty, reason: 'authoring: the mouse is the editor’s');
+
+      play().play();
+      plugin.pressedPlayingGame(press);
+      await pumpEventQueue();
+      expect(calls, ['lock']);
+
+      play().pause();
+      await pumpEventQueue();
+      expect(calls.last, 'unlock', reason: 'paused');
+
+      play().togglePause();
+      plugin.pressedPlayingGame(press);
+      await pumpEventQueue();
+      expect(calls.last, 'lock');
+      play().stop();
+      await pumpEventQueue();
+      expect(calls.last, 'unlock', reason: 'stopped');
     });
 
     test('Step while playing freezes first; while stopped it does nothing', () {
@@ -177,9 +223,8 @@ void main() {
       final designer = rectOf(tester, 'Open Level Designer  (F3)');
       final preview = rectOf(tester, 'Hide the game camera preview  (F4)');
       expect(preview.left - restart.right, greaterThan(14));
-      // Inside that frame a divider parts what the viewport shows from what
-      // it is for.
-      expect(designer.left - preview.right, greaterThan(8));
+      // Inside that frame the two sit as the transport's buttons do.
+      expect(designer.left - preview.right, greaterThanOrEqualTo(2));
       done();
     });
 

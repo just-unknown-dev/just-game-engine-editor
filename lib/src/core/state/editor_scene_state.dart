@@ -2,7 +2,6 @@ import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../dev/editor_dev_flags.dart';
 import '../scene/editor_scene.dart';
 
 /// The authoring state of the open [EditorScene]: selection, dirtiness, the
@@ -31,14 +30,9 @@ class EditorSceneState {
     debugLabel: 'sceneMode',
   );
 
-  /// The mode the inspector, tools and pickers work in: the scene's own —
-  /// except that 3-D authoring is not switched on yet
-  /// ([EditorDevFlags.allow3DSceneMode]), so a 3-D scene is edited with the
-  /// 2-D defaults. Its mode is kept when it is saved.
-  SceneMode get editingMode =>
-      sceneMode.value == SceneMode.threeD && !EditorDevFlags.allow3DSceneMode
-      ? SceneMode.twoD
-      : sceneMode.value;
+  /// The mode the inspector, tools, pickers and the view work in: the
+  /// scene's own.
+  SceneMode get editingMode => sceneMode.value;
 
   /// The primary selection.
   final Signal<Entity?> selectedEntity = Signal(
@@ -472,6 +466,58 @@ class EditorSceneState {
     _settle(entity);
     final sy = gridSnappingEnabled.value ? _snapScale(y) : y;
     transform.scale.y = sy;
+    _settle(entity);
+    _edited();
+  }
+
+  /// What moving snaps in while editing in 3-D, in metres: a 2-D grid's
+  /// cell, in pixels, means nothing there.
+  double moveStep3D = 0.25;
+
+  /// Whether the 3-D gizmo works along the entity's own axes rather than
+  /// the world's.
+  bool localGizmo = false;
+
+  /// [metres] on the nearest [moveStep3D] while snapping.
+  double snapLength(double metres) =>
+      gridSnappingEnabled.value && moveStep3D > 0
+      ? (metres / moveStep3D).roundToDouble() * moveStep3D
+      : metres;
+
+  /// A scale on the nearest [scaleStep] while snapping.
+  double snapScale(double value) =>
+      gridSnappingEnabled.value ? _snapScale(value) : value;
+
+  /// Set [entity]'s position in 3-D (a gizmo drag; the drag snaps).
+  void setPosition3(Entity entity, Vector3 position) {
+    final transform = entity.getComponent<TransformComponent>();
+    if (transform == null) return;
+    _settle(entity);
+    transform.position.setFrom(position);
+    _settle(entity);
+    _edited();
+  }
+
+  /// Set [entity]'s rotation in 3-D.
+  void setRotation3(Entity entity, Quaternion rotation) {
+    final transform = entity.getComponent<TransformComponent>();
+    if (transform == null) return;
+    _settle(entity);
+    transform.setRotation(rotation);
+    _settle(entity);
+    _edited();
+  }
+
+  /// Set [entity]'s scale on all three axes, each kept within 0.01..50.
+  void setScale3(Entity entity, Vector3 scale) {
+    final transform = entity.getComponent<TransformComponent>();
+    if (transform == null) return;
+    _settle(entity);
+    transform.scale.setValues(
+      scale.x.clamp(0.01, 50.0),
+      scale.y.clamp(0.01, 50.0),
+      scale.z.clamp(0.01, 50.0),
+    );
     _settle(entity);
     _edited();
   }

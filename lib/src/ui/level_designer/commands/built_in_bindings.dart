@@ -52,6 +52,33 @@ abstract final class BuiltInBindings {
     const KeyBinding(LogicalKeyboardKey.keyW, 'editor.transform.move'),
     const KeyBinding(LogicalKeyboardKey.keyE, 'editor.transform.scale'),
     const KeyBinding(LogicalKeyboardKey.keyR, 'editor.transform.rotate'),
+    // In 3-D: F and Shift+F frame, the pad's 1, 3 and 7 look along an axis
+    // (Ctrl for the other side), X puts the gizmo in the entity's own axes.
+    const KeyBinding(LogicalKeyboardKey.keyF, 'editor.view.frame'),
+    const KeyBinding(
+      LogicalKeyboardKey.keyF,
+      'editor.view.frameAll',
+      shift: true,
+    ),
+    const KeyBinding(LogicalKeyboardKey.numpad1, 'editor.view.front'),
+    const KeyBinding(
+      LogicalKeyboardKey.numpad1,
+      'editor.view.back',
+      control: true,
+    ),
+    const KeyBinding(LogicalKeyboardKey.numpad3, 'editor.view.right'),
+    const KeyBinding(
+      LogicalKeyboardKey.numpad3,
+      'editor.view.left',
+      control: true,
+    ),
+    const KeyBinding(LogicalKeyboardKey.numpad7, 'editor.view.top'),
+    const KeyBinding(
+      LogicalKeyboardKey.numpad7,
+      'editor.view.bottom',
+      control: true,
+    ),
+    const KeyBinding(LogicalKeyboardKey.keyX, 'editor.gizmo.local'),
     const KeyBinding(
       LogicalKeyboardKey.keyA,
       'designer.selectAll',

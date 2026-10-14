@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../../../core/view/ray_entity_picker.dart';
+
 /// How a prefab is created in the viewport.
 enum PrefabPlacement {
   /// Drag a rectangle; the prefab is sized to fit it. Level geometry.
@@ -30,6 +32,7 @@ class PrefabDefinition {
     this.aliases = const [],
     this.depth,
     this.dimensions = jge.Dimensions.twoD,
+    this.buildAt,
   });
 
   /// Which scene modes the palette offers it in. 2-D unless it says
@@ -75,6 +78,13 @@ class PrefabDefinition {
   /// Builds the components for one instance, sized to [size] and centred at
   /// [position].
   final List<jge.Component> Function(Offset position, Size size) build;
+
+  /// Builds the components for one placed in space (a 3-D scene's viewport
+  /// menu): at [SurfacePoint.position], on a surface facing
+  /// [SurfacePoint.normal] — up (-Y) on the ground — so it can stand on
+  /// what it was placed onto. Null builds with [build] at the point's x and
+  /// y, at its z.
+  final List<jge.Component> Function(SurfacePoint at)? buildAt;
 
   /// The depth it is placed at, whatever depth is active — a background
   /// decoration's `background`; null for the one being placed at.

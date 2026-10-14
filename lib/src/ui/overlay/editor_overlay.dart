@@ -475,15 +475,21 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
   }
 
   /// The right-click menu, on whatever the pointer is over.
-  void _openMenu(BuildContext context, PointerDownEvent event) {
+  void _openMenu(BuildContext context, PointerDownEvent event) =>
+      _openMenuAt(context, event.localPosition, event.position);
+
+  void _openMenuAt(BuildContext context, Offset local, Offset global) {
     final plugin = widget.plugin;
     if (plugin.playController.isRunning || !plugin.isVisible.value) return;
     showViewportMenu(
       context,
       plugin,
-      entity: plugin.viewport.entityAt(event.localPosition),
-      globalPosition: event.position,
-      worldPoint: plugin.viewport.worldPointAt(event.localPosition),
+      entity: plugin.viewport.entityAt(local),
+      globalPosition: global,
+      worldPoint: plugin.viewport.worldPointAt(local),
+      surface: plugin.scope.editorView.isPlanar
+          ? null
+          : plugin.surfaceAt(local),
     );
   }
 
@@ -494,6 +500,11 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         _scheduleCanvasSizeUpdate(size);
 
+        // In 3-D a right-press looks around; one that never moved opens
+        // the menu when it lets go.
+        widget.plugin.viewport.openMenu = (local, global) {
+          if (mounted) _openMenuAt(context, local, global);
+        };
         final canvas = MouseRegion(
           onExit: (_) => widget.plugin.viewport.onPointerExit(),
           child: Listener(
@@ -501,6 +512,7 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
               // A press on the game view mid-play means "back to the game".
               if (widget.plugin.playController.isRunning) {
                 widget.plugin.focusGame();
+                widget.plugin.pressedPlayingGame(event);
               }
               final claimed = widget.plugin.viewport.onPointerDown(event);
               // A right-press is the context menu's unless a tool took it —

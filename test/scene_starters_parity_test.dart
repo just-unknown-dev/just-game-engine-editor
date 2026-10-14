@@ -1,5 +1,5 @@
 // The starter scenes New Scene writes come from just_game_engine_formats as
-// plain JSON, shared with `just scene new`. This keeps them honest: encoding
+// plain JSON, shared with `just game scene new`. This keeps them honest: encoding
 // the live components through the scene codec must still give exactly that
 // JSON. When a component gains a field or changes a default, this fails, and
 // the starters in just_game_engine_formats' scene_starters.dart are updated
@@ -53,7 +53,7 @@ void main() {
   });
 
   test('the 3-D starter is the live components, encoded', () {
-    const back = 600.0, up = 200.0;
+    const back = 8.0, up = 3.0;
     final live = {
       'version': SceneFormat.current,
       ...EditorScene(name: 'world', mode: SceneMode.threeD).toJson(),
@@ -63,7 +63,11 @@ void main() {
             position: Vector3(0, -up, -back),
             euler: Vector3(-math.atan2(up, back), 0, 0),
           ),
-          VirtualCameraComponent(projection: CameraProjection.perspective),
+          VirtualCameraComponent(
+            projection: CameraProjection.perspective,
+            nearClip: 0.1,
+            farClip: 500,
+          ),
         ]),
         entity('PlayerSpawn', [
           TransformComponent(),

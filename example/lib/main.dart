@@ -9,6 +9,9 @@ Future<void> main() async {
   // The editor attaches to a ready engine: its world and camera exist.
   await engine.initialize();
   final plugin = await JustGameEditorPlugin.register(engine: engine);
+  // The game loop drives the editor too: Play, autosave and the 3-D fly
+  // keys all run on its frames.
+  engine.start();
 
   runApp(_ExampleApp(engine: engine, plugin: plugin));
 }
@@ -21,9 +24,9 @@ class _ExampleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // GameEditorAdapter automatically composes GameWidget + JustGameEditorOverlay
-    // and handles focus routing, update ticker, and render hook lifecycle.
-    // When plugin is null (release builds) it renders a plain GameWidget.
+    // JustGameEngineEditor puts the editor overlay over the GameWidget and
+    // routes focus between them. When plugin is null (release builds, or a
+    // platform the editor does not run on) it is a plain GameWidget.
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(

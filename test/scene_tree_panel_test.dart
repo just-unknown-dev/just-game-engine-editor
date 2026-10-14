@@ -389,6 +389,48 @@ void main() {
       expect(scope.world.findEntityByName('A'), isNotNull);
     });
 
+    testWidgets('the keys it acts on are its own while it has the focus: '
+        'the editor does not act on them as well', (tester) async {
+      node('A');
+      await pumpTree(tester);
+      bool claimed(LogicalKeyboardKey key, {String? character}) =>
+          EditorKeyClaim.focusedClaims(
+            KeyDownEvent(
+              physicalKey: PhysicalKeyboardKey.keyA,
+              logicalKey: key,
+              character: character,
+              timeStamp: Duration.zero,
+            ),
+          );
+
+      expect(claimed(LogicalKeyboardKey.f2), isFalse, reason: 'not focused');
+      await tester.tap(find.text('A'));
+      await tester.pump();
+      for (final key in [
+        LogicalKeyboardKey.arrowUp,
+        LogicalKeyboardKey.arrowLeft,
+        LogicalKeyboardKey.home,
+        LogicalKeyboardKey.f2,
+        LogicalKeyboardKey.enter,
+        LogicalKeyboardKey.delete,
+        LogicalKeyboardKey.escape,
+      ]) {
+        expect(claimed(key), isTrue, reason: key.debugName);
+      }
+      expect(
+        claimed(LogicalKeyboardKey.keyW, character: 'w'),
+        isTrue,
+        reason: 'a letter jumps to a row, and picks no tool',
+      );
+      expect(claimed(LogicalKeyboardKey.f3), isFalse);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      expect(claimed(LogicalKeyboardKey.keyD), isTrue, reason: 'one copy');
+      expect(claimed(LogicalKeyboardKey.keyG), isTrue);
+      expect(claimed(LogicalKeyboardKey.keyS), isFalse, reason: 'it saves');
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    });
+
     testWidgets('Alt and an arrow move a row among its siblings', (
       tester,
     ) async {

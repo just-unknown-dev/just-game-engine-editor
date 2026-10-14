@@ -160,17 +160,13 @@ abstract final class BuiltInPrefabs {
     category: 'Physics',
     icon: Icons.rectangle,
     color: solidColor,
-    description: 'A static rectangular collider. Walls, floors, obstacles.',
+    description: 'A static body matching its rectangle. Walls, floors, obstacles.',
     namePrefix: 'Solid',
     build: (position, size) => [
       ..._base(position),
       _rect(size, solidColor),
-      jge.PhysicsBodyComponent(
-        shape: jge.RectangleShape(size.width, size.height),
-        bodyType: jge.BodyType.static,
-        fixedRotation: true,
-        restitution: 0,
-      ),
+      jge.RigidBody2D(bodyType: jge.BodyType.static, lockRotation: true, restitution: 0),
+      jge.Collider2D(shape: jge.ColliderShape2D.matchShape),
     ],
   );
 
@@ -187,12 +183,8 @@ abstract final class BuiltInPrefabs {
       // Outline only: a trigger is an authoring concept, and a solid fill
       // would read as geometry in the viewport.
       _rect(size, triggerColor, filled: false),
-      jge.PhysicsBodyComponent(
-        shape: jge.RectangleShape(size.width, size.height),
-        bodyType: jge.BodyType.static,
-        isSensor: true,
-        fixedRotation: true,
-      ),
+      jge.RigidBody2D(bodyType: jge.BodyType.static, isSensor: true, lockRotation: true),
+      jge.Collider2D(shape: jge.ColliderShape2D.matchShape),
     ],
   );
 

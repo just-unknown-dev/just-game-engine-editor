@@ -42,10 +42,8 @@ class _TestExtension extends EditorModule {
           position: jge.Vector3(position.dx, position.dy, 0),
         ),
         jge.RectangleComponent(width: size.width, height: size.height),
-        jge.PhysicsBodyComponent(
-          shape: jge.RectangleShape(size.width, size.height),
-          bodyType: jge.BodyType.static,
-        ),
+        jge.RigidBody2D(bodyType: jge.BodyType.static),
+        jge.Collider2D(size: jge.Vector2(size.width, size.height)),
         jge.TagComponent(kBlockTag),
         jge.LayerComponent(),
       ],

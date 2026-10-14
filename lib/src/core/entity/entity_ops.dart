@@ -61,14 +61,18 @@ class EntityOps {
   /// and registers it in the authoring scene graph.
   /// Makes an empty entity, at [at] in world coordinates when given — a
   /// right click on the level means "one of these, here".
-  void createEntity({Offset? at}) {
+  ///
+  /// [point] places it in space (a 3-D scene's ground under the pointer)
+  /// and wins over [at]; with neither it goes where the view is looking.
+  void createEntity({Offset? at, Vector3? point}) {
     if (!sceneState.hasScene) return;
 
-    final camera = cameraOf();
-    final spawnPos = at ?? camera.position;
+    final spawnPos =
+        point ??
+        (at != null ? Vector3.fromOffset(at) : cameraOf().focus);
 
     final entity = world.createEntityWithComponents([
-      TransformComponent(position: Vector3.fromOffset(spawnPos)),
+      TransformComponent(position: Vector3.copy(spawnPos)),
     ], name: uniqueName('entity'));
 
     sceneState.registerEntity(entity);
@@ -106,24 +110,24 @@ class EntityOps {
 
     // Where the group goes: the middle of what it holds, so moving it
     // afterwards turns them about something sensible.
-    var sum = Offset.zero;
+    final sum = Vector3.zero();
     var counted = 0;
     for (final entity in targets) {
       final t = entity.getComponent<TransformComponent>();
       if (t == null) continue;
-      sum += Offset(t.position.x, t.position.y);
+      sum.add(t.position);
       counted++;
     }
     final centre = counted == 0
-        ? cameraOf().position
-        : sum / counted.toDouble();
+        ? cameraOf().focus
+        : (sum..scale(1 / counted));
 
     final command = GroupCommand(
       world: world,
       sceneState: sceneState,
       entities: targets,
       name: uniqueName('group'),
-      position: Vector3.fromOffset(centre),
+      position: centre,
     );
     scope.history.push(command);
 
@@ -213,7 +217,10 @@ class EntityOps {
     final targets = selectionEntities;
     if (targets.isEmpty) return;
 
-    final offset = Offset(gridSize, gridSize);
+    // In space a metre along X: a grid cell of pixels would be far away.
+    final offset = cameraOf().isPlanar
+        ? Offset(gridSize, gridSize)
+        : const Offset(1, 0);
     final specs = targets
         .map(
           (entity) => EntitySpec.of(
@@ -317,11 +324,10 @@ class EntityOps {
   void createGroup({List<Entity>? children}) {
     if (!sceneState.hasScene) return;
 
-    final camera = cameraOf();
-    final spawnPos = camera.position;
+    final spawnPos = cameraOf().focus;
 
     final groupEntity = world.createEntityWithComponents([
-      TransformComponent(position: Vector3.fromOffset(spawnPos)),
+      TransformComponent(position: spawnPos),
       ChildrenComponent(),
     ], name: uniqueName('group'));
 
@@ -511,8 +517,10 @@ class EntityOps {
     );
   }
 
-  /// Spawns a new entity from the clipboard, offset from the camera centre.
-  void pasteEntity({Offset? at}) {
+  /// Spawns a new entity from the clipboard, offset from the camera centre —
+  /// at [point] in space when given (a 3-D scene's ground under the
+  /// pointer), else at [at]. A copied depth (z) is kept in 2-D.
+  void pasteEntity({Offset? at, Vector3? point}) {
     if (!sceneState.hasClipboard) return;
 
     final components = (sceneState.clipboard.value ?? [])
@@ -520,10 +528,19 @@ class EntityOps {
         .whereType<Component>()
         .toList();
 
-    final pastePosOffset = at ?? cameraOf().position + const Offset(30, 30);
-    final pastePos = Vector3.fromOffset(pastePosOffset);
+    final view = cameraOf();
+    final copied = components.whereType<TransformComponent>().firstOrNull;
+    final Vector3 pastePos;
+    if (point != null) {
+      pastePos = Vector3.copy(point);
+    } else if (view.isPlanar || at != null) {
+      final xy = at ?? view.position + const Offset(30, 30);
+      pastePos = Vector3(xy.dx, xy.dy, copied?.position.z ?? 0);
+    } else {
+      pastePos = view.focus;
+    }
 
-    final transform = components.whereType<TransformComponent>().firstOrNull;
+    final transform = copied;
     if (transform != null) {
       transform.position.setFrom(pastePos);
     } else {

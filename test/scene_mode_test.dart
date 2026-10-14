@@ -1,7 +1,6 @@
 import 'package:flutter/widgets.dart' show IconData;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_game_engine_editor/src/core/dev/editor_dev_flags.dart';
 import 'package:just_game_engine_editor/src/core/scene/editor_scene.dart';
 import 'package:just_game_engine_editor/src/core/state/editor_scene_state.dart';
 import 'package:just_game_engine_editor/src/core/state/scene_mode_filters.dart';
@@ -23,17 +22,12 @@ class _Tool extends LevelToolHandler {
 }
 
 void main() {
-  tearDown(() => EditorDevFlags.allow3DSceneModeOverride = null);
-
-  test('a 3-D scene is edited as 2-D until 3-D authoring is switched on', () {
+  test('a 3-D scene is edited in 3-D', () {
     final state = EditorSceneState();
     expect(state.editingMode, SceneMode.twoD);
 
     state.openScene(EditorScene(name: 'deep', mode: SceneMode.threeD));
     expect(state.sceneMode.value, SceneMode.threeD, reason: 'kept');
-    EditorDevFlags.allow3DSceneModeOverride = false;
-    expect(state.editingMode, SceneMode.twoD);
-    EditorDevFlags.allow3DSceneModeOverride = true;
     expect(state.editingMode, SceneMode.threeD);
 
     state.closeScene();

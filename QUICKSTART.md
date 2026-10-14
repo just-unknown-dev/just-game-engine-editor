@@ -6,9 +6,10 @@ Add it as a `dev_dependency`: only your developer entry point imports it, and a 
 
 ```yaml
 dev_dependencies:
-  just_game_engine_editor:
-    path: packages/just_game_engine_editor
+  just_game_engine_editor: ^0.1.0
 ```
+
+It comes from the Asset Store: a project made with `just create` has it, or `just add just_game_engine_editor`. The store puts it in `packages/core/` and points the dependency there in `pubspec_overrides.yaml`.
 
 ## 1. A developer entry point
 
@@ -95,7 +96,8 @@ final healthSchema = ComponentSchema<MyHealthComponent>(
   ),
 );
 
-ComponentDefinitionRegistry.instance.register(healthSchema);
+// Each engine has its own registry: register on the one the game runs.
+engine.context.definitions.register(healthSchema);
 ```
 
 That is the whole description: the inspector's section for `MyHealthComponent` is built from it. An `EditorModule` is where prefabs, viewport tools, overlays and — if you add your own `FieldType` — its editor go:
@@ -131,11 +133,11 @@ See the main [README](README.md) for keyboard shortcuts and the scene file forma
 
 ## 5. Build a level
 
-Open the Level Designer with the map icon on the play toolbar. At the top right of the level, All, Move, Scale and Rotate (Q, W, E, R) are the select tool; the other tools hang below them under SELECT, SHAPES, TILES and MEASURE, each with its key on the button. The settings for the tool in hand are at the left of the status bar along the bottom.
+Open the Level Designer with **F3** or the map icon on the play toolbar. At the top right of the level, All, Move, Scale and Rotate (Q, W, E, R) are the select tool; the other tools hang below them under SELECT, SHAPES, TILES and MEASURE, each with its key on the button. The settings for the tool in hand are at the left of the status bar along the bottom.
 
-1. **Ground.** Press **S** and pick a tile in TILESET. The engine's built-in *Basic shapes* (blocks, slopes, a one-way plank) are always listed first; picking one adds that tileset to the map and, the first time, makes the scene's **Level Map** (a scene has one) with a `Ground` layer whose tiles collide. Or drop your own `.tileset.json` from the Assets dock onto the level, or add one with the **+** in TILESET. Then paint. **G** fills, **T** paints terrain, **D** erases and **W** selects tiles. Right-drag picks tiles up into the brush.
+1. **Ground.** Press **S** and pick a tile in TILESET. The engine's built-in *Basic shapes* (blocks, slopes, a one-way plank) are always listed first; picking one adds that tileset to the map and, the first time, makes the scene's **Level Map** (a scene has one) with a `Ground` layer whose tiles collide. Or drop your own `.tileset.json` from the Assets dock onto the level, or add one with the **+** in TILESET. Then paint. **G** fills, **T** paints terrain, **D** erases and **V** selects tiles. Right-drag picks tiles up into the brush.
 2. **Platforms, scenery, things that act.** Pick a prefab in PREFABS, then drag one out with **B** or paint several with **P**. Each is an entity, placed under the Level Map on one of its layers. The status bar says where it will go, e.g. `→ Level Map ▸ Ground`. If the scene has no map yet, the first thing placed makes it, and one Ctrl+Z takes both away.
-3. **Tiles as one thing.** Select painted tiles with **W** and press Enter (or right-click them, or use *Make them an entity* in the inspector). They are cut out into an entity of their own under the map, drawn and colliding exactly where they were.
+3. **Tiles as one thing.** Select painted tiles with **V** and press Enter (or right-click them, or use *Make them an entity* in the inspector). They are cut out into an entity of their own under the map, drawn and colliding exactly where they were.
 4. **Arrange.** LAYERS lists the depths front first. Under each depth are the map's layers, each saying how many entities are on it, and the entities at that depth that are on no map layer. **+** adds a map layer at a depth, and each layer has a switch for whether its tiles collide. **Q** selects and moves; moving an entity moves what is under it. The scene tree lists the Level Map's layers under it and, under each layer, the entities on it. Drag an entity onto a layer row to put it there.
 5. **Save** with Ctrl+S (the scene, and the map's `.map.json` if it is kept in one) and press Play.
 

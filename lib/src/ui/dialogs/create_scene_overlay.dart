@@ -4,7 +4,6 @@ import 'package:just_game_engine/just_game_engine.dart'
 import '../../core/constants/editor_constants.dart';
 import '../../core/theme/editor_metrics.dart';
 
-import '../../core/dev/editor_dev_flags.dart';
 import '../../core/serialization/scene_store.dart';
 import '../../core/serialization/scene_name_validator.dart';
 import '../kit/kit.dart';
@@ -69,9 +68,8 @@ Future<String?> showNewSceneDialog(
 /// The New scene form.
 ///
 /// A name, checked as it is typed and suggested from the scenes there are —
-/// `level_04` after `level_03` — and a choice of scene type: 2-D, or 3-D
-/// (disabled until 3-D authoring ships, unless
-/// [EditorDevFlags.allow3DSceneMode] is on). Create:
+/// `level_04` after `level_03` — and a choice of scene type: 2-D or 3-D.
+/// Create:
 /// 1. writes `assets/scenes/{name}.scene.json` via [SceneStore], in the
 ///    chosen mode, at the end of the play order;
 /// 2. calls [onSceneCreated] with the name.
@@ -111,12 +109,6 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
 
   /// How the new scene is authored. 2-D unless 3-D is picked.
   SceneMode _mode = SceneMode.twoD;
-
-  /// Why 3-D cannot be picked yet — on the page and in the tooltip.
-  static const String threeDUnavailable =
-      '3D scenes arrive in the next release.';
-
-  bool get _canPick3D => EditorDevFlags.allow3DSceneMode;
 
   @override
   void initState() {
@@ -234,35 +226,9 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
           EditorSegmented<SceneMode>(
             value: _mode,
             options: const [(SceneMode.twoD, '2D'), (SceneMode.threeD, '3D')],
-            disabled: _canPick3D ? const {} : const {SceneMode.threeD},
-            tooltips: _canPick3D
-                ? const {}
-                : const {SceneMode.threeD: threeDUnavailable},
             expand: true,
             onChanged: (mode) => setState(() => _mode = mode),
           ),
-          if (!_canPick3D) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Icon(
-                  Icons.info_outline,
-                  size: 13,
-                  color: EditorTheme.textMuted,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    threeDUnavailable,
-                    style: TextStyle(
-                      color: EditorTheme.textMuted,
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
           const SizedBox(height: 16),
           Text(
             'Saved as assets/scenes/${typed.isEmpty ? '{name}' : typed}'

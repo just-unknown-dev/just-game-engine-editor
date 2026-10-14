@@ -12,8 +12,9 @@ import '../ui/overlay/editor_overlay.dart';
 /// - Registering the [JustGameEditorPlugin] with [Engine.plugins], which
 ///   ticks it once per frame on wall-clock time — so it keeps working while
 ///   the game is paused or its time scale is zero.
-/// - Adding [JustGameEditorPlugin.onRender] to [RenderingEngine.overlayHooks]
-///   so gizmos draw on top of all ECS entities in world space.
+/// - Drawing the world before the editor: the engine calls the plugin's
+///   `renderOverlay` from its overlay hook, after the world's render, which
+///   this adds to [RenderingEngine.overlayHooks] if it is missing.
 /// - [JustGameEditorOverlay] focus-scope integration.
 ///
 /// When [plugin] is null (release builds) the widget degrades to a plain

@@ -216,7 +216,7 @@ class QuickValueRow extends StatefulWidget {
 
   final OverlayUiSettings settings;
 
-  /// What the values are: `Move step`, `Grid size`.
+  /// What the values are: `Step`, `Grid Size`.
   final String label;
 
   /// Each value, its chip's label and its tooltip.

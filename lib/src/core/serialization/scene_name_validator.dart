@@ -7,7 +7,7 @@ import 'scene_store.dart';
 /// Validates scene names and scans the project for existing scenes.
 ///
 /// The rules themselves are the engine's [SceneNames], shared with
-/// `just scene new`, so a name the editor refuses the command line refuses
+/// `just game scene new`, so a name the editor refuses the command line refuses
 /// too.
 class SceneNameValidator {
   const SceneNameValidator._();

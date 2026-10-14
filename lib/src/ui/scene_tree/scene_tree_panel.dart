@@ -281,30 +281,35 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
       );
     }
 
-    return Focus(
-      focusNode: _keys,
-      onFocusChange: (has) => setState(() => _hasKeys = has),
-      onKeyEvent: _onKey,
-      child: Listener(
-        // Every pointer up in the list reaches here, rows included, so
-        // one no row claimed is a click on the empty part of the tree:
-        // nothing is selected. A widget *behind* the list would never
-        // hear it — a scrollable swallows taps.
-        onPointerDown: (event) {
-          _emptyPressedAt = event.position;
-          _emptyPressedPrimary = event.buttons & kPrimaryButton != 0;
-        },
-        onPointerUp: (event) {
-          final tookIt = _rowTookIt;
-          _rowTookIt = false;
-          if (tookIt || !_emptyPressedPrimary) return;
-          if ((event.position - _emptyPressedAt).distance > kTouchSlop) return;
-          _keys.requestFocus();
-          if (_tree.renaming.value != null) return;
-          _tree.pickedLayer.value = null;
-          _sceneState.clearSelection();
-        },
-        child: _rowList(tree),
+    return EditorKeyClaim(
+      claims: _claims,
+      child: Focus(
+        focusNode: _keys,
+        onFocusChange: (has) => setState(() => _hasKeys = has),
+        onKeyEvent: _onKey,
+        child: Listener(
+          // Every pointer up in the list reaches here, rows included, so
+          // one no row claimed is a click on the empty part of the tree:
+          // nothing is selected. A widget *behind* the list would never
+          // hear it — a scrollable swallows taps.
+          onPointerDown: (event) {
+            _emptyPressedAt = event.position;
+            _emptyPressedPrimary = event.buttons & kPrimaryButton != 0;
+          },
+          onPointerUp: (event) {
+            final tookIt = _rowTookIt;
+            _rowTookIt = false;
+            if (tookIt || !_emptyPressedPrimary) return;
+            if ((event.position - _emptyPressedAt).distance > kTouchSlop) {
+              return;
+            }
+            _keys.requestFocus();
+            if (_tree.renaming.value != null) return;
+            _tree.pickedLayer.value = null;
+            _sceneState.clearSelection();
+          },
+          child: _rowList(tree),
+        ),
       ),
     );
   }
@@ -969,6 +974,37 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   }
 
   // ── Keys ─────────────────────────────────────────────────────────────
+
+  static final Set<LogicalKeyboardKey> _treeKeys = {
+    LogicalKeyboardKey.arrowUp,
+    LogicalKeyboardKey.arrowDown,
+    LogicalKeyboardKey.arrowLeft,
+    LogicalKeyboardKey.arrowRight,
+    LogicalKeyboardKey.home,
+    LogicalKeyboardKey.end,
+    LogicalKeyboardKey.f2,
+    LogicalKeyboardKey.enter,
+    LogicalKeyboardKey.delete,
+    LogicalKeyboardKey.escape,
+  };
+
+  /// The keys [_onKey] acts on, kept from the editor's shortcuts while the
+  /// tree has the focus: the editor hears every key first, so Ctrl+D would
+  /// otherwise duplicate twice, F2 open the docks as well as rename, and the
+  /// arrows nudge the selection in the level as well as walk the tree.
+  /// Ctrl+S and the rest still reach the editor.
+  static bool _claims(KeyEvent event) {
+    if (HardwareKeyboard.instance.isControlPressed) {
+      return event.logicalKey == LogicalKeyboardKey.keyD ||
+          event.logicalKey == LogicalKeyboardKey.keyG;
+    }
+    if (_treeKeys.contains(event.logicalKey)) return true;
+    // A letter jumps to the next row starting with it.
+    final character = event.character;
+    return character != null &&
+        character.length == 1 &&
+        character.trim().isNotEmpty;
+  }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {

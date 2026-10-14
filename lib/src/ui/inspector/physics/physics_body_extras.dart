@@ -6,9 +6,8 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
 import '../../../core/constants/editor_constants.dart';
+import '../../../core/entity/component_edit.dart';
 import '../../../core/scope/editor_scope.dart';
-import '../../level_designer/state/editor_commands.dart';
-import '../../overlay/gizmo_painter.dart';
 import '../../widgets/editor_dropdown.dart';
 import '../component_extras.dart';
 import '../field_style.dart';
@@ -29,20 +28,27 @@ class PhysicsMaterialPreset {
   final double restitution;
   final String description;
 
-  /// Whether [body] is made of this.
-  bool matches(jge.PhysicsBodyComponent body) =>
-      (body.friction - friction).abs() < 1e-6 &&
-      (body.restitution - restitution).abs() < 1e-6;
+  /// Whether a body of [friction] and [restitution] is made of this.
+  bool matches(double friction, double restitution) =>
+      (friction - this.friction).abs() < 1e-6 && (restitution - this.restitution).abs() < 1e-6;
 }
 
-/// What the inspector adds to a Physics Body: a one-line summary, Fit to
-/// visual and Edit collider, material presets, and while the game runs,
-/// how the body is moving.
+/// What the inspector adds to the physics components — the 2-D ones here,
+/// and a 3-D body's material presets through [materialsFor]:
+///
+/// - **Rigid Body 2D**: a one-line summary, material presets heading its
+///   Surface group, and while the game runs, how the body is moving.
+/// - **Collider 2D**: its shape in a few words, Fit to what is drawn, and
+///   Edit in the viewport.
 abstract final class PhysicsBodyExtras {
-  static const String type = 'PhysicsBodyComponent';
+  /// The rigid body's saved type.
+  static const String rigidBodyType = 'RigidBody2D';
+
+  /// The collider's saved type.
+  static const String colliderType = 'Collider2D';
 
   static const List<PhysicsMaterialPreset> materials = [
-    PhysicsMaterialPreset('Default', 0.2, 0.8, 'What a new body starts as.'),
+    PhysicsMaterialPreset('Default', 0.5, 0, 'What a new body starts as.'),
     PhysicsMaterialPreset(
       'Character',
       0,
@@ -58,132 +64,120 @@ abstract final class PhysicsBodyExtras {
     PhysicsMaterialPreset('Sticky', 1, 0, 'Holds on; gives nothing back.'),
   ];
 
-  static ComponentEditorExtras extras(EditorScope scope) =>
+  /// Every 2-D extra.
+  static List<ComponentEditorExtras> all(EditorScope scope) => [rigidBody(scope), collider(scope)];
+
+  /// What [RigidBody2D]'s inspector adds.
+  static ComponentEditorExtras rigidBody(EditorScope scope) => ComponentEditorExtras(
+    type: rigidBodyType,
+    summary: (c) => summaryOf(c as jge.RigidBody2D, scope),
+    groupLeading: {
+      'Surface': (context, c) => _MaterialPresetRow(scope: scope, body: c),
+    },
+    section: (context, c) => _BodyNotes(scope: scope, body: c as jge.RigidBody2D),
+  );
+
+  /// The material presets on any body of [type] with `friction` and
+  /// `restitution` fields, heading its Surface group — what a 3-D rigid
+  /// body shows too, so both pick a material the same way. The editor is
+  /// found from where the row is shown.
+  static ComponentEditorExtras materialsFor(String type, {String Function(jge.Component c)? summary}) =>
       ComponentEditorExtras(
         type: type,
-        summary: (c) => summaryOf(c as jge.PhysicsBodyComponent, scope),
-        actions: [
-          InspectorAction(
-            id: 'physics.fitToVisual',
-            label: 'Fit the collider to what is drawn',
-            icon: Icons.fit_screen_rounded,
-            run: (context, c) async =>
-                fitToVisual(scope, c as jge.PhysicsBodyComponent),
-          ),
-          InspectorAction(
-            id: 'physics.editCollider',
-            label: 'Edit the collider in the viewport',
-            icon: Icons.edit_location_alt_outlined,
-            run: (context, c) async {
-              final session = ColliderEditSession.of(scope);
-              final entity = ownerOf(scope, c);
-              if (entity != null) session.toggle(entity);
-            },
-          ),
-        ],
+        summary: summary,
         groupLeading: {
-          'Material': (context, c) => _MaterialPresetRow(
-            scope: scope,
-            body: c as jge.PhysicsBodyComponent,
-          ),
+          'Surface': (context, c) {
+            final scope = EditorScopeProvider.maybeOf(context);
+            return scope == null ? const SizedBox.shrink() : _MaterialPresetRow(scope: scope, body: c);
+          },
         },
-        section: (context, c) =>
-            _BodyNotes(scope: scope, body: c as jge.PhysicsBodyComponent),
       );
 
-  /// `Dynamic · Circle r 17.4 · Sensor · Player`.
-  static String summaryOf(jge.PhysicsBodyComponent b, EditorScope scope) {
+  /// What [Collider2D]'s inspector adds.
+  static ComponentEditorExtras collider(EditorScope scope) => ComponentEditorExtras(
+    type: colliderType,
+    summary: (c) => shapeLabel(c as jge.Collider2D),
+    actions: [
+      InspectorAction(
+        id: 'physics.fitToVisual',
+        label: 'Fit the collider to what is drawn',
+        icon: Icons.fit_screen_rounded,
+        run: (context, c) async => fitToVisual(scope, c as jge.Collider2D),
+      ),
+      InspectorAction(
+        id: 'physics.editCollider',
+        label: 'Edit the collider in the viewport',
+        icon: Icons.edit_location_alt_outlined,
+        run: (context, c) async {
+          final session = ColliderEditSession.of(scope);
+          final entity = ownerOf(scope, c);
+          if (entity != null) session.toggle(entity);
+        },
+      ),
+    ],
+  );
+
+  /// `Dynamic body · Sensor · Player`.
+  static String summaryOf(jge.RigidBody2D b, EditorScope scope) {
     final layers = scope.physicsLayers.layers.value;
     return [
       switch (b.bodyType) {
-        jge.BodyType.static => 'Static',
-        jge.BodyType.kinematic => 'Kinematic',
-        jge.BodyType.dynamic => 'Dynamic',
+        jge.BodyType.static => 'Static body',
+        jge.BodyType.kinematic => 'Kinematic body',
+        jge.BodyType.dynamic => 'Dynamic body',
       },
-      shapeLabel(b.shape),
       if (b.isSensor) 'Sensor',
-      if (b.isOneWay) 'One-way',
       if (b.layer != 0) layers.labelOf(b.layer),
     ].join(' · ');
   }
 
-  /// A shape in a few words: `Circle r 17.4`, `Box 64 × 20`.
-  static String shapeLabel(jge.CollisionShape s) {
-    String n(double v) =>
-        v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
-    return switch (s) {
-      jge.CircleShape c => 'Circle r ${n(c.radius)}',
-      jge.RoundedPolygonShape p => 'Rounded ${p.vertices.length}-gon',
-      jge.RectangleShape r => 'Box ${n(r.width)} × ${n(r.height)}',
-      jge.PolygonShape p => '${p.vertices.length}-gon',
-      jge.CapsuleShape c => 'Capsule r ${n(c.radius)}',
-      jge.SegmentShape _ => 'Segment',
-      jge.ChainShape c => 'Chain of ${c.vertices.length}',
-      _ => 'Shape',
+  static String _n(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+
+  /// A collider in a few words: `Circle r 17.4`, `Box 64 × 20 · One-way`.
+  static String shapeLabel(jge.Collider2D c) {
+    final shape = switch (c.shape) {
+      jge.ColliderShape2D.box => 'Box ${_n(c.size.x)} × ${_n(c.size.y)}',
+      jge.ColliderShape2D.circle => 'Circle r ${_n(c.radius)}',
+      jge.ColliderShape2D.capsule => 'Capsule r ${_n(c.radius)} × ${_n(c.height)}',
+      jge.ColliderShape2D.polygon => '${c.points.length}-gon',
+      jge.ColliderShape2D.segment => 'Segment',
+      jge.ColliderShape2D.chain => 'Chain of ${c.points.length}',
+      jge.ColliderShape2D.matchShape => 'Matches what is drawn',
     };
+    return [shape, if (c.oneWay) 'One-way'].join(' · ');
   }
+
+  /// A simulated shape in a few words, for messages.
+  static String collisionShapeLabel(jge.CollisionShape s) => switch (s) {
+    jge.CircleShape c => 'Circle r ${_n(c.radius)}',
+    jge.RoundedPolygonShape p => 'Rounded ${p.vertices.length}-gon',
+    jge.RectangleShape r => 'Box ${_n(r.width)} × ${_n(r.height)}',
+    jge.PolygonShape p => '${p.vertices.length}-gon',
+    jge.CapsuleShape c => 'Capsule r ${_n(c.radius)}',
+    jge.SegmentShape _ => 'Segment',
+    jge.ChainShape c => 'Chain of ${c.vertices.length}',
+    _ => 'Shape',
+  };
 
   /// The entity [component] is on: the selection's, else whoever has it.
   static jge.Entity? ownerOf(EditorScope scope, jge.Component component) {
     final selected = scope.sceneState.selectedEntity.value;
-    if (selected != null &&
-        selected.components.any((c) => identical(c, component))) {
+    if (selected != null && selected.components.any((c) => identical(c, component))) {
       return selected;
     }
-    for (final e in scope.world.query([jge.PhysicsBodyComponent])) {
-      if (identical(e.getComponent<jge.PhysicsBodyComponent>(), component)) {
-        return e;
-      }
+    for (final e in scope.world.entities) {
+      if (e.components.any((c) => identical(c, component))) return e;
     }
     return null;
   }
 
-  /// The collider that would cover what [entity] draws, in its own space
-  /// (before its scale): a circle for a circle, a capsule for a capsule, a
-  /// polygon for a polygon, and a box around anything else that has a size.
-  /// Null when it draws nothing with a size.
-  static jge.CollisionShape? visualShapeOf(jge.Entity entity) {
-    for (final c in entity.components) {
-      switch (c) {
-        case jge.CircleComponent v:
-          return jge.CircleShape(v.radius);
-        case jge.CapsuleComponent v:
-          final r = math.min(v.width, v.height) / 2;
-          final half = (math.max(v.width, v.height) / 2 - r).clamp(0, 1e9);
-          return v.height >= v.width
-              ? jge.CapsuleShape(
-                  center1: Offset(0, -half.toDouble()),
-                  center2: Offset(0, half.toDouble()),
-                  radius: r,
-                )
-              : jge.CapsuleShape(
-                  center1: Offset(-half.toDouble(), 0),
-                  center2: Offset(half.toDouble(), 0),
-                  radius: r,
-                );
-        case jge.RectangleComponent v:
-          return jge.RectangleShape(v.width, v.height);
-        case jge.PolygonComponent v when v.vertices.length >= 3:
-          return jge.PolygonShape([...v.vertices]);
-      }
-    }
-    Size? best;
-    for (final c in entity.components) {
-      if (c is jge.PhysicsBodyComponent) continue;
-      final size = GizmoPainter.sizeOf(c);
-      if (size == null || size.width <= 0 || size.height <= 0) continue;
-      if (best == null || size.width * size.height > best.width * best.height) {
-        best = size;
-      }
-    }
-    return best == null ? null : jge.RectangleShape(best.width, best.height);
-  }
-
-  /// Gives [body] the collider of what its entity draws, centred, as one
-  /// undo step. Says so in the log when there is nothing to fit to.
-  static bool fitToVisual(EditorScope scope, jge.PhysicsBodyComponent body) {
-    final entity = ownerOf(scope, body);
-    final shape = entity == null ? null : visualShapeOf(entity);
+  /// Gives [collider] the shape of what its entity draws, centred and
+  /// unturned, as one undo step — set once; a collider matching the shape
+  /// ([jge.ColliderShape2D.matchShape]) follows it instead. Says so in the
+  /// log when there is nothing to fit to.
+  static bool fitToVisual(EditorScope scope, jge.Collider2D collider) {
+    final entity = ownerOf(scope, collider);
+    final shape = entity == null ? null : jge.ColliderGeometry.visualShapeOf(entity, definitions: scope.definitions);
     if (shape == null) {
       scope.log.log(
         'Fit to visual: the entity draws nothing with a size to fit to.',
@@ -192,98 +186,98 @@ abstract final class PhysicsBodyExtras {
       );
       return false;
     }
-    setCollider(scope, body, shape, Offset.zero, label: 'Fit collider');
+    final edit = ComponentEdit.begin(scope, collider);
+    setFrom(collider, shape);
+    edit.commit('Fit collider');
     return true;
   }
 
-  /// Sets [body]'s shape and offset together, as one undo step.
-  static void setCollider(
-    EditorScope scope,
-    jge.PhysicsBodyComponent body,
-    jge.CollisionShape shape,
-    Offset offset, {
-    String label = 'Edit collider',
-  }) {
-    final state = scope.sceneState;
-    scope.history.push(
-      CompositeCommand(
-        label: label,
-        commands: [
-          ComponentFieldCommand(
-            label: label,
-            component: body,
-            write: (c, v) => (c as jge.PhysicsBodyComponent).shape =
-                v! as jge.CollisionShape,
-            before: body.shape,
-            after: shape,
-            sceneState: state,
-          ),
-          ComponentFieldCommand(
-            label: label,
-            component: body,
-            write: (c, v) =>
-                (c as jge.PhysicsBodyComponent).offset = v! as Offset,
-            before: body.offset,
-            after: offset,
-            sceneState: state,
-          ),
-        ],
-      ),
-    );
-    state.refresh();
+  /// Sets [collider]'s fields to stand for [shape] (in its own space),
+  /// centred and unturned, its own scale 1.
+  static void setFrom(jge.Collider2D collider, jge.CollisionShape shape) {
+    collider
+      ..offset = Offset.zero
+      ..rotation = 0
+      ..scale = jge.Vector2(1, 1)
+      ..cornerRadius = 0;
+    switch (shape) {
+      case jge.CircleShape s:
+        collider
+          ..shape = jge.ColliderShape2D.circle
+          ..radius = s.radius
+          ..offset = s.center;
+      case jge.CapsuleShape s:
+        final d = s.center2 - s.center1;
+        collider
+          ..shape = jge.ColliderShape2D.capsule
+          ..radius = s.radius
+          ..height = d.distance + 2 * s.radius
+          ..rotation = d.distance < 1e-9 ? 0 : math.atan2(-d.dx, d.dy)
+          ..offset = (s.center1 + s.center2) / 2;
+      case jge.RectangleShape s:
+        collider
+          ..shape = jge.ColliderShape2D.box
+          ..size = jge.Vector2(s.width, s.height);
+      case jge.RoundedPolygonShape s:
+        final r = jge.ColliderGeometry.boundsOf(jge.PolygonShape(s.vertices));
+        collider
+          ..shape = jge.ColliderShape2D.box
+          ..size = jge.Vector2(r.width + 2 * s.cornerRadius, r.height + 2 * s.cornerRadius)
+          ..cornerRadius = s.cornerRadius
+          ..offset = r.center;
+      case jge.PolygonShape s:
+        collider
+          ..shape = jge.ColliderShape2D.polygon
+          ..points = [...s.vertices];
+      case jge.SegmentShape s:
+        collider
+          ..shape = jge.ColliderShape2D.segment
+          ..points = [s.point1, s.point2]
+          ..thickness = s.thickness;
+      case jge.ChainShape s:
+        collider
+          ..shape = jge.ColliderShape2D.chain
+          ..points = [...s.vertices]
+          ..loop = s.loop
+          ..thickness = s.thickness;
+    }
   }
 
-  /// Makes [body] of [preset], as one undo step.
-  static void applyMaterial(
-    EditorScope scope,
-    jge.PhysicsBodyComponent body,
-    PhysicsMaterialPreset preset,
-  ) {
-    final state = scope.sceneState;
-    final label = 'Material: ${preset.name}';
-    scope.history.push(
-      CompositeCommand(
-        label: label,
-        commands: [
-          ComponentFieldCommand(
-            label: label,
-            component: body,
-            write: (c, v) =>
-                (c as jge.PhysicsBodyComponent).friction = v! as double,
-            before: body.friction,
-            after: preset.friction,
-            sceneState: state,
-          ),
-          ComponentFieldCommand(
-            label: label,
-            component: body,
-            write: (c, v) =>
-                (c as jge.PhysicsBodyComponent).restitution = v! as double,
-            before: body.restitution,
-            after: preset.restitution,
-            sceneState: state,
-          ),
-        ],
-      ),
-    );
-    state
-      ..markDirty()
-      ..refresh();
+  /// [body]'s friction and restitution, read through its definition — a
+  /// 2-D or a 3-D body alike; null when it has neither.
+  static (double, double)? surfaceOf(EditorScope scope, jge.Component body) {
+    final definition = scope.definitions.definitionFor(body);
+    final friction = definition?.field('friction')?.read(body);
+    final restitution = definition?.field('restitution')?.read(body);
+    if (friction is! num || restitution is! num) return null;
+    return (friction.toDouble(), restitution.toDouble());
+  }
+
+  /// Makes [body] — any body with friction and restitution fields — of
+  /// [preset], as one undo step.
+  static void applyMaterial(EditorScope scope, jge.Component body, PhysicsMaterialPreset preset) {
+    final definition = scope.definitions.definitionFor(body);
+    if (definition == null) return;
+    final edit = ComponentEdit.begin(scope, body);
+    definition.field('friction')?.write?.call(body, preset.friction);
+    definition.field('restitution')?.write?.call(body, preset.restitution);
+    edit.commit('Material: ${preset.name}');
   }
 }
 
-/// "Preset [Rubber ▾]" at the head of the Material group.
+/// "Preset [Rubber ▾]" at the head of the Surface group.
 class _MaterialPresetRow extends StatelessWidget {
   const _MaterialPresetRow({required this.scope, required this.body});
 
   final EditorScope scope;
-  final jge.PhysicsBodyComponent body;
+  final jge.Component body;
 
   @override
   Widget build(BuildContext context) {
+    final surface = PhysicsBodyExtras.surfaceOf(scope, body);
     PhysicsMaterialPreset? current;
     for (final m in PhysicsBodyExtras.materials) {
-      if (m.matches(body)) current = m;
+      if (surface != null && m.matches(surface.$1, surface.$2)) current = m;
     }
     return Row(
       children: [
@@ -324,13 +318,16 @@ class _BodyNotes extends StatelessWidget {
   const _BodyNotes({required this.scope, required this.body});
 
   final EditorScope scope;
-  final jge.PhysicsBodyComponent body;
+  final jge.RigidBody2D body;
 
   @override
   Widget build(BuildContext context) => SignalBuilder<bool>(
     signal: scope.isPlayTesting,
     builder: (context, playing, _) {
+      final entity = PhysicsBodyExtras.ownerOf(scope, body);
       final notes = <String>[
+        if (entity != null && !entity.hasComponent<jge.Collider2D>())
+          'It has no Collider 2D, so it has no shape and touches nothing.',
         if (body.isDynamic &&
             !body.isSensor &&
             body.restitution > 0 &&
@@ -378,7 +375,7 @@ class _LiveReadout extends StatefulWidget {
   const _LiveReadout({required this.scope, required this.body});
 
   final EditorScope scope;
-  final jge.PhysicsBodyComponent body;
+  final jge.RigidBody2D body;
 
   @override
   State<_LiveReadout> createState() => _LiveReadoutState();
@@ -417,7 +414,7 @@ class _LiveReadoutState extends State<_LiveReadout>
       else ...[
         ('Velocity', '${n(body.velocity.x)}, ${n(body.velocity.y)} px/s'),
         ('Speed', '${n(body.velocity.length)} px/s'),
-        if (!b.fixedRotation)
+        if (!b.lockRotation)
           ('Spin', '${n(body.angularVelocity * 180 / math.pi)} °/s'),
         if (b.isDynamic) ('Asleep', body.isAwake ? 'no' : 'yes'),
         if (b.isDynamic) ('Grounded', b.isGrounded ? 'yes' : 'no'),

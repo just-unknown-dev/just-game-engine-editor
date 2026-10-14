@@ -35,8 +35,8 @@ String formatBytes(int bytes) {
 ///
 /// Three frames, left to right: **transport** (Play, Pause, Step, Stop,
 /// Restart, the speed, and what the play-test is doing), **view and mode**
-/// (the game camera preview, the Level Designer, the interface editor), and
-/// what **modules** add. The frames take the play state's colour, so a
+/// (the game camera preview and the Level Designer), and what **modules**
+/// add, each parted from the next. The frames take the play state's colour, so a
 /// running play-test is visible from the corner of the eye. Narrower than
 /// [maxWidth], the row scrolls sideways rather than run into what is at the
 /// top right.

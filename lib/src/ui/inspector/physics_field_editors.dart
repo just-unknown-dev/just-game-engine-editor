@@ -3,6 +3,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
 import '../../core/constants/editor_constants.dart';
+import '../../core/physics/physics_bodies.dart';
 import '../../core/scope/editor_scope.dart';
 import '../overlay/docks/shell/built_in_docks.dart' show BuiltInDocks;
 import '../widgets/editor_dropdown.dart';
@@ -27,16 +28,10 @@ abstract final class PhysicsFieldEditors {
   static void openDock(EditorScope? scope) =>
       scope?.dockController.open(BuiltInDocks.physics);
 
-  /// How many bodies in [scope]'s scene are on each layer.
+  /// How many bodies, 2-D and 3-D, in [scope]'s scene are on each layer.
   static List<int> bodyCounts(EditorScope? scope) {
-    final counts = List.filled(jge.PhysicsLayers.count, 0);
-    if (scope == null) return counts;
-    for (final e in scope.world.query([jge.PhysicsBodyComponent])) {
-      if (e.hasComponent<jge.MapBodyComponent>()) continue;
-      final b = e.getComponent<jge.PhysicsBodyComponent>()!;
-      counts[jge.PhysicsLayers.clampLayer(b.layer)]++;
-    }
-    return counts;
+    if (scope == null) return List.filled(jge.PhysicsLayers.count, 0);
+    return [for (final bodies in PhysicsBodies.byLayer(scope.world, scope.definitions)) bodies.length];
   }
 
   /// `3 bodies`, `1 body`, or nothing.
@@ -175,11 +170,16 @@ class PhysicsLayerMaskField extends StatelessWidget {
 
   final FieldEditorContext ctx;
 
-  /// The layer of the body the field belongs to, for what the grid says.
-  int get _ownLayer => switch (ctx.component) {
-    jge.PhysicsBodyComponent b => b.layer,
-    _ => 0,
-  };
+  /// The layer of the body the field belongs to, for what the grid says:
+  /// its component's own layer field, whichever body it is.
+  int get _ownLayer {
+    final component = ctx.component;
+    final definition = ctx.scope?.definitions.definitionFor(component);
+    for (final f in definition?.fields ?? const <jge.SchemaField>[]) {
+      if (f.kind == jge.FieldTypes.physicsLayer) return (f.read(component) as num?)?.toInt() ?? 0;
+    }
+    return 0;
+  }
 
   @override
   Widget build(BuildContext context) => _LayersBuilder(

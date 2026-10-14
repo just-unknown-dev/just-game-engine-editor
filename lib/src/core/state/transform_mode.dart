@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart' show IconData, Icons;
 import 'package:just_game_engine/just_game_engine.dart';
 
-/// Which gizmo the selection shows: the floating toolbar's buttons, V, W,
+/// Which gizmo the selection shows: the floating toolbar's buttons, Q, W,
 /// E and R. One for the editor and the Level Designer alike.
 enum TransformMode {
   /// Move, scale and turn with one gizmo — how the editor and the designer

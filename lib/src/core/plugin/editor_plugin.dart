@@ -3,6 +3,8 @@ import 'dart:io' show Platform;
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart'
+    show PointerDeviceKind, kPrimaryMouseButton;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:just_debugger/just_debugger.dart';
@@ -14,9 +16,12 @@ import '../../ui/inspector/physics/collider_edit_session.dart';
 import '../../ui/level_designer/state/editor_commands.dart';
 import '../assets/file_sprite_asset_loader.dart';
 import '../../ui/level_designer/state/map_placement.dart';
+import '../../ui/level_designer/state/prefab_registry.dart';
 import '../ecs/systems/editor_log_capture_system.dart';
 import '../ecs/systems/physics_body_binding_system.dart';
 import '../entity/entity_ops.dart';
+import '../input/handle_drag_session.dart';
+import '../physics/physics_bodies.dart';
 import '../input/viewport_input.dart';
 import '../play/play_controller.dart';
 import '../project/editor_presence.dart';
@@ -30,7 +35,10 @@ import '../state/transform_mode.dart';
 import '../../ui/overlay/chrome_state.dart';
 import '../../ui/overlay/docks/extra/extra_docks.dart' show ProblemScan;
 import '../../ui/overlay/docks/shell/built_in_docks.dart' show BuiltInDocks;
+import '../../ui/overlay/gizmo_3d.dart';
 import '../../ui/overlay/gizmo_painter.dart';
+import '../view/orbit_fly_editor_view.dart';
+import '../view/ray_entity_picker.dart';
 import '../../ui/overlay/settings/settings_dialog.dart';
 import '../../ui/level_designer/commands/designer_command.dart';
 import '../../ui/level_designer/level_designer_session.dart';
@@ -44,7 +52,10 @@ import '../../ui/level_designer/state/editor_history.dart';
 import '../../ui/level_designer/tools/level_tool.dart';
 import '../../ui/level_designer/tools/tiles/tile_tool_base.dart';
 import '../../ui/level_designer/tools/tool_registry.dart';
+import '../../extension/asset_kind.dart';
 import '../../extension/editor_module.dart';
+import '../../extension/viewport_handles.dart';
+import '../../extension/viewport_overlay.dart';
 import '../../ui/overlay/camera_rig_painter.dart';
 import '../../ui/level_designer/painters/designer_canvas.dart';
 import '../constants/editor_constants.dart';
@@ -315,6 +326,13 @@ class JustGameEditorPlugin implements EnginePlugin {
     transformMode: () => shownTransformMode ?? TransformMode.all,
     transformModes: () => transformModesAvailable,
     colliderEdit: () => ColliderEditSession.of(scope),
+    handles: () => selectionHandles,
+    handleDrags: HandleDragSession(scope),
+    commitTransform: (command) {
+      scope.history.pushApplied(command);
+      sceneState.markDirty();
+    },
+    pickTests: () => scope.pickTests,
   );
 
   // ── Focus nodes ───────────────────────────────────────────────────────────
@@ -398,7 +416,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   Future<void> onInitialize() async {
     if (!kDebugMode || _isInitialized) return;
     _isInitialized = true;
-    // So `just scene` and `just upgrade` wait while the editor is open.
+    // So `just game scene` and `just upgrade` wait while the editor is open.
     _presence = EditorPresence.start();
     await logService.startSession(controller: debuggerController);
     if (!engine.world.systems.any((system) => system is SimpleMovementSystem)) {
@@ -407,7 +425,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (bindPhysicsBodies) {
       // No bridge system here — PhysicsSystem (core engine) owns
       // syncing PhysicsBody results back to TransformComponent itself, for
-      // every PhysicsBodyComponent entity, not just editor-authored ones.
+      // every entity with a Collider2D, not just editor-authored ones.
       if (!engine.world.systems.any(
         (system) => system is PhysicsBodyBindingSystem,
       )) {
@@ -462,6 +480,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     _syncLevelMapFocus();
     playController.state.addListener(_focusGameOnPlay);
     playController.state.addListener(_tellModulesPlayState);
+    playController.state.addListener(_releasePointerUnlessPlaying);
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
     // Register game custom components; a component refresh asked for by
@@ -848,10 +867,26 @@ class JustGameEditorPlugin implements EnginePlugin {
   void toggleLevelDesigner() =>
       isLevelDesignerOpen ? closeLevelDesigner() : openLevelDesigner();
 
+  static final Set<LogicalKeyboardKey> _flyKeys = {
+    LogicalKeyboardKey.keyW,
+    LogicalKeyboardKey.keyA,
+    LogicalKeyboardKey.keyS,
+    LogicalKeyboardKey.keyD,
+    LogicalKeyboardKey.keyQ,
+    LogicalKeyboardKey.keyE,
+    LogicalKeyboardKey.shiftLeft,
+    LogicalKeyboardKey.shiftRight,
+  };
+
   bool _onHardwareKey(KeyEvent event) {
     if (!_isInitialized) return false;
     // A chord being bound in the settings: every key is for that.
     if (scope.chrome.capturingKeys) return false;
+    // Flying (right button held in 3-D): the movement keys steer, and are
+    // no shortcuts meanwhile.
+    if (viewport.isLooking && _flyKeys.contains(event.logicalKey)) {
+      return true;
+    }
     // Holding a key keeps nudging; nothing else acts on a repeat.
     if (event is KeyRepeatEvent) {
       if (EditorKeyClaim.focusedClaims(event)) return false;
@@ -983,6 +1018,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// Whether dropping [path] on the viewport makes something: an image, a
   /// sprite project, or a sprite atlas.
   static bool canDropAsset(String path) {
+    if (AssetKind.of(path).drop != null) return true;
     final p = path.toLowerCase();
     return p.endsWith('.tileset.json') ||
         LevelMapFiles.isMapFile(p) ||
@@ -1003,6 +1039,20 @@ class JustGameEditorPlugin implements EnginePlugin {
   Entity? dropAsset(String path, Offset canvasPosition) {
     if (!sceneState.hasScene || !canDropAsset(path)) return null;
     final at = engine.cameraSystem.mainCamera.screenToWorld(canvasPosition);
+    final view = scope.editorView;
+    // In space a sprite stands where the pointer meets the ground.
+    final ground = view.isPlanar ? null : view.screenToGround(canvasPosition);
+    // A kind a module knows makes what it makes.
+    if (AssetKind.of(path).drop case final drop?) {
+      return drop(
+        AssetDrop(
+          scope: scope,
+          path: path,
+          at: ground ?? Vector3(at.dx, at.dy, 0),
+          place: (components, name) => _place(path, components, name: name),
+        ),
+      );
+    }
     final lower = path.toLowerCase();
     // What is dropped sits on the grid, as the Level Designer places it.
     final grid = sceneState.gridSize.value;
@@ -1020,7 +1070,9 @@ class JustGameEditorPlugin implements EnginePlugin {
     final stem = path.substring(path.lastIndexOf('/') + 1, dot);
     final isImage = !lower.endsWith('.json') && !lower.endsWith('.jsprite');
     final components = <Component>[
-      TransformComponent(position: Vector3(at.dx, at.dy, 0)),
+      TransformComponent(
+        position: ground ?? Vector3(at.dx, at.dy, 0),
+      ),
       if (isImage)
         SpriteComponent(spritePath: path, pixelArt: true)
       else
@@ -1347,6 +1399,25 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (playController.state.value == EditorPlayState.playing) focusGame();
   }
 
+  /// A press on the play-test's view, which takes the game's presses while
+  /// it plays: a game that looks with the mouse
+  /// (`input.lockPointerOnClick`) holds it, as it would outside the editor.
+  /// Escape, Pause and Stop let go.
+  void pressedPlayingGame(PointerDownEvent event) {
+    if (playController.state.value != EditorPlayState.playing) return;
+    if (event.kind != PointerDeviceKind.mouse ||
+        (event.buttons & kPrimaryMouseButton) == 0) {
+      return;
+    }
+    if (engine.isInitialized) engine.input.lockPointerForClick();
+  }
+
+  /// Paused or stopped, the editor needs the mouse back.
+  void _releasePointerUnlessPlaying() {
+    if (playController.state.value == EditorPlayState.playing) return;
+    if (engine.isInitialized) unawaited(engine.input.releasePointer());
+  }
+
   /// Gives the keyboard to the game.
   ///
   /// The game hears keys only while its own focus node is the primary focus,
@@ -1389,6 +1460,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (_isInitialized) _autosaveTick();
     if (_isInitialized) _syncRuntimeSystems(dt);
     if (!_isInitialized || !isVisible.value) return;
+    // Right button held in 3-D: WASD flies the view.
+    viewport.flyTick(dt, HardwareKeyboard.instance.logicalKeysPressed);
     _syncTimeScaleForPreview();
     // The game is frozen while authoring, so the brain is asked directly:
     // every camera snaps to what it would frame, which is what the camera
@@ -1454,10 +1527,18 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (!_isInitialized || !isVisible.value) return;
     if (size == Size.zero) return;
 
-    final camera = scope.editorView;
+    final camera = scope.editorView..viewportSize = size;
+    // In space (a 3-D scene) the 2-D aids — the pixel grid, camera rigs,
+    // collider outlines — have nothing to say; the ground grid and the
+    // 3-D gizmo take their place.
+    final flat = camera.isPlanar;
 
     if (isGridVisible.value) {
-      scope.grid.paintGrid(canvas, camera, size, cellSize: gridSize.value);
+      if (flat) {
+        scope.grid.paintGrid(canvas, camera, size, cellSize: gridSize.value);
+      } else {
+        paintGroundGrid(canvas, camera);
+      }
     }
 
     // Between the grid and the gizmos: level overlays sit above the grid so
@@ -1467,7 +1548,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
     // The designer draws the camera rigs as one of its overlays; with it
     // closed the base editor draws them itself.
-    if (designer.value == null && isAuthoring.value) {
+    if (flat && designer.value == null && isAuthoring.value) {
       CameraRigPainter.paint(
         DesignerCanvas(canvas: canvas, size: size, camera: camera),
         engine.world,
@@ -1479,25 +1560,53 @@ class JustGameEditorPlugin implements EnginePlugin {
       );
     }
 
-    _gizmoPainter.paintCameraMarkers(
-      canvas,
-      engine.world
-          .query([TransformComponent, VirtualCameraComponent])
-          .where(_isDrawn)
-          .toList(),
-      camera,
-      size,
-    );
+    // Cameras, spawn points and whatever else a module marks.
+    for (final marker in scope.markers) {
+      final where = marker.where;
+      _gizmoPainter.paintMarkers(
+        canvas,
+        marker,
+        [
+          for (final e in engine.world.query([
+            TransformComponent,
+            ...marker.components,
+          ]))
+            if (_isDrawn(e) && (where == null || where(e))) e,
+        ],
+        camera,
+        size,
+      );
+    }
 
-    _gizmoPainter.paintSpawnMarkers(
-      canvas,
-      engine.world
-          .query([TransformComponent, SpawnComponent])
-          .where(_isDrawn)
-          .toList(),
-      camera,
-      size,
-    );
+    // What the modules draw over the level: a light's reach, a frustum.
+    if (isAuthoring.value && scope.viewportOverlays.isNotEmpty) {
+      final hidden = scope.hiddenOverlays.value;
+      final overlayContext = ViewportOverlayContext(
+        canvas: canvas,
+        size: size,
+        view: camera,
+        scope: scope,
+        isShown: _isDrawn,
+      );
+      for (final overlay in scope.viewportOverlays) {
+        if (hidden.contains(overlay.id)) continue;
+        if (!overlay.dimensions.allows(sceneState.editingMode)) continue;
+        overlay.paint(overlayContext);
+      }
+    }
+
+    // The points of the selection that can be dragged.
+    final handles = selectionHandles;
+    if (handles.isNotEmpty) {
+      paintViewportHandles(
+        canvas,
+        handles,
+        camera.isPlanar
+            ? (p) => camera.worldToScreen(Offset(p.x, p.y))
+            : camera.projectToScreen,
+        activeIndex: viewport.handleDrags?.activeIndex ?? -1,
+      );
+    }
 
     final highlighted = scope.highlightedTag.value;
     if (highlighted != null) {
@@ -1523,11 +1632,8 @@ class JustGameEditorPlugin implements EnginePlugin {
       _gizmoPainter.paintHighlight(
         canvas,
         [
-          for (final e in engine.world.query([PhysicsBodyComponent]))
-            if (e.getComponent<PhysicsBodyComponent>()!.layer == layer &&
-                !e.hasComponent<MapBodyComponent>() &&
-                _isDrawn(e))
-              e,
+          for (final e in PhysicsBodies.byLayer(engine.world, scope.definitions)[layer])
+            if (_isDrawn(e)) e,
         ],
         layers.labelOf(layer),
         layers.colorOf(layer),
@@ -1538,7 +1644,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
     // A collider being edited, over everything in the level.
     final collider = ColliderEditSession.of(scope);
-    if (isAuthoring.value) collider.paint(canvas, camera);
+    if (flat && isAuthoring.value) collider.paint(canvas, camera);
 
     _paintGamePreview(canvas, size, engine.cameraSystem.mainCamera);
 
@@ -1555,6 +1661,17 @@ class JustGameEditorPlugin implements EnginePlugin {
     }
     final mode = shownTransformMode;
     if (mode == null) return;
+    if (!flat) {
+      final gizmo = Gizmo3D.of(
+        selected,
+        camera,
+        local: sceneState.localGizmo,
+      );
+      if (gizmo != null) {
+        paintGizmo3D(canvas, gizmo, mode: mode, active: viewport.activeHandle);
+      }
+      return;
+    }
     _gizmoPainter.paintGizmos(
       canvas,
       selected,
@@ -1625,6 +1742,9 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// showing what the brain wants, then handed back exactly as it was — so
   /// the author sees the shot they are composing without leaving the view
   /// they are composing it from.
+  // The preview's own view, kept so a 3-D backend keeps one surface for it.
+  final FrameView _previewFrame = FrameView();
+
   void _paintGamePreview(Canvas canvas, Size size, Camera camera) {
     if (!showGamePreview.value || !isAuthoring.value) return;
     final brain = scope.cameraBrain;
@@ -1668,6 +1788,19 @@ class JustGameEditorPlugin implements EnginePlugin {
       ..scale(viewRect.width / size.width);
     camera.apply(shot);
     try {
+      // A 3-D backend's image first, as the game draws it.
+      final renderers = engine.rendering.sceneRenderers;
+      if (renderers.isNotEmpty) {
+        final frame = _previewFrame
+          ..update(
+            camera,
+            size,
+            interpolation: engine.rendering.interpolation,
+          );
+        for (final renderer in renderers) {
+          if (renderer.enabled) renderer.render(canvas, frame);
+        }
+      }
       engine.world.render(canvas, size);
     } finally {
       camera
@@ -1812,11 +1945,115 @@ class JustGameEditorPlugin implements EnginePlugin {
       sceneState.selectEntity(entity);
       return;
     }
+    if (scope.editorView case final OrbitFlyEditorView view) {
+      // In space: around it, far enough back to see all of it.
+      final box = Aabb3();
+      if (RayEntityPicker.boundsOf(entity, box)) view.focusOn(box);
+      sceneState.selectEntity(entity);
+      return;
+    }
     engine.cameraSystem.mainCamera.position = Offset(
       transform.position.x,
       transform.position.y,
     );
     sceneState.selectEntity(entity);
+  }
+
+  /// In 3-D: the surface under [canvasPosition] — the face of the nearest
+  /// drawn entity's box, or the ground — where something placed there goes.
+  SurfacePoint surfaceAt(Offset canvasPosition) =>
+      RayEntityPicker(tests: () => scope.pickTests).placementAt(
+        scope.editorView,
+        canvasPosition,
+        engine.world.entities.where(_isDrawn),
+      );
+
+  /// The prefabs a 3-D scene can be given from the viewport menu: the
+  /// modules' that place in 3-D, then each variant of those it applies to
+  /// (a Solid of every shape).
+  List<PrefabDefinition> get prefabsInSpace {
+    final base = [
+      for (final module in scope.modules.all)
+        for (final prefab in [...module.prefabs, ...module.sharedPrefabs])
+          if (prefab.dimensions.allows(SceneMode.threeD)) prefab,
+    ];
+    return [
+      ...base,
+      for (final variant in scope.prefabVariants)
+        for (final prefab in base)
+          if (variant.offersFor(prefab)) variant.of(prefab),
+    ];
+  }
+
+  /// The points the selected entity lets the author drag, while authoring
+  /// with one entity selected: what the modules' [ViewportHandles] offer.
+  List<ViewportHandle> get selectionHandles {
+    if (!isAuthoring.value || sceneState.hasMultiSelection) return const [];
+    final entity = sceneState.selectedEntity.value;
+    if (entity == null || !entity.isAlive) return const [];
+    final mode = sceneState.editingMode;
+    return [
+      for (final provider in scope.viewportHandles)
+        if (provider.dimensions.allows(mode)) ...provider.handlesOf(entity, scope),
+    ];
+  }
+
+  /// Places [prefab] at [at], selected, as one undo step.
+  Entity placePrefab(PrefabDefinition prefab, SurfacePoint at) {
+    final components =
+        prefab.buildAt?.call(at) ??
+        prefab.build(Offset(at.position.x, at.position.y), prefab.defaultSize);
+    final transform = components.whereType<TransformComponent>().firstOrNull;
+    if (transform == null) {
+      components.insert(
+        0,
+        TransformComponent(position: Vector3.copy(at.position)),
+      );
+    } else if (prefab.buildAt == null) {
+      transform.position.z = at.position.z;
+    }
+    final entity = engine.world.createEntityWithComponents(
+      components,
+      name: entities.uniqueName(prefab.namePrefix ?? prefab.id),
+    );
+    sceneState
+      ..syncEntityNode(entity)
+      ..markDirty()
+      ..refresh()
+      ..selectEntity(entity);
+    history.pushApplied(
+      CreateEntitiesCommand.adopting(
+        label: 'Place ${prefab.name}',
+        world: engine.world,
+        sceneState: sceneState,
+        entities: [entity],
+        codec: scope.codec,
+      ),
+    );
+    return entity;
+  }
+
+  /// In 3-D: frames the selection — or, with [all] or nothing selected,
+  /// everything drawn.
+  void frameInSpace({bool all = false}) {
+    final view = scope.editorView;
+    if (view is! OrbitFlyEditorView) return;
+    final box = Aabb3(), one = Aabb3();
+    final picked = all ? const <Entity>[] : selectionEntities;
+    for (final e in picked.isEmpty
+        ? engine.world.entities.where(_isDrawn)
+        : picked) {
+      if (RayEntityPicker.boundsOf(e, one)) box.addBox(one);
+    }
+    view.focusOn(box);
+  }
+
+  /// In 3-D: looks along an axis ([yaw], [pitch] in radians), turning about
+  /// the point the view pivots on.
+  void viewAlong({required double yaw, required double pitch}) {
+    if (scope.editorView case final OrbitFlyEditorView view) {
+      view.viewFrom(yaw: yaw, pitch: pitch);
+    }
   }
 
   /// Opens the Level Designer on the map on [entity], ready to paint: the
@@ -2160,6 +2397,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     keepsToLevelMap.removeListener(_syncLevelMapFocus);
     playController.state.removeListener(_focusGameOnPlay);
     playController.state.removeListener(_tellModulesPlayState);
+    playController.state.removeListener(_releasePointerUnlessPlaying);
     // Tear-offs of one method on one object are equal, not identical.
     if (scope.assetReloader == reloadAssets) {
       scope.assetReloader = null;

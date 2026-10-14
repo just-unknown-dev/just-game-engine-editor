@@ -869,9 +869,17 @@ class _OffsetListEditorRowState extends State<OffsetListEditorRow> {
     _commit();
   }
 
+  // A step in proportion to the outline: a 3-D polygon a metre across is
+  // not stretched 20 metres by its next point.
   void _add() {
     final last = _points.isNotEmpty ? _points.last : Offset.zero;
-    setState(() => _points.add(last + const Offset(20, 0)));
+    var step = 20.0;
+    if (_points.length >= 2) {
+      final xs = _points.map((p) => p.dx), ys = _points.map((p) => p.dy);
+      final size = math.max(xs.reduce(math.max) - xs.reduce(math.min), ys.reduce(math.max) - ys.reduce(math.min));
+      if (size > 0) step = size / 4;
+    }
+    setState(() => _points.add(last + Offset(step, 0)));
     _commit();
   }
 

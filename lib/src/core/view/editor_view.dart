@@ -6,10 +6,10 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 ///
 /// Everything in the editor that draws over the viewport, picks, drags a
 /// gizmo or pans goes through one of these rather than the engine's camera
-/// itself. Today the only view is [GameCameraEditorView] — the 2-D view, on
-/// the engine's main camera. A 3-D viewport (an orbiting camera) will be
-/// another, and the tools that speak rays ([screenToRay],
-/// [projectToScreen]) will work in it unchanged.
+/// itself. [GameCameraEditorView] is the 2-D view, on the engine's main
+/// camera; `OrbitFlyEditorView` the 3-D one, orbiting a pivot. Tools that
+/// speak rays ([screenToRay], [projectToScreen], [screenToGround]) work in
+/// both.
 ///
 /// The 2-D members are named as `jge.Camera`'s, so code written against the
 /// camera reads the same against a view.
@@ -21,6 +21,14 @@ abstract interface class EditorView {
   /// The world point at the centre of the view.
   Offset get position;
   set position(Offset value);
+
+  /// The 3-D point the view centres on: where something new goes when no
+  /// point is given. [position] at z = 0 in 2-D; the orbit's pivot in 3-D.
+  jge.Vector3 get focus;
+
+  /// Where a click at [screen] lands: on the world plane z = 0 in 2-D, on
+  /// the ground (y = 0) in 3-D.
+  jge.Vector3 screenToGround(Offset screen);
 
   /// Pixels per world unit at the centre of the view.
   double get zoom;
@@ -93,6 +101,15 @@ class GameCameraEditorView implements EditorView {
   Offset get position => camera.position;
   @override
   set position(Offset value) => camera.position = value;
+
+  @override
+  jge.Vector3 get focus => jge.Vector3(camera.position.dx, camera.position.dy, 0);
+
+  @override
+  jge.Vector3 screenToGround(Offset screen) {
+    final at = camera.screenToWorld(screen);
+    return jge.Vector3(at.dx, at.dy, 0);
+  }
 
   @override
   double get zoom => camera.zoom;

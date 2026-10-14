@@ -161,6 +161,51 @@ class TimelineDockState extends State<TimelineDock>
         context.findAncestorWidgetOfExactType<EditableText>() != null;
   }
 
+  static final Set<LogicalKeyboardKey> _ctrlKeys = {
+    LogicalKeyboardKey.keyZ,
+    LogicalKeyboardKey.keyY,
+    LogicalKeyboardKey.keyC,
+    LogicalKeyboardKey.keyX,
+    LogicalKeyboardKey.keyV,
+    LogicalKeyboardKey.keyD,
+    LogicalKeyboardKey.keyA,
+  };
+
+  static final Set<LogicalKeyboardKey> _plainKeys = {
+    LogicalKeyboardKey.space,
+    LogicalKeyboardKey.delete,
+    LogicalKeyboardKey.backspace,
+    LogicalKeyboardKey.arrowLeft,
+    LogicalKeyboardKey.arrowRight,
+    LogicalKeyboardKey.keyM,
+    LogicalKeyboardKey.bracketLeft,
+    LogicalKeyboardKey.bracketRight,
+    LogicalKeyboardKey.backslash,
+    LogicalKeyboardKey.comma,
+    LogicalKeyboardKey.period,
+    LogicalKeyboardKey.home,
+    LogicalKeyboardKey.end,
+    LogicalKeyboardKey.keyK,
+    LogicalKeyboardKey.keyF,
+    LogicalKeyboardKey.keyR,
+    LogicalKeyboardKey.tab,
+    LogicalKeyboardKey.escape,
+  };
+
+  /// The keys [_onKey] acts on, kept from the editor's shortcuts while the
+  /// dock has the focus: the editor hears every key first, so Delete would
+  /// otherwise delete the selected entity as well as the keys, Ctrl+Z undo
+  /// in the level as well as here, and R pick the Rotate tool. Ctrl+S is
+  /// left to both: it saves the timeline and the scene.
+  bool _claims(KeyEvent event) {
+    if (session.asset.value == null) return false;
+    final keys = HardwareKeyboard.instance;
+    if (keys.isControlPressed || keys.isMetaPressed) {
+      return _ctrlKeys.contains(event.logicalKey);
+    }
+    return _plainKeys.contains(event.logicalKey);
+  }
+
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is KeyUpEvent || _isTyping || session.asset.value == null) {
       return KeyEventResult.ignored;
@@ -264,40 +309,30 @@ class TimelineDockState extends State<TimelineDock>
   Future<void> _addTrack(BuildContext anchor) async {
     final box = anchor.findRenderObject()! as RenderBox;
     final at = box.localToGlobal(Offset(0, box.size.height));
+    // Every kind the engine knows and offers: its own, and a package's
+    // (skeletal clips, once the 3-D renderer is in).
+    final kinds = widget.scope.context.trackKinds;
     final choice = await showTimelineMenu<String>(context, at, [
       timelineMenuItem('property', 'A field…'),
       timelineMenuDivider(),
-      timelineMenuItem('event', 'Events'),
-      timelineMenuItem('sprite', 'Sprite clips'),
-      timelineMenuItem('camera', 'Camera shots'),
-      timelineMenuItem('audio', 'Audio'),
-      timelineMenuItem('active', 'Activation'),
-      timelineMenuItem('nested', 'Nested timelines'),
+      for (final kind in kinds.offered)
+        timelineMenuItem('kind:$kind', kinds.offerFor(kind)!.label),
     ]);
     if (choice == null || !mounted) return;
-    switch (choice) {
-      case 'property':
-        final picked = await promptPropertyTrack(context, session);
-        if (picked != null) {
-          session.addPropertyTracks(
-            picked.binding,
-            picked.componentType,
-            picked.field,
-          );
-        }
-      case 'event':
-        session.addTrack(jge.EventTrack());
-      case 'sprite':
-        session.addTrack(jge.SpriteClipTrack());
-      case 'camera':
-        session.addTrack(jge.CameraShotTrack());
-      case 'audio':
-        session.addTrack(jge.AudioTrack());
-      case 'active':
-        session.addTrack(jge.ActivationTrack());
-      case 'nested':
-        session.addTrack(jge.NestedTimelineTrack());
+    if (choice == 'property') {
+      final picked = await promptPropertyTrack(context, session);
+      if (picked != null) {
+        session.addPropertyTracks(
+          picked.binding,
+          picked.componentType,
+          picked.field,
+        );
+      }
+      return;
     }
+    if (!choice.startsWith('kind:')) return;
+    final offer = kinds.offerFor(choice.substring('kind:'.length));
+    if (offer != null) session.addTrack(offer.create());
   }
 
   Future<void> _addAt(int trackIndex, double time) async {
@@ -439,118 +474,123 @@ class TimelineDockState extends State<TimelineDock>
     if (asset == null) return _empty();
     final rows = timelineRowsOf(asset);
 
-    return Focus(
-      focusNode: _focus,
-      onKeyEvent: _onKey,
-      child: Listener(
-        onPointerDown: (_) {
-          if (!_focus.hasFocus && !_isTyping) _focus.requestFocus();
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TimelineHeader(
-              session: session,
-              onFit: () => session.zoomToFit(_sheetWidth),
-            ),
-            // Always there, so the sheet does not jump when a selection
-            // comes or goes — between the two clicks of a double click, say.
-            TimelineItemBar(session: session),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    width: TimelineMetrics.treeWidth,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _TreeHeader(onAdd: _addTrack),
-                        Expanded(
-                          child: asset.tracks.isEmpty
-                              ? Padding(
-                                  padding: EdgeInsets.all(12),
-                                  child: Text(
-                                    'No tracks yet. Add one to animate a '
-                                    'field, play a clip or fire an event.',
-                                    style: TextStyle(
-                                      color: EditorTheme.textMuted,
-                                      fontSize: 11,
+    return EditorKeyClaim(
+      claims: _claims,
+      child: Focus(
+        focusNode: _focus,
+        onKeyEvent: _onKey,
+        child: Listener(
+          onPointerDown: (_) {
+            if (!_focus.hasFocus && !_isTyping) _focus.requestFocus();
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TimelineHeader(
+                session: session,
+                onFit: () => session.zoomToFit(_sheetWidth),
+              ),
+              // Always there, so the sheet does not jump when a selection
+              // comes or goes — between the two clicks of a double click, say.
+              TimelineItemBar(session: session),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: TimelineMetrics.treeWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _TreeHeader(onAdd: _addTrack),
+                          Expanded(
+                            child: asset.tracks.isEmpty
+                                ? Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: Text(
+                                      'No tracks yet. Add one to animate a '
+                                      'field, play a clip or fire an event.',
+                                      style: TextStyle(
+                                        color: EditorTheme.textMuted,
+                                        fontSize: 11,
+                                      ),
                                     ),
+                                  )
+                                : TrackTree(
+                                    session: session,
+                                    rows: rows,
+                                    controller: _vertical,
                                   ),
-                                )
-                              : TrackTree(
-                                  session: session,
-                                  rows: rows,
-                                  controller: _vertical,
-                                ),
-                        ),
-                        // The sheet beside it gives up this much to the
-                        // scroll bar; without the same gap here the two
-                        // would show different last rows.
-                        const SizedBox(height: TimelineScrollBar.height),
-                      ],
+                          ),
+                          // The sheet beside it gives up this much to the
+                          // scroll bar; without the same gap here the two
+                          // would show different last rows.
+                          const SizedBox(height: TimelineScrollBar.height),
+                        ],
+                      ),
                     ),
-                  ),
-                  Container(
-                    width: 1,
-                    color: EditorTheme.textPrimary.withValues(alpha: 0.08),
-                  ),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        _sheetWidth = constraints.maxWidth;
-                        // What the sheet can show bounds how far it scrolls,
-                        // and sizes the bar's thumb.
-                        if (session.viewWidth.value != _sheetWidth) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted) session.viewWidth.value = _sheetWidth;
-                          });
-                        }
-                        // The first look at a timeline shows all of it.
-                        if (!_fitted && _sheetWidth > 0) {
-                          _fitted = true;
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted) session.zoomToFit(_sheetWidth);
-                          });
-                        }
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            SizedBox(
-                              height: TimelineMetrics.rulerHeight,
-                              child: ClipRect(
-                                child: TimelineRuler(
-                                  session: session,
-                                  onMenu: _rulerMenu,
+                    Container(
+                      width: 1,
+                      color: EditorTheme.textPrimary.withValues(alpha: 0.08),
+                    ),
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          _sheetWidth = constraints.maxWidth;
+                          // What the sheet can show bounds how far it scrolls,
+                          // and sizes the bar's thumb.
+                          if (session.viewWidth.value != _sheetWidth) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted) {
+                                session.viewWidth.value = _sheetWidth;
+                              }
+                            });
+                          }
+                          // The first look at a timeline shows all of it.
+                          if (!_fitted && _sheetWidth > 0) {
+                            _fitted = true;
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted) session.zoomToFit(_sheetWidth);
+                            });
+                          }
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SizedBox(
+                                height: TimelineMetrics.rulerHeight,
+                                child: ClipRect(
+                                  child: TimelineRuler(
+                                    session: session,
+                                    onMenu: _rulerMenu,
+                                  ),
                                 ),
                               ),
-                            ),
-                            Expanded(
-                              child: session.showCurves.value
-                                  ? CurveView(
-                                      session: session,
-                                      onItemMenu: _itemMenu,
-                                    )
-                                  : DopeSheet(
-                                      key: _sheet,
-                                      session: session,
-                                      rows: rows,
-                                      verticalScroll: _vertical,
-                                      onItemMenu: _itemMenu,
-                                      onEmptyDoubleTap: _addAt,
-                                    ),
-                            ),
-                            TimelineScrollBar(session: session),
-                          ],
-                        );
-                      },
+                              Expanded(
+                                child: session.showCurves.value
+                                    ? CurveView(
+                                        session: session,
+                                        onItemMenu: _itemMenu,
+                                      )
+                                    : DopeSheet(
+                                        key: _sheet,
+                                        session: session,
+                                        rows: rows,
+                                        verticalScroll: _vertical,
+                                        onItemMenu: _itemMenu,
+                                        onEmptyDoubleTap: _addAt,
+                                      ),
+                              ),
+                              TimelineScrollBar(session: session),
+                            ],
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

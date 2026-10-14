@@ -4,54 +4,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/assets/package_asset_paths.dart';
+import '../../../../extension/asset_kind.dart';
 
-/// What a file is, as far as the browser cares: how to draw it, what opens
-/// it, what it can be dropped on.
-enum AssetKind {
-  folder('Folders'),
-  image('Images'),
-  sprite('Sprites'),
-  scene('Scenes'),
-  animator('Animators'),
-  tileset('Tilesets'),
-  levelMap('Maps'),
-  tiled('Tiled files'),
-  data('Data'),
-  audio('Audio'),
-  font('Fonts'),
-  other('Other');
-
-  const AssetKind(this.label);
-
-  final String label;
-
-  static AssetKind of(String path, {bool isDirectory = false}) {
-    if (isDirectory) return AssetKind.folder;
-    final p = path.toLowerCase();
-    if (p.endsWith('.scene.json')) return AssetKind.scene;
-    if (p.endsWith('.animator.json')) return AssetKind.animator;
-    if (p.endsWith('.tileset.json')) return AssetKind.tileset;
-    // A map, of either name: `.tilemap.json` from before the rename.
-    if (p.endsWith('.map.json') || p.endsWith('.tilemap.json')) {
-      return AssetKind.levelMap;
-    }
-    if (p.endsWith('.jsprite') ||
-        p.endsWith('.aseprite') ||
-        p.endsWith('.ase')) {
-      return AssetKind.sprite;
-    }
-    final dot = p.lastIndexOf('.');
-    final ext = dot < 0 ? '' : p.substring(dot + 1);
-    return switch (ext) {
-      'png' || 'jpg' || 'jpeg' || 'webp' || 'gif' || 'bmp' => AssetKind.image,
-      'json' || 'yaml' || 'yml' || 'txt' || 'csv' => AssetKind.data,
-      'tmx' || 'tmj' || 'tsx' || 'tsj' => AssetKind.tiled,
-      'wav' || 'mp3' || 'ogg' || 'flac' || 'm4a' => AssetKind.audio,
-      'ttf' || 'otf' => AssetKind.font,
-      _ => AssetKind.other,
-    };
-  }
-}
+export '../../../../extension/asset_kind.dart' show AssetKind, AssetKinds;
 
 /// One file or folder under the project's assets.
 class AssetEntry {

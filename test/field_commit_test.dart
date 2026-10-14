@@ -261,14 +261,15 @@ void main() {
     }, variant: _desktop);
   });
 
-  testWidgets("a Physics Body's collider takes a typed size on clicking away", (
+  testWidgets("a Collider 2D takes a typed size on clicking away", (
     tester,
   ) async {
     final world = jge.World()..initialize();
     final scope = testScope(world: world);
     final entity = world.createEntityWithComponents([
       jge.TransformComponent(position: jge.Vector3(100, 100, 0)),
-      jge.PhysicsBodyComponent(shape: jge.CircleShape(10)),
+      jge.RigidBody2D(),
+      jge.Collider2D(shape: jge.ColliderShape2D.circle, radius: 10),
     ], name: 'Ball');
     await tester.binding.setSurfaceSize(const Size(420, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -304,8 +305,7 @@ void main() {
     await tester.tapAt(const Offset(400, 1590), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
-    final shape = entity.getComponent<jge.PhysicsBodyComponent>()!.shape;
-    expect((shape as jge.CircleShape).radius, 25);
+    expect(entity.getComponent<jge.Collider2D>()!.radius, 25);
   }, variant: _desktop);
 
   group("the Timeline's fields", () {

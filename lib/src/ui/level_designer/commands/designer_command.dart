@@ -257,12 +257,21 @@ class CommandRegistry {
     required Set<CommandScope> scopes,
     bool isRepeat = false,
   }) {
-    final command = resolve(key, context.modifiers);
-    if (command == null || !scopes.contains(command.scope)) return false;
-    if (isRepeat && !command.repeats) return false;
-    if (!command.enabledIn(context)) return false;
-    command.run(context);
-    return true;
+    // The newest binding of the chord whose command belongs to [scopes] and
+    // the scene's mode owns it: one chord can mean a designer command, an
+    // editor command and a 3-D view command, each where it applies.
+    final mode = context.scope.sceneState.editingMode;
+    for (final b in _bindings.reversed) {
+      if (!b.matches(key, context.modifiers)) continue;
+      final command = _commands[b.commandId];
+      if (command == null || !scopes.contains(command.scope)) continue;
+      if (!command.dimensions.allows(mode)) continue;
+      if (isRepeat && !command.repeats) return false;
+      if (!command.enabledIn(context)) return false;
+      command.run(context);
+      return true;
+    }
+    return false;
   }
 
   /// Remembers the bindings as they are now as the ones built: what

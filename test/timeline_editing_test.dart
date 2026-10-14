@@ -263,6 +263,30 @@ void main() {
       await tester.pump();
       expect(s.selection.value, {const TimelineItemRef(0, 2)});
 
+      // Its keys are its own: the editor, which hears every key first, does
+      // not act on them as well (Delete would delete the selected entity).
+      bool claimed(LogicalKeyboardKey key) => EditorKeyClaim.focusedClaims(
+        KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.keyA,
+          logicalKey: key,
+          timeStamp: Duration.zero,
+        ),
+      );
+      for (final key in [
+        LogicalKeyboardKey.delete,
+        LogicalKeyboardKey.keyR,
+        LogicalKeyboardKey.keyF,
+        LogicalKeyboardKey.arrowLeft,
+        LogicalKeyboardKey.space,
+      ]) {
+        expect(claimed(key), isTrue, reason: key.debugName);
+      }
+      expect(claimed(LogicalKeyboardKey.keyW), isFalse, reason: 'not its key');
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      expect(claimed(LogicalKeyboardKey.keyZ), isTrue, reason: 'its own undo');
+      expect(claimed(LogicalKeyboardKey.keyS), isFalse, reason: 'saves both');
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+
       await press(LogicalKeyboardKey.arrowRight);
       expect(times(0), [0, 1, 2.1, 3]);
       await press(LogicalKeyboardKey.arrowLeft);

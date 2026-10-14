@@ -6,6 +6,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import '../assets/package_asset_paths.dart';
 import '../scope/editor_scope.dart';
 import '../serialization/unknown_components.dart';
+import 'physics_3d_checks.dart';
 import 'physics_checks.dart';
 import 'tag_checks.dart';
 
@@ -114,6 +115,7 @@ abstract final class BuiltInValidators {
     TagChecks.spawnPoints,
     TagChecks.unresolvedTargets,
     ...PhysicsChecks.all,
+    Physics3DChecks.all,
     drawnWithoutTransform,
     levelMaps,
     unshippedTileAssets,

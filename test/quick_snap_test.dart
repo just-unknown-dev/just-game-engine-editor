@@ -141,7 +141,7 @@ void main() {
       await tester.tap(magnet, buttons: kSecondaryButton);
       await tester.pump();
       expect(find.byType(QuickValueRow), findsOneWidget);
-      expect(find.text('Move step'), findsOneWidget);
+      expect(find.text('Step'), findsOneWidget);
       final row = tester.getRect(find.byType(QuickValueRow));
       final bar = tester.getRect(
         find
@@ -193,7 +193,7 @@ void main() {
       expect(inBar(find.text('32')), findsOneWidget, reason: 'its size');
       await tester.tap(button, buttons: kSecondaryButton);
       await tester.pump();
-      expect(find.text('Grid size'), findsOneWidget);
+      expect(find.text('Grid Size'), findsOneWidget);
       // Level with the grid button, at the foot of the column.
       final row = tester.getRect(find.byType(QuickValueRow));
       final at = tester.getRect(button);
@@ -205,8 +205,8 @@ void main() {
         buttons: kSecondaryButton,
       );
       await tester.pump();
-      expect(find.text('Move step'), findsOneWidget);
-      expect(find.text('Grid size'), findsNothing);
+      expect(find.text('Step'), findsOneWidget);
+      expect(find.text('Grid Size'), findsNothing);
       await tester.tap(button, buttons: kSecondaryButton);
       await tester.pump();
 

@@ -13,31 +13,9 @@ import '../../../../extension/editor_contributions.dart';
 import '../shared/dock_widgets.dart';
 import 'asset_index.dart';
 
-IconData assetIcon(AssetKind kind) => switch (kind) {
-  AssetKind.folder => Icons.folder_rounded,
-  AssetKind.image => Icons.image_outlined,
-  AssetKind.sprite => Icons.brush_outlined,
-  AssetKind.scene => Icons.map_outlined,
-  AssetKind.animator => Icons.account_tree_outlined,
-  AssetKind.tileset => Icons.grid_view,
-  AssetKind.levelMap => Icons.grid_on,
-  AssetKind.tiled => Icons.layers_outlined,
-  AssetKind.data => Icons.data_object_rounded,
-  AssetKind.audio => Icons.graphic_eq_rounded,
-  AssetKind.font => Icons.font_download_outlined,
-  AssetKind.other => Icons.insert_drive_file_outlined,
-};
+IconData assetIcon(AssetKind kind) => kind.icon;
 
-Color assetColor(AssetKind kind) => switch (kind) {
-  AssetKind.folder => const Color(0xFFFFC86B),
-  AssetKind.image || AssetKind.sprite => const Color(0xFF7DD8E0),
-  AssetKind.scene => const Color(0xFF7DE6B1),
-  AssetKind.animator => const Color(0xFFFFCA28),
-  AssetKind.tileset || AssetKind.levelMap => const Color(0xFF9CCC65),
-  AssetKind.tiled => const Color(0xFF80CBC4),
-  AssetKind.audio => const Color(0xFFD9A7FF),
-  _ => EditorTheme.textMuted,
-};
+Color assetColor(AssetKind kind) => kind.color ?? EditorTheme.textMuted;
 
 /// The image that stands for [entry] in the grid: itself for an image, the
 /// exported sheet beside a sprite project. Null draws an icon instead.
@@ -545,14 +523,7 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
             ),
           ),
         ),
-        for (final kind in const [
-          AssetKind.image,
-          AssetKind.sprite,
-          AssetKind.scene,
-          AssetKind.tileset,
-          AssetKind.levelMap,
-          AssetKind.audio,
-        ])
+        for (final kind in AssetKinds.active.filters)
           EditorChip(
             label: kind.label,
             color: assetColor(kind),
@@ -733,6 +704,9 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
   );
 
   Widget _thumbnail(AssetEntry entry, double size) {
+    // A kind that draws its own picture (a module's: a 3-D model's render).
+    final preview = entry.kind.preview?.call(context, _index, entry, size);
+    if (preview != null) return preview;
     final image = thumbnailOf(_index, entry);
     if (image == null) {
       return Icon(

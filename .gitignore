@@ -30,5 +30,8 @@ pubspec_overrides.yaml
 .flutter-plugins-dependencies
 /build/
 /coverage/
+# The example app's build output, and the logs the editor writes as it runs.
+/example/build/
+/example/.editor_logs/
 
 /.packages

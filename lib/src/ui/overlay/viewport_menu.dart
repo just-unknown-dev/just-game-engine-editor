@@ -11,19 +11,23 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../core/level_map/tile_selection_ops.dart';
 import '../../core/plugin/editor_plugin.dart';
+import '../../core/view/ray_entity_picker.dart';
+import '../level_designer/state/prefab_registry.dart';
 import '../widgets/editor_menu.dart';
 
 /// Opens the viewport's context menu at [globalPosition].
 ///
 /// [entity] is what was under the pointer, null for bare level; [worldPoint]
 /// is where that is in the level, which is where a paste or a new entity
-/// lands.
+/// lands — [surface] instead in a 3-D scene: what the pointer is on, or
+/// the ground, where the prefabs offered for space go too.
 Future<void> showViewportMenu(
   BuildContext context,
   JustGameEditorPlugin plugin, {
   required jge.Entity? entity,
   required Offset globalPosition,
   required Offset worldPoint,
+  SurfacePoint? surface,
 }) async {
   if (!plugin.sceneState.hasScene) return;
   final scope = plugin.scope;
@@ -44,6 +48,15 @@ Future<void> showViewportMenu(
     plugin.sceneState.selectEntity(entity);
   }
 
+  final prefabs = surface == null
+      ? const <PrefabDefinition>[]
+      : plugin.prefabsInSpace;
+  // Many prefabs are offered by category, each opening a menu of its own.
+  final byCategory = <String, List<PrefabDefinition>>{};
+  for (final prefab in prefabs) {
+    byCategory.putIfAbsent(prefab.category, () => []).add(prefab);
+  }
+  final grouped = prefabs.length > _flatPrefabs;
   final hasHidden = view.hidden.value.isNotEmpty;
   final hasLocked = view.locked.value.isNotEmpty;
 
@@ -94,6 +107,26 @@ Future<void> showViewportMenu(
     ),
     if (entity == null)
       editorMenuItem('create', 'New entity here', icon: Icons.add_box_outlined),
+    // In space: the modules' 3-D prefabs, on what the pointer is on.
+    if (surface != null && prefabs.isNotEmpty) ...[
+      editorMenuDivider(),
+      if (!grouped)
+        for (final prefab in prefabs)
+          editorMenuItem(
+            'prefab:${prefab.id}',
+            'Add ${prefab.name}',
+            icon: prefab.icon,
+          )
+      else ...[
+        editorMenuHeading('Add'),
+        for (final MapEntry(key: category, value: list) in byCategory.entries)
+          editorMenuItem(
+            'category:$category',
+            '$category…',
+            icon: list.first.icon,
+          ),
+      ],
+    ],
     if (entity != null) ...[
       editorMenuDivider(),
       editorMenuItem('group', 'Group', icon: Icons.folder_open_rounded),
@@ -172,9 +205,9 @@ Future<void> showViewportMenu(
     case 'copy':
       if (entity != null) entities.copyEntity(entity);
     case 'paste':
-      entities.pasteEntity(at: worldPoint);
+      entities.pasteEntity(at: worldPoint, point: surface?.position);
     case 'create':
-      entities.createEntity(at: worldPoint);
+      entities.createEntity(at: worldPoint, point: surface?.position);
     case 'group':
       entities.groupSelection();
     case 'ungroup':
@@ -196,6 +229,32 @@ Future<void> showViewportMenu(
     case 'copyName':
       await Clipboard.setData(ClipboardData(text: entity?.name ?? ''));
     default:
+      if (chosen.startsWith('category:') && surface != null) {
+        final list = byCategory[chosen.substring('category:'.length)] ?? const [];
+        if (!context.mounted || list.isEmpty) return;
+        final picked = await showEditorMenu<String>(context, globalPosition, [
+          editorMenuHeading(list.first.category),
+          for (final prefab in list)
+            editorMenuItem(prefab.id, prefab.name, icon: prefab.icon),
+        ]);
+        for (final prefab in list) {
+          if (prefab.id == picked) {
+            plugin.placePrefab(prefab, surface);
+            break;
+          }
+        }
+        return;
+      }
+      if (chosen.startsWith('prefab:') && surface != null) {
+        final id = chosen.substring('prefab:'.length);
+        for (final prefab in prefabs) {
+          if (prefab.id == id) {
+            plugin.placePrefab(prefab, surface);
+            break;
+          }
+        }
+        return;
+      }
       if (!chosen.startsWith('module:')) return;
       final id = chosen.substring('module:'.length);
       if (entity == null) return;
@@ -204,6 +263,10 @@ Future<void> showViewportMenu(
       }
   }
 }
+
+/// Up to this many prefabs are listed in the menu itself; more are listed
+/// by category.
+const int _flatPrefabs = 8;
 
 /// What the menu acts on: the selection when the clicked entity is part of
 /// it, otherwise that entity alone.

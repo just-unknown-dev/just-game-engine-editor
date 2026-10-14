@@ -197,6 +197,9 @@ class PlanarGizmoDragSolver implements GizmoDragSolver {
       case GizmoHandle.rotateX:
       case GizmoHandle.rotateY:
       case GizmoHandle.scaleZ:
+      case GizmoHandle.translateXZ:
+      case GizmoHandle.translateYZ:
+      case GizmoHandle.scaleUniform:
       case GizmoHandle.body:
       case GizmoHandle.none:
         break;

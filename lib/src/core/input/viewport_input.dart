@@ -4,14 +4,22 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
+import '../../extension/viewport_handles.dart';
 import '../../ui/inspector/physics/collider_edit_session.dart';
 import '../../ui/level_designer/level_designer_session.dart';
+import '../../ui/level_designer/state/editor_commands.dart'
+    show TransformCommand, TransformSnapshot;
 import '../../ui/level_designer/tools/level_tool.dart' show ToolButton;
+import '../../ui/overlay/gizmo_3d.dart';
 import '../../ui/overlay/gizmo_painter.dart';
 import '../state/editor_scene_state.dart';
 import '../state/transform_mode.dart';
 import '../view/editor_view.dart';
+import '../view/orbit_fly_editor_view.dart';
+import '../view/ray_entity_picker.dart';
 import 'gizmo_drag_solver.dart';
+import 'handle_drag_session.dart';
+import 'ray_gizmo_drag_solver.dart';
 
 /// Turns pointer events on the game canvas into edits: gizmo drags, camera
 /// pan and zoom, and, when the Level Designer is open, its tools and chrome.
@@ -32,13 +40,23 @@ class ViewportInput {
     this.transformMode,
     this.transformModes,
     this.colliderEdit,
+    this.handles,
+    this.handleDrags,
+    this.commitTransform,
     GizmoHitTester? hitTester,
     GizmoDragSolver? dragSolver,
+    GizmoHitTester? hitTester3D,
+    GizmoDragSolver? dragSolver3D,
+    List<EntityRayTest> Function()? pickTests,
   }) : _worldOf = world,
        dragSolver = dragSolver ?? PlanarGizmoDragSolver(sceneState),
+       dragSolver3D = dragSolver3D ?? RayGizmoDragSolver(sceneState),
        cameraOf = camera,
        designerOf = designer,
-       hitTester = hitTester ?? GizmoHitTester();
+       hitTester = hitTester ?? GizmoHitTester(),
+       hitTester3D =
+           hitTester3D ??
+           RayGizmoHitTester(tests: pickTests, local: () => sceneState.localGizmo);
 
   /// Whether an entity can be picked at all. The padlock in the scene
   /// tree answers false here; without it the lock did nothing outside
@@ -55,6 +73,13 @@ class ViewportInput {
   /// Editing a body's collider, when that is on: its handles take a press
   /// before anything else, and the transform gizmo takes none.
   final ColliderEditSession Function()? colliderEdit;
+
+  /// The points the selection lets the author drag ([ViewportHandles]):
+  /// a press on one takes it before any tool or the gizmo.
+  final List<ViewportHandle> Function()? handles;
+
+  /// Drags of [handles], each one undo step.
+  final HandleDragSession? handleDrags;
 
   /// The collider session, while one is editing something and the editor
   /// is authoring.
@@ -82,15 +107,103 @@ class ViewportInput {
   final bool Function() isAuthoring;
   final GizmoHitTester hitTester;
 
+  /// What picks and finds gizmo handles when the view is in space.
+  final GizmoHitTester hitTester3D;
+
   GizmoHandle? _activeHandle;
 
   /// What turns a drag of a gizmo handle into an edit.
   final GizmoDragSolver dragSolver;
 
+  /// What turns a drag of a 3-D gizmo handle into an edit.
+  final GizmoDragSolver dragSolver3D;
+
+  // The solver of the drag under way: the view's kind when it began.
+  GizmoDragSolver? _solver;
+
+  GizmoHitTester _hitTesterFor(EditorView view) => view.isPlanar ? hitTester : hitTester3D;
+
+  /// Opens the context menu at a pointer's local and global positions:
+  /// set by the overlay. In 3-D a right-press is a look, so the menu opens
+  /// on a right-click that did not drag.
+  void Function(Offset local, Offset global)? openMenu;
+
+  // 3-D navigation under way: a right-drag look (WASD flies while it
+  // lasts), an Alt-drag orbit.
+  bool _looking = false;
+  double _lookTravel = 0;
+  bool _orbiting = false;
+
+  /// Whether the right button is held for a look: WASD flies, and the
+  /// keys are not shortcuts meanwhile.
+  bool get isLooking => _looking;
+
+  /// While [isLooking], moves the 3-D view by the movement keys held:
+  /// W/S ahead and back, A/D sideways, E/Q up and down; Shift faster.
+  /// Called once a frame.
+  void flyTick(double dt, Set<LogicalKeyboardKey> keys) {
+    final view = cameraOf();
+    if (!_looking || view is! OrbitFlyEditorView || dt <= 0) return;
+    double axis(LogicalKeyboardKey plus, LogicalKeyboardKey minus) =>
+        (keys.contains(plus) ? 1.0 : 0.0) - (keys.contains(minus) ? 1.0 : 0.0);
+    final move = Vector3(
+      axis(LogicalKeyboardKey.keyD, LogicalKeyboardKey.keyA),
+      axis(LogicalKeyboardKey.keyE, LogicalKeyboardKey.keyQ),
+      axis(LogicalKeyboardKey.keyW, LogicalKeyboardKey.keyS),
+    );
+    if (move.lengthSquared == 0) return;
+    final fast = keys.contains(LogicalKeyboardKey.shiftLeft) || keys.contains(LogicalKeyboardKey.shiftRight);
+    final speed = view.distance.clamp(2.0, 60.0) * (fast ? 3 : 1);
+    view.fly(move * (speed * dt));
+  }
+
+  /// Records a finished gizmo drag as one undo step: given the drag's
+  /// [TransformCommand], already applied. Without it a drag in the viewport
+  /// cannot be undone.
+  final void Function(TransformCommand command)? commitTransform;
+
+  // The entity a gizmo drag is moving, and its transform when it began.
+  Entity? _dragEntity;
+  TransformSnapshot? _dragBefore;
+  GizmoOp _dragOp = GizmoOp.none;
+
   /// Remembers where a drag of the selection began, and what it began from.
   void _beginDrag(Offset at) {
     final entity = sceneState.selectedEntity.value;
-    if (entity != null) dragSolver.begin(entity, at);
+    if (entity == null) return;
+    final solver = _solver = cameraOf().isPlanar ? dragSolver : dragSolver3D;
+    solver.begin(entity, at);
+    if (entity.getComponent<TransformComponent>() != null) {
+      _dragEntity = entity;
+      _dragBefore = TransformSnapshot.of(entity);
+      _dragOp = _activeHandle?.op ?? GizmoOp.translate;
+    }
+  }
+
+  /// Hands a finished drag to [commitTransform], when it changed anything.
+  void _commitDrag() {
+    final entity = _dragEntity, before = _dragBefore;
+    _dragEntity = null;
+    _dragBefore = null;
+    final commit = commitTransform;
+    if (entity == null || before == null || commit == null) return;
+    if (!entity.isAlive) return;
+    final after = TransformSnapshot.of(entity);
+    if (before.matches(after)) return;
+    final verb = switch (_dragOp) {
+      GizmoOp.rotate => 'Rotate',
+      GizmoOp.scale => 'Scale',
+      _ => 'Move',
+    };
+    commit(
+      TransformCommand(
+        label: '$verb ${entity.name ?? 'entity'}',
+        entities: [entity],
+        before: [before],
+        after: [after],
+        sceneState: sceneState,
+      ),
+    );
   }
 
   /// Size of the game canvas, updated each frame by the overlay.
@@ -103,6 +216,9 @@ class ViewportInput {
   /// from being fought by the simulation.
   bool get isDragging => _activeHandle != null;
 
+  /// The gizmo handle being dragged, or [GizmoHandle.none].
+  GizmoHandle get activeHandle => _activeHandle ?? GizmoHandle.none;
+
   /// What is under [localPosition] in the viewport, or null for bare
   /// level. The same hit test a click uses, so the menu opens on what a
   /// click would have selected.
@@ -110,7 +226,7 @@ class ViewportInput {
     if (canvasSize == Size.zero) return null;
     final camera = cameraOf()..viewportSize = canvasSize;
     final pickable = isPickable;
-    final hit = hitTester.hitTest(
+    final hit = _hitTesterFor(camera).hitTest(
       localPosition,
       sceneState.selectedEntity.value,
       world
@@ -139,6 +255,22 @@ class ViewportInput {
   bool onPointerDown(PointerDownEvent event) {
     if (!isActive()) return false;
     if (canvasSize == Size.zero) return false;
+    final view = cameraOf()..viewportSize = canvasSize;
+    if (view is OrbitFlyEditorView && isAuthoring()) {
+      // In 3-D: right-drag looks (a click without a drag opens the menu),
+      // Alt-drag orbits.
+      if ((event.buttons & kSecondaryButton) != 0) {
+        _looking = true;
+        _lookTravel = 0;
+        _activeHandle = null;
+        return true;
+      }
+      if ((event.buttons & kPrimaryButton) != 0 && HardwareKeyboard.instance.isAltPressed) {
+        _orbiting = true;
+        _activeHandle = null;
+        return true;
+      }
+    }
     // The right button belongs to the context menu, which the overlay
     // opens — unless the Level Designer's tool asks for it: a tile brush
     // picks up tiles with a right-drag, as in Tiled.
@@ -184,6 +316,21 @@ class ViewportInput {
       return true;
     }
 
+    // A point of the selection to drag: before any tool, and the gizmo.
+    final drags = handleDrags;
+    if (drags != null &&
+        isAuthoring() &&
+        (event.buttons & kPrimaryButton) != 0 &&
+        drags.down(
+          event.localPosition,
+          handles?.call() ?? const [],
+          camera,
+          alt: HardwareKeyboard.instance.isAltPressed,
+        )) {
+      _activeHandle = null;
+      return true;
+    }
+
     // The Level Designer's active tool gets first refusal. A tool that claims
     // the gesture (marquee, draw, paint) handles it entirely; one that
     // declines falls through to the gizmo handling below, which is what keeps
@@ -219,7 +366,7 @@ class ViewportInput {
         .where((e) => e.isActive && (pickable == null || pickable(e)))
         .toList();
 
-    final hit = hitTester.hitTest(
+    final hit = _hitTesterFor(camera).hitTest(
       event.localPosition,
       // While a collider is edited the gizmo is not there to take hold of.
       collider != null ? null : sceneState.selectedEntity.value,
@@ -249,7 +396,9 @@ class ViewportInput {
             sceneState.selectedEntity.value?.id == hit.entity!.id;
         sceneState.selectEntity(hit.entity!);
         if (wasSelected) {
-          _activeHandle = GizmoHandle.translateXY;
+          // A second press drags it: on the screen plane in 2-D, along
+          // the ground in 3-D.
+          _activeHandle = camera.isPlanar ? GizmoHandle.translateXY : GizmoHandle.translateXZ;
           _beginDrag(event.localPosition);
           return true;
         }
@@ -292,6 +441,16 @@ class ViewportInput {
   void onPointerExit() => designerOf()?.onPointerExit();
 
   void onPointerMove(PointerMoveEvent event) {
+    final drags = handleDrags;
+    if (drags != null && drags.isDragging) {
+      drags.move(
+        event.localPosition,
+        cameraOf()..viewportSize = canvasSize,
+        snap: HardwareKeyboard.instance.isControlPressed,
+        grid: gridSize(),
+      );
+      return;
+    }
     final collider = colliderEdit?.call();
     if (collider != null && collider.isDragging) {
       collider.onPointerMove(
@@ -321,6 +480,23 @@ class ViewportInput {
 
     if (!isActive()) return;
 
+    final view = cameraOf();
+    if (view is OrbitFlyEditorView) {
+      if (_looking) {
+        _lookTravel += event.delta.distance;
+        view.look(event.delta);
+        return;
+      }
+      if (_orbiting) {
+        view.orbit(event.delta);
+        return;
+      }
+      if (_isPanningCamera) {
+        view.pan(event.delta);
+        return;
+      }
+    }
+
     if (_isPanningCamera) {
       final camera = cameraOf();
       // Drag right/down should move the view (and thus the world under the
@@ -337,7 +513,7 @@ class ViewportInput {
     final camera = cameraOf();
     camera.viewportSize = canvasSize;
 
-    dragSolver.update(
+    (_solver ?? dragSolver).update(
       _activeHandle!,
       entity,
       event.localPosition,
@@ -347,6 +523,19 @@ class ViewportInput {
   }
 
   void onPointerUp(PointerUpEvent event) {
+    if (_looking) {
+      final clicked = _lookTravel < 4;
+      _looking = false;
+      if (clicked) openMenu?.call(event.localPosition, event.position);
+      _resetPointerDragState();
+      return;
+    }
+    final drags = handleDrags;
+    if (drags != null && drags.isDragging) {
+      drags.up();
+      _resetPointerDragState();
+      return;
+    }
     final collider = colliderEdit?.call();
     if (collider != null && collider.isDragging) {
       collider.onPointerUp();
@@ -384,11 +573,18 @@ class ViewportInput {
   void onPointerCancel(PointerCancelEvent event) => _resetPointerDragState();
 
   void _resetPointerDragState() {
+    // A drag the OS cancels has still moved the entity, so it is recorded
+    // too: undo is how to take it back.
+    _commitDrag();
+    handleDrags?.cancel();
     colliderEdit?.call().cancel();
     designerOf()?.onPointerCancel();
     _activeHandle = null;
-    dragSolver.end();
+    (_solver ?? dragSolver).end();
+    _solver = null;
     _isPanningCamera = false;
+    _looking = false;
+    _orbiting = false;
   }
 
   /// Mouse-wheel zoom, centered on the cursor so the point under it stays
@@ -400,6 +596,11 @@ class ViewportInput {
 
     final camera = cameraOf();
     camera.viewportSize = canvasSize;
+    if (camera is OrbitFlyEditorView) {
+      // Scrolling up (negative dy) moves in.
+      camera.dolly(-event.scrollDelta.dy * 0.0015);
+      return;
+    }
 
     final worldPoint = camera.screenToWorld(event.localPosition);
     // Scrolling up (negative dy) zooms in.

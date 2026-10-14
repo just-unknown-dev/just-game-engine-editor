@@ -100,25 +100,26 @@ void main() {
 
       // A body, if any, must match what was drawn — a collider that disagrees
       // with its own rectangle is invisible to the author and wrong in play.
-      final body = components.whereType<jge.PhysicsBodyComponent>().firstOrNull;
-      if (body != null) {
-        final shape = body.shape;
+      final collider = components.whereType<jge.Collider2D>().firstOrNull;
+      if (collider != null) {
+        expect(collider.shape, jge.ColliderShape2D.matchShape, reason: prefab.id);
+        final world = jge.World()..initialize();
+        final e = world.createEntityWithComponents(components);
+        final shape = jge.ColliderGeometry.shapeOf(collider, entity: e);
         expect(shape, isA<jge.RectangleShape>(), reason: prefab.id);
-        expect(
-          (shape as jge.RectangleShape).width,
-          size.width,
-          reason: prefab.id,
-        );
-        expect(shape.height, size.height, reason: prefab.id);
+        final box = shape! as jge.RectangleShape;
+        expect(box.width, size.width, reason: prefab.id);
+        expect(box.height, size.height, reason: prefab.id);
+        world.dispose();
       }
     }
   });
 
   test('the trigger is a sensor and the solid is not', () {
-    jge.PhysicsBodyComponent bodyOf(String id) => scope.prefabs
+    jge.RigidBody2D bodyOf(String id) => scope.prefabs
         .byId(id)!
         .build(position, size)
-        .whereType<jge.PhysicsBodyComponent>()
+        .whereType<jge.RigidBody2D>()
         .single;
 
     expect(bodyOf(BuiltInPrefabs.triggerId).isSensor, isTrue);

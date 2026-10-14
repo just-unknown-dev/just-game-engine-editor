@@ -5,10 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
+import '../../../core/entity/component_edit.dart';
 import '../../../core/scope/editor_scope.dart';
 import '../../../core/state/editor_scene_state.dart';
 import '../../../core/view/editor_view.dart';
 import '../../level_designer/state/editor_history.dart';
+import 'physics_body_extras.dart';
 
 /// What a collider handle does when dragged.
 enum ColliderHandleKind {
@@ -100,12 +102,22 @@ class ColliderEditSession {
 
   bool get isDragging => _drag != null;
 
-  /// The body being edited, while its entity is alive and has one.
-  jge.PhysicsBodyComponent? get body {
+  /// The collider being edited, while its entity is alive and has one with
+  /// a shape of its own — one matching what is drawn has none to edit.
+  jge.Collider2D? get body {
     final e = target.value;
     if (e == null || !e.isAlive) return null;
-    return e.getComponent<jge.PhysicsBodyComponent>();
+    final c = e.getComponent<jge.Collider2D>();
+    return c == null || c.shape == jge.ColliderShape2D.matchShape ? null : c;
   }
+
+  /// [c]'s shape as the handles edit it: in its entity's space before the
+  /// entity's scale, turned and with its own scale — but not moved by its
+  /// offset, which the handles move on their own.
+  static jge.CollisionShape _shapeOf(jge.Collider2D c) => jge.ColliderGeometry.build(
+    jge.ColliderGeometry.shapeOf(c) ?? jge.RectangleShape(1, 1),
+    rotation: c.rotation,
+  );
 
   /// Whether [entity]'s collider is the one being edited.
   bool isEditing(jge.Entity? entity) =>
@@ -115,6 +127,12 @@ class ColliderEditSession {
   void toggle(jge.Entity entity) {
     if (isEditing(entity)) {
       stop();
+    } else if (entity.getComponent<jge.Collider2D>()?.shape == jge.ColliderShape2D.matchShape) {
+      scope.log.log(
+        'Its collider matches what is drawn: change what is drawn, or pick a shape for the collider to edit it.',
+        source: 'editor',
+        category: 'physics',
+      );
     } else {
       scope.sceneState.selectEntity(entity);
       target.value = entity;
@@ -190,7 +208,7 @@ class ColliderEditSession {
     final (sx, sy) = _scale;
     final grow = math.max(sx.abs(), sy.abs());
     final out = <ColliderHandle>[];
-    switch (b.shape) {
+    switch (_shapeOf(b)) {
       case jge.CircleShape c:
         final centre = at(c.center);
         final r = c.radius * grow;
@@ -293,7 +311,7 @@ class ColliderEditSession {
   }
 
   /// A Box2D polygon has at most eight points.
-  bool get _canInsert => switch (body?.shape) {
+  bool get _canInsert => switch (body == null ? null : _shapeOf(body!)) {
     jge.RoundedPolygonShape p => p.vertices.length < 8,
     jge.PolygonShape p => p.vertices.length < 8,
     jge.ChainShape _ => true,
@@ -342,13 +360,13 @@ class ColliderEditSession {
     }
     scope.history.breakMerge();
     _dragId++;
-    _startShape = b.shape;
+    _startShape = _shapeOf(b);
     _startOffset = b.offset;
     _startPointer = _unscale(toLocal(view.screenToWorld(screen)));
     if (h.kind == ColliderHandleKind.insert) {
       // The new point goes in between, and is what the drag moves.
       _insertPoint(b, h.index);
-      _startShape = b.shape;
+      _startShape = _shapeOf(b);
       h = ColliderHandle(ColliderHandleKind.vertex, h.index + 1, h.local);
     }
     _drag = h;
@@ -544,13 +562,13 @@ class ColliderEditSession {
     };
   }
 
-  void _insertPoint(jge.PhysicsBodyComponent b, int edge) {
+  void _insertPoint(jge.Collider2D b, int edge) {
     List<Offset> add(List<Offset> v) {
       final a = v[edge], c = v[(edge + 1) % v.length];
       return [...v.take(edge + 1), (a + c) / 2, ...v.skip(edge + 1)];
     }
 
-    final next = switch (b.shape) {
+    final next = switch (_shapeOf(b)) {
       jge.RoundedPolygonShape p => jge.RoundedPolygonShape(
         add(p.vertices),
         p.cornerRadius,
@@ -566,12 +584,12 @@ class ColliderEditSession {
     if (next != null) _push(b, next, b.offset);
   }
 
-  void _removePoint(jge.PhysicsBodyComponent b, int i) {
+  void _removePoint(jge.Collider2D b, int i) {
     List<Offset> drop(List<Offset> v) => [
       for (var k = 0; k < v.length; k++)
         if (k != i) v[k],
     ];
-    final next = switch (b.shape) {
+    final next = switch (_shapeOf(b)) {
       jge.RoundedPolygonShape p when p.vertices.length > 3 =>
         jge.RoundedPolygonShape(drop(p.vertices), p.cornerRadius),
       jge.PolygonShape p when p.vertices.length > 3 => jge.PolygonShape(
@@ -591,16 +609,20 @@ class ColliderEditSession {
     hovered = null;
   }
 
-  void _push(
-    jge.PhysicsBodyComponent b,
-    jge.CollisionShape shape,
-    Offset offset,
-  ) {
+  /// Gives [b] [shape] moved by [offset] — its fields set to stand for
+  /// them — as part of this gesture's one undo step.
+  void _push(jge.Collider2D b, jge.CollisionShape shape, Offset offset) {
+    final definition = scope.definitions.definitionFor(b);
+    final before = ComponentEdit.snapshot(scope, b);
+    if (definition == null || before == null) return;
+    PhysicsBodyExtras.setFrom(b, shape);
+    b.offset += offset;
     scope.history.push(
       ColliderEditCommand(
-        body: b,
-        before: (b.shape, b.offset),
-        after: (shape, offset),
+        collider: b,
+        definition: definition,
+        before: before,
+        after: ComponentEdit.snapshot(scope, b)!,
         sceneState: scope.sceneState,
         gesture: _dragId,
       ),
@@ -617,7 +639,7 @@ class ColliderEditSession {
     if (t == null) return;
     final (sx, sy) = _scale;
     final built = jge.ColliderGeometry.build(
-      b.shape,
+      _shapeOf(b),
       offset: b.offset,
       sx: sx,
       sy: sy,
@@ -712,20 +734,27 @@ class ColliderEditSession {
   }
 }
 
-/// A change to a body's collider — its shape and offset together. One drag
-/// of one handle is one of these, however many times the pointer moved.
+/// A change to a collider — its shape, sizes and offset together, every
+/// saved field as it was and as it is. One drag of one handle is one of
+/// these, however many times the pointer moved.
 class ColliderEditCommand extends EditorCommand {
   ColliderEditCommand({
-    required this.body,
+    required this.collider,
+    required this.definition,
     required this.before,
     required this.after,
     required this.sceneState,
     required this.gesture,
   });
 
-  final jge.PhysicsBodyComponent body;
-  final (jge.CollisionShape, Offset) before;
-  (jge.CollisionShape, Offset) after;
+  final jge.Collider2D collider;
+
+  /// How [collider]'s fields are read and written.
+  final jge.ComponentDefinition definition;
+
+  /// Its saved fields before, and after.
+  final Map<String, Object?> before;
+  Map<String, Object?> after;
   final EditorSceneState sceneState;
 
   /// Which drag this belongs to: the moves of one merge.
@@ -740,10 +769,12 @@ class ColliderEditCommand extends EditorCommand {
   @override
   void undo() => _apply(before);
 
-  void _apply((jge.CollisionShape, Offset) value) {
-    body
-      ..shape = value.$1
-      ..offset = value.$2;
+  void _apply(Map<String, Object?> value) {
+    for (final field in definition.fields) {
+      if (field.write != null && value.containsKey(field.name)) {
+        field.decodeInto(collider, value[field.name]);
+      }
+    }
     sceneState
       ..markDirty()
       ..refresh();
@@ -752,7 +783,7 @@ class ColliderEditCommand extends EditorCommand {
   @override
   bool mergeWith(EditorCommand next) {
     if (next is! ColliderEditCommand) return false;
-    if (!identical(next.body, body) || next.gesture != gesture) return false;
+    if (!identical(next.collider, collider) || next.gesture != gesture) return false;
     after = next.after;
     return true;
   }

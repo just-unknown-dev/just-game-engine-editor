@@ -4,6 +4,13 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../core/scope/editor_scope.dart';
 import '../core/state/editor_scene_state.dart';
+import '../core/view/editor_view.dart';
+import '../core/view/ray_entity_picker.dart';
+import 'asset_kind.dart';
+import 'editor_marker.dart';
+import 'prefab_variant.dart';
+import 'viewport_handles.dart';
+import 'viewport_overlay.dart';
 import '../ui/level_designer/overlays/designer_overlay.dart';
 import '../ui/level_designer/state/editor_history.dart';
 import '../ui/level_designer/state/layer_preset.dart';
@@ -234,6 +241,36 @@ abstract class EditorModule {
 
   /// Inspector sections after the component sections.
   List<InspectorSection> get inspectorSections => const [];
+
+  /// The views this module offers, by scene mode: what the viewport looks
+  /// through while a scene of that mode is edited. A later module's wins;
+  /// with none, the editor's own (`GameCameraEditorView` in 2-D,
+  /// `OrbitFlyEditorView` in 3-D).
+  Map<jge.SceneMode, EditorView Function(EditorScope scope)> get viewFactories => const {};
+
+  /// Icons the viewport draws at every entity of a kind, so things with
+  /// nothing to draw can be found (see [EditorMarker]).
+  List<EditorMarker> get markers => const [];
+
+  /// What knows the real shape of some entities, so a 3-D pick lands on
+  /// what is drawn rather than its box (a model's triangles).
+  List<EntityRayTest> get pickTests => const [];
+
+  /// Kinds of file it knows: how the asset browser shows them and what
+  /// dropping one on the viewport makes (see [AssetKind]).
+  List<AssetKind> get assetKinds => const [];
+
+  /// What it draws over the viewport while authoring, with the Level
+  /// Designer open or not (see [ViewportOverlay]).
+  List<ViewportOverlay> get viewportOverlays => const [];
+
+  /// Points it lets the author drag to edit the selected entity: a
+  /// polygon's corners (see [ViewportHandles]).
+  List<ViewportHandles> get viewportHandles => const [];
+
+  /// Other ways to offer the prefabs any module offers in space: a physics
+  /// module's Solid and Trigger of every shape (see [PrefabVariant]).
+  List<PrefabVariant> get prefabVariants => const [];
 
   /// What an unset colour field falls back to, for the components this
   /// module knows — so the inspector can show it rather than a blank.

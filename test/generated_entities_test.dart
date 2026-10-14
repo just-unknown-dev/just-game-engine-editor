@@ -18,10 +18,8 @@ import 'support/test_scope.dart';
 Entity _generated(World world, String name) =>
     world.createEntityWithComponents([
       TransformComponent(),
-      PhysicsBodyComponent(
-        shape: RectangleShape(32, 32),
-        bodyType: BodyType.static,
-      ),
+      RigidBody2D(bodyType: BodyType.static),
+      Collider2D(size: Vector2(32, 32)),
       GeneratedEntityComponent(source: 'test'),
     ], name: name);
 

@@ -1,4 +1,6 @@
 import '../../timeline/timeline_session.dart';
+import 'dart:math' as math;
+
 import 'package:flutter/widgets.dart' show Offset;
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
@@ -358,6 +360,53 @@ abstract final class BuiltInCommands {
           c.session?.adoptTransformMode();
         },
       ),
+    // Looking around a 3-D scene.
+    DesignerCommand(
+      id: 'editor.view.frame',
+      label: 'Frame the selection',
+      scope: CommandScope.editor,
+      dimensions: jge.Dimensions.threeD,
+      isEnabled: (c) => c.plugin != null,
+      run: (c) => c.plugin!.frameInSpace(),
+    ),
+    DesignerCommand(
+      id: 'editor.view.frameAll',
+      label: 'Frame everything',
+      scope: CommandScope.editor,
+      dimensions: jge.Dimensions.threeD,
+      isEnabled: (c) => c.plugin != null,
+      run: (c) => c.plugin!.frameInSpace(all: true),
+    ),
+    for (final (id, label, yaw, pitch) in axisViews)
+      DesignerCommand(
+        id: id,
+        label: label,
+        scope: CommandScope.editor,
+        dimensions: jge.Dimensions.threeD,
+        isEnabled: (c) => c.plugin != null,
+        run: (c) => c.plugin!.viewAlong(yaw: yaw, pitch: pitch),
+      ),
+    DesignerCommand(
+      id: 'editor.gizmo.local',
+      label: 'Gizmo: own axes or the world\'s',
+      scope: CommandScope.editor,
+      dimensions: jge.Dimensions.threeD,
+      isEnabled: (c) => c.plugin?.isAuthoring.value ?? false,
+      run: (c) {
+        final state = c.scope.sceneState;
+        state.localGizmo = !state.localGizmo;
+      },
+    ),
+  ];
+
+  /// The views along an axis: id, label, yaw and pitch (radians).
+  static const List<(String, String, double, double)> axisViews = [
+    ('editor.view.front', 'View from the front', 0, 0),
+    ('editor.view.back', 'View from the back', math.pi, 0),
+    ('editor.view.right', 'View from the right', -math.pi / 2, 0),
+    ('editor.view.left', 'View from the left', math.pi / 2, 0),
+    ('editor.view.top', 'View from above', 0, -math.pi / 2),
+    ('editor.view.bottom', 'View from below', 0, math.pi / 2),
   ];
 
   /// A scene is open to play-test, or a play-test is under way.

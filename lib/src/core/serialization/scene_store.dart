@@ -71,7 +71,7 @@ class SceneStore {
     });
   }
 
-  // The starters are shared with `just scene new`, so a level made either
+  // The starters are shared with `just game scene new`, so a level made either
   // way is the same file (test/scene_starters_parity_test.dart checks they
   // still match the live components, encoded).
   String _buildInitialScene(String sceneName, SceneMode mode) =>

@@ -5,7 +5,7 @@ import 'package:just_signals/just_signals.dart';
 import '../../../../core/constants/editor_constants.dart';
 import '../../../../core/physics/layer_refactor.dart';
 import '../../../../core/scope/editor_scope.dart';
-import '../../../../core/state/play_snapshot.dart';
+import '../../../../core/physics/physics_bodies.dart';
 import '../../../dialogs/scene_actions_dialogs.dart' show promptSceneName;
 import '../../../inspector/physics_field_editors.dart' show LayerHighlight;
 import '../../../kit/kit.dart';
@@ -43,19 +43,9 @@ class _PhysicsLayersDockState extends State<PhysicsLayersDock> {
     ),
   );
 
-  /// The bodies an author placed on each layer — not the level map's.
-  List<List<jge.Entity>> _bodies() {
-    final out = List.generate(jge.PhysicsLayers.count, (_) => <jge.Entity>[]);
-    for (final e in scope.world.query([jge.PhysicsBodyComponent])) {
-      if (PlaySnapshot.isGenerated(e) ||
-          e.hasComponent<jge.MapBodyComponent>()) {
-        continue;
-      }
-      final b = e.getComponent<jge.PhysicsBodyComponent>()!;
-      out[jge.PhysicsLayers.clampLayer(b.layer)].add(e);
-    }
-    return out;
-  }
+  /// The bodies, 2-D and 3-D, an author placed on each layer — not the
+  /// level map's.
+  List<List<jge.Entity>> _bodies() => PhysicsBodies.byLayer(scope.world, scope.definitions);
 
   Widget _body(BuildContext context, jge.PhysicsLayers layers) {
     final store = scope.physicsLayers;
