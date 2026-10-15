@@ -1,7 +1,6 @@
 import 'dart:ui';
 
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_signals/just_signals.dart';
 
 import '../state/editor_scene_state.dart';
 import 'level_map_documents.dart';

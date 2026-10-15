@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_signals/just_signals.dart';
 
 import '../../ui/level_designer/state/editor_history.dart';
 import '../assets/package_asset_paths.dart';

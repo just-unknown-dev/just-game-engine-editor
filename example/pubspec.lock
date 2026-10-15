@@ -261,7 +261,7 @@ packages:
       path: "../../just_game_engine"
       relative: true
     source: path
-    version: "2.0.0"
+    version: "2.0.0-dev.1"
   just_game_engine_editor:
     dependency: "direct main"
     description:

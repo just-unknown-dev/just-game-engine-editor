@@ -5,7 +5,6 @@ import 'package:flutter/widgets.dart';
 import 'package:just_di/just_di.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_storage/just_storage.dart';
-import 'package:just_signals/just_signals.dart';
 
 import '../validation/scene_validator.dart';
 import '../colours/project_colours.dart';

@@ -7,7 +7,6 @@ import 'dart:io';
 import 'dart:ui' show Offset;
 
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_signals/just_signals.dart';
 
 import '../../core/assets/package_asset_paths.dart';
 import '../../core/scope/editor_scope.dart';

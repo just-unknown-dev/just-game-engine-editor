@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 import 'dart:ui' show Offset, Rect;
 
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_signals/just_signals.dart';
 
 import '../../core/assets/package_asset_paths.dart';
 

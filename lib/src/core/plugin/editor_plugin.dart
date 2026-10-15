@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_signals/just_signals.dart';
 
 import '../../debugger/engine_debugger.dart';
 import '../../ui/inspector/physics/collider_edit_session.dart';
