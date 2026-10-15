@@ -227,7 +227,15 @@ void main() {
       final plugin = JustGameEditorPlugin(engine: Engine(), modules: [_Shapes(), _Solids()]);
       addTearDown(plugin.dispose);
       expect(plugin.scope.prefabVariants, hasLength(1));
-      expect([for (final p in plugin.prefabsInSpace) p.id], ['cube', 'marker', 'solid:cube']);
+      expect([for (final p in plugin.prefabsInSpace) p.id], [
+        // The built-in ones that place in 3-D: sound.
+        BuiltInAudioContributions.soundId,
+        BuiltInAudioContributions.sound3dId,
+        BuiltInAudioContributions.listenerId,
+        'cube',
+        'marker',
+        'solid:cube',
+      ]);
     });
   });
 }

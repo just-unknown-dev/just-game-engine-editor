@@ -31,6 +31,9 @@ void main() {
       BuiltInPrefabs.dollyCameraId,
       BuiltInPrefabs.spawnId,
       BuiltInPrefabs.markerId,
+      BuiltInAudioContributions.soundId,
+      BuiltInAudioContributions.sound3dId,
+      BuiltInAudioContributions.listenerId,
     });
   });
 

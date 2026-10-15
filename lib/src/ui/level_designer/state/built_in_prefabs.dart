@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
+import '../../../extension/built_in_audio_contributions.dart';
 import '../../../extension/designer_contributions.dart';
 import 'prefab_registry.dart';
 
@@ -55,6 +56,7 @@ abstract final class BuiltInPrefabs {
     PrefabCategory(label: 'Physics', order: 10),
     PrefabCategory(label: 'Scene', order: 20),
     PrefabCategory(label: 'Camera', order: 25),
+    BuiltInAudioContributions.category,
   ];
 
   /// Every built-in prefab, in palette order.
@@ -72,6 +74,7 @@ abstract final class BuiltInPrefabs {
     _dollyCamera,
     _spawn,
     _marker,
+    ...BuiltInAudioContributions.prefabs,
   ];
 
   /// Registers every built-in prefab into [registry].

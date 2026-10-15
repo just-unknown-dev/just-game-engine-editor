@@ -3,6 +3,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../core/scope/editor_scope.dart';
 import '../ui/overlay/docks/assets/asset_index.dart';
+import 'built_in_audio_contributions.dart';
 
 /// What a file is, as far as the editor cares: how the asset browser draws
 /// it, what it can be filtered by, and what dropping it on the viewport
@@ -141,6 +142,8 @@ final class AssetKind {
     color: Color(0xFFD9A7FF),
     endings: ['.wav', '.mp3', '.ogg', '.flac', '.m4a'],
     filterable: true,
+    // Dropped on the viewport: a looping source of it (3-D in a 3-D scene).
+    drop: BuiltInAudioContributions.dropAudio,
   );
   static const AssetKind font = AssetKind(
     'font',

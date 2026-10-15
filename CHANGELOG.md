@@ -8,6 +8,13 @@ First release: a level editor that runs inside a `just_game_engine` game. It nee
 
 - **Dragging the transform gizmo in the viewport can be undone.** A drag outside the Level Designer moved the entity without recording anything; it is now one undo step (`ViewportInput.commitTransform`), labelled Move, Rotate or Scale, including a drag the system cancels.
 
+### Sound
+
+- **Sound plays only in a play-test.** The game's `AudioSystem` is off while the scene is edited (it would start every source on load, and mark it played in the scene), and stopping a play-test stops what it played.
+- **Built in for every project, 2-D and 3-D** (`BuiltInAudioContributions`): a marker on every sound source and on the listener; a selected 3-D source's reach drawn round it — where it starts to fade, and where it falls silent (`AudioRangeOverlay`, three rings round the axes in 3-D, one circle in 2-D); an **Audio** group in the Add menu — *Sound*, *3D sound* and *Audio listener*, placed in pixels in 2-D and metres in 3-D; and an audio file dropped on the viewport becomes a looping source of it, in 3-D in a 3-D scene.
+- The Audio Source's inspector shows its 3-D settings (full within, silent beyond, fade, doppler, muffle to) when it is 3D, its pan when it is not, and its channel; the Audio Listener can be added and is saved (from the engine's definitions).
+- The viewport menu of a 3-D scene offers the built-in prefabs that place in 3-D, before the modules'.
+
 ### 3-D scenes
 
 A 3-D scene opens in the editor; the `JGE_EDITOR_ALLOW_3D_SCENES` gate is gone. The editor itself draws no model: a renderer package (`just_graphics_engine`, with `just_graphics_editor`) does, through the engine's scene renderers.

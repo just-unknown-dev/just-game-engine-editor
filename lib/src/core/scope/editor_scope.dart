@@ -49,6 +49,7 @@ import '../level_map/level_map_documents.dart';
 import '../level_map/level_map_provision.dart';
 import '../../ui/tileset/built_in_workspaces.dart';
 import '../../extension/built_in_camera_contributions.dart';
+import '../../extension/built_in_audio_contributions.dart';
 import '../../extension/built_in_physics_3d_contributions.dart';
 import '../../extension/tiled_object_mapper.dart';
 import '../../extension/built_in_tile_contributions.dart';
@@ -858,9 +859,12 @@ class EditorScope {
     _viewFactories.clear();
     _markers
       ..clear()
-      ..addAll(EditorMarker.builtIn);
+      ..addAll(EditorMarker.builtIn)
+      ..addAll(BuiltInAudioContributions.markers);
     _pickTests.clear();
-    _viewportOverlays.clear();
+    _viewportOverlays
+      ..clear()
+      ..addAll(BuiltInAudioContributions.viewportOverlays);
     _viewportHandles.clear();
     _prefabVariants.clear();
     final kinds = AssetKinds();

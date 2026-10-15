@@ -232,7 +232,11 @@ void main() {
         plugin.dropAsset('assets/scenes/l.scene.json', Offset.zero),
         isNull,
       );
-      expect(plugin.dropAsset('assets/audio/jump.wav', Offset.zero), isNull);
+      // A sound: a looping source of it, flat in a 2-D scene.
+      final sound = plugin.dropAsset('assets/audio/wind.wav', Offset.zero)!;
+      expect(sound.name, 'wind');
+      final source = sound.getComponent<AudioSourceComponent>()!;
+      expect((source.clipPath, source.loop, source.is3d), ('assets/audio/wind.wav', true, false));
     });
   });
 }

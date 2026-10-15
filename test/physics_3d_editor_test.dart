@@ -25,7 +25,7 @@ void main() {
 
   test('with 3-D physics it adds the collider outlines, Solid and Trigger, and its checks', () {
     final s = scope();
-    expect(s.viewportOverlays.map((o) => o.id), ['physics3d.colliders']);
+    expect(s.viewportOverlays.map((o) => o.id), ['audio.ranges', 'physics3d.colliders']);
     expect(s.prefabVariants.map((v) => v.id), containsAll(['solid', 'trigger']));
     expect(BuiltInValidators.all, contains(Physics3DChecks.all));
   });

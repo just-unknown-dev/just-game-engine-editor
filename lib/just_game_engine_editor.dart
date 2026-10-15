@@ -117,6 +117,9 @@ export 'src/ui/inspector/built_in_field_editors.dart';
 export 'src/ui/level_designer/level_designer.dart';
 export 'src/ui/overlay/camera_rig_painter.dart';
 export 'src/extension/built_in_camera_contributions.dart';
+// Sound in the editor: source and listener markers, a 3-D source's range,
+// the Audio prefabs, audio files dropped as sources.
+export 'src/extension/built_in_audio_contributions.dart';
 // 3-D physics in the editor: collider outlines, scene checks, Solid and
 // Trigger shapes — built in, for projects whose engine has Physics3D.
 export 'src/extension/built_in_physics_3d_contributions.dart';

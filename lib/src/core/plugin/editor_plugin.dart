@@ -15,6 +15,7 @@ import '../../debugger/engine_debugger.dart';
 import '../../ui/inspector/physics/collider_edit_session.dart';
 import '../../ui/level_designer/state/editor_commands.dart';
 import '../assets/file_sprite_asset_loader.dart';
+import '../../ui/level_designer/state/built_in_prefabs.dart';
 import '../../ui/level_designer/state/map_placement.dart';
 import '../../ui/level_designer/state/prefab_registry.dart';
 import '../ecs/systems/editor_log_capture_system.dart';
@@ -1354,6 +1355,9 @@ class JustGameEditorPlugin implements EnginePlugin {
   // * Tile collision builds bodies from the maps. While authoring they
   //   would be rebuilt on every stroke for nothing; they are built when
   //   play starts, and destroyed with the play-test.
+  // * Sound plays only in a play-test. Authoring, the game's AudioSystem
+  //   would start every source on load, and mark it played in the scene
+  //   being edited; when a play-test stops, what it played stops with it.
   //
   // Tile animation runs either way — on the game's clock in a play-test,
   // on the wall clock while authoring, when the game's time stands still.
@@ -1365,6 +1369,10 @@ class JustGameEditorPlugin implements EnginePlugin {
       if (system is MapCollisionSystem && system.isActive != run) {
         system.isActive = run;
         if (!run) system.clearGenerated();
+      }
+      if (system is AudioSystem && system.isActive != run) {
+        system.isActive = run;
+        if (!run) system.stopAll();
       }
       if (system is LevelMapSystem) {
         system.advanceClock = run;
@@ -1969,10 +1977,12 @@ class JustGameEditorPlugin implements EnginePlugin {
       );
 
   /// The prefabs a 3-D scene can be given from the viewport menu: the
-  /// modules' that place in 3-D, then each variant of those it applies to
-  /// (a Solid of every shape).
+  /// built-in ones and the modules' that place in 3-D, then each variant of
+  /// those it applies to (a Solid of every shape).
   List<PrefabDefinition> get prefabsInSpace {
     final base = [
+      for (final prefab in BuiltInPrefabs.all)
+        if (prefab.dimensions.allows(SceneMode.threeD)) prefab,
       for (final module in scope.modules.all)
         for (final prefab in [...module.prefabs, ...module.sharedPrefabs])
           if (prefab.dimensions.allows(SceneMode.threeD)) prefab,
