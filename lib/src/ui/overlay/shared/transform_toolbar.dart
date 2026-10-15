@@ -100,6 +100,7 @@ class FloatingToolFrame extends StatelessWidget {
     required this.settings,
     required this.child,
     this.borderColor,
+    this.backgroundColor,
     this.borderWidth = 1,
     this.horizontalPadding = 0,
   });
@@ -110,6 +111,10 @@ class FloatingToolFrame extends StatelessWidget {
   /// The frame's line; the accent when null. The play controls' frame
   /// takes the play state's colour.
   final Color? borderColor;
+
+  /// The frame's fill; the badge colour when null. The play controls'
+  /// frame takes a tint of the play state's colour.
+  final Color? backgroundColor;
   final double borderWidth;
   final double horizontalPadding;
 
@@ -122,7 +127,7 @@ class FloatingToolFrame extends StatelessWidget {
   Widget build(BuildContext context) => AnimatedContainer(
     duration: EditorMetrics.motionFast,
     decoration: BoxDecoration(
-      color: EditorTheme.statusBadgeBg,
+      color: backgroundColor ?? EditorTheme.statusBadgeBg,
       borderRadius: BorderRadius.circular(EditorMetrics.radiusLg),
       border: Border.all(
         color: borderColor ?? EditorTheme.accent,

@@ -36,8 +36,11 @@ String formatBytes(int bytes) {
 /// Three frames, left to right: **transport** (Play, Pause, Step, Stop,
 /// Restart, the speed, and what the play-test is doing), **view and mode**
 /// (the game camera preview and the Level Designer), and what **modules**
-/// add, each parted from the next. The frames take the play state's colour, so a
-/// running play-test is visible from the corner of the eye. Narrower than
+/// add, each parted from the next. The transport frame takes the play
+/// state's colour — a tint in its fill, and in its line mixed into that
+/// fill so the two sit together — and its chip says it at full strength: a
+/// running play-test is visible from the corner of the eye. The other
+/// frames do not change. Narrower than
 /// [maxWidth], the row scrolls sideways rather than run into what is at the
 /// top right.
 class PlayControlsToolbar extends StatelessWidget {
@@ -55,6 +58,31 @@ class PlayControlsToolbar extends StatelessWidget {
   final double? maxWidth;
 
   static Color get _playing => EditorTheme.success;
+
+  /// How much of the play state's colour the transport frame's line takes;
+  /// the rest is the frame's fill. Full strength, it outshone the frame.
+  static const double _lineStrength = 0.45;
+
+  /// How much of the play state's colour the transport frame's fill takes:
+  /// a tint, so its buttons and its chip still stand out on it.
+  static const double _fillStrength = 0.1;
+
+  /// The transport frame's line while a play-test runs: the play state's
+  /// [stateColour] mixed into the frame's fill. Null while stopped: the
+  /// frame's own accent.
+  static Color? transportLine(Color stateColour, {required bool running}) =>
+      running ? _mixed(stateColour, _lineStrength) : null;
+
+  /// The transport frame's fill while a play-test runs: the badge colour
+  /// tinted with the play state's [stateColour]. Null while stopped: the
+  /// frame's own.
+  static Color? transportFill(Color stateColour, {required bool running}) =>
+      running ? _mixed(stateColour, _fillStrength) : null;
+
+  static Color _mixed(Color colour, double strength) => Color.alphaBlend(
+    colour.withValues(alpha: strength),
+    EditorTheme.statusBadgeBg,
+  );
 
   /// Side of one button: a comfortable target, the height of an inspector
   /// field, growing with the text scale.
@@ -131,10 +159,14 @@ class PlayControlsToolbar extends StatelessWidget {
           ),
         );
 
-        Widget frame(List<Widget> children) => FloatingToolFrame(
+        Widget frame(
+          List<Widget> children, {
+          Color? borderColor,
+          Color? backgroundColor,
+        }) => FloatingToolFrame(
           settings: settings,
-          borderColor: frameColour,
-          borderWidth: running ? 1.5 : 1,
+          borderColor: borderColor,
+          backgroundColor: backgroundColor,
           horizontalPadding: EditorMetrics.space(5),
           child: Row(mainAxisSize: MainAxisSize.min, children: children),
         );
@@ -146,69 +178,73 @@ class PlayControlsToolbar extends StatelessWidget {
           children: [
             // ── Transport ──────────────────────────────────────────────
             if (levelTools)
-              frame([
-                button(
-                  Icons.play_arrow_rounded,
-                  state == EditorPlayState.paused ? 'Resume' : 'Play',
-                  _playing,
-                  commandId: 'editor.playToggle',
-                  isActive: state == EditorPlayState.playing,
-                  onTap: state == EditorPlayState.playing ? null : play.play,
-                ),
-                button(
-                  Icons.pause_rounded,
-                  'Pause',
-                  EditorTheme.warning,
-                  commandId: 'editor.pauseToggle',
-                  isActive: state == EditorPlayState.paused,
-                  onTap: state == EditorPlayState.playing ? play.pause : null,
-                ),
-                button(
-                  Icons.skip_next_rounded,
-                  'Step one frame',
-                  EditorTheme.warning,
-                  commandId: 'editor.playStep',
-                  onTap: running ? play.step : null,
-                ),
-                button(
-                  Icons.stop_rounded,
-                  'Stop',
-                  EditorTheme.error,
-                  commandId: 'editor.playToggle',
-                  onTap: running ? play.stop : null,
-                ),
-                button(
-                  Icons.replay_rounded,
-                  'Restart',
-                  _playing,
-                  commandId: 'editor.playRestart',
-                  onTap: running ? play.restart : null,
-                ),
-                const SizedBox(width: 4),
-                EditorDropdown<double>(
-                  value: play.speed.value,
-                  tooltip: 'Play speed',
-                  isExpanded: false,
-                  height: 24,
-                  fontSize: 10,
-                  options: [
-                    for (final speed in PlayController.speeds)
-                      EditorDropdownOption(
-                        value: speed,
-                        label:
-                            '${speed == speed.roundToDouble() ? speed.toInt() : speed}×',
-                      ),
-                  ],
-                  onChanged: play.setSpeed,
-                ),
-                if (running)
-                  _StateChip(
-                    state: state,
-                    color: frameColour,
-                    clock: _clock(play.elapsedSeconds.value),
+              frame(
+                borderColor: transportLine(frameColour, running: running),
+                backgroundColor: transportFill(frameColour, running: running),
+                [
+                  button(
+                    Icons.play_arrow_rounded,
+                    state == EditorPlayState.paused ? 'Resume' : 'Play',
+                    _playing,
+                    commandId: 'editor.playToggle',
+                    isActive: state == EditorPlayState.playing,
+                    onTap: state == EditorPlayState.playing ? null : play.play,
                   ),
-                const SizedBox(width: 2),
-              ]),
+                  button(
+                    Icons.pause_rounded,
+                    'Pause',
+                    EditorTheme.warning,
+                    commandId: 'editor.pauseToggle',
+                    isActive: state == EditorPlayState.paused,
+                    onTap: state == EditorPlayState.playing ? play.pause : null,
+                  ),
+                  button(
+                    Icons.skip_next_rounded,
+                    'Step one frame',
+                    EditorTheme.warning,
+                    commandId: 'editor.playStep',
+                    onTap: running ? play.step : null,
+                  ),
+                  button(
+                    Icons.stop_rounded,
+                    'Stop',
+                    EditorTheme.error,
+                    commandId: 'editor.playToggle',
+                    onTap: running ? play.stop : null,
+                  ),
+                  button(
+                    Icons.replay_rounded,
+                    'Restart',
+                    _playing,
+                    commandId: 'editor.playRestart',
+                    onTap: running ? play.restart : null,
+                  ),
+                  const SizedBox(width: 4),
+                  EditorDropdown<double>(
+                    value: play.speed.value,
+                    tooltip: 'Play speed',
+                    isExpanded: false,
+                    height: 24,
+                    fontSize: 10,
+                    options: [
+                      for (final speed in PlayController.speeds)
+                        EditorDropdownOption(
+                          value: speed,
+                          label:
+                              '${speed == speed.roundToDouble() ? speed.toInt() : speed}×',
+                        ),
+                    ],
+                    onChanged: play.setSpeed,
+                  ),
+                  if (running)
+                    _StateChip(
+                      state: state,
+                      color: frameColour,
+                      clock: _clock(play.elapsedSeconds.value),
+                    ),
+                  const SizedBox(width: 2),
+                ],
+              ),
             // ── View and mode ──────────────────────────────────────────
             // What the viewport shows and what it is for: the game camera
             // over the level, the level being built, or the interface

@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/shared/shared_widgets.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/shared/transform_toolbar.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -272,6 +273,61 @@ void main() {
       plugin.playController.stop();
       await tester.pump();
       expect(find.text('PAUSED'), findsNothing);
+      done();
+    });
+
+    testWidgets('only the transport frame tells the play state: its fill '
+        'tinted, its line mixed into the fill', (tester) async {
+      await pump(tester);
+      List<FloatingToolFrame> frames() => tester
+          .widgetList<FloatingToolFrame>(find.byType(FloatingToolFrame))
+          .toList();
+      // Stopped: every frame has its own accent and fill.
+      expect(frames().map((f) => f.borderColor), everyElement(isNull));
+      expect(frames().map((f) => f.backgroundColor), everyElement(isNull));
+
+      plugin.playController.play();
+      await tester.pump();
+      final line = frames().first.borderColor;
+      expect(
+        line,
+        PlayControlsToolbar.transportLine(EditorTheme.success, running: true),
+      );
+      expect(line, isNot(EditorTheme.success), reason: 'not full strength');
+      final fill = frames().first.backgroundColor;
+      expect(
+        fill,
+        PlayControlsToolbar.transportFill(EditorTheme.success, running: true),
+      );
+      expect(fill, isNot(EditorTheme.statusBadgeBg), reason: 'tinted');
+      // The view and the modules' frames do not change.
+      expect(frames().skip(1).map((f) => f.borderColor), everyElement(isNull));
+      expect(
+        frames().skip(1).map((f) => f.backgroundColor),
+        everyElement(isNull),
+      );
+      // One line width in every state: the toolbar does not grow.
+      expect(frames().map((f) => f.borderWidth), everyElement(1));
+      expect(
+        tester.getSize(find.byType(PlayControlsToolbar)).height,
+        PlayControlsToolbar.heightFor(settings),
+      );
+
+      plugin.playController.pause();
+      await tester.pump();
+      expect(
+        frames().first.borderColor,
+        PlayControlsToolbar.transportLine(EditorTheme.warning, running: true),
+      );
+      expect(
+        frames().first.backgroundColor,
+        PlayControlsToolbar.transportFill(EditorTheme.warning, running: true),
+      );
+
+      plugin.playController.stop();
+      await tester.pump();
+      expect(frames().map((f) => f.borderColor), everyElement(isNull));
+      expect(frames().map((f) => f.backgroundColor), everyElement(isNull));
       done();
     });
 
