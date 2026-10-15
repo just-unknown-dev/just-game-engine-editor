@@ -19,6 +19,7 @@ export 'src/core/assets/package_asset_paths.dart';
 export 'src/core/play/play_controller.dart';
 export 'src/core/scene/editor_scene.dart';
 export 'src/core/scene/scene_io.dart';
+export 'src/core/scene/scene_loading.dart';
 export 'src/core/entity/entity_ops.dart';
 export 'src/core/entity/hierarchy_commands.dart';
 export 'src/core/state/editor_view_state.dart';

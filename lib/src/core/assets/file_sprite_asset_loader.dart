@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/services.dart' show AssetBundle, rootBundle;
 import 'package:just_game_engine/just_game_engine.dart';
 
+import 'asset_load_counter.dart';
 import 'package_asset_paths.dart';
 
 /// Reads sprites from the project's files instead of the asset bundle.
@@ -44,6 +45,11 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
   final Map<String, Future<ui.Image>> _images = {};
   final Map<String, Future<SpriteAtlas>> _atlases = {};
 
+  /// Every read that goes to a file or the bundle, counted: how the scene
+  /// loader knows when what a scene shows has arrived. What comes from the
+  /// cache is not counted.
+  final AssetLoadCounter loads = AssetLoadCounter();
+
   /// The project file for [path] — a package's own folder for
   /// `packages/<name>/…`, wherever the package is installed.
   File _file(String path) => PackageAssetPaths.of(root).file(path);
@@ -56,7 +62,7 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
   ) {
     final cached = cache[path];
     if (cached != null) return cached;
-    final loading = read(path);
+    final loading = loads.track(read(path));
     cache[path] = loading;
     loading.then<void>(
       (_) {},
@@ -96,7 +102,9 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
 
   /// An animator graph, from the project's files; never cached here — the
   /// animator system keeps what it loads until told to reload.
-  Future<AnimatorGraph> loadGraph(String path) async {
+  Future<AnimatorGraph> loadGraph(String path) => loads.track(_readGraph(path));
+
+  Future<AnimatorGraph> _readGraph(String path) async {
     final file = _file(path);
     if (!await file.exists()) {
       return AnimatorGraph.parse(await _bundle.loadString(path));
@@ -106,7 +114,10 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
 
   /// A timeline, from the project's files; the timeline system keeps what
   /// it loads until told to reload.
-  Future<TimelineAsset> loadTimeline(String path) async {
+  Future<TimelineAsset> loadTimeline(String path) =>
+      loads.track(_readTimeline(path));
+
+  Future<TimelineAsset> _readTimeline(String path) async {
     final file = _file(path);
     if (!await file.exists()) {
       return TimelineAsset.parse(
@@ -125,7 +136,9 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
   /// A text file — a tileset, a tile map, a Tiled map — from the project's
   /// files, or the bundle when it is not one of them. What `TileAssets`
   /// reads through while the editor runs.
-  Future<String> readText(String path) async {
+  Future<String> readText(String path) => loads.track(_readText(path));
+
+  Future<String> _readText(String path) async {
     final file = _file(path);
     if (!await file.exists()) return _bundle.loadString(path, cache: false);
     return file.readAsString();

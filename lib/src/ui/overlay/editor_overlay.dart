@@ -18,6 +18,7 @@ import 'chrome/editor_chrome.dart';
 import 'chrome_state.dart';
 import 'settings/overlay_ui_settings.dart';
 import 'viewport_menu.dart';
+import 'start/scene_loading_view.dart';
 import 'start/start_card.dart';
 import 'shared/snackbar.dart';
 import '../kit/dialogs.dart';
@@ -319,35 +320,42 @@ class JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
                 controller: _chromeController,
                 overlayChildBuilder: (context) {
                   return _chromeLook(
-                    SignalBuilder2<bool, bool>(
-                      signal1: plugin.isVisible,
-                      signal2: plugin.isStatusPanelVisible,
-                      builder: (context, _, _, _) {
-                        if (!plugin.isVisible.value) {
-                          if (!plugin.isStatusPanelVisible.value) {
-                            return const SizedBox.shrink();
-                          }
-                          return CompactChrome(plugin: plugin);
-                        }
+                    Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        SignalBuilder2<bool, bool>(
+                          signal1: plugin.isVisible,
+                          signal2: plugin.isStatusPanelVisible,
+                          builder: (context, _, _, _) {
+                            if (!plugin.isVisible.value) {
+                              if (!plugin.isStatusPanelVisible.value) {
+                                return const SizedBox.shrink();
+                              }
+                              return CompactChrome(plugin: plugin);
+                            }
 
-                        return SignalBuilder2<
-                          OverlayUiSettings,
-                          EditorPlayState
-                        >(
-                          signal1: widget.plugin.scope.prefs.settings,
-                          signal2: plugin.playController.state,
-                          builder: (context, settings, _, _) =>
-                              _steppedAside(settings)
-                              ? PlayTestChrome(
-                                  plugin: plugin,
-                                  settings: settings,
-                                )
-                              : FullEditorChrome(
-                                  plugin: plugin,
-                                  settings: settings,
-                                ),
-                        );
-                      },
+                            return SignalBuilder2<
+                              OverlayUiSettings,
+                              EditorPlayState
+                            >(
+                              signal1: widget.plugin.scope.prefs.settings,
+                              signal2: plugin.playController.state,
+                              builder: (context, settings, _, _) =>
+                                  _steppedAside(settings)
+                                  ? PlayTestChrome(
+                                      plugin: plugin,
+                                      settings: settings,
+                                    )
+                                  : FullEditorChrome(
+                                      plugin: plugin,
+                                      settings: settings,
+                                    ),
+                            );
+                          },
+                        ),
+                        // Over everything while a scene opens.
+                        SceneLoadingBarrier(plugin: plugin),
+                      ],
                     ),
                   );
                 },
@@ -562,7 +570,8 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
           ),
         );
         // With no scene open there is no level to show: the start card
-        // covers the game as it booted, and takes the presses.
+        // covers the game as it booted, and takes the presses. While one
+        // opens, the backdrop covers the level being built.
         final plugin = widget.plugin;
         return SignalConsumer(
           signals: [plugin.sceneState.activeScene],
@@ -571,6 +580,12 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
             children: [
               canvas,
               if (!plugin.sceneState.hasScene) EditorStartCover(plugin: plugin),
+              // Keyed: the start card goes from under it as the scene
+              // opens, and its fade must carry on.
+              SceneLoadingCover(
+                key: const ValueKey('sceneLoadingCover'),
+                plugin: plugin,
+              ),
             ],
           ),
         );

@@ -26,6 +26,7 @@ import '../input/viewport_input.dart';
 import '../play/play_controller.dart';
 import '../project/editor_presence.dart';
 import '../scene/scene_io.dart';
+import '../scene/scene_loading.dart' show AssetTally;
 import '../scope/editor_scope.dart';
 import '../serialization/scene_manager.dart';
 import '../services/editor_log_service.dart';
@@ -887,6 +888,19 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (viewport.isLooking && _flyKeys.contains(event.logicalKey)) {
       return true;
     }
+    // A scene opening: the editor waits for it, and Esc stops waiting on
+    // its assets. The toggle key still hides the editor; a key let go
+    // still reaches whatever saw it pressed.
+    if (isVisible.value &&
+        sceneIO.loading.isLoading &&
+        event is! KeyUpEvent &&
+        event.logicalKey != _toggleKey) {
+      if (event is KeyDownEvent &&
+          event.logicalKey == LogicalKeyboardKey.escape) {
+        sceneIO.loading.skip();
+      }
+      return true;
+    }
     // Holding a key keeps nudging; nothing else acts on a repeat.
     if (event is KeyRepeatEvent) {
       if (EditorKeyClaim.focusedClaims(event)) return false;
@@ -1464,6 +1478,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     _attachDebuggerIfReady();
     // After the frame's game update: play time, and the end of a stepped frame.
     if (_isInitialized) playController.tick(dt);
+    if (_isInitialized) sceneIO.loading.tick();
     if (_isInitialized) _autosaveTick();
     if (_isInitialized) _syncRuntimeSystems(dt);
     if (!_isInitialized || !isVisible.value) return;
@@ -2129,11 +2144,39 @@ class JustGameEditorPlugin implements EnginePlugin {
       }
     }
     closeLevelDesigner();
+    final assets = _countSceneAssets();
     final opened = recovered != null
-        ? await sceneIO.openFrom(sceneName, recovered)
-        : await sceneIO.open(sceneName);
+        ? await sceneIO.openFrom(sceneName, recovered, assets: assets)
+        : await sceneIO.open(sceneName, assets: assets);
     if (!opened) return;
     if (wasDesignerOpen) openLevelDesigner();
+  }
+
+  /// Counts what the scene about to open asks to load, for the loader:
+  /// sprites, atlases, tile maps and the rest read through [spriteAssets],
+  /// and 3-D models. What was loading before it is left out.
+  AssetTally Function() _countSceneAssets() {
+    final files = spriteAssets.loads..restart();
+    final models = <String>{};
+    return () {
+      var done = files.finished;
+      var total = files.started;
+      final graphics = engine.graphics3D;
+      if (graphics != null && graphics.isStarted) {
+        final cache = graphics.models;
+        bool arrived(String path) =>
+            cache.errorOf(path) != null || cache.get(path) != null;
+        // The cache keeps the last scene's models too: a model is this
+        // scene's once it is seen loading. The renderer asks for them as
+        // it draws, so after the open.
+        for (final path in List.of(cache.paths)) {
+          if (!arrived(path)) models.add(path);
+        }
+        total += models.length;
+        done += models.where(arrived).length;
+      }
+      return (done: done, total: total);
+    };
   }
 
   // ── Autosave ───────────────────────────────────────────────────────────
