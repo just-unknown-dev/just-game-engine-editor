@@ -56,6 +56,7 @@ class _CountingModule extends EditorModule {
 void main() {
   test('a second EditorScope shares no state', () {
     final a = EditorScope(
+      builtIns: const [BuiltInEditorModule.new],
       world: World()..initialize(),
       modules: [_CountingModule()],
     );

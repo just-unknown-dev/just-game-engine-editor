@@ -4,9 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../core/assets/package_asset_paths.dart';
-import '../../core/constants/editor_constants.dart';
-import '../inspector/field_rows.dart';
+import 'package:just_editor_core/host.dart';
 import 'tileset_session.dart';
 
 /// How to cut an image into tiles.

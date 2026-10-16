@@ -2,14 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../dialogs/add_component_picker.dart';
-import '../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import '../../core/level_map/tile_selection_ops.dart';
-import '../../core/scope/editor_scope.dart';
-import '../inspector/definition_section.dart';
 import '../inspector/entity_header.dart';
-import '../../core/state/editor_scene_state.dart';
-import '../kit/kit.dart';
+import '../../core/scope/editor_scope_services.dart';
 
 /// Inspector panel that shows and edits components on the selected entity.
 class EntityInspectorPanel extends StatelessWidget {

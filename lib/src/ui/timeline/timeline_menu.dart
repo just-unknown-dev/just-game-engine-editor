@@ -7,7 +7,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../widgets/editor_menu.dart';
+import 'package:just_editor_core/host.dart';
 
 /// One line of a menu.
 PopupMenuItem<T> timelineMenuItem<T>(

@@ -6,7 +6,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import '../../../../core/level_map/tile_commands.dart';
 import '../../../../core/level_map/tile_edit_state.dart';
 import '../../controls/designer_controls.dart';
-import '../level_tool.dart';
+import 'package:just_editor_core/host.dart';
 import 'tile_tool_base.dart';
 
 /// Paints the brush — the tiles picked in the Tileset panel, or picked up

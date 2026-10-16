@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../core/constants/editor_constants.dart';
-import '../inspector/field_rows.dart';
+import 'package:just_editor_core/host.dart';
 import 'tileset_session.dart';
 
 /// Where a click inside a tile lands for a terrain set of [type]: the Wang

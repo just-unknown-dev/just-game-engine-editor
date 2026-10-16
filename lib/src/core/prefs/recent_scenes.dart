@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import '../constants/editor_constants.dart';
-import 'editor_prefs.dart';
+import 'package:just_editor_core/host.dart';
 
 /// The scenes opened lately, newest first: the Scenes list's Recent group,
 /// its "recently opened" sort, and the start card's Reopen.

@@ -6,12 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../../../core/constants/editor_constants.dart';
-import '../../../../ui/widgets/editor_menu.dart';
-import '../../../../core/scope/editor_scope.dart';
-import '../../../../extension/editor_contributions.dart';
-import '../shared/dock_widgets.dart';
-import 'asset_index.dart';
+import 'package:just_editor_core/host.dart';
+import '../../../../core/scope/editor_scope_services.dart';
 
 IconData assetIcon(AssetKind kind) => kind.icon;
 

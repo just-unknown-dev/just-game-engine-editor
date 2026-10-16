@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../../../core/level_map/tile_turn.dart';
-import '../../../../core/state/transform_mode.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../overlay/gizmo_painter.dart' show GizmoHandle;
 import '../../../overlay/transform_gizmo.dart';
 
@@ -14,7 +14,6 @@ import '../../../../core/level_map/level_map_documents.dart';
 import '../../../../core/level_map/tile_edit_state.dart';
 import '../../../../core/level_map/tile_selection_ops.dart';
 import '../../controls/designer_controls.dart';
-import '../level_tool.dart';
 import 'tile_tool_base.dart';
 
 /// Selects cells of the layer being painted: a dragged box, the connected

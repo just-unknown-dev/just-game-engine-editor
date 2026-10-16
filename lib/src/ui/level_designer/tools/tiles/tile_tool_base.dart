@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../../../core/scope/editor_scope.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../../core/level_map/tile_commands.dart';
 import '../../../../core/level_map/tile_edit_state.dart';
 import '../../../../core/level_map/level_map_documents.dart';
 import '../../controls/designer_controls.dart';
-import '../level_tool.dart';
+import '../../../../core/scope/editor_scope_services.dart';
 
 /// Ids of the tile tools.
 abstract final class TileTools {

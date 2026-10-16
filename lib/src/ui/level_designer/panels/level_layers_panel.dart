@@ -2,17 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../core/level_map/level_map_documents.dart';
 import '../../../core/level_map/tile_commands.dart';
-import '../../inspector/field_rows.dart';
-import '../../inspector/field_style.dart';
-import '../../inspector/live_preview.dart';
-import '../../widgets/editor_scrollbar.dart';
-import '../../widgets/scrubbable_number_field.dart';
 import '../controls/designer_controls.dart';
 import '../level_designer_session.dart';
-import '../state/editor_commands.dart';
+import '../../../core/scope/editor_scope_services.dart';
 
 /// Makes the scene's Level Map, empty, and selects it to paint — or, when
 /// the scene has one, selects that. One undo step.

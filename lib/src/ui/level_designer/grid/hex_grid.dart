@@ -1,11 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
-import '../../../extension/editor_module.dart';
-import '../state/designer_geometry.dart';
-import 'grid_topology.dart';
-import '../../../core/theme/viewport_look.dart';
-import '../../../core/view/editor_view.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Pointy-top hexagons, addressed by axial coordinates: [Point2.x] is `q`,
 /// [Point2.y] is `r`. The cell size is a hex's width, flat to flat, so a

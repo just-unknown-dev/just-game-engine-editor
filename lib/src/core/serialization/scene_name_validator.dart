@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:just_game_engine/just_game_engine.dart' show SceneNames;
 
-import 'scene_store.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Validates scene names and scans the project for existing scenes.
 ///

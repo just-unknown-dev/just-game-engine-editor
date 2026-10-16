@@ -12,36 +12,27 @@ import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../debugger/engine_debugger.dart';
 import '../../ui/inspector/physics/collider_edit_session.dart';
-import '../../ui/level_designer/state/editor_commands.dart';
+import 'package:just_editor_core/host.dart';
 import '../assets/file_sprite_asset_loader.dart';
 import '../../ui/level_designer/state/built_in_prefabs.dart';
 import '../../ui/level_designer/state/map_placement.dart';
-import '../../ui/level_designer/state/prefab_registry.dart';
 import '../ecs/systems/editor_log_capture_system.dart';
 import '../ecs/systems/physics_body_binding_system.dart';
 import '../entity/entity_ops.dart';
-import '../input/handle_drag_session.dart';
 import '../physics/physics_bodies.dart';
 import '../input/viewport_input.dart';
 import '../play/play_controller.dart';
 import '../project/editor_presence.dart';
 import '../scene/scene_io.dart';
 import '../scene/scene_loading.dart' show AssetTally;
-import '../scope/editor_scope.dart';
 import '../serialization/scene_manager.dart';
-import '../services/editor_log_service.dart';
-import '../state/editor_scene_state.dart';
 import '../state/play_snapshot.dart';
-import '../state/transform_mode.dart';
-import '../../ui/overlay/chrome_state.dart';
 import '../../ui/overlay/docks/extra/extra_docks.dart' show ProblemScan;
 import '../../ui/overlay/docks/shell/built_in_docks.dart' show BuiltInDocks;
 import '../../ui/overlay/gizmo_3d.dart';
 import '../../ui/overlay/gizmo_painter.dart';
 import '../view/orbit_fly_editor_view.dart';
-import '../view/ray_entity_picker.dart';
 import '../../ui/overlay/settings/settings_dialog.dart';
-import '../../ui/level_designer/commands/designer_command.dart';
 import '../../ui/level_designer/level_designer_session.dart';
 import '../level_map/tiled_import.dart';
 import '../../extension/built_in_tile_contributions.dart';
@@ -49,23 +40,11 @@ import '../level_map/level_map_documents.dart';
 import '../level_map/level_map_focus.dart';
 import '../level_map/level_map_provision.dart';
 import '../level_map/tile_commands.dart';
-import '../../ui/level_designer/state/editor_history.dart';
-import '../../ui/level_designer/tools/level_tool.dart';
 import '../../ui/level_designer/tools/tiles/tile_tool_base.dart';
-import '../../ui/level_designer/tools/tool_registry.dart';
-import '../../extension/asset_kind.dart';
-import '../../extension/editor_module.dart';
-import '../../extension/viewport_handles.dart';
-import '../../extension/viewport_overlay.dart';
+import '../../extension/built_in_editor_module.dart';
 import '../../ui/overlay/camera_rig_painter.dart';
-import '../../ui/level_designer/painters/designer_canvas.dart';
-import '../constants/editor_constants.dart';
-import '../theme/viewport_look.dart';
-import '../prefs/editor_prefs.dart';
 import '../prefs/recent_scenes.dart';
-import '../../ui/kit/fields.dart' show PendingFieldEdits;
-import '../../ui/kit/key_claim.dart';
-import '../../ui/overlay/settings/overlay_ui_settings.dart';
+import '../scope/editor_scope_services.dart';
 
 export '../play/play_controller.dart' show EditorPlayState, EntitySpawner;
 
@@ -112,6 +91,7 @@ class JustGameEditorPlugin implements EnginePlugin {
              scope ??
              EditorScope(
                engine: engine,
+               builtIns: const [BuiltInEditorModule.new],
                modules: [..._staticModules, ...modules],
              ),
          ownsScope: scope == null,
@@ -156,6 +136,9 @@ class JustGameEditorPlugin implements EnginePlugin {
        ),
        _gizmoPainter = GizmoPainter() {
     scope.spawners.value = spawners;
+    // A scope someone else built gets the editor's own tools, ahead of its
+    // modules; one the plugin built already has them.
+    scope.addBuiltIn(BuiltInEditorModule.new);
     // Modules handed to the plugin alongside a scope someone else built join
     // that scope; a scope the plugin built already has them.
     if (lateModules.isNotEmpty) {
@@ -954,7 +937,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     final context = CommandContext(
       scope: scope,
       session: designer.value,
-      plugin: this,
+      host: this,
       modifiers: ModifierKeys.fromHardwareKeyboard(),
       gridSize: gridSize.value,
     );

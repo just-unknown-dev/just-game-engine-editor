@@ -11,9 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
-import '../../core/constants/editor_constants.dart';
-import '../../core/scope/editor_scope.dart';
-import '../overlay/docks/shared/dock_widgets.dart';
+import 'package:just_editor_core/host.dart';
 import 'curve_view.dart';
 import 'dope_sheet.dart';
 import 'timeline_dialogs.dart';

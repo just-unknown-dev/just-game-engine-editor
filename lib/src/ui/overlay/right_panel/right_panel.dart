@@ -8,14 +8,9 @@ import '../../panels/entity_inspector_panel.dart';
 import '../../panels/scene_picker_panel.dart';
 import '../../scene_tree/scene_tree_panel.dart';
 import '../../level_designer/level_designer_workspace.dart';
-import '../../../core/constants/editor_constants.dart';
-import '../../../core/theme/editor_metrics.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../core/plugin/editor_plugin.dart';
 import '../docks/panel_parts.dart';
-import '../../kit/kit.dart';
-import '../chrome_state.dart';
-import '../settings/overlay_ui_settings.dart';
-import '../shared/snackbar.dart';
 
 class EditorRightPanel extends StatelessWidget {
   const EditorRightPanel({

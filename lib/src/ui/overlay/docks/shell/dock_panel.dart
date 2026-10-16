@@ -1,12 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/constants/editor_constants.dart';
-import '../../../../core/theme/editor_metrics.dart';
-import '../../../../ui/kit/kit.dart';
-import '../../../widgets/editor_menu.dart';
-import '../../../../core/scope/editor_scope.dart';
-import '../../../../extension/editor_contributions.dart';
-import '../../settings/overlay_ui_settings.dart';
+import 'package:just_editor_core/host.dart';
 import '../dock_controller.dart';
 import '../panel_parts.dart' show PanelResizeHandle;
 

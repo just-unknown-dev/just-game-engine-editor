@@ -3,12 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../core/view/ray_entity_picker.dart';
-import '../ui/level_designer/state/prefab_registry.dart';
-import 'asset_kind.dart';
-import 'designer_contributions.dart';
-import 'editor_marker.dart';
-import 'viewport_overlay.dart';
+import 'package:just_editor_core/host.dart';
 
 /// What the editor itself brings for sound, through the seams a module
 /// uses: a marker on every sound source and on the listener, how far a
@@ -70,8 +65,8 @@ abstract final class BuiltInAudioContributions {
         'A sound heard the same wherever the listener is — ambience, a '
         'drone. Pick its file in the inspector.',
     namePrefix: 'Sound',
-    build: (position, _) => [..._at2d(position), _source('', in3d: false)],
-    buildAt: (at) => [_above(at), _source('', in3d: true)],
+    build: (position, _) => [..._at2d(position), AudioDrop.source('', in3d: false)],
+    buildAt: (at) => [_above(at), AudioDrop.source('', in3d: true)],
   );
 
   static PrefabDefinition get _sound3d => PrefabDefinition(
@@ -87,8 +82,8 @@ abstract final class BuiltInAudioContributions {
         'A sound heard from where it is: louder near, panned by side, '
         'muffled far away. Pick its file in the inspector.',
     namePrefix: 'Sound',
-    build: (position, _) => [..._at2d(position), _source('', in3d: false, spatial: true)],
-    buildAt: (at) => [_above(at), _source('', in3d: true, spatial: true)],
+    build: (position, _) => [..._at2d(position), AudioDrop.source('', in3d: false, spatial: true)],
+    buildAt: (at) => [_above(at), AudioDrop.source('', in3d: true, spatial: true)],
   );
 
   static PrefabDefinition get _listener => PrefabDefinition(
@@ -109,55 +104,15 @@ abstract final class BuiltInAudioContributions {
     buildAt: (at) => [_above(at), jge.AudioListenerComponent()],
   );
 
-  /// An audio file dropped on the viewport: a looping source playing it —
-  /// placed in 3-D in a 3-D scene, flat in a 2-D one.
-  static jge.Entity? dropAudio(AssetDrop drop) {
-    final in3d = drop.scope.sceneState.editingMode == jge.SceneMode.threeD;
-    final slash = drop.path.lastIndexOf('/');
-    final dot = drop.path.lastIndexOf('.');
-    final stem = drop.path.substring(
-      slash + 1,
-      dot > slash ? dot : drop.path.length,
-    );
-    return drop.place([
-      if (in3d)
-        jge.TransformComponent(
-          position: jge.Vector3.copy(drop.at)..y -= _lift,
-        )
-      else
-        jge.LayerComponent(),
-      _source(drop.path, in3d: in3d, spatial: in3d),
-    ], name: stem);
-  }
-
-  /// How far above the ground a sound is put in 3-D, metres (up is −Y).
-  static const double _lift = 1;
-
   static List<jge.Component> _at2d(Offset position) => [
     jge.TransformComponent(position: jge.Vector3(position.dx, position.dy, 0)),
     jge.LayerComponent(),
   ];
 
   static jge.TransformComponent _above(SurfacePoint at) => jge.TransformComponent(
-    position: jge.Vector3.copy(at.position)..addScaled(at.normal, _lift),
+    position: jge.Vector3.copy(at.position)..addScaled(at.normal, AudioDrop.lift),
   );
 
-  /// A looping source of [path]. A 3-D one carries by the scene's units:
-  /// metres in 3-D (full within 1, silent past 20, muffled, with doppler),
-  /// pixels in 2-D (full within 64, silent past 1024).
-  static jge.AudioSourceComponent _source(
-    String path, {
-    required bool in3d,
-    bool spatial = false,
-  }) => jge.AudioSourceComponent(
-    clipPath: path,
-    loop: true,
-    is3d: spatial,
-    minDistance: in3d ? 1 : 64,
-    maxDistance: in3d ? 20 : 1024,
-    dopplerLevel: spatial && in3d ? 1 : 0,
-    farCutoff: spatial ? 2000 : 0,
-  );
 }
 
 /// How far a selected 3-D sound carries: a ring at the distance it starts

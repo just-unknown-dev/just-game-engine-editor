@@ -5,16 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../core/constants/editor_constants.dart';
-import '../../core/prefs/editor_prefs.dart';
+import 'package:just_editor_core/host.dart';
 import '../../core/prefs/recent_scenes.dart';
 import '../../core/serialization/scene_manager.dart';
-import '../../core/serialization/scene_store.dart';
-import '../../core/theme/editor_metrics.dart';
 import '../dialogs/create_scene_overlay.dart';
 import '../dialogs/scene_actions_dialogs.dart';
-import '../kit/kit.dart';
-import '../widgets/editor_menu.dart';
 import 'scene_row.dart';
 
 /// How the Scenes list is ordered.

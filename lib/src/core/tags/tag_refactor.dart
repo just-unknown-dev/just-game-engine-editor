@@ -6,11 +6,7 @@ import 'dart:io';
 
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../ui/level_designer/state/editor_commands.dart';
-import '../../ui/level_designer/state/editor_history.dart';
-import '../scene/editor_scene.dart';
-import '../scope/editor_scope.dart';
-import 'tag_references.dart';
+import 'package:just_editor_core/host.dart';
 
 /// What a rename or a delete would change, listed before anything does.
 class TagChangePlan {

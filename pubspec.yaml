@@ -12,6 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
   just_game_engine: ^2.0.0
+  just_editor_core: ^0.1.0
   just_tiled: ^0.4.0
   just_signals: ^1.0.2
   just_di: ^1.0.0

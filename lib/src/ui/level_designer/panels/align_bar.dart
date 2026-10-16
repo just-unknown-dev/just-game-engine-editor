@@ -2,12 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../../core/constants/editor_constants.dart';
-import '../../kit/kit.dart';
-import '../../../core/entity/hierarchy_commands.dart';
+import 'package:just_editor_core/host.dart';
 import '../level_designer_session.dart';
-import '../state/designer_geometry.dart';
-import '../state/editor_commands.dart';
 
 /// Which edge or axis an alignment operates on.
 enum AlignEdge {

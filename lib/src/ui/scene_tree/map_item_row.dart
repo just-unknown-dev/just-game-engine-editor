@@ -3,16 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../core/constants/editor_constants.dart';
-import '../../core/entity/hierarchy_commands.dart';
+import 'package:just_editor_core/host.dart';
 import '../../core/level_map/level_map_documents.dart';
 import '../../core/level_map/tile_commands.dart';
-import '../../core/scope/editor_scope.dart';
-import '../level_designer/state/editor_commands.dart';
-import '../widgets/editor_menu.dart';
 import 'scene_tree_controller.dart';
-import 'scene_tree_model.dart';
-import 'scene_tree_row.dart';
+import '../../core/scope/editor_scope_services.dart';
 
 /// A row of the scene tree that is part of a level map: one of its layers.
 ///

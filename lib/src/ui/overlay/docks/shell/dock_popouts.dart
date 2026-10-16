@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../../../../core/constants/editor_constants.dart';
-import '../../../../ui/kit/kit.dart';
-import '../../../../core/theme/editor_metrics.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../../core/plugin/editor_plugin.dart';
-import '../../../../extension/editor_contributions.dart';
-import '../../settings/overlay_ui_settings.dart';
 import '../dock_controller.dart';
 import 'built_in_docks.dart';
+import '../../../../core/scope/editor_scope_services.dart';
 
 /// Docks that were popped out of the panel, each in a small window of its
 /// own floating over the editor: drag it by its title, close it to put the

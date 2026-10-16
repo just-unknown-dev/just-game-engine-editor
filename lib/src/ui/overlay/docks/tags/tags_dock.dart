@@ -2,14 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
-import '../../../../core/constants/editor_constants.dart';
-import '../../../../core/scope/editor_scope.dart';
-import '../../../../core/tags/tag_references.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../../core/tags/tag_refactor.dart';
 import '../../../dialogs/scene_actions_dialogs.dart' show promptSceneName;
 import '../../../inspector/tag_field_editors.dart' show TagHighlight;
-import '../../../kit/kit.dart';
-import '../../../widgets/editor_menu.dart';
 
 /// The project's tags: every one, what it looks like, who carries it, and
 /// renaming or deleting one everywhere it is used.

@@ -4,8 +4,7 @@ import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../ui/overlay/gizmo_painter.dart';
-import '../state/editor_scene_state.dart';
-import '../view/editor_view.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Turns a drag of a gizmo handle into an edit of the entity's transform.
 ///

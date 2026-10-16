@@ -2,17 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/scope/editor_scope.dart';
-import '../../../core/serialization/scene_codec.dart';
-import '../../../core/state/editor_scene_state.dart';
+import 'package:just_editor_core/host.dart';
 import '../controls/designer_controls.dart';
-import '../state/designer_geometry.dart';
-import '../state/editor_commands.dart';
 import '../state/map_placement.dart';
-import '../state/level_designer_controller.dart';
-import '../state/editor_history.dart';
-import 'level_tool.dart';
-import 'tool_registry.dart';
 
 /// Paints prefabs onto the grid: brush, eraser, and rectangle fill.
 ///

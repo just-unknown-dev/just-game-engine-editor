@@ -5,15 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_debugger/just_debugger.dart';
 
-import '../../../core/constants/editor_constants.dart';
-import '../../kit/kit.dart';
-import '../../../core/theme/editor_metrics.dart';
+import 'package:just_editor_core/host.dart';
 import '../docks/panel_parts.dart';
-import '../../../core/scope/editor_scope.dart';
-import '../chrome_state.dart';
-import '../settings/overlay_ui_settings.dart';
 import '../shared/shared_widgets.dart';
-import '../shared/snackbar.dart';
 
 class DetailSectionCard extends StatefulWidget {
   const DetailSectionCard({

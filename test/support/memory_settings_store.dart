@@ -1,7 +1,6 @@
 import 'dart:async';
 
-import 'package:just_game_engine_editor/just_game_engine_editor.dart';
-import 'package:just_game_engine_editor/src/ui/overlay/settings/overlay_settings_store.dart';
+import 'package:just_editor_core/host.dart';
 import 'package:just_storage/just_storage.dart';
 
 /// The settings store, in memory: what the real one does, minus the disk —

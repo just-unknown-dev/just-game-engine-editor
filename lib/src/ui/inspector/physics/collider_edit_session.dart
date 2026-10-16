@@ -5,11 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/entity/component_edit.dart';
-import '../../../core/scope/editor_scope.dart';
-import '../../../core/state/editor_scene_state.dart';
-import '../../../core/view/editor_view.dart';
-import '../../level_designer/state/editor_history.dart';
+import 'package:just_editor_core/host.dart';
 import 'physics_body_extras.dart';
 
 /// What a collider handle does when dragged.

@@ -2,13 +2,7 @@ import 'package:flutter/painting.dart';
 import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../ui/level_designer/state/editor_commands.dart';
-import '../../ui/level_designer/state/editor_history.dart';
-import 'hierarchy_commands.dart';
-import '../scope/editor_scope.dart';
-import '../state/editor_scene_state.dart';
-import '../state/unique_namer.dart';
-import '../view/editor_view.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Creates, deletes, groups, re-parents and copies entities in the world
 /// being edited, keeping [sceneState] in step.

@@ -1,10 +1,8 @@
 import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../scope/editor_scope.dart';
-import '../state/editor_scene_state.dart';
+import 'package:just_editor_core/host.dart';
 import '../state/play_snapshot.dart';
-import 'editor_scene.dart';
 import 'scene_loading.dart';
 
 /// Opens and saves scenes: the world on one side, the scope's [SceneStore]

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/editor_constants.dart';
-import '../kit/kit.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Asks before deleting [sceneName] for good. True when the user went ahead.
 Future<bool> confirmDeleteScene(BuildContext context, String sceneName) =>

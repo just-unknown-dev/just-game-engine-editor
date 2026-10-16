@@ -2,34 +2,23 @@ import '../timeline/motion_path.dart';
 import '../timeline/timeline_session.dart';
 import 'dart:math' as math;
 
-export 'state/modifier_keys.dart';
+export 'package:just_editor_core/host.dart' show ModifierKeys;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../core/scope/editor_scope.dart';
-import '../../core/state/editor_scene_state.dart';
-import '../../extension/editor_module.dart';
-import 'commands/designer_command.dart';
+import 'package:just_editor_core/host.dart';
 import 'overlays/built_in_overlays.dart';
-import 'overlays/designer_overlay.dart';
 import 'overlays/measurement_overlay.dart';
 import 'overlays/minimap_overlay.dart';
 import 'overlays/tile_overlays.dart';
 import 'overlays/transform_overlays.dart';
 import 'painters/level_designer_painter.dart';
 import 'state/built_in_prefabs.dart';
-import 'state/modifier_keys.dart';
-import 'state/prefab_registry.dart';
-import 'state/snap_provider.dart';
-import 'state/level_designer_controller.dart';
-import 'state/editor_history.dart';
 import 'state/selection_ops.dart';
 import 'tools/draw_rect_tool.dart';
 import 'tools/eyedropper_tool.dart';
-import 'tools/level_tool.dart';
-import 'tools/tool_registry.dart';
 import 'tools/measure_tool.dart';
 import 'tools/paint_tool.dart';
 import 'tools/select_tool.dart';
@@ -38,8 +27,7 @@ import 'tools/tiles/tile_select_tool.dart';
 import 'tools/tiles/tile_terrain_tool.dart';
 import 'tools/tiles/tile_tool_base.dart' show TileTools;
 import '../overlay/camera_rig_painter.dart';
-import 'tools/path_tool.dart';
-import '../../core/view/editor_view.dart';
+import '../../core/scope/editor_scope_services.dart';
 
 /// Owns the Level Designer's runtime: state, tools, history and painting.
 ///
@@ -47,7 +35,7 @@ import '../../core/view/editor_view.dart';
 /// designer is open, and keeps its existing behaviour when it is closed. That
 /// split is deliberate — with the designer off, the overlay behaves exactly as
 /// it always has, so this feature cannot regress the base editor.
-class LevelDesignerSession {
+class LevelDesignerSession implements DesignerSession {
   LevelDesignerSession({
     required this.scope,
     required String Function(String prefix) uniqueName,
@@ -80,12 +68,15 @@ class LevelDesignerSession {
   late final VoidCallback _stopWatchingDesigner;
 
   /// The editor this session belongs to: its prefabs, layers, codec, log.
+  @override
   final EditorScope scope;
 
   /// The world being edited.
+  @override
   jge.World get world => scope.world;
 
   /// Selection and grid state shared with the rest of the editor.
+  @override
   EditorSceneState get sceneState => scope.sceneState;
 
   /// This session's viewport tools: the built-ins, then each module's —
@@ -111,6 +102,7 @@ class LevelDesignerSession {
   final Map<String, Object> _moduleStates = {};
 
   /// The session state a module created, by type; null when none did.
+  @override
   T? stateOf<T extends Object>() =>
       _moduleStates.values.whereType<T>().firstOrNull;
 
@@ -258,15 +250,18 @@ class LevelDesignerSession {
   }
 
   /// A name starting [prefix] that no entity in the scene has yet.
+  @override
   String uniqueName(String prefix) => _uniqueName(prefix);
 
   /// Undo for every edit, shared with the rest of the editor.
   ///
   /// The scope owns it, so closing the designer does not throw away what
   /// was done in it and Ctrl+Z means the same thing everywhere.
+  @override
   final EditorHistory history;
 
   /// Designer state, exposed as signals for the UI.
+  @override
   late final LevelDesignerController controller;
 
   /// Duplicates the current selection. Supplied by the plugin, which owns
@@ -311,6 +306,7 @@ class LevelDesignerSession {
   /// The viewport camera. The plugin supplies the engine's; a session built
   /// on its own — in a test, say — gets a private one, so framing and zoom
   /// still work rather than every caller checking for null.
+  @override
   EditorView get camera => _camera?.call() ?? _detachedCamera;
   final MeasureTool _measureTool = MeasureTool();
   late final EyedropperTool _eyedropper = EyedropperTool(
@@ -502,6 +498,7 @@ class LevelDesignerSession {
   ///
   /// Abandoning rather than committing: a half-drawn rectangle is not
   /// something the author asked to place.
+  @override
   void setTool(String toolId) {
     if (controller.toolId.value == toolId) return;
     if (tools.byId(toolId) == null) return;

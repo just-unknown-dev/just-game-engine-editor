@@ -279,7 +279,17 @@ With a tile tool in hand, X and Y mirror the brush and Z turns it, Ctrl+V puts c
 
 ## Extending the editor
 
-A game, a kit or a tool adds to the editor with an `EditorModule`, passed to `register(modules: …)`:
+A game, a kit or a tool adds to the editor with an `EditorModule`, passed to `register(modules: …)`. A module builds on [`just_editor_core`](../just_editor_core/) — the module contract, the scope and its services, undo, the inspector's rows and the UI kit — and needs nothing else of the editor, so a kit depends on that package alone:
+
+```yaml
+dependencies:
+  just_editor_core: ^0.1.0
+```
+
+```dart
+import 'package:just_editor_core/just_editor_core.dart';
+```
+
 
 ```dart
 class MyGameModule extends EditorModule {
@@ -319,6 +329,8 @@ The first-party modules:
 | `InputEditorModule` | `just_input_editor` | The input actions asset |
 | `AssetStoreModule` | `just_asset_store_editor` | The Asset Store window |
 | `HexGridModule` | built in | A hexagonal grid for the Level Designer |
+
+The editor's own tools arrive the same way: `BuiltInEditorModule` holds its field editors, commands, prefabs, workspaces and the rest, registered ahead of every other module, so a module replaces any of it by reusing an id.
 
 A project made with `just create` lists the modules of the store items it has in a generated `lib/editor/store_modules.g.dart`.
 

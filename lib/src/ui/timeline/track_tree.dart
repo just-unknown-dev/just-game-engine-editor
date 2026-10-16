@@ -6,7 +6,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import 'dope_sheet.dart';
 import 'timeline_dialogs.dart';
 import 'timeline_menu.dart';

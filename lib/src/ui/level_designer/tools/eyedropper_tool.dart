@@ -2,12 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../state/component_resizer.dart';
-import '../state/designer_geometry.dart';
-import '../state/editor_commands.dart';
-import '../../../core/serialization/scene_codec.dart';
-import '../state/prefab_registry.dart';
-import 'level_tool.dart';
-import 'tool_registry.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Click an entity to make it the thing the draw and paint tools place.
 ///

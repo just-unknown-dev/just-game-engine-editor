@@ -8,11 +8,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../core/constants/editor_constants.dart';
-import '../core/scope/editor_scope.dart';
-import '../core/validation/scene_validator.dart';
+import 'package:just_editor_core/host.dart';
 import '../ui/overlay/docks/extra/extra_docks.dart';
-import 'editor_contributions.dart';
 
 abstract final class BuiltInRowDecorations {
   static List<SceneTreeRowDecoration> get all => [

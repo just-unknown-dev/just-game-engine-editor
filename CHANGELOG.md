@@ -4,6 +4,14 @@
 
 First release: a level editor that runs inside a `just_game_engine` game. It needs a desktop (Windows, macOS, Linux) in a debug build; `JustGameEditorPlugin.register` returns null in a profile or release build and on Android, iOS and the web (`supportsPlatform` says which).
 
+### The module contract is a package of its own
+
+- **`just_editor_core`** holds what a module builds on — `EditorModule` and its contributions, `EditorScope` and its services, undo and the entity commands, the inspector's rows and field editors, the Level Designer's tool and overlay API, the viewport's views and pickers, and the UI kit. A kit or an editor plugin depends on it alone; this package re-exports its library, so a game's editor entry point is unchanged.
+- **The editor's own tools are a module**, `BuiltInEditorModule`: field editors, inspector extras, commands and keys, prefabs and palette, the Tileset Editor, markers, the camera, sound, tag, tile and 3-D physics tooling, the 3-D view and the timeline's key button. The plugin makes its scope with it, and adds it to a scope it is handed; a test making a scope passes `builtIns: const [BuiltInEditorModule.new]`.
+- **The editor's own services** — the dock controller, `EntityOps`, the Level Map's documents, tile state and provision — are getters on the scope from `EditorScopeServices`, each made when first asked for.
+- `EditorModule.saveEditorData`, `restoreEditorData`, `StatusBarControl` and `SidePanelSection` take a `DesignerSession`; `CommandContext.plugin` is `host`, and the editor's commands read the session and plugin through `EditorCommandContext`.
+- New: `EditorModule.fieldAccessories` (`FieldAccessory`), `EditorScope.openDock`, `PrefabColours`, `AudioDrop` (in place of `BuiltInAudioContributions.dropAudio`). `BuiltInValidators` and `PlanarEntityPicker` are files of their own.
+
 ### Fixed
 
 - **Dragging the transform gizmo in the viewport can be undone.** A drag outside the Level Designer moved the entity without recording anything; it is now one undo step (`ViewportInput.commitTransform`), labelled Move, Rotate or Scale, including a drag the system cancels.

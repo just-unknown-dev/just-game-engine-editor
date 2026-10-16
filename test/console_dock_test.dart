@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
-import 'package:just_game_engine_editor/src/core/services/editor_log_entry.dart';
+import 'package:just_editor_core/host.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/console/console_dock.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/shell/built_in_docks.dart';
 

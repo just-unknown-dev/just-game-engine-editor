@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../core/constants/editor_constants.dart';
-import '../inspector/field_rows.dart';
+import 'package:just_editor_core/host.dart';
 import '../inspector/property_table_editor.dart';
 import 'tileset_session.dart';
 

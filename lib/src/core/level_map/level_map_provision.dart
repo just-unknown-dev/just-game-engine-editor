@@ -1,10 +1,9 @@
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../ui/level_designer/state/built_in_prefabs.dart';
-import '../../ui/level_designer/state/editor_commands.dart';
-import '../../ui/level_designer/state/editor_history.dart';
-import '../scope/editor_scope.dart';
+import 'package:just_editor_core/host.dart';
 import 'level_map_documents.dart';
+import '../scope/editor_scope_services.dart';
 
 /// The scene's one Level Map, made when something is first drawn on it.
 ///

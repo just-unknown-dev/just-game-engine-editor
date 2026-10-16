@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../core/constants/editor_constants.dart';
-import '../../../core/scope/editor_scope.dart';
-import '../../../core/theme/editor_metrics.dart';
-import '../../kit/kit.dart';
-import '../settings/overlay_ui_settings.dart';
+import 'package:just_editor_core/host.dart';
 import '../../level_designer/panels/tool_palette.dart';
 import 'transform_toolbar.dart';
 

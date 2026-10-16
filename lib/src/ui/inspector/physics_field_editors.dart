@@ -2,14 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
-import '../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import '../../core/physics/physics_bodies.dart';
-import '../../core/scope/editor_scope.dart';
 import '../overlay/docks/shell/built_in_docks.dart' show BuiltInDocks;
-import '../widgets/editor_dropdown.dart';
-import 'field_editor.dart';
-import 'field_rows.dart';
-import 'field_style.dart';
+import '../../core/scope/editor_scope_services.dart';
 
 /// Inspector editors for collision layers, made like the tag pickers: a
 /// layer picked by name — or made there and then — and the layers a body

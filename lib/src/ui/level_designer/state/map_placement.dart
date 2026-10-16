@@ -2,9 +2,8 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../../core/level_map/level_map_documents.dart';
 import '../../../core/level_map/tile_commands.dart';
-import '../../../core/scope/editor_scope.dart';
-import 'editor_commands.dart';
-import 'editor_history.dart';
+import 'package:just_editor_core/host.dart';
+import '../../../core/scope/editor_scope_services.dart';
 
 /// Where the Level Designer puts what it places: under the scene's Level
 /// Map, on the map's layer at the depth being placed at.

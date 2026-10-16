@@ -7,7 +7,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-import '../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import 'timeline_session.dart';
 
 class TimelineScrollBar extends StatefulWidget {

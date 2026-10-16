@@ -1,7 +1,7 @@
 import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../services/editor_log_service.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Captures ECS runtime changes and forwards them into the editor log stream.
 class EditorLogCaptureSystem extends System {

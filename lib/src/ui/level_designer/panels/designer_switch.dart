@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/constants/editor_constants.dart';
-import '../../../core/scope/editor_scope.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Picks which level designer is live: the built-in one, or a module's.
 ///

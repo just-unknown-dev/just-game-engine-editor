@@ -4,9 +4,10 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart' show Offset;
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../../core/state/transform_mode.dart';
+import 'package:just_editor_core/host.dart';
 
-import 'designer_command.dart';
+import 'editor_command_context.dart';
+import '../../../core/scope/editor_scope_services.dart';
 
 /// What the designer and the editor can do from the keyboard out of the box.
 ///
@@ -37,88 +38,90 @@ abstract final class BuiltInCommands {
               : set > 0
               ? set
               : (snap > 0 ? snap : 1.0);
-          c.session!.ops.nudge(c.session!.selectionEntities(), delta * step);
+          c.designer!.ops.nudge(c.designer!.selectionEntities(), delta * step);
         },
       ),
     _d2(
       'designer.rotateClockwise',
       'Rotate a quarter turn',
-      (c) => c.session!.ops.rotateQuarter(c.session!.selectionEntities(), 1),
+      (c) => c.designer!.ops.rotateQuarter(c.designer!.selectionEntities(), 1),
     ),
     _d2(
       'designer.rotateCounter',
       'Rotate a quarter turn back',
-      (c) => c.session!.ops.rotateQuarter(c.session!.selectionEntities(), -1),
+      (c) => c.designer!.ops.rotateQuarter(c.designer!.selectionEntities(), -1),
     ),
     _d2(
       'designer.flipHorizontal',
       'Flip horizontally',
-      (c) =>
-          c.session!.ops.flip(c.session!.selectionEntities(), horizontal: true),
+      (c) => c.designer!.ops.flip(
+        c.designer!.selectionEntities(),
+        horizontal: true,
+      ),
     ),
     _d2(
       'designer.flipVertical',
       'Flip vertically',
-      (c) => c.session!.ops.flip(
-        c.session!.selectionEntities(),
+      (c) => c.designer!.ops.flip(
+        c.designer!.selectionEntities(),
         horizontal: false,
       ),
     ),
     _d(
       'designer.frameSelection',
       'Frame the selection',
-      (c) => c.session!.frameSelection(),
+      (c) => c.designer!.frameSelection(),
     ),
-    _d('designer.frameAll', 'Frame everything', (c) => c.session!.frameAll()),
+    _d('designer.frameAll', 'Frame everything', (c) => c.designer!.frameAll()),
     _d(
       'designer.hide',
       'Hide the selection',
-      (c) => c.session!.hideSelection(),
+      (c) => c.designer!.hideSelection(),
     ),
     _d(
       'designer.isolate',
       'Isolate the selection',
-      (c) => c.session!.isolateSelection(),
+      (c) => c.designer!.isolateSelection(),
     ),
-    _d('designer.unhideAll', 'Show everything', (c) => c.session!.unhideAll()),
+    _d('designer.unhideAll', 'Show everything', (c) => c.designer!.unhideAll()),
     _d(
       'designer.lock',
       'Lock the selection',
-      (c) => c.session!.lockSelection(),
+      (c) => c.designer!.lockSelection(),
     ),
     _d(
       'designer.unlockAll',
       'Unlock everything',
-      (c) => c.session!.unlockAll(),
+      (c) => c.designer!.unlockAll(),
     ),
     _d(
       'designer.replace',
       'Replace with the active prefab',
-      (c) => c.session!.replaceSelection(),
+      (c) => c.designer!.replaceSelection(),
     ),
-    _d('designer.selectAll', 'Select all', (c) => c.session!.selectAll()),
+    _d('designer.selectAll', 'Select all', (c) => c.designer!.selectAll()),
     _d('designer.brushSmaller', 'Smaller brush', (c) {
-      final brush = c.session!.controller.brushSize;
+      final brush = c.designer!.controller.brushSize;
       brush.value = c.scope.config.smallerBrush(brush.value);
     }),
     _d('designer.brushLarger', 'Larger brush', (c) {
-      final brush = c.session!.controller.brushSize;
+      final brush = c.designer!.controller.brushSize;
       brush.value = c.scope.config.largerBrush(brush.value);
     }),
     _d('designer.cancel', 'Cancel the gesture, or clear the selection', (c) {
-      final s = c.session!;
+      final s = c.designer!;
       s.hasActiveGesture ? s.onPointerCancel() : s.sceneState.clearSelection();
     }),
     for (var slot = 1; slot <= 9; slot++) ...[
       _d(
         'designer.bookmark.store.$slot',
         'Store camera bookmark $slot',
-        (c) => c.session!.storeBookmark(slot),
+        (c) => c.designer!.storeBookmark(slot),
       ),
       _d(
         'designer.bookmark.recall.$slot',
         'Recall camera bookmark $slot',
-        (c) => c.session!.recallBookmark(slot),
+        (c) => c.designer!.recallBookmark(slot),
       ),
     ],
     // Editor-wide: dispatched by the plugin after the designer has passed.
@@ -357,7 +360,7 @@ abstract final class BuiltInCommands {
         isEnabled: (c) => c.plugin?.isAuthoring.value ?? true,
         run: (c) {
           c.scope.view.transformMode.value = mode;
-          c.session?.adoptTransformMode();
+          c.designer?.adoptTransformMode();
         },
       ),
     // Looking around a 3-D scene.

@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
-import 'package:just_game_engine_editor/src/ui/overlay/settings/overlay_settings_store.dart';
+import 'package:just_editor_core/host.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/settings/settings_dialog.dart';
 import 'package:just_storage/just_storage.dart';
 
@@ -64,6 +64,7 @@ void main() {
   test('a module preference round-trips through the store', () async {
     final store = _MemoryStore()..values['test.showWaves'] = 'true';
     final scope = EditorScope(
+      builtIns: const [BuiltInEditorModule.new],
       world: World()..initialize(),
       settingsStore: store,
     );
@@ -105,6 +106,7 @@ void main() {
 
   EditorScope scopeWith({List<EditorModule> modules = const []}) {
     final scope = EditorScope(
+      builtIns: const [BuiltInEditorModule.new],
       world: World()..initialize(),
       modules: modules,
       settingsStore: _MemoryStore(),

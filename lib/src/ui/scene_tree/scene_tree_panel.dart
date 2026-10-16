@@ -14,21 +14,12 @@ import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
-import '../../core/constants/editor_constants.dart';
-import '../../core/theme/editor_metrics.dart';
-import '../kit/kit.dart';
+import 'package:just_editor_core/host.dart';
 import '../../core/entity/entity_ops.dart';
-import '../../core/scope/editor_scope.dart';
-import '../../core/state/editor_scene_state.dart';
 import '../overlay/docks/extra/extra_docks.dart';
-import '../../core/entity/hierarchy_commands.dart';
-import '../inspector/field_style.dart';
-import '../widgets/editor_menu.dart';
 import 'map_item_row.dart';
 import 'scene_tree_controller.dart';
-import 'scene_tree_model.dart';
-import 'scene_tree_row.dart';
-import '../widgets/editor_scrollbar.dart';
+import '../../core/scope/editor_scope_services.dart';
 
 class SceneTreePanel extends StatefulWidget {
   const SceneTreePanel({

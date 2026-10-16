@@ -5,9 +5,7 @@ import 'dart:ui';
 
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../ui/level_designer/state/editor_history.dart';
-import '../assets/package_asset_paths.dart';
-import '../state/editor_scene_state.dart';
+import 'package:just_editor_core/host.dart';
 import 'tile_commands.dart';
 
 /// A map a tile tool can edit, and where it is.

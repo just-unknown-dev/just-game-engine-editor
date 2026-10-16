@@ -3,14 +3,8 @@ import 'dart:ui';
 
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../../core/entity/hierarchy_commands.dart';
-import '../../../core/state/editor_scene_state.dart';
+import 'package:just_editor_core/host.dart';
 import 'component_resizer.dart';
-import 'designer_geometry.dart';
-import 'editor_commands.dart';
-import 'editor_history.dart';
-import 'prefab_registry.dart';
-import '../../../core/serialization/scene_codec.dart';
 
 /// Edits applied to a whole selection at once — each exactly one undo step.
 ///

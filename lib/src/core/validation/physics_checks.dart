@@ -4,11 +4,9 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../ui/inspector/physics/physics_body_extras.dart';
 import '../../ui/inspector/physics_field_editors.dart';
-import '../../ui/level_designer/state/editor_commands.dart';
-import '../entity/component_edit.dart';
+import 'package:just_editor_core/host.dart';
 import '../physics/physics_bodies.dart';
-import '../scope/editor_scope.dart';
-import 'scene_validator.dart';
+import 'built_in_validators.dart';
 
 /// What the Problems dock says about 2-D physics bodies — as `Physics3DChecks`
 /// says about 3-D ones: bodies with no shape, characters with a body as

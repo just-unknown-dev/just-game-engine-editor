@@ -5,17 +5,13 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_game_engine/just_game_engine.dart'
     show TileCell, TileCoord, MapGeometry, MapOrientation, LevelMapRuntime;
 
-import '../../../core/scope/editor_scope.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../core/level_map/tile_edit_state.dart';
-import '../../../core/state/transform_mode.dart';
 import '../../overlay/transform_gizmo.dart';
-import '../painters/designer_canvas.dart';
-import '../tools/level_tool.dart';
 import '../tools/tiles/tile_select_tool.dart';
 import '../tools/tiles/tile_tool_base.dart';
 import 'built_in_overlays.dart';
-import 'designer_overlay.dart';
-import '../../../core/theme/viewport_look.dart';
+import '../../../core/scope/editor_scope_services.dart';
 
 /// Ids of the tile overlays.
 abstract final class TileOverlays {

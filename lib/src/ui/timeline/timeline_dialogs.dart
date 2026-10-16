@@ -5,7 +5,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import '../inspector/tag_field_editors.dart' show TagPicker;
 import '../overlay/docks/shared/dock_widgets.dart';
 import 'timeline_session.dart';

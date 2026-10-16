@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../state/editor_scene_state.dart';
+import 'package:just_editor_core/host.dart';
 import 'level_map_documents.dart';
 
 /// What the tile fill tool fills.

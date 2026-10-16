@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../overlays/designer_overlay.dart';
-import '../state/level_designer_controller.dart';
-import 'designer_canvas.dart';
-import '../../../core/view/editor_view.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Draws the Level Designer's overlays onto the game canvas.
 ///

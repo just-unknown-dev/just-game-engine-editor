@@ -1,6 +1,6 @@
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../state/editor_scene_state.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Live gizmo-drag authoring override for physics bodies.
 ///

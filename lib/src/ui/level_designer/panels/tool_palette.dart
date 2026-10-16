@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/constants/editor_constants.dart';
-import '../../kit/kit.dart';
+import 'package:just_editor_core/host.dart';
 import '../level_designer_session.dart';
-import '../tools/level_tool.dart';
-import '../tools/tool_registry.dart';
-import '../../widgets/editor_scrollbar.dart';
 
 /// The designer's tool strip, floating at the top right of the viewport
 /// under the All / Move / Scale / Rotate column — which is the select tool,

@@ -7,8 +7,7 @@ import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
-import 'package:just_game_engine_editor/just_game_engine_editor.dart';
-import 'package:just_game_engine_editor/src/ui/inspector/component_reorder.dart';
+import 'package:just_editor_core/host.dart';
 
 import 'support/test_scope.dart';
 

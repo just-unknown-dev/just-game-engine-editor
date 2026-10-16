@@ -4,7 +4,7 @@ import 'dart:ui' show Color, Paint, PaintingStyle;
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine/physics_3d.dart';
 
-import '../../extension/viewport_overlay.dart';
+import 'package:just_editor_core/host.dart';
 import 'hull_outline.dart';
 
 /// The shapes of the 3-D colliders and characters in a 3-D scene, as wire

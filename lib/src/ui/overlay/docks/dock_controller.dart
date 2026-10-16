@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:just_signals/just_signals.dart';
 
-import '../../../extension/editor_contributions.dart';
+import 'package:just_editor_core/host.dart';
 
 /// The bottom panel's state: which dock is showing, how tall each is, which
 /// are pinned as tabs and in what order, and what each remembers.

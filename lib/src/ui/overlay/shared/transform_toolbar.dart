@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/constants/editor_constants.dart';
-import '../../../core/theme/editor_metrics.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../core/plugin/editor_plugin.dart';
-import '../../../core/state/transform_mode.dart';
 import '../../level_designer/level_designer_session.dart';
 import '../../level_designer/panels/tool_palette.dart';
-import '../settings/overlay_ui_settings.dart';
+import '../../../core/scope/editor_scope_services.dart';
 
 /// All, Move, Scale and Rotate — Q, W, E and R — in a column at the top
 /// right of the viewport, in the editor and the Level Designer alike; the

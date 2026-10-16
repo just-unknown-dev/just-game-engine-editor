@@ -4,15 +4,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../core/plugin/editor_plugin.dart';
 import '../../../core/prefs/recent_scenes.dart';
-import '../../../core/state/transform_mode.dart';
-import '../../../core/theme/editor_metrics.dart';
-import '../../../extension/editor_contributions.dart';
 import '../../dialogs/create_scene_overlay.dart';
-import '../../kit/kit.dart';
-import '../settings/overlay_ui_settings.dart';
 
 /// What the viewport shows while no scene is open: the editor's backdrop in
 /// place of the game, and on it [EditorStartCard] — how to use the editor.

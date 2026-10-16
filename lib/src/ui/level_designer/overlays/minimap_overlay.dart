@@ -3,11 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../../core/constants/editor_constants.dart';
-import '../state/designer_geometry.dart';
-import '../state/level_designer_controller.dart';
+import 'package:just_editor_core/host.dart';
 import 'built_in_overlays.dart';
-import 'designer_overlay.dart';
 
 /// Where the minimap sits and how it maps world to panel. Shared by the
 /// overlay that draws it and the session that handles clicks on it, so the

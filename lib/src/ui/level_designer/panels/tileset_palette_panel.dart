@@ -8,17 +8,15 @@ import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/assets/package_asset_paths.dart';
-import '../../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../core/level_map/tile_commands.dart';
 import '../../../core/level_map/tile_edit_state.dart';
 import '../../../core/level_map/level_map_documents.dart';
 import '../controls/designer_controls.dart';
 import '../level_designer_session.dart';
-import '../tools/level_tool.dart';
 import '../tools/tiles/tile_tool_base.dart';
 import '../../tileset/built_in_workspaces.dart';
-import '../../widgets/editor_scrollbar.dart';
+import '../../../core/scope/editor_scope_services.dart';
 
 /// The tiles to paint with: the engine's basic shapes, then the map's own
 /// tilesets, one under another, each with its tiles below its name.

@@ -1,4 +1,4 @@
-import 'scene_store.dart';
+import 'package:just_editor_core/host.dart';
 import 'scene_name_validator.dart';
 
 /// Thrown by [SceneManager] operations that are refused (invalid name,

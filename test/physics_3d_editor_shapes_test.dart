@@ -34,7 +34,10 @@ void main() {
   EditorScope scope() {
     final world = World()..initialize();
     Physics3D.registerSchemas(world.context);
-    final s = EditorScope(world: world);
+    final s = EditorScope(
+      builtIns: const [BuiltInEditorModule.new],
+      world: world,
+    );
     addTearDown(s.dispose);
     s.sceneState.openScene(EditorScene(name: 'deep', mode: SceneMode.threeD));
     return s;

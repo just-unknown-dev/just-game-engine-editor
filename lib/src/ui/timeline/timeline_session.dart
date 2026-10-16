@@ -8,9 +8,7 @@ import 'dart:ui' show Offset;
 
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../core/assets/package_asset_paths.dart';
-import '../../core/scope/editor_scope.dart';
-import '../../core/state/scene_mode_filters.dart';
+import 'package:just_editor_core/host.dart';
 import 'dope_sheet.dart' show TimelineMetrics;
 import 'motion_path.dart';
 

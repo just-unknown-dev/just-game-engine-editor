@@ -22,7 +22,10 @@ void main() {
 
   EditorScope scope({SceneMode mode = SceneMode.threeD}) {
     final world = World()..initialize();
-    final s = EditorScope(world: world);
+    final s = EditorScope(
+      builtIns: const [BuiltInEditorModule.new],
+      world: world,
+    );
     addTearDown(s.dispose);
     s.sceneState.openScene(EditorScene(name: 'sound', mode: mode));
     return s;
@@ -131,7 +134,7 @@ void main() {
         return s.world.createEntityWithComponents(components);
       },
     );
-    BuiltInAudioContributions.dropAudio(drop);
+    AudioDrop.place(drop);
     expect(name, 'orb_hum');
     final source = placed.whereType<AudioSourceComponent>().single;
     expect((source.clipPath, source.loop, source.is3d), ('assets/audio/orb_hum.wav', true, true));

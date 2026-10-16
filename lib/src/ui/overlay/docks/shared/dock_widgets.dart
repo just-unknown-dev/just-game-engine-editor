@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/constants/editor_constants.dart';
-import '../../../../core/theme/editor_metrics.dart';
+import 'package:just_editor_core/host.dart';
 
-export '../../../kit/kit.dart';
+export 'package:just_editor_core/kit.dart';
 
 /// The parts every dock is built from, so nine docks look like one editor:
 /// the editor's kit — a toolbar row, a search field, filter chips with

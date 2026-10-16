@@ -1,7 +1,6 @@
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../ui/level_designer/state/editor_commands.dart';
-import '../serialization/scene_codec.dart';
+import 'package:just_editor_core/host.dart';
 
 /// The authored scene, captured when play starts and put back when it stops.
 ///

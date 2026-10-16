@@ -4,9 +4,7 @@ library;
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../state/editor_scene_state.dart';
-import '../../ui/level_designer/state/editor_commands.dart';
-import '../../ui/level_designer/state/editor_history.dart';
+import 'package:just_editor_core/host.dart';
 
 /// The edits the inspector, the scene tree and the Problems dock make to an
 /// entity's tags — each one step on the undo stack.

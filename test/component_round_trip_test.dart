@@ -15,7 +15,10 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 /// Sends [component] through the same encode/decode the designer uses.
-final _scope = EditorScope(world: World()..initialize());
+final _scope = EditorScope(
+  builtIns: const [BuiltInEditorModule.new],
+  world: World()..initialize(),
+);
 
 T roundTrip<T extends Component>(T component) {
   final json = _scope.codec.encode(component);

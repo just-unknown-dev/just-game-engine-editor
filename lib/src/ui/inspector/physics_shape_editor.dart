@@ -3,9 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../widgets/scrubbable_number_field.dart' show NumberScrubConfig;
-import 'field_editor.dart';
-import 'field_rows.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Which [jge.CollisionShape] a body uses. Never persisted: the shape's own
 /// encoding carries its kind.

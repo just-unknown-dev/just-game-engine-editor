@@ -10,7 +10,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/core/assets/file_sprite_asset_loader.dart';
-import 'package:just_game_engine_editor/src/ui/overlay/docks/assets/asset_index.dart';
+import 'package:just_editor_core/host.dart';
 
 import 'support/test_scope.dart';
 

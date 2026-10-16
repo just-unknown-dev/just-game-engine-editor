@@ -4,8 +4,7 @@ import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../ui/overlay/gizmo_painter.dart';
-import '../state/editor_scene_state.dart';
-import '../view/editor_view.dart';
+import 'package:just_editor_core/host.dart';
 import 'gizmo_drag_solver.dart';
 
 /// Turns a drag of a 3-D gizmo handle into an edit, with rays.

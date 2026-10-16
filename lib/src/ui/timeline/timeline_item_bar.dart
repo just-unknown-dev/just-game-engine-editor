@@ -8,9 +8,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../core/assets/package_asset_paths.dart';
-import '../../core/constants/editor_constants.dart';
-import '../kit/fields.dart' show PendingFieldEdits, isEscapeDown;
+import 'package:just_editor_core/host.dart';
 import 'timeline_menu.dart';
 import 'timeline_session.dart';
 

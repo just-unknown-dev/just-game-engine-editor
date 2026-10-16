@@ -5,12 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart' show Entity;
 
-import '../../../../core/constants/editor_constants.dart';
-import '../../shared/snackbar.dart';
-import '../../../../core/scope/editor_scope.dart';
-import '../../../../core/services/editor_log_entry.dart';
-import '../../../../extension/editor_contributions.dart';
-import '../shared/dock_widgets.dart';
+import 'package:just_editor_core/host.dart';
 
 /// A run of identical log lines, shown as one with a count.
 class ConsoleRow {

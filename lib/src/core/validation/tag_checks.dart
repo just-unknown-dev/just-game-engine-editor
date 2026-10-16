@@ -3,10 +3,8 @@ library;
 
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../ui/level_designer/state/editor_commands.dart';
-import '../scope/editor_scope.dart';
+import 'package:just_editor_core/host.dart';
 import '../tags/tag_edits.dart';
-import 'scene_validator.dart';
 
 /// Checks of the tags, spawn points and targets in the open scene.
 ///

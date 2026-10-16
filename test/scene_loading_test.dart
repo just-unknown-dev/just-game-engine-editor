@@ -301,6 +301,7 @@ void main() {
       addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       final scope = EditorScope(
+        builtIns: const [BuiltInEditorModule.new],
         engine: engine,
         settingsStore: MemorySettingsStore(),
       );

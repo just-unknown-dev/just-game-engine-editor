@@ -4,9 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:just_debugger/just_debugger.dart';
 
-import '../../../../core/constants/editor_constants.dart';
-import '../../../../core/scope/editor_scope.dart';
-import '../../../../extension/editor_contributions.dart';
+import 'package:just_editor_core/host.dart';
 import '../shared/dock_widgets.dart';
 import 'frame_capture.dart';
 

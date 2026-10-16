@@ -8,8 +8,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_game_engine_editor/src/core/serialization/scene_codec.dart';
-import 'package:just_game_engine_editor/src/core/serialization/scene_store.dart';
+import 'package:just_editor_core/host.dart';
 import 'package:just_game_engine_editor/src/ui/dialogs/create_scene_overlay.dart';
 
 void main() {

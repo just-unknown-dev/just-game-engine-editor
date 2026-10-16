@@ -6,22 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import '../../core/plugin/editor_plugin.dart';
 import '../../core/entity/entity_ops.dart';
-import '../../core/scope/editor_scope.dart';
-import '../../core/theme/editor_metrics.dart';
-import '../../core/theme/editor_theme_data.dart';
-import '../../core/theme/theme_controller.dart';
-import '../kit/look.dart';
 import 'chrome/editor_chrome.dart';
-import 'chrome_state.dart';
-import 'settings/overlay_ui_settings.dart';
 import 'viewport_menu.dart';
 import 'start/scene_loading_view.dart';
 import 'start/start_card.dart';
-import 'shared/snackbar.dart';
-import '../kit/dialogs.dart';
+import '../../core/scope/editor_scope_services.dart';
 
 // ─ Frame-safe overlay settings watcher ────────────────────────────────────
 

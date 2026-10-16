@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/constants/editor_constants.dart';
-import '../../../core/theme/editor_metrics.dart';
-import '../settings/overlay_ui_settings.dart';
+import 'package:just_editor_core/host.dart';
 
 /// A draggable horizontal handle for resizing panels.
 ///

@@ -175,7 +175,11 @@ void main() {
     // Which preset is in use is the settings' to say, and the overlay
     // follows them; this is the scope's half: the same preset, made again.
     final module = _EditedModule();
-    final scope = EditorScope(world: World()..initialize(), modules: [module]);
+    final scope = EditorScope(
+      builtIns: const [BuiltInEditorModule.new],
+      world: World()..initialize(),
+      modules: [module],
+    );
     addTearDown(scope.dispose);
     final theme = scope.theme..select('test.preset');
     expect(theme.current.value.primary, const Color(0xFF00FF00));

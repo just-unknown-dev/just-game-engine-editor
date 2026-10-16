@@ -1,7 +1,6 @@
 import 'package:flutter/services.dart';
 
-import '../state/designer_config.dart';
-import 'designer_command.dart';
+import 'package:just_editor_core/host.dart';
 
 /// The default chords for `BuiltInCommands`.
 abstract final class BuiltInBindings {

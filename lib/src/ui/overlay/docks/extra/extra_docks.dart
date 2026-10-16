@@ -4,11 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../../../core/constants/editor_constants.dart';
-import '../../../../core/scope/editor_scope.dart';
-import '../../../../core/validation/scene_validator.dart';
-import '../../../../extension/editor_contributions.dart';
-import '../../../level_designer/state/editor_history.dart';
+import 'package:just_editor_core/host.dart';
+import '../../../../core/validation/built_in_validators.dart';
 import '../shared/dock_widgets.dart';
 
 // ── Problems ─────────────────────────────────────────────────────────────────

@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../core/constants/editor_constants.dart';
-import '../../../core/scope/editor_scope.dart';
-import '../../../core/theme/editor_metrics.dart';
-import '../../kit/kit.dart';
-import '../../level_designer/commands/designer_command.dart';
+import 'package:just_editor_core/host.dart';
 
 /// One command on the Keyboard page: what it is called, the keys that run
 /// it, and a way to change them — click, then press the new chord.

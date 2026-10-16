@@ -1,6 +1,6 @@
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../ui/level_designer/state/editor_history.dart';
+import 'package:just_editor_core/host.dart';
 import 'level_map_documents.dart';
 
 /// Which map an undo step belongs to: the entity it is on, and the file it

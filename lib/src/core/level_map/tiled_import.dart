@@ -5,11 +5,7 @@ import 'dart:ui';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_tiled/just_tiled.dart' as tiled;
 
-import '../../extension/tiled_object_mapper.dart';
-import '../assets/package_asset_paths.dart';
-import '../../ui/level_designer/state/editor_commands.dart';
-import '../../ui/level_designer/state/prefab_registry.dart';
-import '../serialization/scene_codec.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Reading and writing the project's files, relative to its folder — a
 /// seam, so tests need no disk.

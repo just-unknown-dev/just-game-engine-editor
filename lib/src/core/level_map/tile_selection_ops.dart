@@ -1,9 +1,10 @@
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../scope/editor_scope.dart';
+import 'package:just_editor_core/host.dart';
 import 'level_map_documents.dart';
 import 'tile_commands.dart';
 import 'tiles_to_entity.dart';
+import '../scope/editor_scope_services.dart';
 
 /// What can be done with the tiles selected with Select tiles, wherever it
 /// is asked for: the tool's keys and options, the viewport's right-click

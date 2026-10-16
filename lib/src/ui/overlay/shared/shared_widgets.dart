@@ -3,12 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/constants/editor_constants.dart';
-import '../../../core/theme/editor_metrics.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../core/plugin/editor_plugin.dart';
-import '../settings/overlay_ui_settings.dart';
-import '../../widgets/editor_dropdown.dart';
-import '../../kit/buttons.dart';
 import 'transform_toolbar.dart';
 import '../../../core/play/play_controller.dart';
 

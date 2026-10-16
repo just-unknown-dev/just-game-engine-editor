@@ -5,16 +5,12 @@ import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart' show TransformComponent;
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/constants/editor_constants.dart';
-import '../../../core/theme/editor_metrics.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../core/plugin/editor_plugin.dart';
-import '../../../core/prefs/editor_prefs.dart';
-import '../../../extension/editor_contributions.dart';
-import '../settings/overlay_ui_settings.dart';
-import '../shared/snackbar.dart';
 import 'dock_controller.dart';
 import 'shell/built_in_docks.dart';
 import 'shell/dock_panel.dart';
+import '../../../core/scope/editor_scope_services.dart';
 
 class CompactStatusDock extends StatefulWidget {
   const CompactStatusDock({

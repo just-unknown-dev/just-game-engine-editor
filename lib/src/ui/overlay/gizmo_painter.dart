@@ -5,14 +5,8 @@ import 'package:flutter/material.dart' show IconData;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../core/constants/editor_constants.dart';
-import '../../core/state/transform_mode.dart';
-import '../level_designer/grid/square_grid.dart';
-import '../level_designer/state/designer_geometry.dart';
+import 'package:just_editor_core/host.dart';
 import 'transform_gizmo.dart';
-import '../../core/theme/viewport_look.dart';
-import '../../core/view/editor_view.dart';
-import '../../extension/editor_marker.dart';
 import 'gizmo_3d.dart' show screenBoundsOf3D;
 
 /// Gizmo handle identifier returned by [GizmoHitTester.hitTest].

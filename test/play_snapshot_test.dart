@@ -19,7 +19,10 @@ void main() {
   late EditorScope scope;
   setUp(() {
     world = World()..initialize();
-    scope = EditorScope(world: world);
+    scope = EditorScope(
+      builtIns: const [BuiltInEditorModule.new],
+      world: world,
+    );
   });
   tearDown(() {
     scope.dispose();

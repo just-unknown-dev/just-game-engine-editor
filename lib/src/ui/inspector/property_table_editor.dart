@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../core/constants/editor_constants.dart';
-import 'field_rows.dart';
+import 'package:just_editor_core/host.dart';
 
 /// A table of custom properties — a tile's, a map shape's: each with its
 /// value to change or take off, and a row to add another of any type.

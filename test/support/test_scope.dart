@@ -12,6 +12,7 @@ EditorScope testScope({
   String? scenesRoot,
 }) {
   final scope = EditorScope(
+    builtIns: const [BuiltInEditorModule.new],
     world: world ?? (World()..initialize()),
     modules: modules,
     scenesRoot: scenesRoot,

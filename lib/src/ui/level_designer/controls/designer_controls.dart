@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/constants/editor_constants.dart';
-import '../../../core/scope/editor_scope.dart';
-import '../state/level_designer_controller.dart';
+import 'package:just_editor_core/host.dart';
 import '../state/map_placement.dart';
-import '../tools/level_tool.dart';
+import '../../../core/scope/editor_scope_services.dart';
 
 // The small controls of the designer's status bar — the tool's options at
 // its left and the designer's own after them — shared so both look and

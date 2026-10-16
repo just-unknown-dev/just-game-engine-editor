@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import 'designer_geometry.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Changes how big an entity is, one size-bearing component at a time.
 ///

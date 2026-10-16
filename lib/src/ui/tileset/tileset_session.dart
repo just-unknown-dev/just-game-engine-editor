@@ -4,7 +4,7 @@ import 'dart:ui' show Offset, Rect;
 
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../core/assets/package_asset_paths.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Reads a project-relative file as text.
 typedef TilesetTextReader = Future<String> Function(String path);

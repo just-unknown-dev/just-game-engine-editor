@@ -4,9 +4,7 @@ import 'dart:ui' show PointMode;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../core/state/transform_mode.dart';
-import '../../core/view/editor_view.dart';
-import '../../core/view/ray_entity_picker.dart';
+import 'package:just_editor_core/host.dart';
 import 'gizmo_painter.dart';
 
 /// X, Y and Z.

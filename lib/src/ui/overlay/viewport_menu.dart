@@ -11,9 +11,8 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../core/level_map/tile_selection_ops.dart';
 import '../../core/plugin/editor_plugin.dart';
-import '../../core/view/ray_entity_picker.dart';
-import '../level_designer/state/prefab_registry.dart';
-import '../widgets/editor_menu.dart';
+import 'package:just_editor_core/host.dart';
+import '../../core/scope/editor_scope_services.dart';
 
 /// Opens the viewport's context menu at [globalPosition].
 ///

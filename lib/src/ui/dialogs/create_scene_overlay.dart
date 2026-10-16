@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart'
     show SceneMode, SceneNames;
-import '../../core/constants/editor_constants.dart';
-import '../../core/theme/editor_metrics.dart';
+import 'package:just_editor_core/host.dart';
 
-import '../../core/serialization/scene_store.dart';
 import '../../core/serialization/scene_name_validator.dart';
-import '../kit/kit.dart';
 
 /// Asks for a new scene — see [CreateSceneOverlay] — and writes it. The
 /// name it was created with, or null when the dialog was cancelled.

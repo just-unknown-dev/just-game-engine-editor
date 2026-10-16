@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../../../extension/built_in_audio_contributions.dart';
-import '../../../extension/designer_contributions.dart';
-import 'prefab_registry.dart';
+import 'package:just_editor_core/host.dart';
 
 /// The palette the editor ships with.
 ///
@@ -16,16 +15,16 @@ import 'prefab_registry.dart';
 /// alongside these, and can replace one outright by reusing its id.
 abstract final class BuiltInPrefabs {
   /// Plain geometry and annotations.
-  static const Color shapeColor = Color(0xFF6D8A99);
+  static const Color shapeColor = PrefabColours.shape;
 
   /// Things that collide.
-  static const Color solidColor = Color(0xFF546E7A);
+  static const Color solidColor = PrefabColours.solid;
 
   /// Things that detect without colliding.
-  static const Color triggerColor = Color(0xFF26A69A);
+  static const Color triggerColor = PrefabColours.trigger;
 
   /// Scene infrastructure: cameras, spawn points, markers.
-  static const Color sceneColor = Color(0xFF7E57C2);
+  static const Color sceneColor = PrefabColours.scene;
 
   /// Ids of the prefabs the editor provides.
   static const String rectangleId = 'builtin.rectangle';

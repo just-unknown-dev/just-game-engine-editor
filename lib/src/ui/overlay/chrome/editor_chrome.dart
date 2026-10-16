@@ -1,23 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/constants/editor_constants.dart';
-import '../../../core/theme/editor_metrics.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../core/plugin/editor_plugin.dart';
-import '../../../core/scope/editor_scope.dart';
-import '../../../extension/editor_contributions.dart';
 import '../../level_designer/level_designer.dart';
 import '../docks/compact_dock.dart';
 import '../docks/shell/dock_popouts.dart';
 import '../editor_overlay.dart';
 import '../right_panel/right_panel.dart';
-import '../settings/overlay_ui_settings.dart';
 import '../settings/settings_dialog.dart';
-import '../shared/dialog_frame.dart';
 import '../shared/shared_widgets.dart';
-import '../shared/snackbar.dart';
 import '../shared/transform_toolbar.dart';
 import '../shared/quick_snap_bar.dart';
+import '../../../core/scope/editor_scope_services.dart';
 
 /// Chrome shown when the full editor is closed but the compact status dock
 /// is pinned open: the dock over the game, and the settings gear standing on

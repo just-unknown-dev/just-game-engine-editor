@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../level_designer/overlays/designer_overlay.dart';
-import '../level_designer/painters/designer_canvas.dart';
-import '../level_designer/tools/tool_registry.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Draws the level's camera rigs: what each virtual camera would show, and
 /// the zones, bounds and tracks that steer them.

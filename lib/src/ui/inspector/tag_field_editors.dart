@@ -2,13 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
-import '../../core/scope/editor_scope.dart';
-import '../../core/constants/editor_constants.dart';
-import '../kit/controls.dart' show EditorSegmented;
-import '../widgets/editor_dropdown.dart';
-import 'field_editor.dart';
-import 'field_rows.dart';
-import 'field_style.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Inspector editors for tags, spawners and targets: pickers over what the
 /// project knows, never a box to type a name into and hope.

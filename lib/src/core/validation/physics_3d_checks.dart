@@ -1,8 +1,7 @@
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine/physics_3d.dart';
 
-import '../../ui/level_designer/state/editor_commands.dart';
-import 'scene_validator.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Scene checks for 3-D physics, in the editor's Problems: bodies with no
 /// shape, shapes a body type cannot have, characters with a body as well,

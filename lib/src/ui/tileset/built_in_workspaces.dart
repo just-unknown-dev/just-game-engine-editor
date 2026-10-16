@@ -3,8 +3,9 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../extension/editor_contributions.dart';
+import 'package:just_editor_core/host.dart';
 import 'tileset_workspace.dart';
+import '../../core/scope/editor_scope_services.dart';
 
 abstract final class BuiltInWorkspaces {
   /// The Tileset Editor: opens `.tileset.json` files, and cuts a new

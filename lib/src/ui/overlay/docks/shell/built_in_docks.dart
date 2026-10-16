@@ -3,13 +3,8 @@ import 'package:just_debugger/just_debugger.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../../../core/plugin/editor_plugin.dart';
-import '../../../../extension/editor_contributions.dart';
-import '../../settings/overlay_ui_settings.dart';
-import '../../../level_designer/commands/designer_command.dart';
-import '../../../level_designer/state/modifier_keys.dart';
-import '../assets/asset_index.dart';
+import 'package:just_editor_core/host.dart';
 import '../assets/assets_browser.dart';
-import '../../../level_designer/state/editor_history.dart';
 import '../console/console_dock.dart';
 import '../extra/extra_docks.dart';
 import '../profiler/frame_capture.dart';
@@ -129,7 +124,7 @@ abstract final class BuiltInDocks {
     final context = CommandContext(
       scope: scope,
       session: plugin.designer.value,
-      plugin: plugin,
+      host: plugin,
       modifiers: const ModifierKeys(),
       gridSize: plugin.gridSize.value,
     );

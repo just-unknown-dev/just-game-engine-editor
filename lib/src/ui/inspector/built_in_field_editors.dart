@@ -3,13 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../core/state/scene_mode_filters.dart';
-import '../widgets/scrubbable_number_field.dart' show NumberScrubConfig;
-import 'edge_insets_row.dart';
-import 'field_editor.dart';
-import 'field_rows.dart';
+import 'package:just_editor_core/host.dart';
 import 'physics_shape_editor.dart';
-import 'collection_editor.dart';
 import 'tag_field_editors.dart';
 import 'physics_field_editors.dart';
 

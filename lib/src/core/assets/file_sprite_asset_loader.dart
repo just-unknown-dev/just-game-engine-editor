@@ -6,7 +6,7 @@ import 'package:flutter/services.dart' show AssetBundle, rootBundle;
 import 'package:just_game_engine/just_game_engine.dart';
 
 import 'asset_load_counter.dart';
-import 'package_asset_paths.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Reads sprites from the project's files instead of the asset bundle.
 ///

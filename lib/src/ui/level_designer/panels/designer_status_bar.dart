@@ -4,12 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import '../controls/designer_controls.dart';
 import '../level_designer_session.dart';
-import '../state/level_designer_controller.dart';
-import '../tools/level_tool.dart';
 import 'tool_options_bar.dart';
+import '../../../core/scope/editor_scope_services.dart';
 
 /// The strip along the bottom of the designer: at its left the tool in hand
 /// and its settings ([ToolOptionsBar]), then snapping options, overlay

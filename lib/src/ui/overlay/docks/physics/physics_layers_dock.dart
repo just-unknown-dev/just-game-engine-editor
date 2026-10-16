@@ -2,15 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
-import '../../../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../../core/physics/layer_refactor.dart';
-import '../../../../core/scope/editor_scope.dart';
 import '../../../../core/physics/physics_bodies.dart';
 import '../../../dialogs/scene_actions_dialogs.dart' show promptSceneName;
 import '../../../inspector/physics_field_editors.dart' show LayerHighlight;
-import '../../../kit/kit.dart';
-import '../../../widgets/editor_dropdown.dart';
-import '../../../widgets/editor_menu.dart';
 
 /// The project's collision layers — every one in use, what it looks like,
 /// what is on it — and the grid of which collide.

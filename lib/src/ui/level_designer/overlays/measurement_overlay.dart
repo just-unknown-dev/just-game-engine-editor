@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../state/designer_geometry.dart';
+import 'package:just_editor_core/host.dart';
 import '../tools/measure_tool.dart';
 import 'built_in_overlays.dart';
-import 'designer_overlay.dart';
 
 /// Draws the measure tool's current readout.
 ///

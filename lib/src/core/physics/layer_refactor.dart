@@ -4,10 +4,7 @@ library;
 
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../ui/level_designer/state/editor_commands.dart';
-import '../../ui/level_designer/state/editor_history.dart';
-import '../scene/editor_scene.dart';
-import '../scope/editor_scope.dart';
+import 'package:just_editor_core/host.dart';
 
 /// One field putting something on a layer: a body's `layer`, or any field
 /// of the `physicsLayer` type.

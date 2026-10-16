@@ -4,21 +4,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
-import '../../extension/viewport_handles.dart';
+import 'package:just_editor_core/host.dart';
 import '../../ui/inspector/physics/collider_edit_session.dart';
 import '../../ui/level_designer/level_designer_session.dart';
-import '../../ui/level_designer/state/editor_commands.dart'
-    show TransformCommand, TransformSnapshot;
-import '../../ui/level_designer/tools/level_tool.dart' show ToolButton;
 import '../../ui/overlay/gizmo_3d.dart';
 import '../../ui/overlay/gizmo_painter.dart';
-import '../state/editor_scene_state.dart';
-import '../state/transform_mode.dart';
-import '../view/editor_view.dart';
 import '../view/orbit_fly_editor_view.dart';
-import '../view/ray_entity_picker.dart';
 import 'gizmo_drag_solver.dart';
-import 'handle_drag_session.dart';
 import 'ray_gizmo_drag_solver.dart';
 
 /// Turns pointer events on the game canvas into edits: gizmo drags, camera

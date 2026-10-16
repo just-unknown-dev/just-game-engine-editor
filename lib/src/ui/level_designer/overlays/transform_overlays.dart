@@ -1,14 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../../core/state/transform_mode.dart';
+import 'package:just_editor_core/host.dart';
 import '../../overlay/transform_gizmo.dart';
-import '../painters/designer_canvas.dart';
-import '../state/designer_geometry.dart';
-import '../state/selection_handle_layout.dart';
-import '../tools/tool_registry.dart';
 import 'built_in_overlays.dart';
-import 'designer_overlay.dart';
 
 /// The selection's gizmo, as the Move, Scale and Rotate toolbar says:
 /// arrows at its centre, the resize handles on its bounds, or a ring

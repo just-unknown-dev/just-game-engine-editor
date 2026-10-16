@@ -10,7 +10,10 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 void main() {
   // One scope: the built-in palette and the codec it round-trips through.
-  final scope = EditorScope(world: jge.World()..initialize());
+  final scope = EditorScope(
+    builtIns: const [BuiltInEditorModule.new],
+    world: jge.World()..initialize(),
+  );
 
   const position = Offset(320, 180);
   const size = Size(200, 96);

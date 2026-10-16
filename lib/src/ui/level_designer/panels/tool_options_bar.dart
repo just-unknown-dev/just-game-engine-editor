@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import '../controls/designer_controls.dart';
 import '../level_designer_session.dart';
-import '../tools/level_tool.dart';
 
 /// The tool in hand and its settings — the paint mode, the brush size, the
 /// layer being painted — at the left end of the designer's status bar

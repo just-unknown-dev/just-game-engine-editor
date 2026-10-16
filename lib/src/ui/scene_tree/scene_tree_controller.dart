@@ -10,7 +10,7 @@ import 'package:flutter/widgets.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
-import 'scene_tree_model.dart';
+import 'package:just_editor_core/host.dart';
 
 /// How tall one row is. The list is built by index, so it has to be told.
 const double kSceneTreeRowHeight = 26;

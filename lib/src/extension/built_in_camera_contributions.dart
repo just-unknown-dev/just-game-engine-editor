@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../core/constants/editor_constants.dart';
-import '../core/scope/editor_scope.dart';
-import '../ui/inspector/component_extras.dart';
-import 'editor_contributions.dart';
+import 'package:just_editor_core/host.dart';
 
 /// What the editor itself contributes for cameras, through the same seams a
 /// module uses: a scene-tree action and badge, and inspector extras.

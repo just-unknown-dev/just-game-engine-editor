@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import 'editor_view.dart';
+import 'package:just_editor_core/host.dart';
 
 /// The 3-D editor view: the engine's main camera, orbiting a [pivot].
 ///
@@ -13,7 +13,7 @@ import 'editor_view.dart';
 /// [viewFrom] snaps to an axis. Angles are the camera's: [pitch] below zero
 /// looks down (the engine's +Y is down), [yaw] turns about the up axis with
 /// 0 looking along +Z. Lengths are metres.
-class OrbitFlyEditorView implements EditorView {
+class OrbitFlyEditorView implements CameraSyncingView {
   /// A view on the camera [_cameraOf] returns, looking at the origin from
   /// a little above and in front.
   OrbitFlyEditorView(this._cameraOf);
@@ -76,6 +76,7 @@ class OrbitFlyEditorView implements EditorView {
 
   /// Puts the camera where the orbit says. Called after every change; call
   /// it yourself after setting [pivot], [distance], [yaw] or [pitch].
+  @override
   void sync() {
     pitch = pitch.clamp(-_pitchLimit, _pitchLimit);
     distance = distance.clamp(minDistance, maxDistance);

@@ -6,17 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/constants/editor_constants.dart';
-import '../../../core/prefs/editor_prefs.dart';
-import '../../../core/scope/editor_scope.dart';
-import '../../../extension/editor_contributions.dart';
-import '../../level_designer/commands/designer_command.dart';
+import 'package:just_editor_core/host.dart';
 import '../../level_designer/panels/tool_palette.dart';
 import '../shared/transform_toolbar.dart';
-import 'overlay_settings_store.dart';
-import 'overlay_ui_settings.dart';
-import '../../kit/kit.dart';
-import '../../widgets/editor_menu.dart';
 import 'settings_controls.dart';
 import 'shortcut_row.dart';
 import '../shared/quick_snap_bar.dart';

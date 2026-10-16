@@ -6,7 +6,7 @@ import 'package:just_signals/just_signals.dart';
 
 import '../../../../core/level_map/tile_commands.dart';
 import '../../../../core/level_map/tile_edit_state.dart';
-import '../level_tool.dart';
+import 'package:just_editor_core/host.dart';
 import 'tile_tool_base.dart';
 
 /// Paints terrains: grass, water, a road. Each corner or edge painted gets

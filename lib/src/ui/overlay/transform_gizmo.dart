@@ -3,9 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
 
-import '../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import 'gizmo_painter.dart' show GizmoHandle;
-import '../../core/theme/viewport_look.dart';
 
 /// The Move, Scale and Rotate gizmos: how each is drawn, and where its
 /// handles are. One for the editor's gizmo and the Level Designer's, so the

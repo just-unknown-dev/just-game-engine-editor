@@ -61,14 +61,12 @@ class _Module extends EditorModule {
   @override
   Object? createSessionState(DesignerToolContext context) => _RouteState();
   @override
-  Map<String, Object?>? saveEditorData(LevelDesignerSession session) => {
+  Map<String, Object?>? saveEditorData(DesignerSession session) => {
     'edits': session.stateOf<_RouteState>()!.edits,
   };
   @override
-  void restoreEditorData(
-    LevelDesignerSession session,
-    Map<String, Object?> data,
-  ) => restored = data;
+  void restoreEditorData(DesignerSession session, Map<String, Object?> data) =>
+      restored = data;
   @override
   List<StatusBarControl> get statusControls => [
     StatusBarControl(id: 'test.status', build: (_, _) => const Text('STATUS')),

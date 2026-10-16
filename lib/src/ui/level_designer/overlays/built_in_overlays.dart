@@ -2,13 +2,7 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../../core/constants/editor_constants.dart';
-import '../state/designer_geometry.dart';
-import '../state/level_designer_controller.dart';
-import '../state/editor_history.dart';
-import '../tools/tool_registry.dart';
-import 'designer_overlay.dart';
-import '../../../core/theme/viewport_look.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Palette shared by the built-in overlays.
 abstract final class OverlayColors {

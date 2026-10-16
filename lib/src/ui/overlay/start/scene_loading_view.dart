@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../../../core/constants/editor_constants.dart';
+import 'package:just_editor_core/host.dart';
 import '../../../core/plugin/editor_plugin.dart';
 import '../../../core/scene/scene_loading.dart';
-import '../../../core/theme/editor_metrics.dart';
-import '../../kit/kit.dart';
 
 /// What the viewport shows while a scene opens: the editor's backdrop in
 /// place of the level being built, so the scene appears whole once its

@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../../core/constants/editor_constants.dart';
-import '../kit/kit.dart';
+import 'package:just_editor_core/host.dart';
 import 'level_designer_session.dart';
 import 'panels/align_bar.dart';
 import 'panels/designer_switch.dart';
 import 'panels/level_layers_panel.dart';
 import 'panels/prefab_palette_panel.dart';
 import 'panels/tileset_palette_panel.dart';
-import 'tools/level_tool.dart';
 
 /// The Level Designer's panel: the designer in use, its sections — prefabs,
 /// layers, the tileset, whatever modules add — and the align bar for what is

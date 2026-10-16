@@ -2,10 +2,10 @@ import 'dart:ui';
 
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../ui/level_designer/state/editor_commands.dart';
-import '../scope/editor_scope.dart';
+import 'package:just_editor_core/host.dart';
 import 'level_map_documents.dart';
 import 'tile_commands.dart';
+import '../scope/editor_scope_services.dart';
 
 /// Tiles cut out of a map layer into an entity of their own: a small map of
 /// just those tiles, a child of the level's map on the layer they came from

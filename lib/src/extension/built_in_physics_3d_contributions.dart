@@ -2,10 +2,8 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_game_engine/physics_3d.dart';
 
 import '../core/physics/collider_overlay_3d.dart';
-import '../ui/inspector/component_extras.dart';
+import 'package:just_editor_core/host.dart';
 import '../ui/inspector/physics/physics_body_extras.dart';
-import 'prefab_variant.dart';
-import 'viewport_overlay.dart';
 
 /// What the editor itself brings for 3-D physics, through the seams a module
 /// uses: collider outlines in the viewport, the rigid body's material

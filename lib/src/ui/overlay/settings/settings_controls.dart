@@ -5,8 +5,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../../core/constants/editor_constants.dart';
-import '../../kit/kit.dart';
+import 'package:just_editor_core/host.dart';
 
 /// One setting: what it is and a line on what it does, its control on the
 /// right, and a way back to the default once it has moved from it.

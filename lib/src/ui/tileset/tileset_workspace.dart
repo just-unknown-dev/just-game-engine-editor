@@ -9,9 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_signals/just_signals.dart';
 
-import '../../core/constants/editor_constants.dart';
-import '../kit/kit.dart';
-import '../inspector/field_rows.dart';
+import 'package:just_editor_core/host.dart';
 import '../timeline/timeline_dialogs.dart';
 import 'collision_shape_editor.dart';
 import 'create_tileset_dialog.dart';

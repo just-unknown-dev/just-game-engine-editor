@@ -86,6 +86,7 @@ void main() {
       await tester.runAsync(engine.initialize);
       tools = _ToolsModule();
       scope = EditorScope(
+        builtIns: const [BuiltInEditorModule.new],
         engine: engine,
         modules: [tools],
         scenesRoot: root.path,

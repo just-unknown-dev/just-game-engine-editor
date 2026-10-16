@@ -1,18 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../../core/constants/editor_constants.dart';
-import '../../core/entity/hierarchy_commands.dart';
-import '../../core/scope/editor_scope.dart';
-import '../../core/state/editor_scene_state.dart';
+import 'package:just_editor_core/host.dart';
 import '../../core/tags/tag_edits.dart';
 import '../../extension/built_in_tag_contributions.dart';
-import '../kit/buttons.dart' show EditorIconButton;
 import '../overlay/docks/shell/built_in_docks.dart';
-import '../scene_tree/scene_tree_row.dart';
-import '../widgets/editor_dropdown.dart';
-import '../widgets/editor_menu.dart';
 import 'tag_field_editors.dart';
+import '../../core/scope/editor_scope_services.dart';
 
 /// The top of the inspector: the entity itself — whether it is on, what it
 /// is, what it is called — and the tags it carries.

@@ -1,10 +1,6 @@
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import 'component_extras.dart';
-import 'field_rows.dart';
-import 'collection_editor.dart';
-import '../../core/scope/editor_scope.dart';
-import '../../core/state/editor_scene_state.dart';
+import 'package:just_editor_core/host.dart';
 import 'package:flutter/widgets.dart';
 
 /// What the editor itself adds to built-in components beyond their fields.

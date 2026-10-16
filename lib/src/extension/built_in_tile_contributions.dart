@@ -4,17 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
-import '../core/constants/editor_constants.dart';
-import '../core/scope/editor_scope.dart';
+import 'package:just_editor_core/host.dart';
 import '../core/level_map/level_map_documents.dart';
 import '../core/level_map/level_map_provision.dart';
 import '../core/level_map/tiled_export.dart';
 import '../core/level_map/tiled_import.dart';
-import '../ui/inspector/component_extras.dart';
-import '../ui/level_designer/state/editor_commands.dart';
 import '../ui/tileset/built_in_workspaces.dart';
 import '../ui/timeline/timeline_dialogs.dart';
-import 'editor_contributions.dart';
+import '../core/scope/editor_scope_services.dart';
 
 /// What the editor itself contributes for tile maps, through the seams a
 /// module uses: a scene-tree icon and the Tile Map inspector's extras.

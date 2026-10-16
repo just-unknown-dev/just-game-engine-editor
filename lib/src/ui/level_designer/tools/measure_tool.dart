@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../state/designer_geometry.dart';
-import 'level_tool.dart';
-import 'tool_registry.dart';
+import 'package:just_editor_core/host.dart';
 
 /// Measures a distance in world units.
 ///
