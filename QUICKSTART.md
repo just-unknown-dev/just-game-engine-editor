@@ -6,7 +6,7 @@ Add it as a `dev_dependency`: only your developer entry point imports it, and a 
 
 ```yaml
 dev_dependencies:
-  just_game_engine_editor: ^0.1.0
+  just_game_engine_editor: ^0.1.0-dev.1
 ```
 
 It comes from the Asset Store: a project made with `just create` has it, or `just add just_game_engine_editor`. The store puts it in `packages/core/` and points the dependency there in `pubspec_overrides.yaml`.

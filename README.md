@@ -39,7 +39,7 @@ The editor is a dev dependency, beside the modules you use:
 
 ```yaml
 dev_dependencies:
-  just_game_engine_editor: ^0.1.0
+  just_game_engine_editor: ^0.1.0-dev.1
 ```
 
 It comes from the Asset Store, not pub.dev. A project made with `just create` has it already; otherwise `just add just_game_engine_editor` (short for `just store install`). The store puts it in `packages/core/just_game_engine_editor` and points the dependency there in `pubspec_overrides.yaml`.
@@ -296,7 +296,7 @@ A game, a kit or a tool adds to the editor with an `EditorModule`, passed to `re
 
 ```yaml
 dependencies:
-  just_editor_core: ^0.1.0
+  just_editor_core: ^0.1.0-dev.1
 ```
 
 ```dart

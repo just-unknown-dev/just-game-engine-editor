@@ -261,7 +261,7 @@ packages:
       path: "../../just_editor_core"
       relative: true
     source: path
-    version: "0.2.0"
+    version: "0.1.0-dev.1"
   just_game_engine:
     dependency: "direct main"
     description:
@@ -275,7 +275,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.2.0"
+    version: "0.1.0-dev.1"
   just_game_engine_formats:
     dependency: "direct overridden"
     description:
