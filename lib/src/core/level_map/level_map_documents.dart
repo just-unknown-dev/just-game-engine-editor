@@ -199,6 +199,13 @@ class LevelMapDocuments {
           data.touch();
           changed++;
         }
+        // A layer drawn through a 2-D material.
+        for (final layer in data.layers) {
+          if (layer.material != from) continue;
+          layer.material = to;
+          data.touch();
+          changed++;
+        }
       }
       for (final ts in c.runtime?.tilesets ?? const <TilesetData?>[]) {
         if (ts == null || ts.image != from) continue;

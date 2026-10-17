@@ -742,6 +742,39 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
             mergeKey: key('offsetY'),
           ),
         ),
+        // Drawn through a 2-D material, and stopping 2-D lights.
+        AssetRefEditorRow(
+          label: 'Material',
+          value: layer.material,
+          extensions: const ['material2d.json'],
+          onChanged: (p) => _edit(
+            target,
+            p.isEmpty ? 'Layer material cleared' : 'Layer material',
+            (_) => layer.material = p,
+          ),
+        ),
+        BoolEditorRow(
+          label: 'Casts shadows',
+          value: layer.castsShadows,
+          onChanged: (v) =>
+              _edit(target, 'Layer shadows', (_) => layer.castsShadows = v),
+        ),
+        if (layer.castsShadows)
+          ScrubFieldRow(
+            label: 'Shadow depth',
+            value: layer.shadowDepth,
+            scrubConfig: const NumberScrubConfig(
+              step: 1,
+              fractionDigits: 0,
+              min: 0,
+            ),
+            onChanged: (v) => _edit(
+              target,
+              'Layer shadow depth',
+              (_) => layer.shadowDepth = v < 0 ? 0 : v,
+              mergeKey: key('shadowDepth'),
+            ),
+          ),
         TextEditorRow(
           label: 'Class',
           initialValue: layer.className,

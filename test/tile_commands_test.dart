@@ -160,6 +160,44 @@ void main() {
       scope.history.undo();
       expect(data.layers.single.opacity, 1);
     });
+
+    test("a layer's material and shadows undo too", () {
+      final map = newMap();
+      final ref = scope.mapDocs.resolve(map)!.ref;
+      final data = map.getComponent<LevelMapComponent>()!.inline!;
+      final id = data.layers.single.id;
+      scope.history.pushApplied(
+        MapStructureCommand.record(
+          label: 'Material',
+          docs: scope.mapDocs,
+          ref: ref,
+          change: (m) => m.layerById(id)!
+            ..material = 'assets/fx/water.material2d.json'
+            ..castsShadows = true
+            ..shadowDepth = 30,
+        )!,
+      );
+      scope.history.undo();
+      final layer = data.layers.single;
+      expect(layer.material, isEmpty);
+      expect(layer.castsShadows, isFalse);
+      expect(layer.shadowDepth, isNot(30));
+      scope.history.redo();
+      expect(data.layers.single.material, 'assets/fx/water.material2d.json');
+      expect(data.layers.single.castsShadows, isTrue);
+    });
+
+    test('a renamed material is renamed on the layers drawn with it', () {
+      final map = newMap();
+      final data = map.getComponent<LevelMapComponent>()!.inline!;
+      data.layers.single.material = 'assets/fx/water.material2d.json';
+      final changed = scope.mapDocs.renamed(
+        'assets/fx/water.material2d.json',
+        'assets/fx/sea.material2d.json',
+      );
+      expect(changed, 1);
+      expect(data.layers.single.material, 'assets/fx/sea.material2d.json');
+    });
   });
 
   group('in its own file', () {

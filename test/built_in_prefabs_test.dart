@@ -42,6 +42,9 @@ void main() {
       BuiltInAudioContributions.soundId,
       BuiltInAudioContributions.sound3dId,
       BuiltInAudioContributions.listenerId,
+      BuiltInLighting2DContributions.lightingId,
+      BuiltInLighting2DContributions.pointId,
+      BuiltInLighting2DContributions.spotId,
       // The default 3-D kit's: offered only in a 3-D scene.
       for (final shape in ShapePrefabs.all) shape.id,
     });

@@ -23,6 +23,14 @@ First release: a level editor that runs inside a `just_game_engine` game. It nee
 - The Audio Source's inspector shows its 3-D settings (full within, silent beyond, fade, doppler, muffle to) when it is 3D, its pan when it is not, and its channel; the Audio Listener can be added and is saved (from the engine's definitions).
 - The viewport menu of a 3-D scene offers the built-in prefabs that place in 3-D, before the modules'.
 
+### 2-D lighting and materials
+
+- **Built in for every 2-D project** (`BuiltInLighting2DContributions`): a marker on every 2-D light and on the scene's lighting; a selected light's reach and a spot's cone drawn in the viewport, and a selected shadow caster's outline; a Lighting group in the Add menu (Point light, Spot light, Scene lighting); **Shift+L** shows the scene unlit and lit again.
+- A check says when 2-D lights light nothing for want of Scene lighting, and adds it (or turns it on) as the fix.
+- A Level Map layer's settings take a 2-D material, whether it casts shadows and how deep; undo puts them back too, and renaming a material renames it on the layers that use it.
+- A changed material file is read again by the game — 2-D ones (and the normal maps they name) and 3-D ones — whichever tool wrote it.
+- An entity's own material values (`material2DOverrides`, `material3DOverrides`) are edited as JSON until a material editor brings its own editor (`just_material_editor` does).
+
 ### 3-D scenes
 
 A 3-D scene opens in the editor; the `JGE_EDITOR_ALLOW_3D_SCENES` gate is gone. The editor itself draws no model: a renderer package (`just_graphics_engine`, with `just_graphics_editor`) does, through the engine's scene renderers.

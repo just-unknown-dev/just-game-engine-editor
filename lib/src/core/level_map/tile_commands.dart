@@ -185,7 +185,10 @@ class MapStructure {
         ..zOrder = saved.zOrder
         ..collides = saved.collides
         ..className = saved.className
-        ..properties = saved.properties;
+        ..properties = saved.properties
+        ..material = saved.material
+        ..castsShadows = saved.castsShadows
+        ..shadowDepth = saved.shadowDepth;
     }
     map.touch();
   }

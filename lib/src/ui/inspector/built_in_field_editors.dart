@@ -24,6 +24,9 @@ abstract final class BuiltInFieldEditors {
     jge.FieldTypes.enumeration.id: _enumeration,
     jge.FieldTypes.list.id: _json,
     jge.FieldTypes.map.id: _json,
+    // A material's overrides, as JSON until a material editor brings its
+    // own (`override: true`).
+    for (final t in jge.MaterialOverridesFieldType.all) t.id: _json,
     jge.FieldTypes.vector2.id: _vector2,
     jge.FieldTypes.vector3.id: _vector3,
     jge.FieldTypes.euler.id: _euler,

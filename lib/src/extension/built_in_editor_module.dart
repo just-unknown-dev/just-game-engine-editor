@@ -17,6 +17,7 @@ import '../core/prefabs/prefab_files.dart';
 import '../ui/inspector/prefab_inspector.dart';
 import 'built_in_3d_designer_contributions.dart';
 import 'built_in_audio_contributions.dart';
+import 'built_in_lighting_2d_contributions.dart';
 import 'built_in_camera_contributions.dart';
 import 'built_in_physics_3d_contributions.dart';
 import 'built_in_row_decorations.dart';
@@ -69,10 +70,16 @@ class BuiltInEditorModule extends EditorModule {
   ];
 
   @override
-  List<DesignerCommand> get commands => BuiltInCommands.all;
+  List<DesignerCommand> get commands => [
+    ...BuiltInCommands.all,
+    ...BuiltInLighting2DContributions.commands,
+  ];
 
   @override
-  List<KeyBinding> get keyBindings => BuiltInBindings.of(scope.config);
+  List<KeyBinding> get keyBindings => [
+    ...BuiltInBindings.of(scope.config),
+    ...BuiltInLighting2DContributions.keyBindings,
+  ];
 
   /// The default kits' palettes: the 2-D shapes and the 3-D ones, each
   /// offered in its own kind of scene.
@@ -110,11 +117,13 @@ class BuiltInEditorModule extends EditorModule {
   List<EditorMarker> get markers => [
     ...EditorMarker.builtIn,
     ...BuiltInAudioContributions.markers,
+    ...BuiltInLighting2DContributions.markers,
   ];
 
   @override
   List<ViewportOverlay> get viewportOverlays => [
     ...BuiltInAudioContributions.viewportOverlays,
+    ...BuiltInLighting2DContributions.viewportOverlays,
     if (_physics3D) ...BuiltInPhysics3DContributions.viewportOverlays,
   ];
 

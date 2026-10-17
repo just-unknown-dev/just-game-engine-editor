@@ -469,6 +469,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       timelines: spriteAssets.loadTimeline,
       tileText: spriteAssets.readText,
       prefabs: spriteAssets.loadPrefab,
+      material2DText: spriteAssets.readText,
     );
     // What a module (the Asset Store, say) calls after writing files.
     scope.assetReloader = reloadAssets;
@@ -1278,6 +1279,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// new version.
   void reloadAsset(String path) {
     final lower = path.toLowerCase();
+    _reloadMaterials(path);
     if (lower.endsWith('.animator.json')) {
       reloadAnimators(path);
     } else if (lower.endsWith('.timeline.json')) {
@@ -1304,6 +1306,18 @@ class JustGameEditorPlugin implements EnginePlugin {
     }
   }
 
+  // The engine's materials: a changed one — or a map, a layer or a normal
+  // map one uses — read again, 2-D (its variants follow) and 3-D. Each is
+  // drawn again once read; a path no material uses is passed over.
+  void _reloadMaterials(String path) {
+    Material2DLibrary.of(engine.context).reload(path);
+    if (!engine.isInitialized) return;
+    final graphics = engine.services.maybe<g3.Graphics3D>();
+    if (graphics != null && graphics.isStarted) {
+      graphics.sceneRenderer.materials.reload(path);
+    }
+  }
+
   /// Many files changed at once — a package installed, updated or removed:
   /// each kind is reloaded once, not once per file.
   void reloadAssets(Iterable<String> paths) {
@@ -1312,6 +1326,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     final maps = <String>{};
     for (final path in paths) {
       final lower = path.toLowerCase();
+      _reloadMaterials(path);
       if (lower.endsWith('.animator.json')) {
         reloadAnimators(path);
       } else if (lower.endsWith('.timeline.json')) {

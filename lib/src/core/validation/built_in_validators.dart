@@ -1,6 +1,7 @@
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import 'package:just_editor_core/host.dart';
+import '../../extension/built_in_lighting_2d_contributions.dart';
 import '../../ui/level_designer_3d/aids/level_checks_3d.dart';
 import 'physics_3d_checks.dart';
 import 'physics_checks.dart';
@@ -24,6 +25,7 @@ abstract final class BuiltInValidators {
     levelMaps,
     unshippedTileAssets,
     unknownComponents,
+    BuiltInLighting2DContributions.lightsWithoutLighting,
   ];
 
   /// The asset paths `pubspec.yaml` lists under `flutter: assets:`, or
