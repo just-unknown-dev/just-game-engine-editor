@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
 import 'package:just_editor_core/host.dart';
@@ -8,6 +11,10 @@ import 'panels/designer_switch.dart';
 import 'panels/level_layers_panel.dart';
 import 'panels/prefab_palette_panel.dart';
 import 'panels/tileset_palette_panel.dart';
+import '../level_designer_3d/panels/array_3d_panel.dart';
+import '../level_designer_3d/panels/groups_3d_panel.dart';
+import '../level_designer_3d/panels/materials_3d_panel.dart';
+import '../level_designer_3d/panels/view_3d_panel.dart';
 
 /// The Level Designer's panel: the designer in use, its sections — prefabs,
 /// layers, the tileset, whatever modules add — and the align bar for what is
@@ -80,6 +87,9 @@ class _DesignerSidePanel extends StatelessWidget {
 
   Widget _buildPanel(BuildContext context) {
     final controller = session.controller;
+    // A 2-D level is built on its Level Map, in layers and from tilesets; a
+    // 3-D scene has none of those.
+    final flat = session.scope.sceneState.editingMode == jge.SceneMode.twoD;
     final sections = <_SectionSpec>[
       _SectionSpec(
         id: 'prefabs',
@@ -89,31 +99,78 @@ class _DesignerSidePanel extends StatelessWidget {
         build: (_) => PrefabPalettePanel(session: session),
       ),
       // Open whatever the tool: every tool works on a layer.
-      _SectionSpec(
-        id: 'layers',
-        title: 'LAYERS',
-        flex: 2,
-        build: (_) => LevelLayersPanel(session: session),
-      ),
-      _SectionSpec(
-        id: 'tileset',
-        title: 'TILESET',
-        groups: _tileTools,
-        flex: 3,
-        build: (_) => TilesetPalettePanel(session: session),
-      ),
-      // What the modules add, under the built-ins: open whatever the tool.
+      if (flat)
+        _SectionSpec(
+          id: 'layers',
+          title: 'LAYERS',
+          flex: 2,
+          build: (_) => LevelLayersPanel(session: session),
+        ),
+      if (flat)
+        _SectionSpec(
+          id: 'tileset',
+          title: 'TILESET',
+          groups: _tileTools,
+          flex: 3,
+          build: (_) => TilesetPalettePanel(session: session),
+        ),
+      // How a 3-D scene is drawn: open whatever the tool.
+      if (!flat)
+        _SectionSpec(
+          id: 'view3d',
+          title: 'VIEW',
+          build: (_) => View3DPanel(
+            scope: session.scope,
+            split: session.splitViews?.call(),
+          ),
+        ),
+      // The project's materials, to paint with: with the shape tools, paint
+      // among them.
+      if (!flat)
+        _SectionSpec(
+          id: 'materials3d',
+          title: 'MATERIALS',
+          groups: const {ToolGroups.shapes},
+          build: (_) => Materials3DPanel(
+            scope: session.scope,
+            setTool: session.setTool,
+          ),
+        ),
+      // The groups, with their eyes and locks.
+      if (!flat)
+        _SectionSpec(
+          id: 'groups3d',
+          title: 'GROUPS',
+          groups: _entityTools,
+          build: (_) => Groups3DPanel(scope: session.scope),
+        ),
+      // Copies of the selection in a row, a grid or round a circle.
+      if (!flat)
+        _SectionSpec(
+          id: 'array3d',
+          title: 'ARRAY',
+          groups: _entityTools,
+          build: (_) => Array3DPanel(
+            scope: session.scope,
+            selection: session.selectionEntities,
+            make: session.onArray3D ?? (_) {},
+          ),
+        ),
+      // What the modules add, under the built-ins: open with their tools,
+      // or whatever the tool when they name none.
       for (final section in session.scope.designerPanels)
         _SectionSpec(
           id: 'module:${section.title}',
           title: section.title.toUpperCase(),
+          groups: section.groups,
           flex: section.expand ? 1 : null,
           build: (context) => section.build(context, session),
         ),
     ];
-    final anyExpanded = sections.any(
-      (s) => s.flex != null && controller.isSectionOpen(s.id, groups: s.groups),
-    );
+    final open = [
+      for (final s in sections)
+        controller.isSectionOpen(s.id, groups: s.groups),
+    ];
 
     return Material(
       color: EditorTheme.panelBg,
@@ -122,33 +179,71 @@ class _DesignerSidePanel extends StatelessWidget {
         child: Column(
           children: [
             _Header(session: session, onClose: onClose),
-            for (final spec in sections)
-              _place(
-                spec,
-                controller.isSectionOpen(spec.id, groups: spec.groups),
+            // What does not fit scrolls. A section that fills (a palette, a
+            // list) gets a share of what the others are likely to leave it,
+            // never less than [_minFill]; the rest take what they need.
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  var flex = 0, others = 0;
+                  for (final (i, spec) in sections.indexed) {
+                    if (!open[i]) continue;
+                    if (spec.flex != null) {
+                      flex += spec.flex!;
+                    } else {
+                      others++;
+                    }
+                  }
+                  final room =
+                      box.maxHeight -
+                      sections.length * _Section.titleHeight -
+                      others * _otherGuess;
+                  return EditorScrollbar(
+                    builder: (_, scroll) => SingleChildScrollView(
+                      controller: scroll,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (final (i, spec) in sections.indexed)
+                            _place(
+                              spec,
+                              open[i],
+                              fill: open[i] && spec.flex != null
+                                  ? math.max(_minFill, room * spec.flex! / flex)
+                                  : null,
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
-            // Everything that fills is closed: keep the align bar at the
-            // bottom.
-            if (!anyExpanded) const Spacer(),
-            AlignBar(session: session, gridSize: gridSize),
+            ),
+            if (flat) AlignBar(session: session, gridSize: gridSize),
           ],
         ),
       ),
     );
   }
 
-  Widget _place(_SectionSpec spec, bool open) {
+  /// The least a section that fills is given, its title aside.
+  static const double _minFill = 220;
+
+  /// About how tall a section that does not fill is, open.
+  static const double _otherGuess = 160;
+
+  Widget _place(_SectionSpec spec, bool open, {double? fill}) {
     final section = _Section(
       key: ValueKey(spec.id),
       title: spec.title,
       open: open,
-      expand: open && spec.flex != null,
+      expand: fill != null,
       onToggle: () => session.controller.setSectionOpen(spec.id, open: !open),
       child: Builder(builder: spec.build),
     );
-    return open && spec.flex != null
-        ? Expanded(flex: spec.flex!, child: section)
-        : section;
+    return fill == null
+        ? section
+        : SizedBox(height: fill + _Section.titleHeight, child: section);
   }
 }
 
@@ -195,7 +290,13 @@ class _Header extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.map_outlined, size: 15, color: EditorTheme.primary),
+          Icon(
+            session.scope.sceneState.editingMode == jge.SceneMode.twoD
+                ? Icons.map_outlined
+                : Icons.view_in_ar,
+            size: 15,
+            color: EditorTheme.primary,
+          ),
           const SizedBox(width: 8),
           // With only the built-in designer there is nothing to switch to,
           // so the header is a plain title.
@@ -237,6 +338,9 @@ class _Section extends StatelessWidget {
   /// Whether the body takes the remaining height, or only what it needs.
   final bool expand;
 
+  /// How tall the title row is.
+  static const double titleHeight = 24;
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -246,6 +350,7 @@ class _Section extends StatelessWidget {
         InkWell(
           onTap: onToggle,
           child: Container(
+            height: titleHeight,
             padding: const EdgeInsets.fromLTRB(4, 5, 10, 4),
             decoration: open
                 ? null

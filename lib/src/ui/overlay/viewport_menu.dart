@@ -106,6 +106,12 @@ Future<void> showViewportMenu(
     ),
     if (entity == null)
       editorMenuItem('create', 'New entity here', icon: Icons.add_box_outlined),
+    editorMenuItem(
+      'playFromHere',
+      'Play from here',
+      icon: Icons.play_circle_outline,
+      enabled: plugin.playController.state.value == EditorPlayState.stopped,
+    ),
     // In space: the modules' 3-D prefabs, on what the pointer is on.
     if (surface != null && prefabs.isNotEmpty) ...[
       editorMenuDivider(),
@@ -207,6 +213,12 @@ Future<void> showViewportMenu(
       entities.pasteEntity(at: worldPoint, point: surface?.position);
     case 'create':
       entities.createEntity(at: worldPoint, point: surface?.position);
+    case 'playFromHere':
+      // A hair above the surface: a character stands on it, not in it.
+      final at = surface == null
+          ? jge.Vector3(worldPoint.dx, worldPoint.dy, 0)
+          : surface.position + surface.normal * 0.05;
+      plugin.playFrom(at);
     case 'group':
       entities.groupSelection();
     case 'ungroup':

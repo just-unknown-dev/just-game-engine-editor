@@ -47,6 +47,41 @@ abstract final class BuiltInBindings {
     const KeyBinding(LogicalKeyboardKey.keyL, 'designer.unlockAll', alt: true),
     // R is Rotate; replacing is the rarer act.
     const KeyBinding(LogicalKeyboardKey.keyR, 'designer.replace', shift: true),
+    // The 3-D designer's working plane: Page Up up, Page Down down (Shift:
+    // ten steps),
+    // \ the next way round, Shift+\ to the selection.
+    const KeyBinding(LogicalKeyboardKey.pageUp, 'designer.plane.raise'),
+    const KeyBinding(
+      LogicalKeyboardKey.pageUp,
+      'designer.plane.raise',
+      shift: true,
+    ),
+    const KeyBinding(LogicalKeyboardKey.pageDown, 'designer.plane.lower'),
+    const KeyBinding(
+      LogicalKeyboardKey.pageDown,
+      'designer.plane.lower',
+      shift: true,
+    ),
+    const KeyBinding(LogicalKeyboardKey.backslash, 'designer.plane.cycle'),
+    const KeyBinding(
+      LogicalKeyboardKey.keyG,
+      'designer.selectSimilar',
+      shift: true,
+    ),
+    const KeyBinding(LogicalKeyboardKey.numpad5, 'editor.view.orthographic'),
+    const KeyBinding(LogicalKeyboardKey.end, 'designer.dropToGround'),
+    // Four views, as Blender splits its own.
+    const KeyBinding(
+      LogicalKeyboardKey.keyQ,
+      'editor.view.split',
+      control: true,
+      alt: true,
+    ),
+    const KeyBinding(
+      LogicalKeyboardKey.backslash,
+      'designer.plane.toSelection',
+      shift: true,
+    ),
     const KeyBinding(LogicalKeyboardKey.keyQ, 'editor.transform.all'),
     const KeyBinding(LogicalKeyboardKey.keyW, 'editor.transform.move'),
     const KeyBinding(LogicalKeyboardKey.keyE, 'editor.transform.scale'),
@@ -159,6 +194,13 @@ abstract final class BuiltInBindings {
       control: true,
     ),
     const KeyBinding(LogicalKeyboardKey.delete, 'editor.delete'),
+    const KeyBinding(LogicalKeyboardKey.keyG, 'editor.group', control: true),
+    const KeyBinding(
+      LogicalKeyboardKey.keyG,
+      'editor.ungroup',
+      control: true,
+      shift: true,
+    ),
   ];
 
   static const List<LogicalKeyboardKey> _digits = [

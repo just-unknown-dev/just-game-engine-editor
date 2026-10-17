@@ -52,6 +52,44 @@ class OrbitFlyEditorView implements CameraSyncingView {
 
   static const double _pitchLimit = math.pi / 2 - 0.01;
 
+  /// Seen without perspective, as a plan or an elevation is drawn: things
+  /// the same size near and far. Pad 5 switches.
+  bool get orthographic => _orthographic;
+  set orthographic(bool value) {
+    if (value == _orthographic) return;
+    _orthographic = value;
+    // Back in perspective the lens ignores zoom; leave it as a flat view
+    // would expect.
+    if (!value) camera.zoom = 1;
+    sync();
+  }
+
+  bool _orthographic = false;
+
+  /// Where the view is and how it looks: what a bookmark keeps.
+  ViewPose3D get pose => ViewPose3D(
+    x: pivot.x,
+    y: pivot.y,
+    z: pivot.z,
+    distance: distance,
+    yaw: yaw,
+    pitch: pitch,
+    orthographic: _orthographic,
+  );
+
+  /// Goes back to [pose].
+  set pose(ViewPose3D pose) {
+    pivot.setValues(pose.x, pose.y, pose.z);
+    distance = pose.distance;
+    yaw = pose.yaw;
+    pitch = pose.pitch;
+    if (pose.orthographic != _orthographic) {
+      orthographic = pose.orthographic;
+    } else {
+      sync();
+    }
+  }
+
   final jge.Quaternion _q = jge.Quaternion.identity();
   final jge.Vector3 _p = jge.Vector3.zero();
 
@@ -82,12 +120,20 @@ class OrbitFlyEditorView implements CameraSyncingView {
     distance = distance.clamp(minDistance, maxDistance);
     final at = eye;
     camera
-      ..lens = jge.CameraLens.perspective(fieldOfView: fieldOfView, near: near, far: far)
+      ..inSpace = true
+      ..lens = _orthographic
+          // As far behind as ahead: an elevation shows what is behind its
+          // pivot too.
+          ? jge.CameraLens.orthographic(near: -far, far: far)
+          : jge.CameraLens.perspective(fieldOfView: fieldOfView, near: near, far: far)
       ..pitch = pitch
       ..yaw = yaw
       ..rotation = 0
       ..position = Offset(at.x, at.y)
       ..z = at.z;
+    // Orthographic: as many pixels a metre as perspective shows at the
+    // pivot, so switching does not jump.
+    if (_orthographic) camera.zoom = zoom;
   }
 
   /// Turns around the pivot by [screenDelta] pixels.
@@ -265,4 +311,57 @@ class OrbitFlyEditorView implements CameraSyncingView {
     camera.orientationInto(_q);
     return _q;
   }
+}
+
+/// Where an [OrbitFlyEditorView] is and how it looks: its pivot, how far
+/// back, its turn and tilt, and whether it is orthographic. What a camera
+/// bookmark in a 3-D scene keeps.
+final class ViewPose3D {
+  /// A pose.
+  const ViewPose3D({
+    required this.x,
+    required this.y,
+    required this.z,
+    required this.distance,
+    required this.yaw,
+    required this.pitch,
+    this.orthographic = false,
+  });
+
+  /// Restores one from [toJson]'s output.
+  factory ViewPose3D.fromJson(Map<String, dynamic> json) {
+    double n(String key) => (json[key] as num).toDouble();
+    return ViewPose3D(
+      x: n('x'),
+      y: n('y'),
+      z: n('z'),
+      distance: n('distance'),
+      yaw: n('yaw'),
+      pitch: n('pitch'),
+      orthographic: json['orthographic'] == true,
+    );
+  }
+
+  /// The pivot.
+  final double x, y, z;
+
+  /// Metres back from the pivot.
+  final double distance;
+
+  /// Radians.
+  final double yaw, pitch;
+
+  /// Without perspective.
+  final bool orthographic;
+
+  /// For saving with the scene.
+  Map<String, dynamic> toJson() => {
+    'x': x,
+    'y': y,
+    'z': z,
+    'distance': distance,
+    'yaw': yaw,
+    'pitch': pitch,
+    if (orthographic) 'orthographic': true,
+  };
 }

@@ -484,12 +484,13 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
     showViewportMenu(
       context,
       plugin,
-      entity: plugin.viewport.entityAt(local),
+      // In a split viewport, what the pane under the pointer sees there.
+      entity: plugin.atPoint(local, plugin.viewport.entityAt),
       globalPosition: global,
-      worldPoint: plugin.viewport.worldPointAt(local),
+      worldPoint: plugin.atPoint(local, plugin.viewport.worldPointAt),
       surface: plugin.scope.editorView.isPlanar
           ? null
-          : plugin.surfaceAt(local),
+          : plugin.atPoint(local, plugin.surfaceAt),
     );
   }
 
@@ -514,24 +515,27 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
                 widget.plugin.focusGame();
                 widget.plugin.pressedPlayingGame(event);
               }
-              final claimed = widget.plugin.viewport.onPointerDown(event);
+              final claimed = widget.plugin.pointerDown(event);
               // A right-press is the context menu's unless a tool took it —
               // a tile brush picking tiles up.
               if ((event.buttons & kSecondaryButton) != 0 && !claimed) {
                 _openMenu(context, event);
               }
             },
-            onPointerHover: widget.plugin.viewport.onPointerHover,
-            onPointerMove: widget.plugin.viewport.onPointerMove,
-            onPointerUp: widget.plugin.viewport.onPointerUp,
-            onPointerCancel: widget.plugin.viewport.onPointerCancel,
-            onPointerSignal: widget.plugin.viewport.onPointerScroll,
+            onPointerHover: widget.plugin.pointerHover,
+            onPointerMove: widget.plugin.pointerMove,
+            onPointerUp: widget.plugin.pointerUp,
+            onPointerCancel: widget.plugin.pointerCancel,
+            onPointerSignal: widget.plugin.pointerScroll,
             // An asset dragged out of the Assets dock lands here: an image
             // becomes a sprite where it was dropped.
             child: DragTarget<String>(
               onWillAcceptWithDetails: (d) =>
                   widget.plugin.sceneState.hasScene &&
-                  JustGameEditorPlugin.canDropAsset(d.data),
+                  JustGameEditorPlugin.canDropAsset(
+                    d.data,
+                    mode: widget.plugin.sceneState.editingMode,
+                  ),
               onAcceptWithDetails: (d) {
                 final box = context.findRenderObject() as RenderBox?;
                 if (box == null) return;

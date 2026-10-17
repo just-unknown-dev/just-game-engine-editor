@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.2.0
+
+### A 3-D Level Designer
+
+In a 3-D scene the Level Designer is a 3-D one, with a built-in **Default 3D kit**; kits plug in beside it, as in 2-D. The switch lists the designers for the open scene's mode: Default and Platformer in 2-D; Default, World Builder and Third Person in 3-D.
+
+- **Select**: marquee, select similar (Shift+G); the gizmo moves, turns and sizes the whole selection about its centre, pivot or base, takes typed values, has a view ring, and snaps to surfaces, bounds and vertices (V).
+- **Working plane** with a metre grid, raised and lowered with Page Up and Page Down.
+- **Placing**: a ghost before it is made, aimed by dragging, spun with Shift+wheel, standing on surfaces or leaning with them, turned and sized at random, stamped in strokes; End drops the selection to the ground; arrays in a line, a grid or a circle; Ctrl+D repeats the last offset.
+- **Size handles** for all 11 shapes and for colliders; **groups** (Ctrl+G, Ctrl+Shift+G) and a Groups panel.
+- **Views**: lit, unlit, wireframe and collision; outline; orthographic with a view cube; 3-D bookmarks; a slice plane; four views at once.
+- **Materials**: a panel and a paint tool for material files.
+- **Prefab files**: make one from the selection, edit it in place, keep an instance's changes as overrides (revert or apply them), unpack one; prefabs in the palette in 2-D and 3-D.
+- **Aids**: a 3-D ruler, level checks (spawns over nothing, solids over the void, things below the kill height), a performance meter, play from here.
+- The 11 basic shapes moved here from just_graphics_editor.
+
+### Also
+
+- A module hears of a scene save before the file is written (`onSceneSaving`); one that fails is reported and the scene saved.
+- The 3-D side panel's sections follow the tools in hand: MATERIALS with the shape tools, GROUPS and ARRAY with select and the shape tools, a module's sections with the groups they name.
+- The designer's side panel scrolls when its open sections don't fit; a palette or list keeps a share of the height (at least 220 px).
+
 ## 0.1.0
 
 First release: a level editor that runs inside a `just_game_engine` game. It needs a desktop (Windows, macOS, Linux) in a debug build; `JustGameEditorPlugin.register` returns null in a profile or release build and on Android, iOS and the web (`supportsPlatform` says which).

@@ -3,6 +3,7 @@ import '../entity/entity_ops.dart';
 import '../level_map/level_map_documents.dart';
 import '../level_map/level_map_provision.dart';
 import '../level_map/tile_edit_state.dart';
+import '../prefabs/prefab_instances.dart';
 import 'package:just_editor_core/host.dart';
 
 /// The services only the editor itself uses, on the scope they belong to.
@@ -46,6 +47,21 @@ extension EditorScopeServices on EditorScope {
 
   /// Makes the scene's Level Map when something is first drawn on it.
   LevelMapProvision get mapProvision => _service(() => LevelMapProvision(this));
+
+  /// Prefab files and their instances in the scene: placing, making again,
+  /// Apply and Revert.
+  PrefabInstances get prefabInstances =>
+      _service(() => PrefabInstances(this), dispose: (p) => p.dispose());
+
+  /// The project's asset files: scanned the first time it is asked for,
+  /// then following the disk. Shared by the Assets dock and every panel
+  /// that lists files (the 3-D designer's materials).
+  AssetIndex get assetIndex => _service(
+    () => AssetIndex()
+      ..scan()
+      ..startWatching(),
+    dispose: (index) => index.dispose(),
+  );
 
   T _service<T extends Object>(
     T Function() make, {

@@ -43,3 +43,24 @@ export 'tools/tiles/tile_select_tool.dart';
 export 'tools/tiles/tile_terrain_tool.dart';
 export 'tools/tiles/tile_tool_base.dart';
 export '../tileset/built_in_workspaces.dart';
+
+// The default kit for 3-D scenes.
+export '../level_designer_3d/overlays/marquee_3d_overlay.dart';
+export '../level_designer_3d/overlays/place_ghost_3d_overlay.dart';
+export '../level_designer_3d/panels/array_3d_panel.dart';
+export '../level_designer_3d/panels/groups_3d_panel.dart';
+export '../level_designer_3d/panels/materials_3d_panel.dart';
+export '../level_designer_3d/tools/material_paint_3d_tool.dart';
+export '../level_designer_3d/shapes/shape_pictures.dart';
+export '../level_designer_3d/panels/space_status_controls.dart';
+export '../level_designer_3d/panels/view_3d_panel.dart';
+export '../level_designer_3d/panels/view_cube.dart';
+export '../level_designer_3d/shapes/polygon_handles.dart';
+export '../level_designer_3d/shapes/collider_size_handles.dart';
+export '../level_designer_3d/shapes/face_handles.dart';
+export '../level_designer_3d/shapes/shape_size_handles.dart';
+export '../level_designer_3d/split/split_views.dart';
+export '../level_designer_3d/shapes/shape_prefabs.dart';
+export '../level_designer_3d/shapes/shape_ray_test.dart';
+export '../level_designer_3d/tools/place_3d_tool.dart';
+export '../level_designer_3d/tools/select_3d_tool.dart';

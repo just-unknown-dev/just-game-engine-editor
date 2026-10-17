@@ -49,7 +49,9 @@ class PlaySnapshot {
     final alive = world.entities.where((e) => e.isAlive).toList();
     return PlaySnapshot._(
       records,
-      encoded,
+      // What a save writes: prefab instances folded back into what they
+      // change, worked out now, before play moves anything.
+      codec.collapseMarked(codec.encodeForSave(ordered)),
       Set<Entity>.identity()..addAll(alive),
       // Everything that was there when play began — a transform query
       // left every piece of interface out, and the tree then listed a
@@ -80,11 +82,12 @@ class PlaySnapshot {
 
   final List<_Record> _records;
 
-  /// Ids of the authored entities, parallel to [entities].
+  /// Ids of the authored entities, in the order they were captured.
   List<EntityId> get ids => [for (final r in _records) r.entity.id];
 
   /// The authored entities encoded exactly as a scene file stores them —
-  /// which is also what a save during play writes.
+  /// which is also what a save during play writes: an instance of a prefab
+  /// one entry, not one per entity it made.
   final List<Map<String, dynamic>> entities;
 
   /// Every entity that existed when play started, authored or not. Only

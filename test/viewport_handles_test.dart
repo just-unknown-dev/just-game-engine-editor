@@ -147,7 +147,9 @@ void main() {
     });
 
     test('the scope gathers what the modules offer', () {
-      expect(scope.viewportHandles.single, isA<_Slide>());
+      // The module's, after the default 3-D kit's own.
+      expect(scope.viewportHandles.whereType<_Slide>(), hasLength(1));
+      expect(scope.viewportHandles.whereType<PolygonHandles>(), hasLength(1));
     });
 
     test('a drag of a handle goes to the module and is one undo step', () {
@@ -227,13 +229,18 @@ void main() {
       final plugin = JustGameEditorPlugin(engine: Engine(), modules: [_Shapes(), _Solids()]);
       addTearDown(plugin.dispose);
       expect(plugin.scope.prefabVariants, hasLength(1));
+      final shapes = [for (final p in ShapePrefabs.all) p.id];
       expect([for (final p in plugin.prefabsInSpace) p.id], [
-        // The built-in ones that place in 3-D: sound.
+        // The built-in ones that place in 3-D: sound, the default kit's
+        // shapes.
         BuiltInAudioContributions.soundId,
         BuiltInAudioContributions.sound3dId,
         BuiltInAudioContributions.listenerId,
+        ...shapes,
         'cube',
         'marker',
+        // A variant of everything it applies to, after them all.
+        for (final id in shapes) 'solid:$id',
         'solid:cube',
       ]);
     });

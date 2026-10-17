@@ -27,7 +27,17 @@ import 'tools/tiles/tile_select_tool.dart';
 import 'tools/tiles/tile_terrain_tool.dart';
 import 'tools/tiles/tile_tool_base.dart' show TileTools;
 import '../overlay/camera_rig_painter.dart';
+import '../level_designer_3d/overlays/marquee_3d_overlay.dart';
+import '../level_designer_3d/overlays/place_ghost_3d_overlay.dart';
+import '../level_designer_3d/aids/ruler_3d.dart';
+import '../level_designer_3d/tools/material_paint_3d_tool.dart';
+import '../level_designer_3d/tools/place_3d_tool.dart';
+import '../../core/view/orbit_fly_editor_view.dart';
+import '../level_designer_3d/split/split_views.dart';
+import 'package:just_game_engine/graphics_3d.dart' as g3;
+import '../level_designer_3d/tools/select_3d_tool.dart';
 import '../../core/scope/editor_scope_services.dart';
+import '../../extension/built_in_3d_designer_contributions.dart';
 
 /// Owns the Level Designer's runtime: state, tools, history and painting.
 ///
@@ -42,8 +52,10 @@ class LevelDesignerSession implements DesignerSession {
     required this.onDuplicate,
     required this.onDelete,
     required this.onArray,
+    this.onArray3D,
     ModifierKeys Function()? readModifiers,
     EditorView Function()? camera,
+    this.splitViews,
   }) : history = scope.history,
        _uniqueName = uniqueName,
        _readModifiers = readModifiers ?? ModifierKeys.fromHardwareKeyboard,
@@ -148,20 +160,27 @@ class LevelDesignerSession implements DesignerSession {
     _ensureActivePrefab();
   }
 
-  /// Keeps a valid prefab selected: the plain rectangle by preference, which
-  /// is the least surprising thing to stamp into an empty scene, else the
-  /// first there is. Only a preference: a project that unregisters the
+  /// Keeps a valid prefab selected, one that places in the scene's mode:
+  /// in 2-D the plain rectangle by preference, which is the least
+  /// surprising thing to stamp into an empty scene; in 3-D the cube; else
+  /// the first there is. Only a preference: a project that unregisters the
   /// built-ins still gets a valid selection.
   void _ensureActivePrefab() {
+    final mode = sceneState.editingMode;
+    bool fits(PrefabDefinition? p) => p != null && p.dimensions.allows(mode);
     final active = controller.activePrefabId.value;
     if (active != null &&
-        (scope.prefabs.byId(active) ?? sessionPrefabs.byId(active)) != null) {
+        fits(scope.prefabs.byId(active) ?? sessionPrefabs.byId(active))) {
       return;
     }
-    final all = scope.prefabs.all;
-    controller.activePrefabId.value = all.isEmpty
-        ? null
-        : scope.prefabs.byId(BuiltInPrefabs.rectangleId)?.id ?? all.first.id;
+    final preferred = scope.prefabs.byId(
+      mode == jge.SceneMode.twoD
+          ? BuiltInPrefabs.rectangleId
+          : BuiltIn3DDesignerContributions.cubeId,
+    );
+    controller.activePrefabId.value = fits(preferred)
+        ? preferred!.id
+        : scope.prefabs.all.where(fits).firstOrNull?.id;
   }
 
   /// Registers the overlays the editor itself provides.
@@ -183,6 +202,11 @@ class LevelDesignerSession implements DesignerSession {
       MotionPathOverlay(() => TimelineSession.of(scope)),
       TileGridOverlay(scope),
       TileBrushOverlay(scope),
+      // The 3-D default kit's.
+      Marquee3DOverlay(),
+      PlaceGhost3DOverlay(_place3D),
+      Ruler3DOverlay(_measure3D),
+      KillHeight3DOverlay(scope),
     ]);
   }
 
@@ -246,8 +270,24 @@ class LevelDesignerSession implements DesignerSession {
       TileFillTool(scope, switchTool: setTool),
       TileEraseTool(scope, switchTool: setTool),
       TileSelectTool(scope, switchTool: setTool),
+      // The default kit for 3-D scenes: offered only there, as the tools
+      // above are only in 2-D. Select shares its id with the 2-D one.
+      Select3DTool(),
+      _place3D,
+      MaterialPaint3DTool(scope: scope),
+      _measure3D,
     ]);
   }
+
+  /// The 3-D Measure tool: one per session, its line drawn by an overlay.
+  late final Measure3DTool _measure3D = Measure3DTool();
+
+  /// The 3-D Place tool: one per session, its preview drawn by an overlay.
+  late final Place3DTool _place3D = Place3DTool(
+    spawn: scope.entities.spawnPrefab,
+    record: scope.entities.recordPlaced,
+    state: () => scope.designer3D,
+  );
 
   /// A name starting [prefix] that no entity in the scene has yet.
   @override
@@ -275,6 +315,9 @@ class LevelDesignerSession implements DesignerSession {
   /// Repeats the current selection `count` times, each copy `step` further on.
   final void Function(int count, Offset step) onArray;
 
+  /// In 3-D: copies the selection as the spec lays them out (ARRAY).
+  final void Function(Array3DSpec spec)? onArray3D;
+
   /// The entities the current selection covers: the multi-selection when there
   /// is one, otherwise just the primary selection.
   List<jge.Entity> selectionEntities() {
@@ -301,6 +344,10 @@ class LevelDesignerSession implements DesignerSession {
   final ModifierKeys Function() _readModifiers;
 
   final EditorView Function()? _camera;
+
+  /// The viewport's four views, where the editor splits it: what the VIEW
+  /// section's switch turns on.
+  final SplitViews Function()? splitViews;
   late final EditorView _detachedCamera = GameCameraEditorView.of(jge.Camera());
 
   /// The viewport camera. The plugin supplies the engine's; a session built
@@ -325,6 +372,10 @@ class LevelDesignerSession implements DesignerSession {
 
   /// Saved camera views, by slot 1–9.
   final Map<int, CameraBookmark> bookmarks = {};
+
+  /// Saved views of a 3-D scene, by slot 1–9: where the orbit is and how
+  /// it looks.
+  final Map<int, ViewPose3D> bookmarks3D = {};
   final LevelDesignerPainter _painter = LevelDesignerPainter();
 
   LevelToolHandler? _activeGesture;
@@ -426,6 +477,24 @@ class LevelDesignerSession implements DesignerSession {
     );
   }
 
+  /// The wheel turned by [delta] over the viewport: the active tool's
+  /// first (Place spins what it is about to place while Shift is held).
+  /// True when the tool kept it, and the view should not zoom.
+  bool onScroll(
+    Offset worldPosition,
+    double gridSize,
+    Offset delta, {
+    Offset? screen,
+    Size? canvasSize,
+  }) {
+    final tool = controller.activeTool;
+    if (tool == null) return false;
+    return tool.onScroll(
+      _context(worldPosition, gridSize, screen: screen, canvasSize: canvasSize),
+      delta,
+    );
+  }
+
   /// The pointer left the viewport.
   void onPointerExit() {
     _hoverWorld = null;
@@ -466,6 +535,7 @@ class LevelDesignerSession implements DesignerSession {
     _activeGesture = null;
     _gestureButton = ToolButton.primary;
     controller.dragRect.value = null;
+    controller.screenRect.value = null;
   }
 
   ToolContext _context(
@@ -475,7 +545,19 @@ class LevelDesignerSession implements DesignerSession {
     Size? canvasSize,
   }) {
     final zoom = camera.zoom;
+    final view = camera;
+    final modifiers = _readModifiers();
     return ToolContext(
+      space: view.isPlanar || screen == null
+          ? null
+          : SpaceContext(
+              view: view,
+              screen: screen,
+              surfaceOf: (ignore) => surfaceAt(view, screen, ignore: ignore),
+              plane: workingPlane,
+              moveStep: sceneState.moveStep3D,
+              snapping: controller.snapEnabled.value && !modifiers.control,
+            ),
       unitsPerPixel: zoom > 0 ? 1 / zoom : 1,
       world: world,
       controller: controller,
@@ -485,7 +567,7 @@ class LevelDesignerSession implements DesignerSession {
       camera: camera,
       gridSize: gridSize,
       snapStep: scope.prefs.settings.value.moveStep,
-      modifiers: _readModifiers(),
+      modifiers: modifiers,
       snapper: snapper,
       stateOf: stateOf,
       grid: scope.grid,
@@ -493,6 +575,32 @@ class LevelDesignerSession implements DesignerSession {
       clickCount: _gestureClicks,
     );
   }
+
+  /// In 3-D: the plane the designer builds on — the scope's, moved to the
+  /// base of the selection while it follows the selection.
+  WorkingPlane get workingPlane {
+    final state = scope.designer3D;
+    if (!state.followSelection.value) return state.plane;
+    return state.planeAt(selectionEntities());
+  }
+
+  /// In 3-D: the surface under [screen] on [view] — the nearest shown
+  /// thing's, by its real shape where a pick test knows it, else the
+  /// ground — leaving out [ignore].
+  SurfacePoint surfaceAt(
+    EditorView view,
+    Offset screen, {
+    Set<jge.Entity> ignore = const {},
+  }) => RayEntityPicker(tests: () => scope.pickTests).placementAt(
+    view,
+    screen,
+    world.entities.where(
+      (e) =>
+          e.isActive &&
+          controller.isShownInViewport(e) &&
+          !ignore.contains(e),
+    ),
+  );
 
   /// Switches tool, abandoning any gesture in progress.
   ///
@@ -571,14 +679,30 @@ class LevelDesignerSession implements DesignerSession {
     cam.setZoom(zoom.clamp(cam.minZoom, math.min(cam.maxZoom, 4.0)));
   }
 
-  /// Saves the current view in [slot] (Ctrl+1-9).
+  /// Saves the current view in [slot] (Ctrl+1-9): in 3-D the orbit, its
+  /// turn and its lens.
   void storeBookmark(int slot) {
-    bookmarks[slot] = CameraBookmark(camera.position, camera.zoom);
+    final view = camera;
+    if (view is OrbitFlyEditorView) {
+      bookmarks3D[slot] = view.pose;
+    } else {
+      bookmarks[slot] = CameraBookmark(camera.position, camera.zoom);
+    }
     controller.setStatus('View saved to $slot');
   }
 
   /// Returns to the view saved in [slot] (1-9).
   void recallBookmark(int slot) {
+    final view = camera;
+    if (view is OrbitFlyEditorView) {
+      final pose = bookmarks3D[slot];
+      if (pose == null) {
+        controller.setStatus('No view saved in $slot - Ctrl+$slot saves one');
+        return;
+      }
+      view.pose = pose;
+      return;
+    }
     final bookmark = bookmarks[slot];
     if (bookmark == null) {
       controller.setStatus('No view saved in $slot - Ctrl+$slot saves one');
@@ -634,6 +758,38 @@ class LevelDesignerSession implements DesignerSession {
         sceneState.toggleMultiSelect(e);
       }
     }
+  }
+
+  /// Selects everything like what is selected (Shift+G): the same model,
+  /// the same kind of shape, or the same name but its number.
+  void selectSimilar() {
+    final picked = selectionEntities();
+    if (picked.isEmpty) {
+      controller.setStatus('Select something first');
+      return;
+    }
+    final kinds = {for (final e in picked) _kindOf(e)};
+    final like = [
+      for (final e in world.query([jge.TransformComponent]))
+        if (e.isActive && controller.isPickable(e) && kinds.contains(_kindOf(e)))
+          e,
+    ];
+    sceneState.clearSelection();
+    for (final e in like) {
+      sceneState.toggleMultiSelect(e);
+    }
+    controller.setStatus('Selected ${like.length} like it');
+  }
+
+  /// What [entity] is like: its model, the kind of shape it is, else its
+  /// name without the number on the end.
+  String _kindOf(jge.Entity entity) {
+    final model = entity.getComponent<g3.ModelComponent>()?.model;
+    if (model != null && model.isNotEmpty) return 'model:$model';
+    final shape = entity.getComponent<g3.Primitive3D>();
+    if (shape != null) return 'shape:${shape.shapeName}';
+    final name = entity.name ?? '';
+    return 'name:${name.replaceFirst(RegExp(r'[ _]?\d+$'), '')}';
   }
 
   /// Replaces the selection with the active prefab (Shift+R).
@@ -715,6 +871,11 @@ class LevelDesignerSession implements DesignerSession {
       for (final entry in bookmarks.entries)
         '${entry.key}': entry.value.toJson(),
     },
+    if (bookmarks3D.isNotEmpty)
+      'bookmarks3d': {
+        for (final entry in bookmarks3D.entries)
+          '${entry.key}': entry.value.toJson(),
+      },
     'modules': {
       for (final module in scope.modules.all)
         module.id: ?module.saveEditorData(this),
@@ -729,6 +890,7 @@ class LevelDesignerSession implements DesignerSession {
     final designer = data?['designer'];
     scope.selectDesigner(designer is String ? designer : null);
     bookmarks.clear();
+    bookmarks3D.clear();
     final byModule = data?['modules'];
     for (final module in scope.modules.all) {
       final saved = byModule is Map ? byModule[module.id] : null;
@@ -747,6 +909,21 @@ class LevelDesignerSession implements DesignerSession {
             position: position.toDouble(),
           ),
         );
+      }
+      final saved3D = data['bookmarks3d'];
+      if (saved3D is Map) {
+        for (final entry in saved3D.entries) {
+          final slot = int.tryParse('${entry.key}');
+          final value = entry.value;
+          if (slot == null || value is! Map) continue;
+          try {
+            bookmarks3D[slot] = ViewPose3D.fromJson(
+              value.cast<String, dynamic>(),
+            );
+          } on Object {
+            // A malformed bookmark is not worth failing a scene load over.
+          }
+        }
       }
       final saved = data['bookmarks'];
       if (saved is Map) {

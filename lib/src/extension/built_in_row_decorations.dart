@@ -15,10 +15,36 @@ abstract final class BuiltInRowDecorations {
   static List<SceneTreeRowDecoration> get all => [
     SceneTreeRowDecoration(id: problemsId, order: 20, build: _problems),
     SceneTreeRowDecoration(id: animatedId, order: 30, build: _animated),
+    SceneTreeRowDecoration(id: prefabId, order: 10, build: _prefab),
   ];
 
   static const String problemsId = 'builtIn.problems';
   static const String animatedId = 'builtIn.animated';
+  static const String prefabId = 'builtIn.prefab';
+
+  /// Part of a prefab instance: a box on its top, a dot on the rest.
+  static Widget? _prefab(BuildContext context, jge.Entity entity) {
+    final instance = entity.getComponent<jge.PrefabInstanceComponent>();
+    if (instance == null && !entity.hasComponent<jge.PrefabLink>()) return null;
+    final colour = instance?.missing ?? false ? EditorTheme.warning : EditorTheme.primaryBright;
+    return Tooltip(
+      message: instance == null
+          ? 'Part of a prefab instance'
+          : instance.missing
+          ? 'An instance of ${instance.path}, which could not be read'
+          : 'An instance of ${instance.path}',
+      child: Padding(
+        padding: const EdgeInsets.only(right: 4),
+        child: instance == null
+            ? Container(
+                width: 5,
+                height: 5,
+                decoration: BoxDecoration(color: colour.withValues(alpha: 0.7), shape: BoxShape.circle),
+              )
+            : Icon(Icons.inventory_2_outlined, size: 13, color: colour),
+      ),
+    );
+  }
 
   /// How many scene checks this entity failed, and how badly.
   static Widget? _problems(BuildContext context, jge.Entity entity) {

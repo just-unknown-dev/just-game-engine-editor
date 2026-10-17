@@ -103,6 +103,59 @@ void main() {
     expect(smart.left - snap.right, greaterThanOrEqualTo(6));
   });
 
+  testWidgets('in a 3-D scene: Surface, Bounds and the pivot, no Smart', (
+    tester,
+  ) async {
+    final world = World()..initialize();
+    addTearDown(world.dispose);
+    final scope = testScope(world: world);
+    scope.sceneState.openScene(
+      EditorScene(name: 'deep', mode: SceneMode.threeD),
+    );
+    final session = LevelDesignerSession(
+      scope: scope,
+      uniqueName: (p) => p,
+      onDuplicate: () {},
+      onDelete: () {},
+      onArray: (_, _) {},
+      readModifiers: () => const ModifierKeys(),
+    );
+    addTearDown(session.dispose);
+    await tester.binding.setSurfaceSize(const Size(1600, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: SizedBox(
+              height: DesignerStatusBar.height,
+              child: DesignerStatusBar(
+                session: session,
+                gridSize: 32,
+                onGridSizeChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Smart'), findsNothing);
+
+    final state = scope.designer3D;
+    await tester.tap(find.text('Surface'));
+    await tester.tap(find.text('Bounds'));
+    await tester.pump();
+    expect([state.surfaceSnap.value, state.boundsSnap.value], [true, true]);
+
+    await tester.tap(find.byType(PivotModeField));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Base').last);
+    await tester.pumpAndSettle();
+    expect(state.pivotMode.value, PivotMode3D.base);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a crowded bar in a narrow window does not overflow', (
     tester,
   ) async {

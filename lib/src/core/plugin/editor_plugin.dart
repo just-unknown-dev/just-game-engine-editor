@@ -4,7 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart'
-    show PointerDeviceKind, kPrimaryMouseButton;
+    show PointerDeviceKind, PointerSignalEvent, kPrimaryMouseButton;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:just_debugger/just_debugger.dart';
@@ -13,8 +13,12 @@ import 'package:just_game_engine/just_game_engine.dart';
 import '../../debugger/engine_debugger.dart';
 import '../../ui/inspector/physics/collider_edit_session.dart';
 import 'package:just_editor_core/host.dart';
+import 'package:just_game_engine/graphics_3d.dart' as g3;
+import '../physics/collider_overlay_3d.dart';
+import '../input/selection_pivot.dart';
+import '../input/translate_snaps_3d.dart';
+import '../../ui/level_designer_3d/split/split_views.dart';
 import '../assets/file_sprite_asset_loader.dart';
-import '../../ui/level_designer/state/built_in_prefabs.dart';
 import '../../ui/level_designer/state/map_placement.dart';
 import '../ecs/systems/editor_log_capture_system.dart';
 import '../ecs/systems/physics_body_binding_system.dart';
@@ -303,8 +307,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     // viewport, which is what the padlock is for.
     // Nor can anything the Level Designer has put out of reach.
     isPickable: (entity) =>
-        !scope.view.isLocked(entity.id) &&
-        !scope.view.isHidden(entity.id) &&
+        !scope.view.isLockedIn(entity) &&
+        !scope.view.isHiddenIn(entity) &&
         !PlaySnapshot.isGenerated(entity) &&
         sceneState.canSelect(entity),
     transformMode: () => shownTransformMode ?? TransformMode.all,
@@ -317,6 +321,29 @@ class JustGameEditorPlugin implements EnginePlugin {
       sceneState.markDirty();
     },
     pickTests: () => scope.pickTests,
+    // In 3-D the gizmo moves, turns and scales all that is selected,
+    // about the pivot the designer chose, and moves land where the snaps
+    // say.
+    selection: () => selectionEntities,
+    pivotOf: (entities) =>
+        SelectionPivot.of(entities, scope.designer3D.pivotMode.value),
+    snaps3D: TranslateSnaps3D(
+      view: () => scope.editorView,
+      state: () => scope.designer3D,
+      surfaceAt: (screen, ignore) =>
+          RayEntityPicker(tests: () => scope.pickTests).placementAt(
+            scope.editorView,
+            screen,
+            engine.world.entities.where(
+              (e) => _isDrawn(e) && !ignore.contains(e),
+            ),
+          ),
+      candidates: () => engine.world.entities.where(_isDrawn),
+      vertexSources: () => scope.pickTests.whereType<EntityVertexSource>(),
+      holdingV: () => HardwareKeyboard.instance.logicalKeysPressed.contains(
+        LogicalKeyboardKey.keyV,
+      ),
+    ),
   );
 
   // ── Focus nodes ───────────────────────────────────────────────────────────
@@ -441,6 +468,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       animatorGraphs: spriteAssets.loadGraph,
       timelines: spriteAssets.loadTimeline,
       tileText: spriteAssets.readText,
+      prefabs: spriteAssets.loadPrefab,
     );
     // What a module (the Asset Store, say) calls after writing files.
     scope.assetReloader = reloadAssets;
@@ -770,12 +798,14 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// Whether only the Level Map can be worked on: the Level Designer is
-  /// open and building, not play-testing, and no workspace — the tileset
-  /// or interface editor, which work on things off the map — is open over
-  /// it.
+  /// open on a 2-D scene and building, not play-testing, and no workspace
+  /// — the tileset or interface editor, which work on things off the map —
+  /// is open over it. A 3-D scene has no Level Map: its designer works on
+  /// the whole scene.
   late final Computed<bool> keepsToLevelMap = Computed(
     () =>
         designer.value != null &&
+        sceneState.sceneMode.value == SceneMode.twoD &&
         isAuthoring.value &&
         scope.activeWorkspace.value == null,
     debugLabel: 'keepsToLevelMap',
@@ -796,9 +826,11 @@ class JustGameEditorPlugin implements EnginePlugin {
       scope: scope,
       uniqueName: entities.uniqueName.call,
       camera: () => scope.editorView,
+      splitViews: () => splitViews,
       onDuplicate: duplicateSelection,
       onDelete: deleteSelection,
       onArray: (count, step) => arraySelection(count: count, step: step),
+      onArray3D: arraySelection3D,
     )..restoreEditorData(sceneIO.editorData);
     // Its panel is a tab of the right panel: the one to see on opening.
     scope.chrome.rightPanelTab.value = EditorChromeState.levelTab;
@@ -827,7 +859,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// Designer has hidden: its layers, and everything but its Level Map.
   bool _isDrawn(Entity entity) {
     if (!isAuthoring.value) return true;
-    if (scope.view.isHidden(entity.id)) return false;
+    if (scope.view.isHiddenIn(entity)) return false;
     final session = designer.value;
     return session == null || session.controller.isShownInViewport(entity);
   }
@@ -899,6 +931,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     }
     if (event is! KeyDownEvent) return false;
     final key = event.logicalKey;
+    // A 3-D gizmo being dragged takes a typed value: digits, Enter, Esc.
+    if (viewport.isDragging && viewport.typeKey(key)) return true;
 
     if (key == _toggleKey) {
       toggleVisibility();
@@ -1012,10 +1046,13 @@ class JustGameEditorPlugin implements EnginePlugin {
         !ModuleDataFiles.suffixes.any(p.endsWith);
   }
 
-  /// Whether dropping [path] on the viewport makes something: an image, a
-  /// sprite project, or a sprite atlas.
-  static bool canDropAsset(String path) {
+  /// Whether dropping [path] on the viewport of a scene of [mode] makes
+  /// something: a kind a module knows how to drop (a model); in 2-D also
+  /// an image, a sprite project, a sprite atlas, a tileset or a map.
+  static bool canDropAsset(String path, {SceneMode mode = SceneMode.twoD}) {
     if (AssetKind.of(path).drop != null) return true;
+    // Sprites and tile maps are 2-D: a 3-D scene does not draw them.
+    if (mode != SceneMode.twoD) return false;
     final p = path.toLowerCase();
     return p.endsWith('.tileset.json') ||
         LevelMapFiles.isMapFile(p) ||
@@ -1034,18 +1071,24 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// atlas sits beside it). One undo step while the Level Designer is open.
   /// Null when there is no scene, or the file is not something to place.
   Entity? dropAsset(String path, Offset canvasPosition) {
-    if (!sceneState.hasScene || !canDropAsset(path)) return null;
+    if (!sceneState.hasScene ||
+        !canDropAsset(path, mode: sceneState.editingMode)) {
+      return null;
+    }
     final at = engine.cameraSystem.mainCamera.screenToWorld(canvasPosition);
     final view = scope.editorView;
-    // In space a sprite stands where the pointer meets the ground.
+    // In space a sprite stands where the pointer meets the ground; a model
+    // on the surface under it.
     final ground = view.isPlanar ? null : view.screenToGround(canvasPosition);
+    final surface = view.isPlanar ? null : surfaceAt(canvasPosition);
     // A kind a module knows makes what it makes.
     if (AssetKind.of(path).drop case final drop?) {
       return drop(
         AssetDrop(
           scope: scope,
           path: path,
-          at: ground ?? Vector3(at.dx, at.dy, 0),
+          at: surface?.position ?? Vector3(at.dx, at.dy, 0),
+          surface: surface,
           place: (components, name) => _place(path, components, name: name),
         ),
       );
@@ -1248,6 +1291,8 @@ class JustGameEditorPlugin implements EnginePlugin {
       reloadLevelMaps(path);
     } else if (isSpriteAtlasPath(path)) {
       reloadSprites(path);
+    } else if (PrefabFile.isPrefabPath(lower)) {
+      unawaited(scope.prefabInstances.refresh(path));
     } else if (lower.endsWith('.json')) {
       // Some other data file: nothing a sprite shows.
     } else if (!_isFont(lower) && !_isAudio(lower)) {
@@ -1280,6 +1325,8 @@ class JustGameEditorPlugin implements EnginePlugin {
         maps.add(path);
       } else if (isSpriteAtlasPath(path)) {
         sprites = true;
+      } else if (PrefabFile.isPrefabPath(lower)) {
+        unawaited(scope.prefabInstances.refresh(path));
       } else if (!lower.endsWith('.json') &&
           !_isFont(lower) &&
           !_isAudio(lower)) {
@@ -1464,6 +1511,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (_isInitialized) sceneIO.loading.tick();
     if (_isInitialized) _autosaveTick();
     if (_isInitialized) _syncRuntimeSystems(dt);
+    if (_isInitialized) _syncSplit();
+    if (_isInitialized) _syncSceneAids();
     if (!_isInitialized || !isVisible.value) return;
     // Right button held in 3-D: WASD flies the view.
     viewport.flyTick(dt, HardwareKeyboard.instance.logicalKeysPressed);
@@ -1475,6 +1524,46 @@ class JustGameEditorPlugin implements EnginePlugin {
         engine.isInitialized &&
         engine.cameraSystem.isInitialized) {
       engine.cameraSystem.brain.evaluate(engine.world, 0, snap: true);
+    }
+  }
+
+  /// What the editor adds to its 3-D views — what it hides, the
+  /// selection's outline, the view mode, the slice — handed to the 3-D
+  /// renderer while authoring a 3-D scene; taken back otherwise, so a
+  /// play-test shows the level as it ships.
+  late final g3.SceneEditorAids sceneAids = g3.SceneEditorAids()
+    ..plainViews.add(_previewFrame)
+    ..drawFilter = _isDrawn
+    ..highlighted = () => selectionEntities;
+
+  void _syncSceneAids() {
+    if (!engine.isInitialized) return;
+    final graphics = engine.services.maybe<g3.Graphics3D>();
+    if (graphics == null || !graphics.isStarted) return;
+    final renderer = graphics.sceneRenderer;
+    if (!isVisible.value ||
+        !isAuthoring.value ||
+        sceneState.editingMode != SceneMode.threeD) {
+      renderer.aids = null;
+      return;
+    }
+    final state = scope.designer3D;
+    renderer.aids = sceneAids
+      ..viewMode = switch (state.viewMode.value) {
+        ViewMode3D.lit => g3.RenderViewMode.lit,
+        ViewMode3D.unlit || ViewMode3D.collision => g3.RenderViewMode.unlit,
+        ViewMode3D.wireframe => g3.RenderViewMode.wireframe,
+      }
+      ..highlighted = state.outline.value ? () => selectionEntities : null
+      ..sliceY = state.sliceOn.value ? state.sliceY.value : null;
+    sceneAids.skippedViews.clear();
+    if (activeSplit != null) sceneAids.skippedViews.add(engine.rendering.view);
+  }
+
+  /// Switches the 3-D view between perspective and orthographic (pad 5).
+  void toggleOrthographic() {
+    if (scope.editorView case final OrbitFlyEditorView view) {
+      view.orthographic = !view.orthographic;
     }
   }
 
@@ -1531,7 +1620,218 @@ class JustGameEditorPlugin implements EnginePlugin {
   void onRender(Canvas canvas, Size size) {
     if (!_isInitialized || !isVisible.value) return;
     if (size == Size.zero) return;
+    final split = activeSplit;
+    if (split != null) {
+      _renderPanes(canvas, size, split);
+      return;
+    }
+    _renderView(canvas, size, preview: true);
+  }
 
+  /// The viewport split four ways (top, front, side, perspective) — while
+  /// [SplitViews.on], authoring a 3-D scene.
+  late final SplitViews splitViews = SplitViews(
+    () => scope.sceneView as OrbitFlyEditorView,
+  );
+
+  /// [splitViews] while they are what the viewport shows; null otherwise.
+  SplitViews? get activeSplit =>
+      splitViews.on.value &&
+          isAuthoring.value &&
+          sceneState.editingMode == SceneMode.threeD &&
+          scope.sceneView is OrbitFlyEditorView
+      ? splitViews
+      : null;
+
+  /// Splits the 3-D viewport four ways, or joins it again.
+  void toggleSplitViews() {
+    if (sceneState.editingMode != SceneMode.threeD) return;
+    splitViews.toggle();
+  }
+
+  /// Each pane of [split] in its quarter of the canvas: its own picture of
+  /// the scene, and over it the editor's aids seen through it. The game's
+  /// camera preview over them all.
+  void _renderPanes(Canvas canvas, Size size, SplitViews split) {
+    split.layout(size);
+    final background = Paint()..color = engine.rendering.backgroundColor;
+    canvas.drawRect(Offset.zero & size, Paint()..color = EditorTheme.border);
+    for (final pane in split.panes) {
+      canvas
+        ..save()
+        ..clipRect(pane.rect)
+        ..translate(pane.rect.left, pane.rect.top);
+      scope.throughPane(pane, () {
+        final paneSize = pane.rect.size;
+        canvas.drawRect(Offset.zero & paneSize, background);
+        pane.frame.update(
+          pane.view.camera,
+          paneSize,
+          interpolation: engine.rendering.interpolation,
+        );
+        for (final renderer in engine.rendering.sceneRenderers) {
+          if (renderer.enabled) renderer.render(canvas, pane.frame);
+        }
+        _renderView(canvas, paneSize, preview: false);
+      });
+      _paintPaneLabel(canvas, pane, active: identical(pane, split.active));
+      canvas.restore();
+    }
+    _paintGamePreview(canvas, size, engine.cameraSystem.mainCamera);
+  }
+
+  /// What has been typed during a gizmo drag, beside the gizmo.
+  void _paintTyped(Canvas canvas, Offset at, String text) {
+    final label = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: EditorTheme.textBright,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final box = Rect.fromLTWH(at.dx + 16, at.dy + 16, label.width + 12, label.height + 6);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(box, const Radius.circular(4)),
+      Paint()..color = EditorTheme.panelBg.withValues(alpha: 0.9),
+    );
+    label.paint(canvas, box.topLeft + const Offset(6, 3));
+  }
+
+  void _paintPaneLabel(Canvas canvas, ViewPane pane, {required bool active}) {
+    final label = TextPainter(
+      text: TextSpan(
+        text: pane.kind.label,
+        style: TextStyle(
+          color: active ? EditorTheme.primary : EditorTheme.textSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    label.paint(canvas, const Offset(8, 6));
+    if (active) {
+      canvas.drawRect(
+        (Offset.zero & pane.rect.size).deflate(0.5),
+        Paint()
+          ..color = EditorTheme.primary.withValues(alpha: 0.6)
+          ..style = PaintingStyle.stroke,
+      );
+    }
+  }
+
+  // ── The pointer, through the pane it is over ─────────────────────────
+
+  /// Runs [handle] with [event] as [pane] sees it: its position in the
+  /// pane, the pane's view as the editor's, the canvas the pane's size.
+  T _inPane<T>(ViewPane pane, PointerEvent event, T Function(PointerEvent) handle) {
+    final shift = Matrix4.translationValues(-pane.rect.left, -pane.rect.top, 0);
+    final local = event.transformed(
+      event.transform == null ? shift : (shift..multiply(event.transform!)),
+    );
+    final canvas = viewport.canvasSize;
+    viewport.updateCanvasSize(pane.rect.size);
+    _inPaneDepth++;
+    try {
+      return scope.throughPane(pane, () => handle(local));
+    } finally {
+      _inPaneDepth--;
+      viewport.updateCanvasSize(canvas);
+    }
+  }
+
+  int _inPaneDepth = 0;
+
+  /// Between gestures the editor's view is the pane last used, so a key —
+  /// F, the pad's views, flying — works in it; with no split, its own.
+  void _syncSplit() {
+    final split = activeSplit;
+    final pane = split?.active ?? split?.panes.last;
+    scope.viewOverride = pane?.view;
+  }
+
+  /// Runs [handle] with [event] in the pane it belongs to: the one it went
+  /// down in, while a gesture lasts, else the one under it. Without a
+  /// split, as it is.
+  T _routed<T>(
+    PointerEvent event,
+    T Function(PointerEvent) handle,
+    T outside, {
+    bool begins = false,
+  }) {
+    final split = activeSplit;
+    if (split == null) return handle(event);
+    final pane = begins || split.active == null
+        ? split.paneAt(event.localPosition)
+        : split.active;
+    if (pane == null) return outside;
+    split.active = pane;
+    return _inPane(pane, event, handle);
+  }
+
+  /// A press on the canvas, sent on to the viewport through its pane.
+  bool pointerDown(PointerDownEvent event) => _routed(
+    event,
+    (e) => viewport.onPointerDown(e as PointerDownEvent),
+    false,
+    begins: true,
+  );
+
+  /// The pointer moving with no button down.
+  void pointerHover(PointerHoverEvent event) => _routed(
+    event,
+    (e) => viewport.onPointerHover(e as PointerHoverEvent),
+    null,
+    begins: true,
+  );
+
+  /// The pointer moving with a button down.
+  void pointerMove(PointerMoveEvent event) =>
+      _routed(event, (e) => viewport.onPointerMove(e as PointerMoveEvent), null);
+
+  /// A press let go.
+  void pointerUp(PointerUpEvent event) =>
+      _routed(event, (e) => viewport.onPointerUp(e as PointerUpEvent), null);
+
+  /// A gesture cut short.
+  void pointerCancel(PointerCancelEvent event) => _routed(
+    event,
+    (e) => viewport.onPointerCancel(e as PointerCancelEvent),
+    null,
+  );
+
+  /// The wheel.
+  void pointerScroll(PointerSignalEvent event) => _routed(
+    event,
+    (e) => viewport.onPointerScroll(e as PointerSignalEvent),
+    null,
+    begins: true,
+  );
+
+  /// Runs [body] with [local] (canvas pixels) as the pane under it sees
+  /// it, that pane's view the editor's: what the right-click menu asks.
+  T atPoint<T>(Offset local, T Function(Offset local) body) {
+    final split = activeSplit;
+    // Already in a pane: a menu opened from a gesture there.
+    if (split == null || _inPaneDepth > 0) return body(local);
+    final pane = split.paneAt(local) ?? split.panes.last;
+    final canvas = viewport.canvasSize;
+    viewport.updateCanvasSize(pane.rect.size);
+    try {
+      return scope.throughPane(
+        pane,
+        () => body(local - pane.rect.topLeft),
+      );
+    } finally {
+      viewport.updateCanvasSize(canvas);
+    }
+  }
+
+  void _renderView(Canvas canvas, Size size, {required bool preview}) {
     final camera = scope.editorView..viewportSize = size;
     // In space (a 3-D scene) the 2-D aids — the pixel grid, camera rigs,
     // collider outlines — have nothing to say; the ground grid and the
@@ -1542,7 +1842,14 @@ class JustGameEditorPlugin implements EnginePlugin {
       if (flat) {
         scope.grid.paintGrid(canvas, camera, size, cellSize: gridSize.value);
       } else {
-        paintGroundGrid(canvas, camera);
+        // On the plane the 3-D designer builds on — the ground, unless it
+        // was moved or turned — in the move step.
+        paintPlaneGrid(
+          canvas,
+          camera,
+          plane: designer.value?.workingPlane ?? scope.designer3D.plane,
+          step: sceneState.moveStep3D,
+        );
       }
     }
 
@@ -1593,8 +1900,13 @@ class JustGameEditorPlugin implements EnginePlugin {
         scope: scope,
         isShown: _isDrawn,
       );
+      final collisionView =
+          !flat && scope.designer3D.viewMode.value == ViewMode3D.collision;
       for (final overlay in scope.viewportOverlays) {
-        if (hidden.contains(overlay.id)) continue;
+        if (hidden.contains(overlay.id) &&
+            !(collisionView && overlay is ColliderOverlay3D)) {
+          continue;
+        }
         if (!overlay.dimensions.allows(sceneState.editingMode)) continue;
         overlay.paint(overlayContext);
       }
@@ -1651,16 +1963,17 @@ class JustGameEditorPlugin implements EnginePlugin {
     final collider = ColliderEditSession.of(scope);
     if (flat && isAuthoring.value) collider.paint(canvas, camera);
 
-    _paintGamePreview(canvas, size, engine.cameraSystem.mainCamera);
+    if (preview) _paintGamePreview(canvas, size, engine.cameraSystem.mainCamera);
 
     final selected = sceneState.selectedEntity.value;
     if (selected == null || !selected.isActive) return;
     // Its handles are the ones to take hold of: no gizmo over them.
     if (collider.isEditing(selected)) return;
-    // The designer's select tool draws its own resize and rotate handles, and
-    // claims every press — the base gizmo would be a second set of handles
-    // that cannot be grabbed.
-    if (designer.value?.controller.toolId.value == BuiltInTools.select &&
+    // The 2-D designer's select tool draws its own resize and rotate
+    // handles, and claims every press — the base gizmo would be a second set
+    // of handles that cannot be grabbed. The 3-D one leaves the gizmo be.
+    if (flat &&
+        designer.value?.controller.toolId.value == BuiltInTools.select &&
         isAuthoring.value) {
       return;
     }
@@ -1671,9 +1984,12 @@ class JustGameEditorPlugin implements EnginePlugin {
         selected,
         camera,
         local: sceneState.localGizmo,
+        pivot: viewport.gizmoPivot(),
       );
       if (gizmo != null) {
         paintGizmo3D(canvas, gizmo, mode: mode, active: viewport.activeHandle);
+        final typed = viewport.typedLabel;
+        if (typed != null) _paintTyped(canvas, gizmo.origin, typed);
       }
       return;
     }
@@ -1964,23 +2280,59 @@ class JustGameEditorPlugin implements EnginePlugin {
     sceneState.selectEntity(entity);
   }
 
-  /// In 3-D: the surface under [canvasPosition] — the face of the nearest
-  /// drawn entity's box, or the ground — where something placed there goes.
-  SurfacePoint surfaceAt(Offset canvasPosition) =>
-      RayEntityPicker(tests: () => scope.pickTests).placementAt(
-        scope.editorView,
-        canvasPosition,
-        engine.world.entities.where(_isDrawn),
-      );
+  /// In 3-D: the surface under [canvasPosition] — the nearest drawn
+  /// entity's, by its real shape where a pick test knows it, else the
+  /// working plane, else the ground — where something placed there goes.
+  SurfacePoint surfaceAt(Offset canvasPosition) {
+    final view = scope.editorView;
+    final found = RayEntityPicker(tests: () => scope.pickTests).placementAt(
+      view,
+      canvasPosition,
+      engine.world.entities.where(_isDrawn),
+    );
+    if (found.onto != null) return found;
+    final plane = workingPlane3D;
+    final hit = plane.intersect(view.screenToRay(canvasPosition));
+    return hit == null ? found : SurfacePoint(hit, plane.normal);
+  }
+
+  /// The 3-D designer's working plane: as set, or through the base of the
+  /// selection while it follows it.
+  WorkingPlane get workingPlane3D {
+    final state = scope.designer3D;
+    return state.followSelection.value
+        ? state.planeAt(selectionEntities)
+        : state.plane;
+  }
+
+  /// Drops everything selected straight down onto what is under it (or
+  /// the working plane), as one undo step. How many moved.
+  int dropSelectionToGround() {
+    final picker = RayEntityPicker(tests: () => scope.pickTests);
+    return entities.dropSelectionToGround(
+      below: (ray, ignore) => picker.placementAlong(
+        ray,
+        engine.world.entities.where((e) => _isDrawn(e) && !ignore.contains(e)),
+      ),
+      plane: workingPlane3D,
+    );
+  }
+
+  /// Copies the selection as [spec] lays them out, about the gizmo's
+  /// pivot, as one undo step.
+  void arraySelection3D(Array3DSpec spec) => entities.arraySelection3D(
+    history,
+    spec,
+    SelectionPivot.of(selectionEntities, scope.designer3D.pivotMode.value),
+  );
 
   /// The prefabs a 3-D scene can be given from the viewport menu: the
-  /// built-in ones and the modules' that place in 3-D, then each variant of
-  /// those it applies to (a Solid of every shape).
+  /// built-in ones and every module's that place in 3-D, whichever kit the
+  /// Level Designer has chosen, then each variant of those it applies to
+  /// (a Solid of every shape).
   List<PrefabDefinition> get prefabsInSpace {
     final base = [
-      for (final prefab in BuiltInPrefabs.all)
-        if (prefab.dimensions.allows(SceneMode.threeD)) prefab,
-      for (final module in scope.modules.all)
+      for (final module in scope.modules.withBuiltIns)
         for (final prefab in [...module.prefabs, ...module.sharedPrefabs])
           if (prefab.dimensions.allows(SceneMode.threeD)) prefab,
     ];
@@ -2006,39 +2358,8 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// Places [prefab] at [at], selected, as one undo step.
-  Entity placePrefab(PrefabDefinition prefab, SurfacePoint at) {
-    final components =
-        prefab.buildAt?.call(at) ??
-        prefab.build(Offset(at.position.x, at.position.y), prefab.defaultSize);
-    final transform = components.whereType<TransformComponent>().firstOrNull;
-    if (transform == null) {
-      components.insert(
-        0,
-        TransformComponent(position: Vector3.copy(at.position)),
-      );
-    } else if (prefab.buildAt == null) {
-      transform.position.z = at.position.z;
-    }
-    final entity = engine.world.createEntityWithComponents(
-      components,
-      name: entities.uniqueName(prefab.namePrefix ?? prefab.id),
-    );
-    sceneState
-      ..syncEntityNode(entity)
-      ..markDirty()
-      ..refresh()
-      ..selectEntity(entity);
-    history.pushApplied(
-      CreateEntitiesCommand.adopting(
-        label: 'Place ${prefab.name}',
-        world: engine.world,
-        sceneState: sceneState,
-        entities: [entity],
-        codec: scope.codec,
-      ),
-    );
-    return entity;
-  }
+  Entity placePrefab(PrefabDefinition prefab, SurfacePoint at) =>
+      entities.placePrefab(prefab, at);
 
   /// In 3-D: frames the selection — or, with [all] or nothing selected,
   /// everything drawn.
@@ -2341,6 +2662,42 @@ class JustGameEditorPlugin implements EnginePlugin {
   void play() {
     if (_isInitialized) playController.play();
   }
+
+  /// Starts the play-test with the player at [at] instead of its spawn
+  /// point — placed by the game kit that knows its player
+  /// (`LevelAids.playFrom`), else whatever carries the `player` tag.
+  /// Whether it was placed; nothing when a play-test is on already.
+  bool playFrom(Vector3 at) {
+    if (!_isInitialized ||
+        playController.state.value != EditorPlayState.stopped) {
+      return false;
+    }
+    playController.play();
+    final world = engine.world;
+    for (final aids in scope.levelAids) {
+      if (aids.playFrom(world, at)) return true;
+    }
+    for (final e in world.entities) {
+      if (!e.isAlive ||
+          !(e.getComponent<TagComponent>()?.tags.contains('player') ?? false)) {
+        continue;
+      }
+      final t = e.getComponent<TransformComponent>();
+      if (t == null) continue;
+      t.position.setValues(at.x, at.y, view3D ? at.z : t.position.z);
+      world.transformHierarchy.propagateFrom(e);
+      return true;
+    }
+    scope.log.log(
+      'Play from here: no game kit placed its player, and nothing is tagged '
+      '"player"; it started from the spawn point.',
+      source: 'editor',
+      category: 'play',
+    );
+    return false;
+  }
+
+  bool get view3D => !scope.editorView.isPlanar;
 
   /// Freezes the play-test; see [PlayController.pause].
   void pause() => playController.pause();

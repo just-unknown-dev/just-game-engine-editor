@@ -3,6 +3,7 @@ import 'package:just_debugger/just_debugger.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../../../core/plugin/editor_plugin.dart';
+import '../../../../core/scope/editor_scope_services.dart';
 import 'package:just_editor_core/host.dart';
 import '../assets/assets_browser.dart';
 import '../console/console_dock.dart';
@@ -35,7 +36,6 @@ abstract final class BuiltInDocks {
   static const String levelArg = 'level';
 
   static final Expando<List<DockDefinition>> _cache = Expando('builtInDocks');
-  static final Expando<AssetIndex> _indexes = Expando('assetIndex');
   static final Expando<FrameCapture> _captures = Expando('frameCapture');
   static final Expando<ValueNotifier<EditorHistory?>> _histories = Expando(
     'designerHistory',
@@ -75,9 +75,7 @@ abstract final class BuiltInDocks {
   /// The project's asset index: one per editor, shared by the Assets dock
   /// and its readout, scanning once and then following the disk.
   static AssetIndex assetIndexOf(JustGameEditorPlugin plugin) =>
-      _indexes[plugin] ??= (AssetIndex()
-        ..scan()
-        ..startWatching());
+      plugin.scope.assetIndex;
 
   /// The built-in docks for [plugin], made once: their closures hold state
   /// a dock should not lose between builds.

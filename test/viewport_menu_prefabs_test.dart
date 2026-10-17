@@ -65,10 +65,18 @@ void main() {
     return plugin;
   }
 
-  testWidgets('a few prefabs are listed in the menu itself', (tester) async {
+  testWidgets("the default kit's shapes are always there, by category", (
+    tester,
+  ) async {
+    // With the 3-D default kit's shapes there are always more than a menu
+    // lists itself, so even a few of a module's go under their category.
     await open(tester, 3);
-    expect(find.text('Add Thing 0'), findsOneWidget);
-    expect(find.text('Evens…'), findsNothing);
+    expect(find.text('Shapes…'), findsOneWidget);
+    expect(find.text('Evens…'), findsOneWidget);
+    expect(find.text('Add Thing 0'), findsNothing);
+    await tester.tap(find.text('Shapes…'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cube'), findsOneWidget);
   });
 
   testWidgets('many are listed by category; one picked there is placed', (tester) async {

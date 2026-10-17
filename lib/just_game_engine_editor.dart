@@ -8,6 +8,7 @@ export 'src/core/plugin/editor_plugin.dart';
 // any other package that ships assets.
 export 'src/core/play/play_controller.dart';
 export 'src/core/scene/scene_io.dart';
+export 'src/core/prefabs/prefab_instances.dart';
 export 'src/core/scene/scene_loading.dart';
 export 'src/core/entity/entity_ops.dart';
 export 'src/core/input/viewport_input.dart';
@@ -36,6 +37,8 @@ export 'src/core/view/planar_entity_picker.dart';
 export 'src/core/view/orbit_fly_editor_view.dart';
 export 'src/core/input/gizmo_drag_solver.dart';
 export 'src/core/input/ray_gizmo_drag_solver.dart';
+export 'src/core/input/selection_pivot.dart';
+export 'src/core/input/translate_snaps_3d.dart';
 export 'src/ui/overlay/gizmo_3d.dart';
 export 'src/ui/level_designer/commands/editor_command_context.dart';
 export 'src/ui/overlay/docks/dock_controller.dart';
@@ -62,6 +65,7 @@ export 'src/ui/inspector/built_in_field_editors.dart';
 
 // Level Designer — the dedicated level-authoring workspace.
 export 'src/ui/level_designer/level_designer.dart';
+export 'src/extension/built_in_3d_designer_contributions.dart';
 export 'src/ui/overlay/camera_rig_painter.dart';
 export 'src/extension/built_in_camera_contributions.dart';
 // Sound in the editor: source and listener markers, a 3-D source's range,

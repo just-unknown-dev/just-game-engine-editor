@@ -12,6 +12,7 @@ import '../../ui/overlay/gizmo_painter.dart';
 import '../view/orbit_fly_editor_view.dart';
 import 'gizmo_drag_solver.dart';
 import 'ray_gizmo_drag_solver.dart';
+import 'translate_snaps_3d.dart';
 
 /// Turns pointer events on the game canvas into edits: gizmo drags, camera
 /// pan and zoom, and, when the Level Designer is open, its tools and chrome.
@@ -40,15 +41,73 @@ class ViewportInput {
     GizmoHitTester? hitTester3D,
     GizmoDragSolver? dragSolver3D,
     List<EntityRayTest> Function()? pickTests,
+    this.selection,
+    this.pivotOf,
+    this.snaps3D,
   }) : _worldOf = world,
        dragSolver = dragSolver ?? PlanarGizmoDragSolver(sceneState),
        dragSolver3D = dragSolver3D ?? RayGizmoDragSolver(sceneState),
        cameraOf = camera,
        designerOf = designer,
-       hitTester = hitTester ?? GizmoHitTester(),
-       hitTester3D =
-           hitTester3D ??
-           RayGizmoHitTester(tests: pickTests, local: () => sceneState.localGizmo);
+       hitTester = hitTester ?? GizmoHitTester() {
+    this.hitTester3D =
+        hitTester3D ??
+        RayGizmoHitTester(
+          tests: pickTests,
+          local: () => sceneState.localGizmo,
+          pivot: gizmoPivot,
+        );
+  }
+
+  /// Everything selected: what a 3-D gizmo drag moves, turns and scales
+  /// together. The selected entity alone when null.
+  final List<Entity> Function()? selection;
+
+  /// Where a 3-D gizmo sits on [entities] (see `PivotMode3D`); the first's
+  /// own origin when null.
+  final Vector3 Function(List<Entity> entities)? pivotOf;
+
+  /// Where a 3-D move lands besides the grid: surfaces, corners, boxes.
+  final TranslateSnaps3D? snaps3D;
+
+  /// What a 3-D drag of the selection's gizmo edits: the selection, less
+  /// anything inside something else selected, which moves with it anyway.
+  List<Entity> _targetsFor(Entity primary) {
+    final all = selection?.call() ?? const <Entity>[];
+    if (all.length < 2 || !all.any((e) => e.id == primary.id)) {
+      return [primary];
+    }
+    final ids = {for (final e in all) e.id};
+    bool inside(Entity e) {
+      var parent = e.getComponent<ParentComponent>()?.parentId;
+      for (var guard = 0; parent != null && guard < 64; guard++) {
+        if (ids.contains(parent)) return true;
+        parent = world.getEntity(parent)?.getComponent<ParentComponent>()?.parentId;
+      }
+      return false;
+    }
+
+    // The primary leads (its turn gives the gizmo's axes) unless it is
+    // itself inside something selected.
+    return [
+      if (!inside(primary)) primary,
+      for (final e in all)
+        if (e.id != primary.id &&
+            e.getComponent<TransformComponent>() != null &&
+            !inside(e))
+          e,
+    ];
+  }
+
+  /// Where the 3-D gizmo sits for the selection now; null with nothing
+  /// selected.
+  Vector3? gizmoPivot() {
+    final primary = sceneState.selectedEntity.value;
+    if (primary == null) return null;
+    final targets = _targetsFor(primary);
+    return pivotOf?.call(targets) ??
+        primary.getComponent<TransformComponent>()?.position;
+  }
 
   /// Whether an entity can be picked at all. The padlock in the scene
   /// tree answers false here; without it the lock did nothing outside
@@ -100,7 +159,7 @@ class ViewportInput {
   final GizmoHitTester hitTester;
 
   /// What picks and finds gizmo handles when the view is in space.
-  final GizmoHitTester hitTester3D;
+  late final GizmoHitTester hitTester3D;
 
   GizmoHandle? _activeHandle;
 
@@ -154,48 +213,148 @@ class ViewportInput {
   /// cannot be undone.
   final void Function(TransformCommand command)? commitTransform;
 
-  // The entity a gizmo drag is moving, and its transform when it began.
-  Entity? _dragEntity;
-  TransformSnapshot? _dragBefore;
+  // What a gizmo drag is moving, and their transforms when it began.
+  List<Entity> _dragEntities = const [];
+  List<TransformSnapshot> _dragBefores = const [];
   GizmoOp _dragOp = GizmoOp.none;
 
   /// Remembers where a drag of the selection began, and what it began from.
   void _beginDrag(Offset at) {
     final entity = sceneState.selectedEntity.value;
     if (entity == null) return;
-    final solver = _solver = cameraOf().isPlanar ? dragSolver : dragSolver3D;
-    solver.begin(entity, at);
-    if (entity.getComponent<TransformComponent>() != null) {
-      _dragEntity = entity;
-      _dragBefore = TransformSnapshot.of(entity);
-      _dragOp = _activeHandle?.op ?? GizmoOp.translate;
+    final flat = cameraOf().isPlanar;
+    final solver = _solver = flat ? dragSolver : dragSolver3D;
+    _dragOp = _activeHandle?.op ?? GizmoOp.translate;
+    var targets = [entity];
+    if (solver is RayGizmoDragSolver) {
+      targets = _targetsFor(entity);
+      solver.beginMany(
+        targets,
+        pivotOf?.call(targets) ??
+            entity.getComponent<TransformComponent>()?.position ??
+            Vector3.zero(),
+        at,
+      );
+      final snaps = snaps3D;
+      if (snaps != null && _dragOp == GizmoOp.translate) {
+        snaps.begin(targets, at);
+        solver.adjustMove = snaps.adjust;
+      } else {
+        solver.adjustMove = null;
+      }
+    } else {
+      solver.begin(entity, at);
     }
+    _dragEntities = [
+      for (final e in targets)
+        if (e.getComponent<TransformComponent>() != null) e,
+    ];
+    _dragBefores = [for (final e in _dragEntities) TransformSnapshot.of(e)];
+    _typed = '';
+    _lastScreen = at;
   }
 
   /// Hands a finished drag to [commitTransform], when it changed anything.
   void _commitDrag() {
-    final entity = _dragEntity, before = _dragBefore;
-    _dragEntity = null;
-    _dragBefore = null;
+    final entities = _dragEntities, befores = _dragBefores;
+    _dragEntities = const [];
+    _dragBefores = const [];
     final commit = commitTransform;
-    if (entity == null || before == null || commit == null) return;
-    if (!entity.isAlive) return;
-    final after = TransformSnapshot.of(entity);
-    if (before.matches(after)) return;
+    if (entities.isEmpty || commit == null) return;
+    if (entities.any((e) => !e.isAlive)) return;
+    final afters = [for (final e in entities) TransformSnapshot.of(e)];
+    var changed = false;
+    for (var i = 0; i < entities.length; i++) {
+      if (!befores[i].matches(afters[i])) changed = true;
+    }
+    if (!changed) return;
     final verb = switch (_dragOp) {
       GizmoOp.rotate => 'Rotate',
       GizmoOp.scale => 'Scale',
       _ => 'Move',
     };
+    final what = entities.length == 1
+        ? entities.single.name ?? 'entity'
+        : '${entities.length} entities';
     commit(
       TransformCommand(
-        label: '$verb ${entity.name ?? 'entity'}',
-        entities: [entity],
-        before: [before],
-        after: [after],
+        label: '$verb $what',
+        entities: entities,
+        before: befores,
+        after: afters,
         sceneState: sceneState,
       ),
     );
+  }
+
+  // ── A value typed while dragging ─────────────────────────────────────
+
+  String _typed = '';
+  Offset? _lastScreen;
+
+  /// What has been typed during the drag, as it is shown: the change and
+  /// its unit; null when nothing has.
+  String? get typedLabel {
+    if (_typed.isEmpty || _dragEntities.isEmpty) return null;
+    return switch (_dragOp) {
+      GizmoOp.rotate => 'Turn $_typed°',
+      GizmoOp.scale => 'Scale ×$_typed',
+      _ => 'Move $_typed m',
+    };
+  }
+
+  static final Map<LogicalKeyboardKey, String> _typedKeys = {
+    for (var d = 0; d <= 9; d++) ...{
+      LogicalKeyboardKey(LogicalKeyboardKey.digit0.keyId + d): '$d',
+      LogicalKeyboardKey(LogicalKeyboardKey.numpad0.keyId + d): '$d',
+    },
+    LogicalKeyboardKey.period: '.',
+    LogicalKeyboardKey.numpadDecimal: '.',
+    LogicalKeyboardKey.minus: '-',
+    LogicalKeyboardKey.numpadSubtract: '-',
+  };
+
+  /// A key pressed while a 3-D gizmo is dragged: digits, a point and a
+  /// minus type the change outright (metres, degrees, a factor);
+  /// Backspace takes one back; Enter keeps it; Escape puts everything back
+  /// where the drag began. True when the key was taken.
+  bool typeKey(LogicalKeyboardKey key) {
+    final solver = _solver;
+    final handle = _activeHandle;
+    if (solver is! RayGizmoDragSolver ||
+        handle == null ||
+        handle == GizmoHandle.none ||
+        _dragEntities.isEmpty) {
+      return false;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      for (var i = 0; i < _dragEntities.length; i++) {
+        _dragBefores[i].applyTo(_dragEntities[i]);
+      }
+      sceneState.markDirty();
+      _dragEntities = const [];
+      _dragBefores = const [];
+      _resetPointerDragState();
+      return true;
+    }
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      _resetPointerDragState();
+      return true;
+    }
+    if (key == LogicalKeyboardKey.backspace) {
+      if (_typed.isNotEmpty) _typed = _typed.substring(0, _typed.length - 1);
+    } else {
+      final ch = _typedKeys[key];
+      if (ch == null) return false;
+      _typed += ch;
+    }
+    solver.exact = double.tryParse(_typed);
+    final entity = sceneState.selectedEntity.value, at = _lastScreen;
+    if (entity != null && at != null) {
+      solver.update(handle, entity, at, cameraOf()..viewportSize = canvasSize);
+    }
+    return true;
   }
 
   /// Size of the game canvas, updated each frame by the overlay.
@@ -435,11 +594,17 @@ class ViewportInput {
   void onPointerMove(PointerMoveEvent event) {
     final drags = handleDrags;
     if (drags != null && drags.isDragging) {
+      final view = cameraOf()..viewportSize = canvasSize;
+      final ctrl = HardwareKeyboard.instance.isControlPressed;
+      // In 2-D Ctrl snaps to the grid in pixels. In space a handle snaps in
+      // the move step, in metres, as the gizmo does while snapping is on;
+      // Ctrl turns it the other way.
+      final flat = view.isPlanar;
       drags.move(
         event.localPosition,
-        cameraOf()..viewportSize = canvasSize,
-        snap: HardwareKeyboard.instance.isControlPressed,
-        grid: gridSize(),
+        view,
+        snap: flat ? ctrl : sceneState.gridSnappingEnabled.value != ctrl,
+        grid: flat ? gridSize() : sceneState.moveStep3D,
       );
       return;
     }
@@ -504,6 +669,7 @@ class ViewportInput {
 
     final camera = cameraOf();
     camera.viewportSize = canvasSize;
+    _lastScreen = event.localPosition;
 
     (_solver ?? dragSolver).update(
       _activeHandle!,
@@ -572,6 +738,8 @@ class ViewportInput {
     colliderEdit?.call().cancel();
     designerOf()?.onPointerCancel();
     _activeHandle = null;
+    _typed = '';
+    _lastScreen = null;
     (_solver ?? dragSolver).end();
     _solver = null;
     _isPanningCamera = false;
@@ -588,6 +756,18 @@ class ViewportInput {
 
     final camera = cameraOf();
     camera.viewportSize = canvasSize;
+    // The designer's tool first: Shift+wheel spins what Place is placing.
+    final designer = designerOf();
+    if (designer != null &&
+        designer.onScroll(
+          camera.screenToWorld(event.localPosition),
+          gridSize(),
+          event.scrollDelta,
+          screen: event.localPosition,
+          canvasSize: canvasSize,
+        )) {
+      return;
+    }
     if (camera is OrbitFlyEditorView) {
       // Scrolling up (negative dy) moves in.
       camera.dolly(-event.scrollDelta.dy * 0.0015);

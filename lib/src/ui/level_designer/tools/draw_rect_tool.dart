@@ -4,6 +4,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_editor_core/host.dart';
 import '../controls/designer_controls.dart';
 import '../state/map_placement.dart';
+import '../../../core/scope/editor_scope_services.dart';
 
 /// Drag out a rectangle to place the active prefab, sized to the drag.
 ///
@@ -149,6 +150,18 @@ class DrawRectTool extends LevelToolHandler {
 
   void _place(ToolContext context, PrefabDefinition prefab, Rect rect) {
     final scope = this.scope;
+    // An instance of a prefab file: its entities, under the Level Map.
+    if (prefab.instanceOf case final path? when scope != null) {
+      final placed = scope.prefabInstances.place(
+        path,
+        at: jge.Vector3(rect.center.dx, rect.center.dy, 0),
+        under: jge.LevelMaps.primaryEntity(context.world),
+      );
+      context.controller.setStatus(
+        placed == null ? 'The prefab $path is not read yet' : 'Placed ${placed.name}',
+      );
+      return;
+    }
     final components = prefab.build(rect.center, rect.size);
     if (scope != null) {
       // Into the level's map: a child of it, on a layer at this depth.

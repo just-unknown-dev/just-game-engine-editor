@@ -8,6 +8,8 @@ import 'package:just_editor_core/host.dart';
 import '../controls/designer_controls.dart';
 import '../level_designer_session.dart';
 import 'tool_options_bar.dart';
+import '../../level_designer_3d/panels/space_status_controls.dart';
+import '../../level_designer_3d/aids/ruler_3d.dart';
 import '../../../core/scope/editor_scope_services.dart';
 
 /// The strip along the bottom of the designer: at its left the tool in hand
@@ -114,6 +116,46 @@ class DesignerStatusBar extends StatelessWidget {
         onTap: () => session.setSnapping(!enabled),
       ),
     ),
+    // Smart snapping and the grid in pixels are the 2-D tools'; in space the
+    // step is in metres, and things go on the working plane.
+    if (_flat)
+      ..._snapControls2D(controller)
+    else ...[
+      MoveStep3DField(scope: session.scope),
+      SignalBuilder<bool>(
+        signal: session.scope.designer3D.surfaceSnap,
+        builder: (context, on, _) => DesignerToggle(
+          icon: Icons.vertical_align_bottom,
+          label: 'Surface',
+          isOn: on,
+          tooltip:
+              'A move sets things on the surface under the pointer  '
+              '(hold V to put a corner on a corner)',
+          onTap: () => session.scope.designer3D.surfaceSnap.value = !on,
+        ),
+      ),
+      SignalBuilder<bool>(
+        signal: session.scope.designer3D.boundsSnap,
+        builder: (context, on, _) => DesignerToggle(
+          icon: Icons.border_outer,
+          label: 'Bounds',
+          isOn: on,
+          tooltip: 'A move lines things up with the boxes of things near them',
+          onTap: () => session.scope.designer3D.boundsSnap.value = !on,
+        ),
+      ),
+      PivotModeField(scope: session.scope),
+      WorkingPlaneControl(
+        scope: session.scope,
+        selection: session.selectionEntities,
+      ),
+      PerformanceMeter(scope: session.scope),
+    ],
+  ];
+
+  bool get _flat => session.scope.sceneState.editingMode == jge.SceneMode.twoD;
+
+  List<Widget> _snapControls2D(LevelDesignerController controller) => [
     SignalBuilder<bool>(
       signal: controller.smartSnap,
       builder: (context, enabled, _) => DesignerToggle(

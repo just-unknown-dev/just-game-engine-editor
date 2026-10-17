@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
 import 'package:just_editor_core/host.dart';
@@ -12,7 +13,9 @@ import '../settings/settings_dialog.dart';
 import '../shared/shared_widgets.dart';
 import '../shared/transform_toolbar.dart';
 import '../shared/quick_snap_bar.dart';
+import '../../../core/view/orbit_fly_editor_view.dart';
 import '../../../core/scope/editor_scope_services.dart';
+import '../../inspector/prefab_inspector.dart';
 
 /// Chrome shown when the full editor is closed but the compact status dock
 /// is pinned open: the dock over the game, and the settings gear standing on
@@ -131,6 +134,8 @@ class FullEditorChrome extends StatelessWidget {
         plugin.isStatusPanelVisible,
         // No scene, no level tools: the start card has the viewport.
         plugin.sceneState.activeScene,
+        // A 3-D scene: no rulers or minimap; a view cube.
+        plugin.sceneState.sceneMode,
         // The docks take room from the designer: its panels stop where the
         // dock panel starts, and the level's view is inset by it.
         plugin.scope.dockController.openId,
@@ -173,7 +178,10 @@ class FullEditorChrome extends StatelessWidget {
         // while designing, otherwise just inside the corner. The game camera
         // preview hangs below the controls, so the plugin — which paints it on
         // the canvas — is told where that is.
-        final controlsAt = designer != null
+        // The rulers and the minimap are the 2-D designer's.
+        final flat = plugin.sceneState.editingMode == jge.SceneMode.twoD;
+        final ruled = designer != null && flat;
+        final controlsAt = ruled
             ? const Offset(
                 RulersOverlay.thickness + MinimapLayout.margin,
                 RulersOverlay.thickness + MinimapLayout.margin,
@@ -185,20 +193,24 @@ class FullEditorChrome extends StatelessWidget {
             Offset(gameInsets.left, gameInsets.top);
         // Clear of the minimap, bottom left, while designing; of the canvas's
         // edge otherwise. The gear is at the other corner.
-        plugin.gamePreviewBottomReserve = designer != null
+        plugin.gamePreviewBottomReserve = ruled
             ? MinimapLayout.margin * 2 + MinimapLayout.size.height
             : controlsAt.dy;
         // What stands in the bottom right corner: the gear, snapping at hand
         // on it while editing, and above them the messages; the transform
         // column and tool strip stop short of them.
-        final gearMargin = designer != null ? MinimapLayout.margin : 16.0;
+        final gearMargin = ruled ? MinimapLayout.margin : 16.0;
         final quickSnap =
             !plugin.playController.isRunning && plugin.sceneState.hasScene;
+        // In space, the axes as the view sees them, over the snapping.
+        final view = plugin.scope.editorView;
+        final cube = quickSnap && !flat && view is OrbitFlyEditorView;
         final aboveGear =
             gameInsets.bottom +
             gearMargin +
             SettingsGearButton.heightFor(settings) +
             (quickSnap ? QuickSnapBar.heightFor(settings) + 8 : 0) +
+            (cube ? ViewCube.size + 10 + 8 : 0) +
             8;
         // The same frame as the toolbar above it: radius, border, padding.
         plugin.gamePreviewStyle = GamePreviewStyle(
@@ -249,6 +261,14 @@ class FullEditorChrome extends StatelessWidget {
                   maxDetailHeight: size.height - designerBar,
                 ),
               ),
+            // Editing an instance as its prefab: the way out, over the top
+            // of the level.
+            Positioned(
+              left: 0,
+              right: panelWidth,
+              top: controlsAt.dy + 48,
+              child: Center(child: PrefabModeBanner(scope: plugin.scope)),
+            ),
             Positioned(
               left: controlsAt.dx,
               top: controlsAt.dy,
@@ -262,7 +282,7 @@ class FullEditorChrome extends StatelessWidget {
                     gameInsets.right -
                     controlsAt.dx -
                     ToolPalette.width -
-                    (designer != null ? MinimapLayout.margin : 16) -
+                    (ruled ? MinimapLayout.margin : 16) -
                     12,
               ),
             ),
@@ -276,6 +296,15 @@ class FullEditorChrome extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  if (cube) ...[
+                    ViewCube(
+                      view: view,
+                      onViewAlong: (yaw, pitch) =>
+                          plugin.viewAlong(yaw: yaw, pitch: pitch),
+                      onToggleOrthographic: plugin.toggleOrthographic,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   if (quickSnap) ...[
                     QuickSnapBar(scope: plugin.scope, settings: settings),
                     // The gap between the frames of the column above.
@@ -290,9 +319,7 @@ class FullEditorChrome extends StatelessWidget {
             // at the top, of its ruler — and the designer's tool strip
             // hanging below, as tall as the level lets it be.
             Positioned(
-              right:
-                  gameInsets.right +
-                  (designer != null ? MinimapLayout.margin : 16),
+              right: gameInsets.right + (ruled ? MinimapLayout.margin : 16),
               top: controlsAt.dy,
               bottom: aboveGear,
               child: Column(

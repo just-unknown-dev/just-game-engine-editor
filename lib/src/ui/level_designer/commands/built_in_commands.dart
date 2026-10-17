@@ -8,6 +8,7 @@ import 'package:just_editor_core/host.dart';
 
 import 'editor_command_context.dart';
 import '../../../core/scope/editor_scope_services.dart';
+import '../../../core/prefabs/prefab_instances.dart';
 
 /// What the designer and the editor can do from the keyboard out of the box.
 ///
@@ -67,12 +68,16 @@ abstract final class BuiltInCommands {
         horizontal: false,
       ),
     ),
-    _d(
+    _d2(
       'designer.frameSelection',
       'Frame the selection',
       (c) => c.designer!.frameSelection(),
     ),
-    _d('designer.frameAll', 'Frame everything', (c) => c.designer!.frameAll()),
+    _d2(
+      'designer.frameAll',
+      'Frame everything',
+      (c) => c.designer!.frameAll(),
+    ),
     _d(
       'designer.hide',
       'Hide the selection',
@@ -94,17 +99,17 @@ abstract final class BuiltInCommands {
       'Unlock everything',
       (c) => c.designer!.unlockAll(),
     ),
-    _d(
+    _d2(
       'designer.replace',
       'Replace with the active prefab',
       (c) => c.designer!.replaceSelection(),
     ),
     _d('designer.selectAll', 'Select all', (c) => c.designer!.selectAll()),
-    _d('designer.brushSmaller', 'Smaller brush', (c) {
+    _d2('designer.brushSmaller', 'Smaller brush', (c) {
       final brush = c.designer!.controller.brushSize;
       brush.value = c.scope.config.smallerBrush(brush.value);
     }),
-    _d('designer.brushLarger', 'Larger brush', (c) {
+    _d2('designer.brushLarger', 'Larger brush', (c) {
       final brush = c.designer!.controller.brushSize;
       brush.value = c.scope.config.largerBrush(brush.value);
     }),
@@ -112,6 +117,77 @@ abstract final class BuiltInCommands {
       final s = c.designer!;
       s.hasActiveGesture ? s.onPointerCancel() : s.sceneState.clearSelection();
     }),
+    // The 3-D designer's working plane: up and down a move step (ten with
+    // Shift), the next way round, to the selection.
+    for (final (id, label, sign) in const [
+      ('designer.plane.raise', 'Working plane up a step', 1.0),
+      ('designer.plane.lower', 'Working plane down a step', -1.0),
+    ])
+      DesignerCommand(
+        id: id,
+        label: label,
+        repeats: true,
+        dimensions: jge.Dimensions.threeD,
+        run: (c) {
+          final step = c.scope.sceneState.moveStep3D;
+          final by = (step > 0 ? step : 1.0) * (c.modifiers.shift ? 10 : 1);
+          final state = c.scope.designer3D..followSelection.value = false;
+          state.raise(sign * by);
+          c.designer?.controller.setStatus(_planeStatus(state.plane));
+        },
+      ),
+    DesignerCommand(
+      id: 'designer.dropToGround',
+      label: 'Drop to the ground',
+      dimensions: jge.Dimensions.threeD,
+      scope: CommandScope.editor,
+      isEnabled: (c) => c.plugin != null,
+      run: (c) {
+        final moved = c.plugin!.dropSelectionToGround();
+        c.designer?.controller.setStatus(
+          moved == 0 ? 'Nothing to drop' : 'Dropped $moved to the ground',
+        );
+      },
+    ),
+    DesignerCommand(
+      id: 'designer.array3D',
+      label: 'Array the selection (as set in ARRAY)',
+      dimensions: jge.Dimensions.threeD,
+      scope: CommandScope.editor,
+      isEnabled: (c) => c.plugin != null,
+      run: (c) => c.plugin!.arraySelection3D(c.scope.designer3D.array.value),
+    ),
+    DesignerCommand(
+      id: 'designer.selectSimilar',
+      label: 'Select everything like the selection',
+      dimensions: jge.Dimensions.threeD,
+      run: (c) => c.designer!.selectSimilar(),
+    ),
+    DesignerCommand(
+      id: 'designer.plane.cycle',
+      label: 'Working plane: ground, front, side',
+      dimensions: jge.Dimensions.threeD,
+      run: (c) {
+        final state = c.scope.designer3D..cycleAxis();
+        final selection = c.designer?.selectionEntities() ?? const [];
+        // Turned, it goes through what is selected, else the view's focus.
+        state.planeOffset.value = selection.isEmpty
+            ? state.plane.through(c.scope.editorView.focus).offset
+            : state.planeAt(selection).offset;
+        c.designer?.controller.setStatus(_planeStatus(state.plane));
+      },
+    ),
+    DesignerCommand(
+      id: 'designer.plane.toSelection',
+      label: 'Working plane to the selection',
+      dimensions: jge.Dimensions.threeD,
+      run: (c) {
+        final selection = c.designer?.selectionEntities() ?? const [];
+        if (selection.isEmpty) return;
+        final state = c.scope.designer3D..moveTo(selection);
+        c.designer?.controller.setStatus(_planeStatus(state.plane));
+      },
+    ),
     for (var slot = 1; slot <= 9; slot++) ...[
       _d(
         'designer.bookmark.store.$slot',
@@ -342,6 +418,83 @@ abstract final class BuiltInCommands {
       run: (c) => c.plugin!.duplicateSelection(),
     ),
     DesignerCommand(
+      id: 'editor.prefab.make',
+      label: 'Make a prefab of the selection',
+      scope: CommandScope.editor,
+      isEnabled: (c) {
+        final selected = c.scope.sceneState.selectedEntity.value;
+        return selected != null && PrefabInstances.topOf(selected) == null;
+      },
+      run: (c) async {
+        final selected = c.scope.sceneState.selectedEntity.value;
+        if (selected == null) return;
+        final path = await c.scope.prefabInstances.makePrefab(selected);
+        c.designer?.controller.setStatus(
+          path == null ? 'That is part of a prefab already' : 'Made $path',
+        );
+      },
+    ),
+    DesignerCommand(
+      id: 'editor.prefab.edit',
+      label: 'Edit the prefab of the selected instance',
+      scope: CommandScope.editor,
+      isEnabled: (c) => _selectedTop(c) != null,
+      run: (c) {
+        final top = _selectedTop(c);
+        if (top != null) c.scope.prefabInstances.edit(top);
+      },
+    ),
+    DesignerCommand(
+      id: 'editor.prefab.apply',
+      label: 'Apply the selected instance\'s changes to its prefab',
+      scope: CommandScope.editor,
+      isEnabled: (c) => _selectedTop(c) != null,
+      run: (c) {
+        final top = _selectedTop(c);
+        if (top != null) c.scope.prefabInstances.apply(top);
+      },
+    ),
+    DesignerCommand(
+      id: 'editor.prefab.revert',
+      label: 'Revert the selected instance to its prefab',
+      scope: CommandScope.editor,
+      isEnabled: (c) => _selectedTop(c) != null,
+      run: (c) {
+        final top = _selectedTop(c);
+        if (top != null) c.scope.prefabInstances.revertAll(top);
+      },
+    ),
+    DesignerCommand(
+      id: 'editor.prefab.unpack',
+      label: 'Unpack the selected instance into plain entities',
+      scope: CommandScope.editor,
+      isEnabled: (c) => _selectedTop(c) != null,
+      run: (c) {
+        final top = _selectedTop(c);
+        if (top != null) c.scope.prefabInstances.unpack(top);
+      },
+    ),
+    DesignerCommand(
+      id: 'editor.group',
+      label: 'Group the selection',
+      scope: CommandScope.editor,
+      isEnabled: (c) => c.scope.sceneState.hasAnySelection,
+      run: (c) => c.scope.entities.groupSelection(),
+    ),
+    DesignerCommand(
+      id: 'editor.ungroup',
+      label: 'Take the selected group apart',
+      scope: CommandScope.editor,
+      isEnabled: (c) {
+        final selected = c.scope.sceneState.selectedEntity.value;
+        return selected != null && c.scope.entities.isGroup(selected);
+      },
+      run: (c) {
+        final selected = c.scope.sceneState.selectedEntity.value;
+        if (selected != null) c.scope.entities.ungroup(selected);
+      },
+    ),
+    DesignerCommand(
       id: 'editor.delete',
       label: 'Delete the selection',
       scope: CommandScope.editor,
@@ -390,6 +543,22 @@ abstract final class BuiltInCommands {
         run: (c) => c.plugin!.viewAlong(yaw: yaw, pitch: pitch),
       ),
     DesignerCommand(
+      id: 'editor.view.split',
+      label: 'Four views: top, front, side, perspective',
+      scope: CommandScope.editor,
+      dimensions: jge.Dimensions.threeD,
+      isEnabled: (c) => c.plugin?.isAuthoring.value ?? false,
+      run: (c) => c.plugin!.toggleSplitViews(),
+    ),
+    DesignerCommand(
+      id: 'editor.view.orthographic',
+      label: 'Orthographic or perspective',
+      scope: CommandScope.editor,
+      dimensions: jge.Dimensions.threeD,
+      isEnabled: (c) => c.plugin != null,
+      run: (c) => c.plugin!.toggleOrthographic(),
+    ),
+    DesignerCommand(
       id: 'editor.gizmo.local',
       label: 'Gizmo: own axes or the world\'s',
       scope: CommandScope.editor,
@@ -412,7 +581,24 @@ abstract final class BuiltInCommands {
     ('editor.view.bottom', 'View from below', 0, math.pi / 2),
   ];
 
+  /// What the status bar says of [plane]: its way and, as a height or a
+  /// depth, where it is.
+  static String _planeStatus(WorkingPlane plane) {
+    final at = plane.axis == WorkingPlaneAxis.ground
+        ? -plane.offset
+        : plane.offset;
+    final where = plane.axis == WorkingPlaneAxis.ground ? 'height' : 'at';
+    return 'Working plane: ${plane.axis.label}, $where '
+        '${(at.abs() < 0.005 ? 0.0 : at).toStringAsFixed(2)} m';
+  }
+
   /// A scene is open to play-test, or a play-test is under way.
+  /// The prefab instance the selection is part of: its top.
+  static jge.Entity? _selectedTop(CommandContext c) {
+    final selected = c.scope.sceneState.selectedEntity.value;
+    return selected == null ? null : PrefabInstances.topOf(selected);
+  }
+
   static bool _canPlay(CommandContext c) {
     final plugin = c.plugin;
     return plugin == null ||

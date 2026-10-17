@@ -141,11 +141,24 @@ A scene made 3-D (*New scene → 3D*, or a file with `"mode": "3d"`) is seen thr
 - **The gizmo** has arrows, plane squares, rotation rings and scale boxes. It snaps in metres, degrees and scale steps while snapping is on. A second press on the selected entity drags it along the ground. Each drag is one undo step.
 - **Picking** casts a ray at each entity's box, then at its real shape where a module knows it (a model, a 3-D shape).
 - **The ground grid** is drawn at y = 0 around where you look, the X axis red and the Z axis blue. Cameras and spawn points are drawn as markers.
-- **Placing.** New entity, Paste and dropped files land where the pointer meets the ground, or the face of what is under it. The viewport menu offers the modules' 3-D prefabs on that surface, grouped by category when there are many: with `just_graphics_editor`, eleven 3-D shapes, and a Solid and a Trigger of each when the game has 3-D physics.
+- **Placing.** New entity, Paste and dropped files land where the pointer meets the ground, or the face of what is under it. The viewport menu offers the 3-D prefabs on that surface, grouped by category when there are many: the editor's eleven 3-D shapes, and a Solid and a Trigger of each when the game has 3-D physics, then the modules' own.
 - **Handles.** A module can put points of the selection in the viewport to drag (a 3-D polygon's corners); Ctrl snaps them, and each drag is one undo step.
 - **3-D physics** shows itself when the game's engine has `Physics3D`: collider and character outlines, the rigid body's material presets, the Solid and Trigger variants, and Problems checks with fixes. A 2-D project gets none of it.
 
-The Level Designer's built-in tools, the tile tools among them, are 2-D: in a 3-D scene, place and arrange with the viewport menu, the gizmo and the inspector. The game preview (F4) shows the game's own 3-D image.
+The game preview (F4) shows the game's own 3-D image.
+
+### The 3-D Level Designer
+
+In a 3-D scene, F3 opens the Level Designer in 3-D, with the editor's built-in **Default 3D kit**. Kits plug in beside it as in 2-D: the switch at the top of the side panel lists the designers for the scene's mode (Default, World Builder, Third Person in 3-D), one at a time, and the default kit's tools stay in every one. The 2-D Level Map, its layers and tilesets are not part of a 3-D scene.
+
+- **Select** takes what is clicked, or what a marquee dragged over empty space covers (Shift or Ctrl add); Shift+G selects similar things. The gizmo moves, turns and sizes the whole selection about its centre, its pivot or its base, takes typed values while dragging (digits, Enter keeps, Esc restores), has a view ring, and snaps to surfaces, to bounds and, holding V, to vertices.
+- **The working plane** is where tools aim when nothing is under the pointer: a metre grid, raised and lowered with Page Up and Page Down (Shift ten times as far), turned with `\`, brought to the selection with Shift+`\`. The move step is in the status bar.
+- **Place** (the palette's shapes, models, prefabs and prefab files) shows a ghost before it is made, on the surface under the pointer or the plane; drag to aim it, Shift+wheel to spin it. It can stand upright or lean with the surface, turn and size at random, or stamp a stroke of copies. End drops the selection onto what is under it. ARRAY copies the selection in a line, a grid or a circle; Ctrl+D repeats the last copy's offset.
+- **Size handles** on a shape's faces (all eleven shapes) and on a collider: the far face stays, one undo step a drag. **Groups** are empty parent entities: Ctrl+G, Ctrl+Shift+G, and a GROUPS section with eye and lock.
+- **VIEW**: lit, unlit, wireframe and collision; the selection's outline; orthographic views (numpad 5) and a view cube; bookmarks that keep the whole pose; a slice plane; four views at once (Ctrl+Alt+Q). F and Shift+F frame.
+- **MATERIALS** lists the project's material files; the paint tool (P) draws what it is dragged over with one, Alt picks one up.
+- **Prefab files**: make one from the selection, open it in place (the rest of the level dims, a banner offers Apply and leave), keep an instance's changes as overrides — marked in the inspector, each revertable or applied to the file — or unpack an instance into plain entities.
+- **Aids**: the ruler (M), level checks in Problems (a spawn with nothing under it, a solid over the void, things below the kill height), a performance meter in the status bar (draws against a budget of 100, triangles, instances), and *Play from here* in the viewport menu. A genre kit adds its own aids (`LevelAids`): the third-person kit draws how far the hero jumps and how steep it walks.
 
 ---
 

@@ -238,17 +238,39 @@ class SceneIO {
     // those are neither linked by name nor taken for the scene's roots.
     final made = <Entity>[];
     if (rawJson != null) {
-      final entityList = (rawJson['entities'] as List<dynamic>? ?? []);
+      // The prefabs its instances are made from, read first; each instance
+      // then becomes the entities it makes, as the game makes them.
+      final library = PrefabLibrary.of(scope.context);
+      await library.loadScene(rawJson);
+      final entityList = PrefabExpander.expandScene([
+        for (final e in rawJson['entities'] as List<dynamic>? ?? const [])
+          if (e is Map) e.cast<String, dynamic>(),
+      ], library.loaded);
+      for (final entry in entityList) {
+        if (entry['prefabRef'] case {'missing': final String path}) {
+          scope.log.log(
+            'Scene $sceneName: the prefab $path could not be read '
+            '(${library.errorOf(path) ?? 'no such file'}); '
+            '"${entry['name']}" stands empty and keeps its place.',
+            source: 'editor',
+            category: 'scene',
+            level: DebuggerLogLevel.warning,
+          );
+        }
+      }
+      // What each entry made, in step with the entries.
+      final madeAt = List<Entity?>.filled(entityList.length, null);
       loading.report(SceneLoadStage.build, total: entityList.length);
       for (var i = 0; i < entityList.length; i++) {
-        final entityData = entityList[i] as Map<String, dynamic>;
+        final entityData = entityList[i];
         final entityName = entityData['name'] as String?;
         // Anything no definition can read is kept as it was, so a save
         // cannot quietly delete it.
         final components = scope.codec.decodeAll(
           entityData['components'] as List<dynamic>? ?? const [],
         );
-        if (components.isNotEmpty) {
+        // An instance whose prefab is missing has none, and stays.
+        if (components.isNotEmpty || entityData['prefabRef'] != null) {
           final entity = world.createEntityWithComponents(
             components,
             name: entityName,
@@ -257,6 +279,7 @@ class SceneIO {
           // tree, and the game will not run it.
           if (entityData['enabled'] == false) entity.isActive = false;
           made.add(entity);
+          madeAt[i] = entity;
         }
         if (clock.elapsed >= _slice) {
           loading.report(
@@ -275,23 +298,22 @@ class SceneIO {
       );
       await _breathe(clock);
 
-      // Second pass: re-link parent-child relationships by name.
+      // Second pass: re-link parent-child relationships — by name, as the
+      // game does (SceneLoader.parentIndices): where names repeat, the one
+      // on the way down; inside a prefab instance, by its place in it.
       //
       // Every entity, not only the ones with a transform: a piece of
-      // interface has none, and building this map from a transform query
+      // interface has none, and linking through a transform query
       // silently dropped every HUD and menu link — the tree showed a
       // canvas's children as though they were roots.
-      final nameToEntity = <String?, Entity>{
-        for (final e in made)
-          if (e.isAlive) e.name: e,
-      };
-      for (final item in entityList) {
-        final entityData = item as Map<String, dynamic>;
-        final parentName = entityData['parentName'] as String?;
-        if (parentName == null) continue;
-        final childEntity = nameToEntity[entityData['name'] as String?];
-        final parentEntity = nameToEntity[parentName];
+      final parents = SceneLoader.parentIndices(entityList);
+      for (var i = 0; i < entityList.length; i++) {
+        final at = parents[i];
+        if (at == null) continue;
+        final childEntity = madeAt[i];
+        final parentEntity = madeAt[at];
         if (childEntity == null || parentEntity == null) continue;
+        if (!childEntity.isAlive || !parentEntity.isAlive) continue;
         // Both ends of the link, and both made where a file leaves one
         // out — the same rule `SceneLoader` follows.
         final existing = childEntity.getComponent<ParentComponent>();
@@ -306,6 +328,34 @@ class SceneIO {
         parentEntity.getComponent<ChildrenComponent>()!.addChild(
           childEntity.id,
         );
+      }
+      // Where what a prefab made came from, and each instance placed: what
+      // is inside it against its top where the prefab has it, then
+      // following the top to where it is.
+      for (var i = 0; i < entityList.length; i++) {
+        final ref = entityList[i]['prefabRef'];
+        final entity = madeAt[i];
+        if (ref is! Map || entity == null) continue;
+        final top = madeAt[ref['instance'] as int];
+        if (top == null) continue;
+        entity.addComponent(PrefabLink(instance: top.id, path: ref['path'] as String));
+        if (ref['block'] case final Map block) {
+          entity.addComponent(
+            PrefabInstanceComponent(
+              block: PrefabInstance.fromJson(block),
+              missing: ref['missing'] != null,
+            ),
+          );
+        }
+      }
+      for (var i = 0; i < entityList.length; i++) {
+        final ref = entityList[i]['prefabRef'];
+        final top = madeAt[i];
+        if (ref is! Map || ref['instance'] != i || top == null) continue;
+        if (ref['home'] case final Map home) {
+          final at = scope.codec.decode(home.cast<String, dynamic>());
+          if (at is TransformComponent) SceneLoader.placeFromHome(world, top, at);
+        }
       }
     }
 
@@ -360,6 +410,17 @@ class SceneIO {
       encoded = scope.codec.encodeEntities(
         entities,
         rootOrder: sceneState.rootOrder(world),
+      );
+    }
+    // The files the scene refers to that modules keep — a terrain's
+    // heights — written with it.
+    final failed = await scope.modules.notifySceneSaving(scene.name);
+    for (final MapEntry(key: module, value: error) in failed.entries) {
+      scope.log.log(
+        'Saving scene ${scene.name}: $module could not write its files: $error',
+        source: 'editor',
+        category: 'scene',
+        level: DebuggerLogLevel.warning,
       );
     }
     await scope.scenes.writeSceneJson(

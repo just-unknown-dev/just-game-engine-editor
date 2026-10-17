@@ -133,6 +133,19 @@ class FileSpriteAssetLoader extends SpriteAssetLoader {
     );
   }
 
+  /// A prefab file, from the project's files (the bundle when it is not
+  /// one of them); the prefab library keeps what it reads until told to
+  /// read it again.
+  Future<PrefabFile> loadPrefab(String path) => loads.track(_readPrefab(path));
+
+  Future<PrefabFile> _readPrefab(String path) async {
+    final file = _file(path);
+    if (!await file.exists()) {
+      return PrefabFile.parse(await _bundle.loadString(path, cache: false));
+    }
+    return PrefabFile.parse(await file.readAsString());
+  }
+
   /// A text file — a tileset, a tile map, a Tiled map — from the project's
   /// files, or the bundle when it is not one of them. What `TileAssets`
   /// reads through while the editor runs.

@@ -261,28 +261,28 @@ packages:
       path: "../../just_editor_core"
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.2.0"
   just_game_engine:
     dependency: "direct main"
     description:
       path: "../../just_game_engine"
       relative: true
     source: path
-    version: "2.0.0-dev.1"
+    version: "2.0.0-dev.2"
   just_game_engine_editor:
     dependency: "direct main"
     description:
       path: ".."
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.2.0"
   just_game_engine_formats:
     dependency: "direct overridden"
     description:
       path: "../../just_game_engine_formats"
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.2.0"
   just_gamepads:
     dependency: "direct overridden"
     description:
@@ -296,7 +296,7 @@ packages:
       path: "../../just_graphics_engine"
       relative: true
     source: path
-    version: "0.1.0-dev.1"
+    version: "0.1.0-dev.2"
   just_inputs:
     dependency: "direct overridden"
     description:
@@ -325,7 +325,7 @@ packages:
       path: "../../just_physics_engine"
       relative: true
     source: path
-    version: "1.4.0"
+    version: "1.5.0"
   just_signals:
     dependency: transitive
     description:

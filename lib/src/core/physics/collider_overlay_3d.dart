@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' show Color, Paint, PaintingStyle;
 
 import 'package:just_game_engine/just_game_engine.dart';
@@ -100,7 +101,50 @@ final class ColliderOverlay3D extends ViewportOverlay {
           (Vector3(dx * radius, -halfHeight, dz * radius), Vector3(dx * radius, halfHeight, dz * radius)),
       ], x, y, z),
       SolidHull(:final points) => HullOutline.of(points),
+      SolidMesh(:final positions, :final indices) => _meshLines(positions, indices),
+      SolidHeightField(:final heights, :final sampleCount, :final cellSize, :final x, :final y, :final z) =>
+        _fieldLines(heights, sampleCount, cellSize, Vector3(x, y, z)),
     };
+  }
+
+  /// A triangle mesh's edges, at most a few thousand of them.
+  static List<(Vector3, Vector3)> _meshLines(Float32List p, Uint32List idx) {
+    Vector3 at(int i) => Vector3(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+    final int step = math.max(1, idx.length ~/ (3 * 2000));
+    return [
+      for (var i = 0; i + 2 < idx.length; i += 3 * step) ...[
+        (at(idx[i]), at(idx[i + 1])),
+        (at(idx[i + 1]), at(idx[i + 2])),
+        (at(idx[i + 2]), at(idx[i])),
+      ],
+    ];
+  }
+
+  /// A height field's grid, every few rows on a big one.
+  static List<(Vector3, Vector3)> _fieldLines(Float32List h, int n, double cell, Vector3 origin) {
+    if (n < 2 || h.length < n * n) return const [];
+    final int step = math.max(1, n ~/ 32);
+    Vector3? at(int col, int row) {
+      final height = h[row * n + col];
+      if (height >= SolidHeightField.holeHeight) return null;
+      // Heights are up: +Y is down.
+      return Vector3(origin.x + col * cell, origin.y - height, origin.z + row * cell);
+    }
+
+    final out = <(Vector3, Vector3)>[];
+    for (var row = 0; row < n; row += step) {
+      for (var col = 0; col + step < n; col += step) {
+        final a = at(col, row), b = at(col + step, row);
+        if (a != null && b != null) out.add((a, b));
+      }
+    }
+    for (var col = 0; col < n; col += step) {
+      for (var row = 0; row + step < n; row += step) {
+        final a = at(col, row), b = at(col, row + step);
+        if (a != null && b != null) out.add((a, b));
+      }
+    }
+    return out;
   }
 
   static Paint _paint(Color colour, bool selected) => Paint()

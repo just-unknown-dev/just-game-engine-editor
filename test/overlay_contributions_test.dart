@@ -70,7 +70,11 @@ void main() {
       BuiltInTagContributions.selectTaggedId,
       'test.mark',
     ]);
-    expect(scope.inspectorSections.map((s) => s.id), ['test.notes']);
+    // After the editor's own: a prefab instance's.
+    expect(scope.inspectorSections.map((s) => s.id), [
+      'prefab.instance',
+      'test.notes',
+    ]);
     expect(scope.theme.preset('test.neon'), isNotNull);
     // Five built-in accents stay, first and in order.
     expect(scope.theme.presets.take(5).map((p) => p.id), [

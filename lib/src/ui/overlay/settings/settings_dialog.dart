@@ -12,6 +12,7 @@ import '../shared/transform_toolbar.dart';
 import 'settings_controls.dart';
 import 'shortcut_row.dart';
 import '../shared/quick_snap_bar.dart';
+import '../../level_designer_3d/panels/space_status_controls.dart';
 
 part 'settings_catalog.dart';
 

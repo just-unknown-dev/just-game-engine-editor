@@ -13,6 +13,9 @@ import '../ui/level_designer/state/built_in_prefabs.dart';
 import '../ui/tileset/built_in_workspaces.dart';
 import '../ui/timeline/field_key_button.dart';
 import '../ui/timeline/timeline_session.dart';
+import '../core/prefabs/prefab_files.dart';
+import '../ui/inspector/prefab_inspector.dart';
+import 'built_in_3d_designer_contributions.dart';
 import 'built_in_audio_contributions.dart';
 import 'built_in_camera_contributions.dart';
 import 'built_in_physics_3d_contributions.dart';
@@ -21,9 +24,10 @@ import 'built_in_tag_contributions.dart';
 import 'built_in_tile_contributions.dart';
 
 /// The editor's own tools, arriving the way a module's do: its field
-/// editors and inspector extras, its commands and keys, its prefabs and
-/// palette, the Tileset Editor, the camera, sound, tag, tile and 3-D physics
-/// tooling, the 3-D view, and the timeline's key button.
+/// editors and inspector extras, its commands and keys, the Level
+/// Designer's default kits (2-D and 3-D) and palette, the Tileset Editor,
+/// the camera, sound, tag, tile and 3-D physics tooling, the 3-D view, and
+/// the timeline's key button.
 ///
 /// The editor makes every scope with it ahead of the other modules
 /// (`EditorScope(builtIns: [BuiltInEditorModule.new])`), so a module
@@ -70,8 +74,31 @@ class BuiltInEditorModule extends EditorModule {
   @override
   List<KeyBinding> get keyBindings => BuiltInBindings.of(scope.config);
 
+  /// The default kits' palettes: the 2-D shapes and the 3-D ones, each
+  /// offered in its own kind of scene.
   @override
-  List<PrefabDefinition> get prefabs => BuiltInPrefabs.all;
+  List<PrefabDefinition> get prefabs => [
+    ...BuiltInPrefabs.all,
+    ...BuiltIn3DDesignerContributions.prefabs,
+  ];
+
+  late final EntityRayTest _shapeTest =
+      BuiltIn3DDesignerContributions.shapeTest();
+
+  @override
+  List<EntityRayTest> get pickTests => [_shapeTest];
+
+  /// Prefab files: dropped on the viewport, an instance of one.
+  @override
+  List<AssetKind> get assetKinds => const [PrefabFiles.kind];
+
+  @override
+  List<PrefabPicture> get prefabPictures =>
+      BuiltIn3DDesignerContributions.prefabPictures;
+
+  @override
+  List<ViewportHandles> get viewportHandles =>
+      BuiltIn3DDesignerContributions.viewportHandles;
 
   @override
   List<PrefabCategory> get prefabCategories => BuiltInPrefabs.categories;
@@ -121,13 +148,19 @@ class BuiltInEditorModule extends EditorModule {
   };
 
   @override
-  List<FieldAccessory> get fieldAccessories => const [
-    FieldAccessory(
+  List<FieldAccessory> get fieldAccessories => [
+    const FieldAccessory(
       id: 'timeline.key',
       build: _timelineKey,
       onEdited: _recordEdit,
     ),
+    PrefabInspector.marks,
   ];
+
+  /// A prefab instance's part: which prefab, what it changes, Apply,
+  /// Revert, Unpack and editing the prefab.
+  @override
+  List<InspectorSection> get inspectorSections => [PrefabInspector.section];
 
   /// The key button after a row, while a timeline is open that could
   /// animate its fields on this entity.

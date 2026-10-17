@@ -29,19 +29,40 @@ final class Gizmo3D {
   Gizmo3D._(this.view, this.position, this.origin, this.axes, this.length, this.tips);
 
   /// The gizmo of [entity] seen through [view], or null when it has no
-  /// transform or sits behind the viewer.
-  static Gizmo3D? of(Entity entity, EditorView view, {bool local = false, double pixels = 90}) {
+  /// transform or sits behind the viewer. At [pivot] when given — the
+  /// middle or the base of a selection — else at the entity.
+  static Gizmo3D? of(
+    Entity entity,
+    EditorView view, {
+    bool local = false,
+    double pixels = 90,
+    Vector3? pivot,
+  }) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return null;
-    final position = Vector3.copy(transform.position);
+    Quaternion? turn;
+    if (local) {
+      turn = Quaternion.identity();
+      transform.rotationInto(turn);
+    }
+    return at(pivot ?? transform.position, view, turn: turn, pixels: pixels);
+  }
+
+  /// A gizmo at [position] seen through [view], its axes the world's or
+  /// turned by [turn]; null behind the viewer.
+  static Gizmo3D? at(
+    Vector3 position,
+    EditorView view, {
+    Quaternion? turn,
+    double pixels = 90,
+  }) {
+    position = Vector3.copy(position);
     final origin = view.projectToScreen(position);
     if (origin == null) return null;
     final axes = [Vector3(1, 0, 0), Vector3(0, -1, 0), Vector3(0, 0, 1)];
-    if (local) {
-      final q = Quaternion.identity();
-      transform.rotationInto(q);
+    if (turn != null) {
       for (final a in axes) {
-        q.rotate(a);
+        turn.rotate(a);
       }
     }
     // How many pixels a metre spans here: the longest of the three axes.
@@ -72,6 +93,10 @@ final class Gizmo3D {
 
   /// Where each arm ends on screen, or null behind the viewer.
   final List<Offset?> tips;
+
+  /// The outer ring's radius on screen, pixels: it turns about the way the
+  /// view looks.
+  static const double viewRingRadius = 104;
 
   /// The ring turning about axis [i], as screen polylines (broken where
   /// it passes behind the viewer).
@@ -138,6 +163,10 @@ final class Gizmo3D {
       }
     }
     if (best != GizmoHandle.none) return best;
+    if (turns &&
+        ((screen - origin).distance - viewRingRadius).abs() <= grab) {
+      return GizmoHandle.rotateView;
+    }
     if (turns) {
       for (var i = 0; i < 3; i++) {
         for (final run in ring(i)) {
@@ -199,6 +228,17 @@ void paintGizmo3D(
     ..strokeCap = StrokeCap.round;
 
   if (turns) {
+    // The outer ring: a turn about the way the view looks.
+    canvas.drawCircle(
+      gizmo.origin,
+      Gizmo3D.viewRingRadius,
+      stroke(
+        active == GizmoHandle.rotateView
+            ? highlight
+            : const Color(0xFFE6E6E6).withValues(alpha: 0.6),
+        1.5,
+      ),
+    );
     for (var i = 0; i < 3; i++) {
       final paint = stroke(active == _turnHandles[i] ? highlight : gizmoAxisColors[i].withValues(alpha: 0.85), 2);
       for (final run in gizmo.ring(i)) {
@@ -253,9 +293,15 @@ void paintGizmo3D(
 class RayGizmoHitTester extends GizmoHitTester {
   /// A hit tester picking with [picker], with the gizmo in the entity's own
   /// axes while [local] says so.
-  RayGizmoHitTester({EntityRayTestList? tests, bool Function()? local})
-    : picker = RayEntityPicker(tests: tests),
-      _local = local;
+  RayGizmoHitTester({
+    EntityRayTestList? tests,
+    bool Function()? local,
+    this.pivot,
+  }) : picker = RayEntityPicker(tests: tests),
+       _local = local;
+
+  /// Where the gizmo sits on the selection; the selected entity when null.
+  final Vector3? Function()? pivot;
 
   /// What finds an entity under the pointer.
   final RayEntityPicker picker;
@@ -273,7 +319,12 @@ class RayGizmoHitTester extends GizmoHitTester {
     Set<TransformMode>? allows,
   }) {
     if (selected != null) {
-      final gizmo = Gizmo3D.of(selected, camera, local: _local?.call() ?? false);
+      final gizmo = Gizmo3D.of(
+        selected,
+        camera,
+        local: _local?.call() ?? false,
+        pivot: pivot?.call(),
+      );
       final handle = gizmo?.handleAt(screenPos, mode) ?? GizmoHandle.none;
       if (handle != GizmoHandle.none) return GizmoHitResult(handle, selected);
     }
@@ -309,27 +360,71 @@ Rect? screenBoundsOf3D(Entity entity, EditorView view) {
   return Rect.fromLTRB(left!, top!, right!, bottom!);
 }
 
-/// A grid on the ground (y = 0) around where [view] looks: a line every
-/// [step] metres for 50 m each way, every tenth brighter, the X axis red
-/// and the Z axis blue. Lines passing behind the viewer are drawn only
-/// where they are in front.
-void paintGroundGrid(Canvas canvas, EditorView view, {double step = 1}) {
+/// The spacing a grid seen through [view] is drawn at near [at]: [step]
+/// metres when its lines stay at least [minPixels] apart on screen there,
+/// else the first of a metre, ten, a hundred… that does.
+double gridSpacing(EditorView view, Vector3 at, double step, {double minPixels = 8}) {
+  final base = step > 0 ? step : 1.0;
+  final eye = view.projectToScreen(at);
+  final aside = view.projectToScreen(Vector3(at.x + 1, at.y, at.z)) ??
+      view.projectToScreen(Vector3(at.x, at.y, at.z + 1));
+  if (eye == null || aside == null) return base;
+  final perMetre = (aside - eye).distance;
+  if (perMetre <= 0) return base;
+  if (base * perMetre >= minPixels) return base;
+  var spacing = base < 1 ? 1.0 : base * 10;
+  while (spacing * perMetre < minPixels && spacing < 1e5) {
+    spacing *= 10;
+  }
+  return spacing;
+}
+
+/// A grid on [plane] — the ground at y = 0 unless the 3-D designer moved
+/// or turned it — around where [view] looks: a line every [spacing]
+/// metres (see [gridSpacing]) for 50 lines each way, every metre or every
+/// tenth line brighter, the axes in their colours. Lines passing behind the viewer are drawn
+/// only where they are in front.
+void paintPlaneGrid(
+  Canvas canvas,
+  EditorView view, {
+  WorkingPlane plane = WorkingPlane.ground,
+  double step = 1,
+}) {
+  // The plane's two directions, as world axes: (u, v).
+  final (u, v) = switch (plane.axis) {
+    WorkingPlaneAxis.ground => (0, 2),
+    WorkingPlaneAxis.front => (0, 1),
+    WorkingPlaneAxis.side => (2, 1),
+  };
+  Vector3 point(double a, double b) {
+    final c = [0.0, 0.0, 0.0];
+    c[plane.axis.axis] = plane.offset;
+    c[u] = a;
+    c[v] = b;
+    return Vector3(c[0], c[1], c[2]);
+  }
+
   final focus = view.focus;
+  final f = [focus.x, focus.y, focus.z];
+  final centre = point(f[u], f[v]);
+  final spacing = gridSpacing(view, centre, step);
   const cells = 50;
-  final cx = (focus.x / (step * 10)).roundToDouble() * step * 10;
-  final cz = (focus.z / (step * 10)).roundToDouble() * step * 10;
+  // Centred on a major line, so the bright lines stay put as the view
+  // moves.
+  final block = spacing < 1 ? 1.0 : spacing * 10;
+  final cu = (f[u] / block).roundToDouble() * block;
+  final cv = (f[v] / block).roundToDouble() * block;
   final minor = Paint()
     ..color = const Color(0x22FFFFFF)
     ..strokeWidth = 1;
   final major = Paint()
     ..color = const Color(0x44FFFFFF)
     ..strokeWidth = 1;
-  final xAxis = Paint()
-    ..color = gizmoAxisColors[0].withValues(alpha: 0.8)
+  // A line of constant u runs along v, and is the v axis where u is 0.
+  Paint axis(int which) => Paint()
+    ..color = gizmoAxisColors[which].withValues(alpha: 0.8)
     ..strokeWidth = 1.5;
-  final zAxis = Paint()
-    ..color = gizmoAxisColors[2].withValues(alpha: 0.8)
-    ..strokeWidth = 1.5;
+  final alongV = axis(v), alongU = axis(u);
   void line(Vector3 a, Vector3 b, Paint paint) {
     // In pieces, so a line reaching behind the viewer keeps its front part.
     const pieces = 10;
@@ -346,13 +441,15 @@ void paintGroundGrid(Canvas canvas, EditorView view, {double step = 1}) {
     }
   }
 
-  final half = cells * step;
+  // Lines under a metre apart are brighter every metre; others every ten.
+  final majorEvery = spacing < 1 ? math.max(1, (1 / spacing).round()) : 10;
+  final half = cells * spacing;
   for (var i = -cells; i <= cells; i++) {
-    final x = cx + i * step, z = cz + i * step;
-    final isMajor = (i % 10) == 0;
-    final paintX = x.abs() < step / 2 ? zAxis : (isMajor ? major : minor);
-    final paintZ = z.abs() < step / 2 ? xAxis : (isMajor ? major : minor);
-    line(Vector3(x, 0, cz - half), Vector3(x, 0, cz + half), paintX);
-    line(Vector3(cx - half, 0, z), Vector3(cx + half, 0, z), paintZ);
+    final a = cu + i * spacing, b = cv + i * spacing;
+    final isMajor = (i % majorEvery) == 0;
+    final paintA = a.abs() < spacing / 2 ? alongV : (isMajor ? major : minor);
+    final paintB = b.abs() < spacing / 2 ? alongU : (isMajor ? major : minor);
+    line(point(a, cv - half), point(a, cv + half), paintA);
+    line(point(cu - half, b), point(cu + half, b), paintB);
   }
 }

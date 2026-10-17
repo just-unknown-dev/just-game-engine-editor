@@ -386,6 +386,30 @@ extension _SettingsCatalog on _EditorSettingsDialogState {
     _Setting(
       page: _snapping,
       group: 'Moving',
+      label: 'Move step in 3-D',
+      hint:
+          'What moving snaps in, in a 3-D scene, in metres: the gizmo, the '
+          'handles, where the Level Designer places things, and its grid.',
+      keywords: 'snap step move increment metres 3d space grid',
+      isDefault: _same(s.moveStep3D, d.moveStep3D),
+      reset: (s) => s.copyWith(moveStep3D: d.moveStep3D),
+      control: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        alignment: WrapAlignment.end,
+        children: [
+          for (final step in MoveStep3DField.steps)
+            EditorChip(
+              label: MoveStep3DField.label(step),
+              selected: _same(s.moveStep3D, step),
+              onTap: () => _save(s.copyWith(moveStep3D: step)),
+            ),
+        ],
+      ),
+    ),
+    _Setting(
+      page: _snapping,
+      group: 'Moving',
       label: 'Nudge distance',
       hint:
           'How far an arrow key moves the selection in the Level Designer: '

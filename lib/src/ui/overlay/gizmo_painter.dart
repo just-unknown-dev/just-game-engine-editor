@@ -31,7 +31,10 @@ enum GizmoHandle {
   scaleZ(GizmoOp.scale, GizmoAxes.z),
   translateXZ(GizmoOp.translate, GizmoAxes.x | GizmoAxes.z),
   translateYZ(GizmoOp.translate, GizmoAxes.y | GizmoAxes.z),
-  scaleUniform(GizmoOp.scale, GizmoAxes.x | GizmoAxes.y | GizmoAxes.z);
+  scaleUniform(GizmoOp.scale, GizmoAxes.x | GizmoAxes.y | GizmoAxes.z),
+
+  /// The 3-D gizmo's outer ring: turns about the way the view looks.
+  rotateView(GizmoOp.rotate, 0);
 
   const GizmoHandle(this.op, this.axes);
 

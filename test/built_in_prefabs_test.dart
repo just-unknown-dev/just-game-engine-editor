@@ -6,13 +6,18 @@
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
+import 'package:just_game_engine/graphics_3d.dart' show Graphics3D;
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 void main() {
   // One scope: the built-in palette and the codec it round-trips through.
+  // A world that knows the 3-D shapes, as a 3-D project's does: the default
+  // kit's 3-D palette places them.
+  final world = jge.World()..initialize();
+  Graphics3D.registerSchemas(world.context);
   final scope = EditorScope(
     builtIns: const [BuiltInEditorModule.new],
-    world: jge.World()..initialize(),
+    world: world,
   );
 
   const position = Offset(320, 180);
@@ -37,6 +42,8 @@ void main() {
       BuiltInAudioContributions.soundId,
       BuiltInAudioContributions.sound3dId,
       BuiltInAudioContributions.listenerId,
+      // The default 3-D kit's: offered only in a 3-D scene.
+      for (final shape in ShapePrefabs.all) shape.id,
     });
   });
 
