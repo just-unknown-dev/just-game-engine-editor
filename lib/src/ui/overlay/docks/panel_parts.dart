@@ -15,6 +15,9 @@ class PanelResizeHandle extends StatelessWidget {
   /// The drag is over: the moment to remember the size it left.
   final VoidCallback? onDragEnd;
 
+  /// How tall it stands.
+  static const double height = 12;
+
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
@@ -24,7 +27,7 @@ class PanelResizeHandle extends StatelessWidget {
         onVerticalDragUpdate: (details) => onDrag(details.delta.dy),
         onVerticalDragEnd: (_) => onDragEnd?.call(),
         child: Container(
-          height: 12,
+          height: height,
           width: double.infinity,
           alignment: Alignment.center,
           decoration: BoxDecoration(

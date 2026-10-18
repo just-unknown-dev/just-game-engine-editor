@@ -22,6 +22,10 @@ class ToolPalette extends StatelessWidget {
   /// Width of the strip, and of the transform column above it.
   static const double width = 48;
 
+  /// The least of it worth showing, frame aside: two tools, the line, and
+  /// undo and redo. On a shorter level the column it hangs in scrolls.
+  static const double leastHeight = ToolStripButton.extent * 4 + 1 + 4;
+
   @override
   Widget build(BuildContext context) => SignalBuilder<String?>(
     // Everything below follows the designer in use.

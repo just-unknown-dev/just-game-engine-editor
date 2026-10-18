@@ -22,6 +22,28 @@ class _Memory implements DockMemory {
   void write(String key, Object? value) => values[key] = value;
 }
 
+// More things to do with a folder than its row in the tree has room for.
+class _FolderModule extends EditorModule {
+  final ran = <String>[];
+
+  @override
+  String get id => 'folders';
+  @override
+  String get name => 'Folders';
+
+  @override
+  List<AssetAction> get assetActions => [
+    for (var i = 0; i < 7; i++)
+      AssetAction(
+        id: 'folders.new$i',
+        label: 'New thing $i',
+        icon: Icons.add_box_outlined,
+        appliesTo: (path, {required isDirectory}) => isDirectory,
+        run: (scope, path) => ran.add('$i $path'),
+      ),
+  ];
+}
+
 void main() {
   late Directory dir;
   late AssetIndex index;
@@ -46,13 +68,16 @@ void main() {
     dir.deleteSync(recursive: true);
   });
 
-  Future<(_Memory, EditorScope)> pump(WidgetTester tester) async {
+  Future<(_Memory, EditorScope)> pump(
+    WidgetTester tester, {
+    List<EditorModule> modules = const [],
+  }) async {
     tester.view
       ..physicalSize = const Size(1400, 500)
       ..devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.runAsync(index.scan);
-    final scope = testScope();
+    final scope = testScope(modules: modules);
     final memory = _Memory();
     await tester.pumpWidget(
       MaterialApp(
@@ -115,6 +140,21 @@ void main() {
     await tester.tap(find.text('assets').first);
     await tester.pump();
     expect(find.text('hero.json'), findsNothing);
+  });
+
+  testWidgets('a folder with more actions than its row holds lists them '
+      'under one button', (tester) async {
+    final module = _FolderModule();
+    await pump(tester, modules: [module]);
+    expect(tester.takeException(), isNull, reason: 'nothing overflows');
+    expect(find.byTooltip('New thing 0'), findsNothing);
+
+    await tester.tap(find.byTooltip('What this folder can do'));
+    await tester.pumpAndSettle();
+    expect(find.text('New thing 6'), findsOneWidget);
+    await tester.tap(find.text('New thing 2'));
+    await tester.pumpAndSettle();
+    expect(module.ran, ['2 assets']);
   });
 
   testWidgets('a file that is in use says so before it is deleted, and the '

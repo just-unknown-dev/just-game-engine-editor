@@ -91,21 +91,35 @@ class EditorRightPanel extends StatelessWidget {
                               onClose: plugin.closeLevelDesigner,
                             ),
                           )
-                        else ...[
-                          _ResizableSceneTreeSection(plugin: plugin),
-                          Divider(height: 1, color: EditorTheme.border),
+                        else
+                          // The tree and the inspector share what is left:
+                          // a short window takes it from the tree.
                           Expanded(
-                            child: EntityInspectorPanel(
-                              scope: plugin.scope,
-                              sceneState: plugin.sceneState,
-                              world: plugin.engine.world,
-                              onDetachFromParent:
-                                  plugin.entities.detachFromParent,
-                              onGroupSelection: plugin.entities.createGroup,
-                              isLevelDesignerOpen: designer != null,
+                            child: LayoutBuilder(
+                              builder: (context, box) => Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  _ResizableSceneTreeSection(
+                                    plugin: plugin,
+                                    room: box.maxHeight,
+                                  ),
+                                  Divider(height: 1, color: EditorTheme.border),
+                                  Expanded(
+                                    child: EntityInspectorPanel(
+                                      scope: plugin.scope,
+                                      sceneState: plugin.sceneState,
+                                      world: plugin.engine.world,
+                                      onDetachFromParent:
+                                          plugin.entities.detachFromParent,
+                                      onGroupSelection:
+                                          plugin.entities.createGroup,
+                                      isLevelDesignerOpen: designer != null,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ],
                         _SaveFooter(plugin: plugin, settings: settings),
                       ],
                     ],
@@ -255,9 +269,12 @@ class _VerticalPanelResizeHandle extends StatelessWidget {
 /// drag handle below it (grows/shrinks the tree; [EntityInspectorPanel]
 /// below takes whatever's left via [Expanded]).
 class _ResizableSceneTreeSection extends StatefulWidget {
-  const _ResizableSceneTreeSection({required this.plugin});
+  const _ResizableSceneTreeSection({required this.plugin, required this.room});
 
   final JustGameEditorPlugin plugin;
+
+  /// What the tree shares with the inspector under it.
+  final double room;
 
   @override
   State<_ResizableSceneTreeSection> createState() =>
@@ -266,45 +283,53 @@ class _ResizableSceneTreeSection extends StatefulWidget {
 
 class _ResizableSceneTreeSectionState
     extends State<_ResizableSceneTreeSection> {
-  // Where it was left last time.
+  // The least a drag leaves the tree, and the inspector under it.
+  static const double _leastTree = 120;
+  static const double _leastInspector = 120;
+
+  // Where it was left last time: the tree's height whenever the window has
+  // room for it.
   late double _height = widget.plugin.scope.prefs.get(
     EditorChromeState.sceneTreeHeightPref,
   );
 
-  void _onResize(double dy, double maxHeight) {
+  // The tallest the tree can be with the inspector still there: on a short
+  // window less than it was left, and back to that as the window grows.
+  double get _most => math.max(
+    0.0,
+    widget.room - _leastInspector - PanelResizeHandle.height - 1,
+  );
+
+  void _onResize(double dy) {
+    final most = _most;
     setState(() {
       // Anchored at the top with the handle below it, so dragging down
       // (positive dy) grows the section directly (no sign flip needed).
-      final maxAllowed = math.max(120.0, maxHeight - 160.0);
-      _height = (_height + dy).clamp(120.0, maxAllowed);
+      _height = (math.min(_height, most) + dy).clamp(
+        math.min(_leastTree, most),
+        most,
+      );
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // The surrounding Column gives this (non-Expanded) child loose/
-        // unbounded height constraints, so fall back to the screen height
-        // for the resize clamp when that happens.
-        final maxHeight = constraints.hasBoundedHeight
-            ? constraints.maxHeight
-            : MediaQuery.sizeOf(context).height;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            SizedBox(height: _height, child: _sceneTree(widget.plugin)),
-            PanelResizeHandle(
-              onDrag: (dy) => _onResize(dy, maxHeight),
-              onDragEnd: () => widget.plugin.scope.prefs.set(
-                EditorChromeState.sceneTreeHeightPref,
-                _height,
-              ),
-            ),
-          ],
-        );
-      },
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        SizedBox(
+          height: math.min(_height, _most),
+          child: _sceneTree(widget.plugin),
+        ),
+        PanelResizeHandle(
+          onDrag: _onResize,
+          onDragEnd: () => widget.plugin.scope.prefs.set(
+            EditorChromeState.sceneTreeHeightPref,
+            _height,
+          ),
+        ),
+      ],
     );
   }
 }

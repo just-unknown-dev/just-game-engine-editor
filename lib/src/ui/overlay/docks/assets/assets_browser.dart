@@ -618,64 +618,69 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
               height: 22,
               color: dir == _dir ? EditorTheme.selectionBg : null,
               padding: EdgeInsets.only(left: 4.0 + depth * 12, right: 4),
-              child: Row(
-                children: [
-                  Semantics(
-                    button: children.isNotEmpty,
-                    label: children.isEmpty
-                        ? null
-                        : open
-                        ? 'Collapse'
-                        : 'Expand',
-                    child: InkWell(
-                      onTap: children.isEmpty
+              // The row's width decides whether the folder's actions fit
+              // beside its name as buttons of their own.
+              child: LayoutBuilder(
+                builder: (context, box) => Row(
+                  children: [
+                    Semantics(
+                      button: children.isNotEmpty,
+                      label: children.isEmpty
                           ? null
-                          : () => setState(
-                              () => open
-                                  ? _openFolders.remove(dir)
-                                  : _openFolders.add(dir),
-                            ),
-                      child: Icon(
-                        children.isEmpty
-                            ? Icons.remove
-                            : open
-                            ? Icons.expand_more_rounded
-                            : Icons.chevron_right_rounded,
-                        size: 13,
-                        color: children.isEmpty
-                            ? Colors.transparent
-                            : EditorTheme.textMuted,
+                          : open
+                          ? 'Collapse'
+                          : 'Expand',
+                      child: InkWell(
+                        onTap: children.isEmpty
+                            ? null
+                            : () => setState(
+                                () => open
+                                    ? _openFolders.remove(dir)
+                                    : _openFolders.add(dir),
+                              ),
+                        child: Icon(
+                          children.isEmpty
+                              ? Icons.remove
+                              : open
+                              ? Icons.expand_more_rounded
+                              : Icons.chevron_right_rounded,
+                          size: 13,
+                          color: children.isEmpty
+                              ? Colors.transparent
+                              : EditorTheme.textMuted,
+                        ),
                       ),
                     ),
-                  ),
-                  Icon(
-                    open && children.isNotEmpty
-                        ? Icons.folder_open_rounded
-                        : Icons.folder_rounded,
-                    size: 13,
-                    color: assetColor(AssetKind.folder),
-                  ),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      dir.split('/').last,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: dir == _dir
-                            ? EditorTheme.textPrimary
-                            : EditorTheme.textSecondary,
-                        fontSize: 11,
+                    Icon(
+                      open && children.isNotEmpty
+                          ? Icons.folder_open_rounded
+                          : Icons.folder_rounded,
+                      size: 13,
+                      color: assetColor(AssetKind.folder),
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        dir.split('/').last,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: dir == _dir
+                              ? EditorTheme.textPrimary
+                              : EditorTheme.textSecondary,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
-                  ),
-                  if (dir == _dir)
-                    for (final a in actions)
-                      EditorIconButton(
-                        icon: a.icon,
-                        tooltip: a.label,
-                        onTap: () => a.run(widget.scope, dir),
+                    if (dir == _dir && actions.isNotEmpty)
+                      _FolderActions(
+                        actions: actions,
+                        // What the arrow, the folder and a little of the
+                        // name leave.
+                        room: box.maxWidth - 13 - 13 - 5 - 48,
+                        run: (a) => a.run(widget.scope, dir),
                       ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -935,6 +940,56 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The open folder's actions on its row in the tree: a button each when
+/// they fit in [room], else one button that lists them, so a narrow tree
+/// or many modules' "New ..." never push the row past its edge.
+class _FolderActions extends StatelessWidget {
+  const _FolderActions({
+    required this.actions,
+    required this.room,
+    required this.run,
+  });
+
+  final List<AssetAction> actions;
+  final double room;
+  final void Function(AssetAction action) run;
+
+  @override
+  Widget build(BuildContext context) {
+    if (actions.length * EditorMetrics.controlSm <= room) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final a in actions)
+            EditorIconButton(
+              icon: a.icon,
+              tooltip: a.label,
+              onTap: () => run(a),
+            ),
+        ],
+      );
+    }
+    return Builder(
+      builder: (context) => EditorIconButton(
+        icon: Icons.more_horiz_rounded,
+        tooltip: 'What this folder can do',
+        onTap: () async {
+          final box = context.findRenderObject()! as RenderBox;
+          final chosen = await showEditorMenu<AssetAction>(
+            context,
+            box.localToGlobal(box.size.bottomLeft(Offset.zero)),
+            [
+              for (final a in actions)
+                editorMenuItem<AssetAction>(a, a.label, icon: a.icon),
+            ],
+          );
+          if (chosen != null) run(chosen);
+        },
       ),
     );
   }

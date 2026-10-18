@@ -28,6 +28,12 @@ class TransformToolbar extends StatelessWidget {
   final JustGameEditorPlugin plugin;
   final OverlayUiSettings settings;
 
+  /// How tall it stands while showing: a strip button per mode, in the
+  /// frame.
+  static double get height => FloatingToolFrame.heightFor(
+    ToolStripButton.extent * TransformMode.values.length,
+  );
+
   @override
   Widget build(BuildContext context) => SignalBuilder<LevelDesignerSession?>(
     signal: plugin.designer,
@@ -110,6 +116,11 @@ class ToolColumnButtons extends StatelessWidget {
     for (final b in scope.toolbarButtons)
       if (b.slot == ToolbarSlot.toolColumn) b,
   ];
+
+  /// How tall [count] of them stand, in their frame; nothing for none.
+  static double heightFor(int count) => count == 0
+      ? 0
+      : FloatingToolFrame.heightFor(ToolStripButton.extent * count);
 
   @override
   Widget build(BuildContext context) {

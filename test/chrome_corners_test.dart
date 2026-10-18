@@ -57,9 +57,13 @@ void main() {
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
 
-  Future<void> start(WidgetTester tester, {bool scene = true}) async {
+  Future<void> start(
+    WidgetTester tester, {
+    bool scene = true,
+    Size window = const Size(1400, 900),
+  }) async {
     tester.view
-      ..physicalSize = const Size(1400, 900)
+      ..physicalSize = window
       ..devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final engine = Engine();
@@ -232,6 +236,31 @@ void main() {
       greaterThan(tester.getRect(find.text('First')).bottom),
     );
     await tester.pump(const Duration(seconds: 10));
+    await stop(tester);
+  });
+
+  testWidgets('a short window: the tool column scrolls and the scene tree '
+      'gives way, nothing runs past its edge', (tester) async {
+    if (!kDebugMode) return;
+    await start(tester, scene: false, window: const Size(1400, 330));
+    // The tree was left taller than this window has room for.
+    scope.prefs.set(EditorChromeState.sceneTreeHeightPref, 500.0);
+    plugin.sceneState.openScene(EditorScene(name: 'level'));
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'nothing overflows');
+    final transform = frameIn(tester, TransformToolbar);
+    final snap = tester.getRect(find.byType(QuickSnapBar));
+    expect(transform.top, lessThan(snap.top), reason: 'the column is there');
+    expect(
+      tester.getRect(find.byType(ToolColumnButtons)).top,
+      greaterThan(snap.top - 8),
+      reason: 'the store button scrolled out of the room it has',
+    );
+
+    // The designer's strip too, under it.
+    plugin.toggleLevelDesigner();
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'nothing overflows');
     await stop(tester);
   });
 }

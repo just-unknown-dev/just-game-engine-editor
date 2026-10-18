@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
@@ -347,29 +349,65 @@ class FullEditorChrome extends StatelessWidget {
             // top right of the level — clear of the designer's panel and,
             // at the top, of its ruler — the editor's own features such as
             // the Asset Store under it, and the designer's tool strip
-            // hanging below, as tall as the level lets it be.
+            // hanging below, as tall as the level lets it be. A level too
+            // short for all that — a small window, tall docks — scrolls
+            // the column rather than run it over the snapping.
             Positioned(
               right: gameInsets.right + (ruled ? MinimapLayout.margin : 16),
               top: controlsAt.dy,
               bottom: aboveGear,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  TransformToolbar(plugin: plugin, settings: settings),
-                  if (inToolColumn.isNotEmpty) ...[
-                    if (quickSnap) const SizedBox(height: 8),
-                    ToolColumnButtons(plugin: plugin, settings: settings),
-                  ],
-                  if (designer != null) ...[
-                    const SizedBox(height: 8),
-                    Flexible(
-                      child: FloatingToolFrame(
-                        settings: settings,
-                        child: ToolPalette(session: designer),
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  final tools =
+                      (quickSnap ? TransformToolbar.height : 0) +
+                      (inToolColumn.isEmpty
+                          ? 0
+                          : (quickSnap ? 8 : 0) +
+                                ToolColumnButtons.heightFor(
+                                  inToolColumn.length,
+                                ));
+                  // The strip has what the tools leave, and never less
+                  // than the least of it worth showing.
+                  final strip = math.max(
+                    FloatingToolFrame.heightFor(ToolPalette.leastHeight),
+                    box.maxHeight - tools - 8,
+                  );
+                  return Align(
+                    alignment: Alignment.topRight,
+                    child: EditorScrollbar(
+                      builder: (_, scroll) => SingleChildScrollView(
+                        controller: scroll,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            TransformToolbar(
+                              plugin: plugin,
+                              settings: settings,
+                            ),
+                            if (inToolColumn.isNotEmpty) ...[
+                              if (quickSnap) const SizedBox(height: 8),
+                              ToolColumnButtons(
+                                plugin: plugin,
+                                settings: settings,
+                              ),
+                            ],
+                            if (designer != null) ...[
+                              const SizedBox(height: 8),
+                              ConstrainedBox(
+                                constraints: BoxConstraints(maxHeight: strip),
+                                child: FloatingToolFrame(
+                                  settings: settings,
+                                  child: ToolPalette(session: designer),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
-                  ],
-                ],
+                  );
+                },
               ),
             ),
             // Docks popped out of the panel float over the editor.
