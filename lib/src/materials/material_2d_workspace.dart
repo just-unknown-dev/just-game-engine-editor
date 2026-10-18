@@ -250,18 +250,27 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     if (widget.loadOnStart) load();
   }
 
+  /// The least time between two drawings of what moves: a preview needs no
+  /// more than about 60 a second, whatever the screen's refresh rate.
+  static const Duration movingFrame = Duration(milliseconds: 12);
+
+  // Seconds played that are not drawn yet, and when what moves last was.
+  double _unshown = 0;
+  Duration _lastMoved = Duration.zero;
+
   void _tick(Duration elapsed) {
     final dt = (elapsed - _lastTick).inMicroseconds / 1e6;
     _lastTick = elapsed;
-    final moving = stage.moving;
-    if (_playing && moving) {
-      _clock.value = (_clock.value + dt * _speed) % loop;
+    if (_playing && stage.moving) _unshown += dt * _speed;
+    final due = _unshown > 0 && elapsed - _lastMoved >= movingFrame;
+    if (due) {
+      _lastMoved = elapsed;
+      _clock.value = (_clock.value + _unshown) % loop;
+      _unshown = 0;
     }
     stage.time = plainStage.time = _clock.value;
     final comparing = _compareAt != null || _holdingPlain;
-    if ((moving && _playing) ||
-        !stage.ready ||
-        (comparing && !plainStage.ready)) {
+    if (due || !stage.ready || (comparing && !plainStage.ready)) {
       _repaint.value++;
     }
   }
@@ -352,8 +361,20 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   /// Shows [change] without making an undo step: a value being dragged or
   /// picked. [change] or [edit] puts it in for good; [endPreview] lets it
   /// go.
-  void preview(Material2DFile Function(Material2DFile m) change) {
-    setState(() => _live = change(material));
+  ///
+  /// Without [rebuild] only the preview is drawn again, not the window: for
+  /// a slider, which shows the value dragged to itself — rebuilding the
+  /// whole window at every step of a drag was most of its time.
+  void preview(
+    Material2DFile Function(Material2DFile m) change, {
+    bool rebuild = true,
+  }) {
+    final live = change(material);
+    if (rebuild) {
+      setState(() => _live = live);
+    } else {
+      _live = live;
+    }
     _sync();
   }
 
@@ -587,6 +608,7 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
 
   /// Goes to [seconds] into the preview.
   void scrub(double seconds) {
+    _unshown = 0;
     _clock.value = seconds.clamp(0, loop).toDouble();
     stage.time = plainStage.time = _clock.value;
     _repaint.value++;
@@ -605,7 +627,6 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     double? reach,
     double? strength,
   }) {
-    setState(() {});
     _view2((s) {
       if (at != null) s.light = at;
       if (colour != null) s.lightColour = colour;
@@ -613,7 +634,11 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
       if (reach != null) s.lightReach = reach;
       if (strength != null) s.lightStrength = strength;
     });
+    // Only what shows the light follows it: its handle and settings.
+    _lightMoved.value++;
   }
+
+  final ValueNotifier<int> _lightMoved = ValueNotifier(0);
 
   /// Where a light preset puts the light, and how high: from the top
   /// left, from above, grazing from the side, from behind the top right.
@@ -625,14 +650,19 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   };
 
   /// Sizes the material's panel [width] logical pixels wide.
-  void setPanelWidth(double width) => setState(
-    () => _panelWidth = _lastPanelWidth = width.clamp(220, 560).toDouble(),
-  );
+  void setPanelWidth(double width) {
+    _panelWidth = _lastPanelWidth = width.clamp(220, 560).toDouble();
+    _widths.value++;
+  }
 
   /// Sizes the effects panel [width] logical pixels wide.
-  void setEffectsWidth(double width) => setState(
-    () => _effectsWidth = _lastEffectsWidth = width.clamp(260, 640).toDouble(),
-  );
+  void setEffectsWidth(double width) {
+    _effectsWidth = _lastEffectsWidth = width.clamp(260, 640).toDouble();
+    _widths.value++;
+  }
+
+  // The panels' widths changed: the window is laid out again, not built.
+  final ValueNotifier<int> _widths = ValueNotifier(0);
 
   /// Switches [effect] on (one undo step) and shows its card, unfolded.
   void addEffect(String effect) {
@@ -796,6 +826,8 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     stage.dispose();
     plainStage.dispose();
     _repaint.dispose();
+    _lightMoved.dispose();
+    _widths.dispose();
     _effectsScroll.dispose();
     _clock.dispose();
     _drawnScale.dispose();
@@ -905,27 +937,32 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
               onToggleFullScreen: widget.workspace.onToggleFullScreen,
               onClose: widget.workspace.onClose,
             ),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(width: _panelWidth, child: _fields()),
-                  PanelResizeHandle(
-                    onDrag: (dx) => setPanelWidth(_panelWidth + dx),
-                  ),
-                  Expanded(child: _previewPane()),
-                  PanelResizeHandle(
-                    onDrag: (dx) => setEffectsWidth(_effectsWidth - dx),
-                  ),
-                  SizedBox(width: _effectsWidth, child: _effects()),
-                ],
-              ),
-            ),
+            Expanded(child: _panels(_fields(), _previewPane(), _effects())),
           ],
         ),
       ),
     );
   }
+
+  // The three panels side by side, as wide as they are dragged to. A drag
+  // builds only this row: the panels are the ones the window was built
+  // with, and are laid out again.
+  Widget _panels(Widget fields, Widget preview, Widget effects) =>
+      ValueListenableBuilder<int>(
+        valueListenable: _widths,
+        builder: (context, _, _) => Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: _panelWidth, child: fields),
+            PanelResizeHandle(onDrag: (dx) => setPanelWidth(_panelWidth + dx)),
+            Expanded(child: preview),
+            PanelResizeHandle(
+              onDrag: (dx) => setEffectsWidth(_effectsWidth - dx),
+            ),
+            SizedBox(width: _effectsWidth, child: effects),
+          ],
+        ),
+      );
 
   // ── Fields ────────────────────────────────────────────────────────────
 
@@ -1354,7 +1391,8 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
             step: (max - min) / 200,
             decimals: max - min > 20 ? 0 : 2,
             unit: p.unit,
-            onChanged: show,
+            onChanged: (v) =>
+                preview((x) => x.withValue(key, v), rebuild: false),
             onChangeEnd: set,
           ),
           indent: indent,
@@ -1617,7 +1655,14 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
               Positioned.fill(child: _view(screen)),
               Positioned(left: 10, right: 10, bottom: 8, child: _chips(screen)),
               if (_lightSettingsOpen && !screen)
-                Positioned(top: 8, right: 10, child: _lightSettings()),
+                Positioned(
+                  top: 8,
+                  right: 10,
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: _lightMoved,
+                    builder: (context, _, _) => _lightSettings(),
+                  ),
+                ),
             ],
           ),
         ),
@@ -2086,7 +2131,11 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
                   child: PreviewChip('With', icon: Icons.chevron_right),
                 ),
               ],
-              if (lit) _lightHandle(size),
+              if (lit)
+                ValueListenableBuilder<int>(
+                  valueListenable: _lightMoved,
+                  builder: (context, _, _) => _lightHandle(size),
+                ),
               ...workspaceOverlays(_extensionView, size),
             ],
           ),

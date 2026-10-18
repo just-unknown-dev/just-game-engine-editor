@@ -522,7 +522,8 @@ class JustGameEditorPlugin implements EnginePlugin {
       ..add(logService.onError((_) => _pauseOnError()))
       ..add(sceneState.activeScene.watch(_rememberScene))
       ..add(designer.watch(_rememberDesigner))
-      ..add(designer.watch(_syncDesignerSnap));
+      ..add(designer.watch(_syncDesignerSnap))
+      ..add(scope.activeWorkspace.watch(_syncDrawingUnderWorkspace));
     isAuthoring.addListener(_syncBackdrop);
     _followSettings();
     // Launching the editor entry point is asking for the editor: open it and
@@ -2664,6 +2665,34 @@ class JustGameEditorPlugin implements EnginePlugin {
     }
   }
 
+  /// How often the level is drawn while a workspace is open over it. It is
+  /// dimmed and nearly covered there, and drawing it every frame only took
+  /// time from the workspace — a lit level drawn with a 2-D material
+  /// window's own lit preview filled the GPU's memory: 3 fps. Often enough
+  /// that what is edited live in the scene still shows at its edges.
+  static const Duration drawIntervalUnderWorkspace = Duration(
+    milliseconds: 250,
+  );
+
+  // The game's own drawInterval, while a workspace has the level's.
+  Duration? _gameDrawInterval;
+  bool _drawingHeld = false;
+
+  void _syncDrawingUnderWorkspace() {
+    if (!engine.isInitialized) return;
+    final rendering = engine.rendering;
+    final hold = scope.activeWorkspace.value != null;
+    if (hold && !_drawingHeld) {
+      _gameDrawInterval = rendering.drawInterval;
+      rendering.drawInterval = drawIntervalUnderWorkspace;
+      _drawingHeld = true;
+    } else if (!hold && _drawingHeld) {
+      rendering.drawInterval = _gameDrawInterval;
+      _gameDrawInterval = null;
+      _drawingHeld = false;
+    }
+  }
+
   /// Saves the active scene. During a play-test the level is saved as it was
   /// authored, not as the simulation has left it.
   ///
@@ -2804,6 +2833,10 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (_gameBackdrop != null && engine.isInitialized) {
       engine.rendering.backgroundColor = _gameBackdrop!;
       _gameBackdrop = null;
+    }
+    if (_drawingHeld && engine.isInitialized) {
+      engine.rendering.drawInterval = _gameDrawInterval;
+      _drawingHeld = false;
     }
     closeLevelDesigner();
     isAuthoring.removeListener(_syncCameraOwnership);

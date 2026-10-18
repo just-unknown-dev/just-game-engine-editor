@@ -143,6 +143,8 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   PreviewLighting _lighting = _lastLighting;
 
   ui.Image? _image;
+  // Bumped when a picture is drawn: what shows it listens.
+  final ValueNotifier<int> _pictures = ValueNotifier(0);
   GpuSurface? _surface;
   bool _rendering = false, _again = false, _noGpu = false;
   Object? _drawError;
@@ -250,8 +252,19 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   /// Shows [change] in the preview without making an undo step: a value
   /// being dragged or picked. [change] or [edit] puts it in for good;
   /// [endPreview] lets it go.
-  void preview(MaterialFile Function(MaterialFile m) change) {
-    setState(() => _live = change(shown));
+  ///
+  /// Without [rebuild] only the preview is drawn again, not the window: for
+  /// a slider, which shows the value dragged to itself.
+  void preview(
+    MaterialFile Function(MaterialFile m) change, {
+    bool rebuild = true,
+  }) {
+    final live = change(shown);
+    if (rebuild) {
+      setState(() => _live = live);
+    } else {
+      _live = live;
+    }
     _redraw();
   }
 
@@ -464,17 +477,22 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
           plainImage?.dispose();
           return;
         }
-        setState(() {
-          _drawError = problem;
-          if (image != null) {
-            _image?.dispose();
-            _image = image;
-          }
-          if (plainImage != null) {
-            _plainImage?.dispose();
-            _plainImage = plainImage;
-          }
-        });
+        if (image != null) {
+          _image?.dispose();
+          _image = image;
+        }
+        if (plainImage != null) {
+          _plainImage?.dispose();
+          _plainImage = plainImage;
+        }
+        // A new picture is shown by the picture alone — the window was
+        // built again for each, a turn or a drag at a time — and the chips
+        // only when what went wrong did.
+        if ('$problem' != '$_drawError') {
+          setState(() => _drawError = problem);
+        } else {
+          _pictures.value++;
+        }
       } while (_again && mounted);
     } finally {
       _rendering = false;
@@ -489,6 +507,10 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
     if (widget.maps == null) _maps.dispose();
     _image?.dispose();
     _plainImage?.dispose();
+    _pictures.dispose();
+    _widths.dispose();
+    _framing.dispose();
+    _resized?.cancel();
     _extensionView.dispose();
     super.dispose();
   }
@@ -532,24 +554,40 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   void _zoomTo(num zoom) {
     final next = zoom.clamp(0.5, 3.0).toDouble();
     if (next == _zoom) return;
-    setState(() => _zoom = next);
-    _redraw();
+    _zoom = next;
+    _turned();
   }
 
   /// Turns and zooms the preview as it started.
   void fit() {
-    setState(() {
-      _yaw = _startYaw;
-      _pitch = _startPitch;
-      _zoom = _startZoom;
-    });
+    _yaw = _startYaw;
+    _pitch = _startPitch;
+    _zoom = _startZoom;
+    _turned();
+  }
+
+  // The preview was turned or zoomed: drawn again, and the zoom controls
+  // say so — the window is not built again for each turn of the wheel.
+  void _turned() {
+    _framing.value++;
     _redraw();
   }
 
+  final ValueNotifier<int> _framing = ValueNotifier(0);
+
+  /// How long the preview's size must stay the same before it is drawn at
+  /// it again.
+  static const Duration resizeSettle = Duration(milliseconds: 150);
+  Timer? _resized;
+
   /// Sizes the material's panel [width] logical pixels wide.
-  void setPanelWidth(double width) => setState(
-    () => _panelWidth = _lastPanelWidth = width.clamp(260, 640).toDouble(),
-  );
+  void setPanelWidth(double width) {
+    _panelWidth = _lastPanelWidth = width.clamp(260, 640).toDouble();
+    _widths.value++;
+  }
+
+  // The panel's width changed: the window is laid out again, not built.
+  final ValueNotifier<int> _widths = ValueNotifier(0);
 
   /// The preview's keys, as its shortcut list says them.
   static const String shortcuts =
@@ -644,23 +682,27 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
               onToggleFullScreen: widget.workspace.onToggleFullScreen,
               onClose: widget.workspace.onClose,
             ),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(width: _panelWidth, child: _fields()),
-                  PanelResizeHandle(
-                    onDrag: (dx) => setPanelWidth(_panelWidth + dx),
-                  ),
-                  Expanded(child: _previewPane()),
-                ],
-              ),
-            ),
+            Expanded(child: _panels(_fields(), _previewPane())),
           ],
         ),
       ),
     );
   }
+
+  // The panel and the preview side by side, the panel as wide as it is
+  // dragged to. A drag builds only this row: both are the ones the window
+  // was built with, and are laid out again.
+  Widget _panels(Widget fields, Widget preview) => ValueListenableBuilder<int>(
+    valueListenable: _widths,
+    builder: (context, _, _) => Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(width: _panelWidth, child: fields),
+        PanelResizeHandle(onDrag: (dx) => setPanelWidth(_panelWidth + dx)),
+        Expanded(child: preview),
+      ],
+    ),
+  );
 
   // ── Fields ────────────────────────────────────────────────────────────
 
@@ -764,7 +806,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
       step: step ?? (max - min) / 100,
       decimals: decimals,
       unit: unit,
-      onChanged: (v) => preview((m) => set(m, v)),
+      onChanged: (v) => preview((m) => set(m, v), rebuild: false),
       onChangeEnd: (v) => change((m) => set(m, v)),
     ),
   );
@@ -1517,18 +1559,21 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
         ],
       ),
       const ToolSeparator(),
-      ZoomControls(
-        label: Text('${(zoom * 100).round()}%', style: _label),
-        onZoomOut: () => zoomBy(-1),
-        onZoomIn: () => zoomBy(1),
-        steps: [
-          ZoomStep(
-            'Fit',
-            'Face it again, as it started (F; double-click)',
-            selected: atStart,
-            onTap: fit,
-          ),
-        ],
+      ValueListenableBuilder<int>(
+        valueListenable: _framing,
+        builder: (context, _, _) => ZoomControls(
+          label: Text('${(zoom * 100).round()}%', style: _label),
+          onZoomOut: () => zoomBy(-1),
+          onZoomIn: () => zoomBy(1),
+          steps: [
+            ZoomStep(
+              'Fit',
+              'Face it again, as it started (F; double-click)',
+              selected: atStart,
+              onTap: fit,
+            ),
+          ],
+        ),
       ),
       WorkspaceToolButtons(view: _extensionView),
       const ToolSeparator(),
@@ -1587,14 +1632,22 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   Widget _view() => LayoutBuilder(
     builder: (context, constraints) {
       final size = Size(constraints.maxWidth, constraints.maxHeight);
+      // The surfaces are kept, and resized as they are drawn into: one
+      // made for every size a dragged panel went through held GPU memory
+      // until the card was full.
       if (size != _size && size.width > 0 && size.height > 0) {
         _size = size;
-        _surface = null;
-        _plainSurface = null;
-        WidgetsBinding.instance.addPostFrameCallback((_) => _redraw());
+        _resized?.cancel();
+        if (_image == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => _redraw());
+        } else {
+          // While a panel is dragged the picture is scaled to fit, and
+          // drawn again once its size stops changing: each size drawn at
+          // took fresh textures.
+          _resized = Timer(resizeSettle, _redraw);
+        }
       }
       final split = _holdingPlain ? 1.0 : _compareAt;
-      final plain = _plainImage;
       return Listener(
         onPointerSignal: (event) {
           if (event is! PointerScrollEvent) return;
@@ -1604,30 +1657,36 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
           onPanUpdate: (d) {
             _yaw += d.delta.dx * 0.01;
             _pitch = (_pitch - d.delta.dy * 0.01).clamp(-1.5, 1.5);
-            _redraw();
+            _turned();
           },
           onDoubleTap: fit,
           child: Stack(
             children: [
               Positioned.fill(
-                child: ColoredBox(
-                  color: const Color(0xFF15181D),
-                  child: split == null || plain == null
-                      ? _picture(_image)
-                      : Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            ClipRect(
-                              clipper: _Side(split, left: true),
-                              child: _picture(plain),
+                child: ValueListenableBuilder<int>(
+                  valueListenable: _pictures,
+                  builder: (context, _, _) {
+                    final plain = _plainImage;
+                    return ColoredBox(
+                      color: const Color(0xFF15181D),
+                      child: split == null || plain == null
+                          ? _picture(_image)
+                          : Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                ClipRect(
+                                  clipper: _Side(split, left: true),
+                                  child: _picture(plain),
+                                ),
+                                if (split < 1)
+                                  ClipRect(
+                                    clipper: _Side(split, left: false),
+                                    child: _picture(_image),
+                                  ),
+                              ],
                             ),
-                            if (split < 1)
-                              ClipRect(
-                                clipper: _Side(split, left: false),
-                                child: _picture(_image),
-                              ),
-                          ],
-                        ),
+                    );
+                  },
                 ),
               ),
               if (_compareAt case final at? when !_holdingPlain) ...[
