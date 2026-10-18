@@ -55,11 +55,32 @@ class AssetsBrowserDock extends StatefulWidget {
     required this.scope,
     required this.dock,
     required this.index,
+    this.onOpenScene,
   });
 
   final EditorScope scope;
   final DockContext dock;
   final AssetIndex index;
+
+  /// Opens the scene named so in the editor: what a scene file in the
+  /// scenes folder does when it is opened here. Without it, it opens as
+  /// another file does.
+  final Future<void> Function(String sceneName)? onOpenScene;
+
+  /// The name of the scene whose file is [file] (an absolute path) when it
+  /// is in [scenesRoot] — what the editor opens a scene by; null for any
+  /// other file.
+  static String? sceneNameAt(String file, String scenesRoot) {
+    const ending = '.scene.json';
+    final path = file.replaceAll(r'\', '/');
+    if (!path.toLowerCase().endsWith(ending)) return null;
+    final slash = path.lastIndexOf('/');
+    final folder = path.substring(0, slash).toLowerCase();
+    final root = scenesRoot.replaceAll(r'\', '/').toLowerCase();
+    if (folder != root) return null;
+    final name = path.substring(slash + 1);
+    return name.substring(0, name.length - ending.length);
+  }
 
   @override
   State<AssetsBrowserDock> createState() => AssetsBrowserDockState();
@@ -152,10 +173,26 @@ class AssetsBrowserDockState extends State<AssetsBrowserDock> {
       );
       return;
     }
+    // A scene of the scenes folder opens as the scene, in the editor.
+    if ((widget.onOpenScene, sceneNameOf(entry.path)) case (
+      final open?,
+      final name?,
+    )) {
+      open(name);
+      return;
+    }
     if (!widget.scope.openInWorkspace(entry.path)) {
       _index.openExternally(entry.path);
     }
   }
+
+  /// The name of the scene at [path] (project-relative), when it is a scene
+  /// of the scenes folder — what the editor opens a scene by; null for any
+  /// other file.
+  String? sceneNameOf(String path) => AssetsBrowserDock.sceneNameAt(
+    _index.absolute(path),
+    widget.scope.scenes.scenesRoot,
+  );
 
   Future<void> _newFolder() async {
     final path = await _index.newFolder(_dir);

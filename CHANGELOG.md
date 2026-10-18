@@ -29,7 +29,17 @@ First release: a level editor that runs inside a `just_game_engine` game. It nee
 - A check says when 2-D lights light nothing for want of Scene lighting, and adds it (or turns it on) as the fix.
 - A Level Map layer's settings take a 2-D material, whether it casts shadows and how deep; undo puts them back too, and renaming a material renames it on the layers that use it.
 - A changed material file is read again by the game — 2-D ones (and the normal maps they name) and 3-D ones — whichever tool wrote it.
-- An entity's own material values (`material2DOverrides`, `material3DOverrides`) are edited as JSON until a material editor brings its own editor (`just_material_editor` does).
+- An entity's own material values (`material2DOverrides`, `material3DOverrides`) are edited in the inspector, each with an editor of its kind, a way to take it away and a list of what can be added ([below](#materials-built-in)).
+
+### Materials, built in
+
+- **Materials are the editor's own** (`BuiltInMaterialsModule`, registered beside `BuiltInEditorModule`; its windows, pictures and tools in `package:just_game_engine_editor/materials.dart`), with or without `just_material_editor`: 3-D and 2-D material files pictured in the Assets dock (kept in `.dart_tool/just_game_engine_editor/material_pictures`); the 3-D Material window (sections, presets, variants, a live preview on five shapes in six lights) and the 2-D one (effects that are on first, each with what it does, a reset and a solo; presets; variants; a preview the engine draws, on the game's own sprite that uses it or what fits the material, zoomed and panned, tiled 3 × 3, with and without, its normals, a light to drag, a time bar, keys and chips); New material, New 2D material, New screen material and New variant; live in the scene while edited; dropped on what it draws as one undo step; Problems checks with fixes; texture sets and a model's materials made into material files; normal maps made from a picture.
+- **A module adds to another's window** through `EditorModule.workspaceContributions` (`just_editor_core`): a tool on its toolbar (`WorkspaceTool`), a section in its panel (`WorkspaceSection`) or an overlay over its preview (`WorkspaceOverlay`), by the window's id. The material windows (`WorkspaceIds.material`, `WorkspaceIds.material2D`) hand them a view of themselves (`Material3DWorkspaceView`, `Material2DWorkspaceView`): the material, what the preview shows, `change` as one undo step and `preview` for a value being dragged.
+
+### The Assets dock opens every file
+
+- **A scene** double-clicked in the scenes folder opens as the scene, as from the Scenes panel.
+- **A JSON file no installed window opens** — a screen without `just_ui_editor`, an animator without `just_sprite_editor` — opens in the read-only JSON window (`BuiltInWorkspaces.json`) instead of the system's app: pretty-printed, its lines numbered, searched (Ctrl+F; Enter for the next match), copied; a file that is not valid JSON is shown as written, with why; Open in system app hands it on. A module's own window for a file comes first.
 
 ### 3-D scenes
 

@@ -187,6 +187,7 @@ abstract final class BuiltInDocks {
           scope: scope,
           dock: dock,
           index: assetIndexOf(plugin),
+          onOpenScene: plugin.openScene,
         ),
       ),
       DockDefinition(

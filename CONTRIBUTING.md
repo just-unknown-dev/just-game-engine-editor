@@ -125,6 +125,8 @@ Seven packages build on this one, each with an `EditorModule` of its own: the mo
 | `lib/src/ui/scene_tree/` | `SceneTreePanel`, `SceneTreeModel`, `SceneTreeController` |
 | `lib/src/ui/level_designer/` | The Level Designer, and two editor-wide things history put here: the `CommandRegistry` (`commands/`) and the undo stack, `EditorHistory` (`state/`) |
 | `lib/src/ui/timeline/`, `ui/tileset/` | The Timeline dock (`TimelineSession`) and the Tileset Editor workspace (`TilesetSession`) |
+| `lib/src/ui/json_viewer/` | `JsonViewer`: the read-only window for a JSON file no other window opens |
+| `lib/src/materials/` | `BuiltInMaterialsModule`: the 2-D and 3-D Material windows, their pictures, presets, checks, inspector editors and importers, exported through `lib/materials.dart` |
 | `example/` | A bare engine with the editor over it |
 | `test/` | The tests; shared helpers are in `test/support/` |
 
@@ -153,9 +155,12 @@ flutter test
 
 # One file.
 flutter test test/scene_manager_test.dart
+
+# The tests that render, on a real GPU.
+flutter test --enable-impeller --enable-flutter-gpu --tags gpu --concurrency=1
 ```
 
-There is no `dart_test.yaml` and there are no test tags: `flutter test` runs everything.
+**The `gpu` tag.** A test that renders with Flutter GPU (the 3-D material pictures) carries `@Tags(['gpu'])` (declared in `dart_test.yaml`) and skips with the reason from `gpuUnavailableReason()` (`package:just_graphics_engine/testing.dart`, a dev dependency), so a plain `flutter test` passes on any machine. Run it for any change to the material pictures or the 3-D Material window's preview.
 
 **Tests that hold the rules.**
 
@@ -192,7 +197,7 @@ There is no `dart_test.yaml` and there are no test tags: `flutter test` runs eve
 - **Documentation.** Give every public API you add a `///` doc comment. Describe user-visible changes in [CHANGELOG.md](CHANGELOG.md). Update [README.md](README.md) when what users see changes, and [ARCHITECTURE.md](ARCHITECTURE.md) when the structure or the module contract does.
 - **Tests.** Add or update tests for any behaviour you change. A bug fix comes with a test that fails without it.
 - **Dependencies.** Do not add a dependency without discussing it in an issue first.
-- **Structure.** Match the existing folders under `lib/src/`. Export new public API through `lib/just_game_engine_editor.dart`. Modules and games import that library, never files under `lib/src/`.
+- **Structure.** Match the existing folders under `lib/src/`. Export new public API through `lib/just_game_engine_editor.dart` (materials' through `lib/materials.dart`). Modules and games import that library, never files under `lib/src/`.
 
 ---
 

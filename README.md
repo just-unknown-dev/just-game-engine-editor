@@ -22,6 +22,7 @@ A level editor that runs inside a [`just_game_engine`](../just_game_engine/) gam
 - **Physics**: 2-D and 3-D bodies look and work alike. Body type, material presets, Fit to visual, collider handles in the viewport, named collision layers with a Physics Layers dock, and a live readout while playing ([below](#physics-bodies)).
 - **Cameras**: the game's virtual cameras previewed while you work, their frames, zones and bounds drawn in the viewport, and Solo camera in the scene tree.
 - **Level Designer**: a grouped tool strip, the scene's **Level Map** (tiles on square, isometric, staggered and hexagonal grids, a built-in *Basic shapes* tileset, a Tileset Editor), and everything placed as an entity under the map, on one of its layers. Tiled maps import and export ([below](#the-level-designer)).
+- **Materials**, 2-D and 3-D: pictured in Assets, made new from a folder, edited in a Material window with a live preview, presets and variants, and dropped on what they draw ([below](#materials)).
 - **Timeline**: reusable timelines that animate any component field, with a dope sheet, curve editor, record mode and motion paths in the viewport.
 - **Docks**: Console, Assets, Timeline, Profiler, World, Problems, Tags, Physics Layers, History, Animator and Search, in one tabbed panel whose layout is remembered ([below](#docks)).
 - **Problems** lists what is wrong with the open scene, many with a one-click fix.
@@ -209,6 +210,29 @@ A module declares the tags its code relies on (`EditorModule.tags`). They are li
 
 ---
 
+## Materials
+
+Materials are the editor's own (`BuiltInMaterialsModule`), in every project: nothing has to be installed for them.
+
+- **In the Assets dock.** 3-D material files (`*.material.json`) and 2-D ones (`*.material2d.json`) have kinds and filters of their own, each pictured as it draws: a 3-D one on a ball, a 2-D one on what fits it, lit when it has a normal map or glows. Pictures are kept in `.dart_tool/just_game_engine_editor/material_pictures` until the file, or a map, layer or parent it uses, changes.
+- **New material**, **New 2D material** and **New screen material** in a folder's menu make one and open it; **New variant** in a material's menu makes one beside it.
+- **The 3-D Material window**: Surface, Transparency, Maps (each slot pictured, taking an image dragged from Assets), Layers and layout; presets to start from; a live preview on a ball, a cube, a cylinder, a ring or a floor tile in a studio, a day, dusk, night or overcast sky, or the open scene's own.
+- **The 2-D Material window**: each effect a switch with its values — colour (palette swap, gradient map, greyscale, tint, flash), edges (outline, glow, drop shadow), motion (wave, scroll, dissolve, shine), light (normal map, glow) — or, for a screen material, the frame's (pixelate, an old screen, a colour grade, scanlines, a vignette). Effects that are on come first, each with what it does, a reset and a solo; the rest are added from a searchable list; presets start one off.
+  - **A preview drawn by the engine itself.** By default on what fits the material: the game's own sprite or shape drawn with it (pick another of them), stone tiles under a normal map, tiles for a wave, else a sample disc; or the selected sprite, or tiles. It zooms and pans, repeats the subject 3 × 3 to show its seams, compares with and without (a line to drag; Space held), shows the normals the light sees, and has a light to drag with its colour, height, reach and strength. What moves plays, pauses, goes slower or faster and is scrubbed. Every part of it has a key, and what it says shows in chips over its foot.
+  - **A normal map from the sprite shown**, from the wand on the Normal map slot.
+- **Live in the scene.** While a material is open, the open scene draws it as it is being edited, a value being dragged too, until it is saved, switched off in the window's header, or closed (the scene draws the file again).
+- **Variants**: a material with a parent shows the parent's values where it has none of its own, and what is changed becomes its own; each value says which it is, with a revert. Revert all, and Apply to parent.
+- **Dropped on what it draws**: a 3-D material on a shape or a model, a 2-D one on a sprite or a shape, a screen material on the scene's — one undo step. A Level Map layer takes one in its settings.
+- **An entity's own values** for its material are edited in the inspector, each with an editor of its kind, a way to take it away and a list of what can be added.
+- **Checks** in Problems: missing or looping parents, values out of range, a screen material on a sprite, a normal map with no Scene lighting, two screen materials at once, a material named that isn't there; each with a fix where one is clear.
+- **Made from files**: a material from every texture set in a folder (maps named alike, as texture sites export them: roughness, metal and occlusion packed, DirectX normals turned round); a model's own materials out of a `.glb` or `.gltf` (Extract materials); a normal map from an image (Generate normal map), for a sprite or for a texture that repeats.
+
+The 3-D pictures and preview need Flutter GPU on in the game's runner (`set_enable_flutter_gpu(true)` on Windows; see just_graphics_engine's README for the others). Without it the dock shows the material's icon and the 3-D window says it has no GPU for a preview; everything else works. The 2-D ones need nothing.
+
+The windows, pictures and tools are a library of their own for tools and modules that build on them: `package:just_game_engine_editor/materials.dart`. `just_material_editor` is where the advanced tools will go (a shader graph); it adds to these windows ([below](#extending-the-editor)).
+
+---
+
 ## Docks
 
 The foot of the editor is a status strip and, above it, one tabbed panel (**F2** or Ctrl+` opens and shuts it). Each fact on the strip is a button to where it came from: errors to the Console, the frame rate to the Profiler. Tabs reorder, a right-click pops a dock out, maximises it or takes it off the bar, and **+** brings back any dock. The layout, each dock's filters and the popped-out windows are remembered.
@@ -216,7 +240,7 @@ The foot of the editor is a status strip and, above it, one tabbed panel (**F2**
 | Dock | Key | What it shows |
 |------|-----|---------------|
 | Console | Ctrl+Shift+C | The log, the last session's too: search (text or `/regex/`), levels, sources, repeats folded, pause, export, and a line for the editor's commands. Clicking a line selects the entity it names |
-| Assets | Ctrl+Shift+A | The project's files with thumbnails, filters by kind, drag to the viewport or onto a field, rename (references follow), duplicate, find references, delete (undoable) and each kind's conversions; package assets read-only |
+| Assets | Ctrl+Shift+A | The project's files with thumbnails, filters by kind; a double-click opens a file in its window, a scene as the scene, and a JSON file no window is installed for read-only (pretty-printed, numbered, searched; Open in system app); drag to the viewport or onto a field, rename (references follow), duplicate, find references, delete (undoable) and each kind's conversions; package assets read-only |
 | Timeline | Ctrl+Shift+T | The selected entity's timeline, or a `.timeline.json` |
 | Profiler | Ctrl+Shift+P | Frame times against the target, and what each system took |
 | World | Ctrl+Shift+W | The live entities, systems (with timings) and component types |
@@ -328,6 +352,8 @@ class MyGameModule extends EditorModule {
 
 A module can bring prefabs and tools, overlays, snap providers and a grid to the Level Designer; docks, toolbar buttons, settings pages, theme presets and full-screen workspaces to the chrome; field editors, inspector sections and component extras to the inspector; scene-tree actions, row badges and icons; commands and key bindings; checks for Problems; kinds of file and actions on them for Assets; tags its code relies on; and, for 3-D, a view, markers, exact pick tests, viewport overlays, handles and prefab variants. The first module to answer wins where only one answer counts (an entity's icon), lowest `order` first; lists are added together. See [ARCHITECTURE.md](ARCHITECTURE.md#the-module-contract) for every member.
 
+A module adds to another's window too, by the window's id: a tool on its toolbar (`WorkspaceTool`), a section in its panel (`WorkspaceSection`) or an overlay over its preview (`WorkspaceOverlay`), in `workspaceContributions`. Each is handed the window's view of itself — for the material windows (`WorkspaceIds.material`, `WorkspaceIds.material2D`) the material, what the preview shows, and `change` as one undo step.
+
 Everything a module contributes is rebuilt from the modules on every reload of the editor's registries, so nothing piles up across hot reloads. `onRegister` runs once; `onReassemble` after each hot reload.
 
 The first-party modules:
@@ -341,9 +367,11 @@ The first-party modules:
 | `SpriteStudioModule` | `just_sprite_editor` | Sprite sheets, atlases and animator graphs |
 | `InputEditorModule` | `just_input_editor` | The input actions asset |
 | `AssetStoreModule` | `just_asset_store_editor` | The Asset Store window |
+| `MaterialEditorModule` | `just_material_editor` | The advanced material tools to come (a shader graph); nothing yet |
+| `BuiltInMaterialsModule` | built in | Materials, 2-D and 3-D ([above](#materials)) |
 | `HexGridModule` | built in | A hexagonal grid for the Level Designer |
 
-The editor's own tools arrive the same way: `BuiltInEditorModule` holds its field editors, commands, prefabs, workspaces and the rest, registered ahead of every other module, so a module replaces any of it by reusing an id.
+The editor's own tools arrive the same way: `BuiltInEditorModule` holds its field editors, commands, prefabs, workspaces and the rest, and `BuiltInMaterialsModule` its materials, registered ahead of every other module, so a module replaces any of it by reusing an id.
 
 A project made with `just create` lists the modules of the store items it has in a generated `lib/editor/store_modules.g.dart`.
 

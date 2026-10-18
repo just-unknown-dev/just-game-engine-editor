@@ -46,6 +46,7 @@ import '../level_map/level_map_provision.dart';
 import '../level_map/tile_commands.dart';
 import '../../ui/level_designer/tools/tiles/tile_tool_base.dart';
 import '../../extension/built_in_editor_module.dart';
+import '../../materials/built_in_materials_module.dart';
 import '../../ui/overlay/camera_rig_painter.dart';
 import '../prefs/recent_scenes.dart';
 import '../scope/editor_scope_services.dart';
@@ -95,7 +96,10 @@ class JustGameEditorPlugin implements EnginePlugin {
              scope ??
              EditorScope(
                engine: engine,
-               builtIns: const [BuiltInEditorModule.new],
+               builtIns: const [
+                 BuiltInEditorModule.new,
+                 BuiltInMaterialsModule.make,
+               ],
                modules: [..._staticModules, ...modules],
              ),
          ownsScope: scope == null,
@@ -142,7 +146,9 @@ class JustGameEditorPlugin implements EnginePlugin {
     scope.spawners.value = spawners;
     // A scope someone else built gets the editor's own tools, ahead of its
     // modules; one the plugin built already has them.
-    scope.addBuiltIn(BuiltInEditorModule.new);
+    scope
+      ..addBuiltIn(BuiltInEditorModule.new)
+      ..addBuiltIn(BuiltInMaterialsModule.make);
     // Modules handed to the plugin alongside a scope someone else built join
     // that scope; a scope the plugin built already has them.
     if (lateModules.isNotEmpty) {

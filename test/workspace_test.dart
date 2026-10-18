@@ -64,11 +64,11 @@ class _PaintModule extends EditorModule {
 void main() {
   test('a module lists workspaces; a file opens in the one that fits best', () {
     final scope = testScope(modules: [_PaintModule()]);
-    // The tileset editor is the editor's own workspace and is always
-    // there; the module's come after it.
+    // The tileset editor and the JSON viewer are the editor's own
+    // workspaces and are always there; the module's come between them.
     expect(
       [for (final w in scope.workspaces) w.id],
-      [BuiltInWorkspaces.tileset, 'paint', 'graph'],
+      [BuiltInWorkspaces.tileset, 'paint', 'graph', BuiltInWorkspaces.json],
     );
     expect(scope.activeWorkspace.value, isNull);
 
@@ -78,6 +78,9 @@ void main() {
 
     // `animator.json` is a longer match than `json`, whoever declares it.
     expect(scope.openInWorkspace('assets/hero.animator.json'), isTrue);
+    expect(scope.activeWorkspace.value!.definition.id, 'graph');
+    // A module's window for any JSON file comes before the viewer's.
+    expect(scope.openInWorkspace('assets/data.json'), isTrue);
     expect(scope.activeWorkspace.value!.definition.id, 'graph');
 
     expect(scope.openInWorkspace('assets/readme.txt'), isFalse);
@@ -98,7 +101,7 @@ void main() {
     scope.reload();
     expect(
       [for (final w in scope.workspaces) w.id],
-      [BuiltInWorkspaces.tileset],
+      [BuiltInWorkspaces.tileset, BuiltInWorkspaces.json],
       reason: "only the editor's own are left",
     );
     expect(scope.activeWorkspace.value, isNull);
