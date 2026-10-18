@@ -19,7 +19,7 @@ import '../../inspector/prefab_inspector.dart';
 
 /// Chrome shown when the full editor is closed but the compact status dock
 /// is pinned open: the dock over the game, and the settings gear standing on
-/// it at the right, with any messages above the gear. Sized against [MediaQuery]'s screen size since it paints
+/// it at the right, with any messages to the gear's left. Sized against [MediaQuery]'s screen size since it paints
 /// in the root [Overlay] rather than inline with [JustGameEditorOverlay],
 /// which — for this package's expected full-bleed usage — matches the size
 /// the dock would have received locally.
@@ -37,29 +37,32 @@ class CompactChrome extends StatelessWidget {
           left: 0,
           right: 0,
           bottom: 0,
-          // One column, so the gear and the messages above it ride up with
+          // One column, so the gear and the messages beside it ride up with
           // the dock panel.
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Align(
-                alignment: Alignment.centerRight,
-                child: Padding(
-                  padding: EdgeInsets.only(right: 8, bottom: 8),
-                  child: EditorSnackBarLayer(),
-                ),
-              ),
               Align(
                 alignment: Alignment.centerRight,
                 child: Padding(
                   padding: const EdgeInsets.only(right: 16, bottom: 16),
-                  child: SignalBuilder<OverlayUiSettings>(
-                    signal: plugin.scope.prefs.settings,
-                    builder: (context, settings, _) => SettingsGearButton(
-                      scope: plugin.scope,
-                      settings: settings,
-                    ),
+                  // The newest message level with the gear, older ones
+                  // stacked up from it.
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const EditorSnackBarLayer(),
+                      const SizedBox(width: 8),
+                      SignalBuilder<OverlayUiSettings>(
+                        signal: plugin.scope.prefs.settings,
+                        builder: (context, settings, _) => SettingsGearButton(
+                          scope: plugin.scope,
+                          settings: settings,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -109,7 +112,7 @@ EdgeInsets editorGameInsets({
 /// Chrome shown while the full editor is open: the right panel, the docks
 /// along the foot of the canvas column, the controls floating over the
 /// viewport's corners — play top left, transform top right with the Asset
-/// Store under it, the settings gear bottom right with messages above it,
+/// Store under it, the settings gear bottom right with messages to its left,
 /// the designer's minimap or, in space, the view cube bottom left — and the
 /// dialogs over it all.
 /// See [CompactChrome] for the sizing assumption.
@@ -193,8 +196,8 @@ class FullEditorChrome extends StatelessWidget {
             Offset(0, PlayControlsToolbar.heightFor(settings) + 8) -
             Offset(gameInsets.left, gameInsets.top);
         // What stands in the bottom right corner: the gear, snapping at hand
-        // on it while editing, and above them the messages; the transform
-        // column and tool strip stop short of them.
+        // on it while editing, and the messages to the gear's left; the
+        // transform column and tool strip stop short of them.
         final gearMargin = ruled ? MinimapLayout.margin : 16.0;
         // Editing a scene: the transform column and the snapping show.
         final quickSnap =
@@ -399,11 +402,13 @@ class FullEditorChrome extends StatelessWidget {
             // Over everything, the settings, while they are open.
             Positioned.fill(child: EditorSettingsHost(scope: plugin.scope)),
             // Messages last, so a dialog never hides one: in the canvas's
-            // own corner, standing on the gear, clear of the panels and of
-            // whatever the foot of the window holds.
+            // own corner, to the gear's left — the newest level with it,
+            // older ones stacked up from it — clear of the column of tools
+            // over the gear and of whatever the foot of the window holds.
             Positioned(
-              bottom: aboveGear,
-              right: gameInsets.right + 8,
+              bottom: gameInsets.bottom + gearMargin,
+              right:
+                  gameInsets.right + gearMargin + SettingsGearButton.width + 8,
               child: const EditorSnackBarLayer(),
             ),
           ],

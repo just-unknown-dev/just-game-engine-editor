@@ -1,7 +1,8 @@
 // What stands where over the viewport: a button that asks to stand apart
 // from the modules' tools (the Asset Store's) is in the column down the
-// right, in a frame of its own under the transform tools, and in space the
-// view cube has the bottom left corner to itself.
+// right, in a frame of its own under the transform tools, in space the
+// view cube has the bottom left corner to itself, and messages stand to the
+// gear's left.
 
 import 'dart:io';
 
@@ -201,6 +202,36 @@ void main() {
     plugin.sceneState.openScene(EditorScene(name: 'flat'));
     await tester.pump();
     expect(find.byType(ViewCube), findsNothing);
+    await stop(tester);
+  });
+
+  testWidgets("messages stand to the gear's left, the newest level with it, "
+      'clear of the snapping above it', (tester) async {
+    if (!kDebugMode) return;
+    await start(tester);
+    final messages = EditorMessenger.of(
+      tester.element(find.byType(SettingsGearButton)),
+    );
+    messages.showSnackBar(const EditorSnackBarEntry(message: 'First'));
+    await tester.pump();
+
+    final gear = tester.getRect(find.byType(SettingsGearButton));
+    final snap = tester.getRect(find.byType(QuickSnapBar));
+    var layer = tester.getRect(find.byType(EditorSnackBarLayer));
+    expect(layer.right, closeTo(gear.left - 8, 1), reason: 'beside the gear');
+    expect(layer.bottom, closeTo(gear.bottom, 1), reason: "the gear's line");
+    expect(layer.right, lessThan(snap.left), reason: 'not over the snapping');
+
+    // A second one: the newest by the gear, the older stacked above it.
+    messages.showSnackBar(const EditorSnackBarEntry(message: 'Second'));
+    await tester.pump();
+    layer = tester.getRect(find.byType(EditorSnackBarLayer));
+    expect(layer.bottom, closeTo(gear.bottom, 1));
+    expect(
+      tester.getRect(find.text('Second')).top,
+      greaterThan(tester.getRect(find.text('First')).bottom),
+    );
+    await tester.pump(const Duration(seconds: 10));
     await stop(tester);
   });
 }

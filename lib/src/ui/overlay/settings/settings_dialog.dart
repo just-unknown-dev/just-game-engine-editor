@@ -29,10 +29,14 @@ class SettingsGearButton extends StatelessWidget {
   final EditorScope scope;
   final OverlayUiSettings settings;
 
-  /// How tall it stands, for what has to clear it: the messages above it
-  /// and the tool strip. One of the strip's buttons in the strip's frame.
+  /// How tall it stands, for what has to clear it: the tool strip above
+  /// it. One of the strip's buttons in the strip's frame.
   static double heightFor(OverlayUiSettings settings) =>
       FloatingToolFrame.heightFor(ToolStripButton.extent);
+
+  /// How wide it stands, for what stands beside it: the messages, to its
+  /// left. The tool strip's width in the frame's line.
+  static const double width = ToolPalette.width + 2;
 
   @override
   Widget build(BuildContext context) {

@@ -325,7 +325,7 @@ packages:
       path: "../../just_physics_engine"
       relative: true
     source: path
-    version: "1.5.0"
+    version: "1.4.1"
   just_signals:
     dependency: transitive
     description:
