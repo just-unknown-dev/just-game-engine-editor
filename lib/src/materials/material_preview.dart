@@ -47,6 +47,26 @@ enum PreviewShape {
   };
 }
 
+/// What a preview is drawn in front of.
+enum PreviewBackdrop {
+  /// The light's own sky: a plain dark grey for the studio.
+  sky('Sky', null),
+
+  /// A plain dark grey, as the 2-D material window's dark background.
+  dark('Dark', 0xFF2A2E35),
+
+  /// A plain light grey, as the 2-D material window's bright background.
+  bright('Bright', 0xFFD9DDE3);
+
+  const PreviewBackdrop(this.label, this.colour);
+
+  /// Its name in the editor.
+  final String label;
+
+  /// Its colour (sRGB); null for [sky].
+  final int? colour;
+}
+
 /// The light a preview is drawn in.
 enum PreviewLighting {
   /// A neutral grey room with a key light: how the material looks itself.

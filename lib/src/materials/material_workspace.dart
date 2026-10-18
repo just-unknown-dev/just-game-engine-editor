@@ -14,16 +14,21 @@ import 'map_pictures.dart';
 import 'material_pictures.dart';
 import 'material_presets.dart';
 import 'material_preview.dart';
+import 'material_window_kit.dart';
 
 /// A material file's look (`*.material.json`), with a live preview to turn:
 /// the workspace a material opens in.
 ///
-/// Its fields are in sections — Surface, Transparency, Maps (each with a
-/// picture of its image), Layers, and how the maps are laid out — with
-/// presets to start from. A slider being dragged or a colour being picked
-/// shows in the preview at once and becomes one undo step when let go.
-/// The preview shows the material on a ball, a cube, a cylinder, a ring or
-/// a floor tile, in a studio, a sky's light or the open scene's own.
+/// It looks and works as the 2-D material window does. Its values are in
+/// cards in a panel on the left — Surface, Transparency, Maps (each with a
+/// picture of its image), Layers, and how the maps are laid out — each
+/// with what it holds, a reset and a fold, under presets to start from. A
+/// slider being dragged or a colour being picked shows in the preview at
+/// once and becomes one undo step when let go. The preview shows the
+/// material on a ball, a cube, a cylinder, a ring or a floor tile, in a
+/// studio, a sky's light or the open scene's own, in front of that sky or
+/// a plain dark or light background; it zooms, and compares the material
+/// with a plain grey one.
 ///
 /// A variant (a material with a parent) shows its parent's values where it
 /// has none of its own; whatever is changed becomes its own.
@@ -143,8 +148,37 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   Object? _drawError;
   // A little way back, so the whole shape shows with room round it.
   static const double _startZoom = 0.85;
-  double _yaw = -0.6, _pitch = -0.45, _zoom = _startZoom;
+  static const double _startYaw = -0.6, _startPitch = -0.45;
+  double _yaw = _startYaw, _pitch = _startPitch, _zoom = _startZoom;
   Size _size = const Size(360, 360);
+  ui.Image? _plainImage;
+  GpuSurface? _plainSurface;
+
+  /// What Compare shows on the other side of its line: a plain grey.
+  static const MaterialFile plain = MaterialFile(
+    color: 0xFF5F646B,
+    roughness: 0.6,
+  );
+
+  /// What the preview is drawn in front of, kept for the next material.
+  static PreviewBackdrop _lastBackdrop = PreviewBackdrop.sky;
+  PreviewBackdrop get backdrop => _backdrop;
+  PreviewBackdrop _backdrop = _lastBackdrop;
+
+  /// Where the compare line is, a share of the preview across: a plain
+  /// grey material to its left, this one to its right. Null when not
+  /// comparing.
+  double? get compareAt => _compareAt;
+  double? _compareAt;
+
+  /// Whether Space is held: a plain grey material drawn in its place.
+  bool get holdingPlain => _holdingPlain;
+  bool _holdingPlain = false;
+
+  /// The material's panel's width, kept for the next material.
+  static double _lastPanelWidth = 360;
+  double get panelWidth => _panelWidth;
+  double _panelWidth = _lastPanelWidth;
   late final MapPictures _maps = widget.maps ?? MapPictures(root: widget.root);
   StreamSubscription<String>? _changes;
 
@@ -395,21 +429,31 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
         }
         if (!mounted) return;
         final surface = _surface ??= renderer.device.createSurface(w, h);
-        ui.Image? image;
+        Future<ui.Image?> draw(MaterialFile file, GpuSurface into) =>
+            widget.pictures.render(
+              file,
+              width: w,
+              height: h,
+              yaw: _yaw,
+              pitch: _pitch,
+              zoom: _zoom,
+              shape: _shape,
+              lighting: _lighting,
+              scene: sceneLighting,
+              background: _backdrop.colour,
+              into: into,
+            );
+        ui.Image? image, plainImage;
         Object? problem;
         try {
-          image = await widget.pictures.render(
-            drawn,
-            width: w,
-            height: h,
-            yaw: _yaw,
-            pitch: _pitch,
-            zoom: _zoom,
-            shape: _shape,
-            lighting: _lighting,
-            scene: sceneLighting,
-            into: surface,
-          );
+          image = await draw(drawn, surface);
+          // Compare's other side: the same, in a plain grey.
+          if (_comparing) {
+            plainImage = await draw(
+              plain,
+              _plainSurface ??= renderer.device.createSurface(w, h),
+            );
+          }
         } on Object catch (error) {
           // A map or layer that can't be read: say so, keep the last
           // picture.
@@ -417,6 +461,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
         }
         if (!mounted) {
           image?.dispose();
+          plainImage?.dispose();
           return;
         }
         setState(() {
@@ -424,6 +469,10 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
           if (image != null) {
             _image?.dispose();
             _image = image;
+          }
+          if (plainImage != null) {
+            _plainImage?.dispose();
+            _plainImage = plainImage;
           }
         });
       } while (_again && mounted);
@@ -439,15 +488,109 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
     _changes?.cancel();
     if (widget.maps == null) _maps.dispose();
     _image?.dispose();
+    _plainImage?.dispose();
     _extensionView.dispose();
     super.dispose();
   }
 
+  /// Draws the preview in front of [backdrop].
+  void setBackdrop(PreviewBackdrop backdrop) {
+    if (backdrop == _backdrop) return;
+    setState(() => _backdrop = _lastBackdrop = backdrop);
+    _redraw();
+  }
+
+  /// Compares the material with a plain grey one — a line across the
+  /// preview at [at] (a share of it across), the plain one to its left —
+  /// or stops.
+  void setCompare(double? at) {
+    final was = _comparing;
+    setState(() => _compareAt = at?.clamp(0.02, 0.98).toDouble());
+    if (_comparing && !was) _redraw();
+  }
+
+  /// Draws a plain grey material in its place while Space is held.
+  void setHoldingPlain(bool on) {
+    if (on == _holdingPlain) return;
+    final was = _comparing;
+    setState(() => _holdingPlain = on);
+    if (_comparing && !was) _redraw();
+  }
+
+  bool get _comparing => _compareAt != null || _holdingPlain;
+
+  /// How close the preview is, as a share of how close it starts.
+  double get zoom => _zoom / _startZoom;
+
+  /// Whether the preview is turned and zoomed as it started.
+  bool get atStart =>
+      _yaw == _startYaw && _pitch == _startPitch && _zoom == _startZoom;
+
+  /// A step closer (+1) or further (-1).
+  void zoomBy(int steps) => _zoomTo(_zoom * math.pow(1.25, steps));
+
+  void _zoomTo(num zoom) {
+    final next = zoom.clamp(0.5, 3.0).toDouble();
+    if (next == _zoom) return;
+    setState(() => _zoom = next);
+    _redraw();
+  }
+
+  /// Turns and zooms the preview as it started.
+  void fit() {
+    setState(() {
+      _yaw = _startYaw;
+      _pitch = _startPitch;
+      _zoom = _startZoom;
+    });
+    _redraw();
+  }
+
+  /// Sizes the material's panel [width] logical pixels wide.
+  void setPanelWidth(double width) => setState(
+    () => _panelWidth = _lastPanelWidth = width.clamp(260, 640).toDouble(),
+  );
+
+  /// The preview's keys, as its shortcut list says them.
+  static const String shortcuts =
+      'F  face it again      + / −  zoom in, out\n'
+      'Wheel  zoom      Drag  turn      Double-click  face it again\n'
+      'C  compare      Hold Space  without the material\n'
+      'B  background\n'
+      'Ctrl+S  save      Ctrl+Z / Ctrl+Y  undo, redo';
+
   KeyEventResult _onKey(KeyEvent event) {
+    // Space held shows a plain grey material in its place.
+    if (event.logicalKey == LogicalKeyboardKey.space &&
+        !WorkspaceKeyScope.isTyping) {
+      if (event is KeyDownEvent) setHoldingPlain(true);
+      if (event is KeyUpEvent) setHoldingPlain(false);
+      return KeyEventResult.handled;
+    }
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final ctrl = HardwareKeyboard.instance.isControlPressed;
     final shift = HardwareKeyboard.instance.isShiftPressed;
-    if (!ctrl) return KeyEventResult.ignored;
+    if (!ctrl) {
+      if (WorkspaceKeyScope.isTyping) return KeyEventResult.ignored;
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.keyF:
+          fit();
+        case LogicalKeyboardKey.equal:
+        case LogicalKeyboardKey.numpadAdd:
+          zoomBy(1);
+        case LogicalKeyboardKey.minus:
+        case LogicalKeyboardKey.numpadSubtract:
+          zoomBy(-1);
+        case LogicalKeyboardKey.keyC:
+          setCompare(_compareAt == null ? 0.5 : null);
+        case LogicalKeyboardKey.keyB:
+          const all = PreviewBackdrop.values;
+          setBackdrop(all[(_backdrop.index + 1) % all.length]);
+        default:
+          return KeyEventResult.ignored;
+      }
+      return KeyEventResult.handled;
+    }
     switch (event.logicalKey) {
       case LogicalKeyboardKey.keyZ when shift:
       case LogicalKeyboardKey.keyY:
@@ -505,8 +648,10 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(width: 340, child: _fields()),
-                  const VerticalDivider(width: 1),
+                  SizedBox(width: _panelWidth, child: _fields()),
+                  PanelResizeHandle(
+                    onDrag: (dx) => setPanelWidth(_panelWidth + dx),
+                  ),
                   Expanded(child: _previewPane()),
                 ],
               ),
@@ -909,6 +1054,130 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
     ),
   );
 
+  /// The keys of the material each card holds, by card: what its reset
+  /// and, in a variant, its revert take back.
+  static const Map<String, List<String>> cardKeys = {
+    'surface': [
+      'color',
+      'metallic',
+      'roughness',
+      'emission',
+      'emissionStrength',
+      'unlit',
+      'doubleSided',
+    ],
+    'transparency': ['alpha', 'opacity', 'alphaCutoff'],
+    'maps': [
+      'colorMap',
+      'metalRoughMap',
+      'normalMap',
+      'normalScale',
+      'occlusionMap',
+      'occlusionStrength',
+      'emissionMap',
+    ],
+    'layers': ['layers'],
+    'layout': ['uv', 'tiling', 'offset', 'rotation'],
+  };
+
+  // Each card's name, and a line on what it holds.
+  static const Map<String, (String, String)> _cardText = {
+    'surface': (
+      'Surface',
+      'Its colour, how metal and how rough it is, and its glow.',
+    ),
+    'transparency': (
+      'Transparency',
+      "Solid, cut out where the colour map's alpha is low, or see-through.",
+    ),
+    'maps': (
+      'Maps',
+      'Images for its colour, its metal and roughness, its bumps, the shade '
+          'in its creases and its glow.',
+    ),
+    'layers': (
+      'Layers',
+      "Up to four materials blended by a mesh's vertex red, green, blue and "
+          "alpha; each layer's colour map tiled per metre as that layer says.",
+    ),
+    'layout': (
+      'Laid out',
+      'How the maps lie on the mesh — by its own coordinates, per metre or '
+          'from the world — repeated, shifted and turned.',
+    ),
+  };
+
+  /// Whether the card [card] holds anything but the defaults (in a
+  /// variant: anything of its own).
+  bool cardChanged(String card) {
+    final keys = cardKeys[card]!;
+    final m = material;
+    if (m.isVariant) return keys.any(m.overrides.contains);
+    // Saved, a material keeps only what differs from the defaults.
+    final saved = m.toJson();
+    return keys.any(saved.containsKey);
+  }
+
+  /// The card [card]'s values back to the defaults — in a variant, to its
+  /// parent's — as one undo step.
+  void resetCard(String card) {
+    final keys = cardKeys[card]!;
+    final m = material;
+    if (m.isVariant) {
+      edit(m.copyWith(overrides: {...m.overrides}..removeAll(keys)));
+      return;
+    }
+    edit(
+      MaterialFile.fromJson(
+        m.toJson()..removeWhere((k, _) => keys.contains(k)),
+      ),
+    );
+  }
+
+  Widget _card(String card, List<Widget> rows) {
+    final (title, description) = _cardText[card]!;
+    final fold = '3d.$card';
+    final changed = cardChanged(card);
+    return MaterialCard(
+      title: title,
+      description: description,
+      folded: MaterialCardFolds.isFolded(fold),
+      onFold: (folded) => setState(() => MaterialCardFolds.set(fold, folded)),
+      actions: [
+        EditorIconButton(
+          icon: Icons.restart_alt,
+          tooltip: material.isVariant
+              ? "Back to its parent's values"
+              : 'Back to its defaults',
+          iconSize: 14,
+          size: 22,
+          onTap: changed ? () => resetCard(card) : null,
+        ),
+        if (material.isVariant)
+          SizedBox(
+            width: 24,
+            child: changed
+                ? EditorIconButton(
+                    icon: Icons.undo,
+                    tooltip: "Its own: back to the parent's",
+                    iconSize: 14,
+                    size: 22,
+                    onTap: () => resetCard(card),
+                  )
+                : Tooltip(
+                    message: "The parent's",
+                    child: Icon(
+                      Icons.link,
+                      size: 12,
+                      color: EditorTheme.textMuted,
+                    ),
+                  ),
+          ),
+      ],
+      children: rows,
+    );
+  }
+
   Widget _fields() {
     final m = _live ?? shown;
     final layered = m.kind == MaterialKind.layered;
@@ -938,211 +1207,209 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
             onChanged: (k) => change((x) => x.copyWith(kind: k)),
           ),
         ),
+        const SizedBox(height: 4),
         if (!layered) ...[
-          const EditorSectionHeader('Surface'),
-          _colour(
-            'Colour',
-            key: 'color',
-            m.color,
-            (x, v) => x.copyWith(color: v),
-          ),
-          _slider(
-            'Metallic',
-            key: 'metallic',
-            m.metallic,
-            1,
-            (x, v) => x.copyWith(metallic: v),
-          ),
-          _slider(
-            'Roughness',
-            key: 'roughness',
-            m.roughness,
-            1,
-            (x, v) => x.copyWith(roughness: v),
-          ),
-          _colour(
-            'Glow',
-            key: 'emission',
-            m.emission,
-            (x, v) => x.copyWith(emission: v),
-          ),
-          _slider(
-            'Glow strength',
-            key: 'emissionStrength',
-            m.emissionStrength,
-            20,
-            (x, v) => x.copyWith(emissionStrength: v),
-          ),
-          _toggle(
-            'Unlit',
-            key: 'unlit',
-            'Ignore lights',
-            m.unlit,
-            (x, v) => x.copyWith(unlit: v),
-          ),
-          _toggle(
-            'Two-sided',
-            key: 'doubleSided',
-            'Both faces',
-            m.doubleSided,
-            (x, v) => x.copyWith(doubleSided: v),
-          ),
-          const EditorSectionHeader('Transparency'),
+          _card('surface', [
+            _colour(
+              'Colour',
+              key: 'color',
+              m.color,
+              (x, v) => x.copyWith(color: v),
+            ),
+            _slider(
+              'Metallic',
+              key: 'metallic',
+              m.metallic,
+              1,
+              (x, v) => x.copyWith(metallic: v),
+            ),
+            _slider(
+              'Roughness',
+              key: 'roughness',
+              m.roughness,
+              1,
+              (x, v) => x.copyWith(roughness: v),
+            ),
+            _colour(
+              'Glow',
+              key: 'emission',
+              m.emission,
+              (x, v) => x.copyWith(emission: v),
+            ),
+            _slider(
+              'Glow strength',
+              key: 'emissionStrength',
+              m.emissionStrength,
+              20,
+              (x, v) => x.copyWith(emissionStrength: v),
+            ),
+            _toggle(
+              'Unlit',
+              key: 'unlit',
+              'Ignore lights',
+              m.unlit,
+              (x, v) => x.copyWith(unlit: v),
+            ),
+            _toggle(
+              'Two-sided',
+              key: 'doubleSided',
+              'Both faces',
+              m.doubleSided,
+              (x, v) => x.copyWith(doubleSided: v),
+            ),
+          ]),
+          _card('transparency', [
+            _row(
+              key: 'alpha',
+              'Mode',
+              EditorSegmented<MaterialAlpha>(
+                value: m.alpha,
+                options: const [
+                  (MaterialAlpha.opaque, 'Opaque'),
+                  (MaterialAlpha.cutout, 'Cutout'),
+                  (MaterialAlpha.blend, 'Blend'),
+                ],
+                tooltips: const {
+                  MaterialAlpha.opaque: 'Solid: nothing shows through',
+                  MaterialAlpha.cutout:
+                      "Holes where the colour map's alpha is below the cutoff "
+                      '— leaves, fences',
+                  MaterialAlpha.blend:
+                      'See-through by its opacity — glass, water',
+                },
+                onChanged: (a) => change((x) => x.copyWith(alpha: a)),
+              ),
+            ),
+            if (m.alpha == MaterialAlpha.cutout)
+              _slider(
+                'Cutoff',
+                key: 'alphaCutoff',
+                m.alphaCutoff,
+                1,
+                (x, v) => x.copyWith(alphaCutoff: v),
+              ),
+            if (m.alpha == MaterialAlpha.blend)
+              _slider(
+                'Opacity',
+                key: 'opacity',
+                m.opacity,
+                1,
+                (x, v) => x.copyWith(opacity: v),
+              ),
+          ]),
+          _card('maps', [
+            _map(
+              'Colour',
+              key: 'colorMap',
+              m.colorMap,
+              (x, p) => x.copyWith(colorMap: p),
+            ),
+            _map(
+              'Metal & rough',
+              key: 'metalRoughMap',
+              m.metalRoughMap,
+              (x, p) => x.copyWith(metalRoughMap: p),
+            ),
+            _map(
+              'Normal',
+              key: 'normalMap',
+              m.normalMap,
+              (x, p) => x.copyWith(normalMap: p),
+            ),
+            if (m.normalMap.isNotEmpty)
+              _slider(
+                'Normal strength',
+                key: 'normalScale',
+                m.normalScale,
+                2,
+                (x, v) => x.copyWith(normalScale: v),
+              ),
+            _map(
+              'Occlusion',
+              key: 'occlusionMap',
+              m.occlusionMap,
+              (x, p) => x.copyWith(occlusionMap: p),
+            ),
+            if (m.occlusionMap.isNotEmpty)
+              _slider(
+                'Occlusion strength',
+                key: 'occlusionStrength',
+                m.occlusionStrength,
+                1,
+                (x, v) => x.copyWith(occlusionStrength: v),
+              ),
+            _map(
+              'Glow',
+              key: 'emissionMap',
+              m.emissionMap,
+              (x, p) => x.copyWith(emissionMap: p),
+            ),
+          ]),
+        ] else
+          _card('layers', [
+            for (var i = 0; i < MaterialFile.maxLayers; i++)
+              _layer(i, i < m.layers.length ? m.layers[i] : ''),
+          ]),
+        _card('layout', [
           _row(
-            key: 'alpha',
-            'Mode',
-            EditorSegmented<MaterialAlpha>(
-              value: m.alpha,
+            key: 'uv',
+            'How',
+            EditorSegmented<MaterialUv>(
+              value: m.uv,
               options: const [
-                (MaterialAlpha.opaque, 'Opaque'),
-                (MaterialAlpha.cutout, 'Cutout'),
-                (MaterialAlpha.blend, 'Blend'),
+                (MaterialUv.natural, 'Mesh'),
+                (MaterialUv.metres, 'Metres'),
+                (MaterialUv.world, 'World'),
               ],
               tooltips: const {
-                MaterialAlpha.opaque: 'Solid: nothing shows through',
-                MaterialAlpha.cutout:
-                    "Holes where the colour map's alpha is below the cutoff "
-                    '— leaves, fences',
-                MaterialAlpha.blend:
-                    'See-through by its opacity — glass, water',
+                MaterialUv.natural: "As the mesh's own coordinates say",
+                MaterialUv.metres:
+                    'Repeated per metre along the mesh, at any size',
+                MaterialUv.world:
+                    'Projected from the world: no seams between pieces side '
+                    'by side',
               },
-              onChanged: (a) => change((x) => x.copyWith(alpha: a)),
+              onChanged: (v) => change((x) => x.copyWith(uv: v)),
             ),
           ),
-          if (m.alpha == MaterialAlpha.cutout)
-            _slider(
-              'Cutoff',
-              key: 'alphaCutoff',
-              m.alphaCutoff,
-              1,
-              (x, v) => x.copyWith(alphaCutoff: v),
-            ),
-          if (m.alpha == MaterialAlpha.blend)
-            _slider(
-              'Opacity',
-              key: 'opacity',
-              m.opacity,
-              1,
-              (x, v) => x.copyWith(opacity: v),
-            ),
-          const EditorSectionHeader('Maps'),
-          _map(
-            'Colour',
-            key: 'colorMap',
-            m.colorMap,
-            (x, p) => x.copyWith(colorMap: p),
+          _number(
+            m.uv == MaterialUv.natural ? 'Repeat across' : 'Repeat per m',
+            key: 'tiling',
+            m.tilingX,
+            (x, v) => x.copyWith(tilingX: v),
+            positive: true,
           ),
-          _map(
-            'Metal & rough',
-            key: 'metalRoughMap',
-            m.metalRoughMap,
-            (x, p) => x.copyWith(metalRoughMap: p),
+          _number(
+            m.uv == MaterialUv.natural ? 'Repeat down' : 'Repeat per m (down)',
+            key: 'tiling',
+            m.tilingY,
+            (x, v) => x.copyWith(tilingY: v),
+            positive: true,
           ),
-          _map(
-            'Normal',
-            key: 'normalMap',
-            m.normalMap,
-            (x, p) => x.copyWith(normalMap: p),
+          _number(
+            'Shift across',
+            key: 'offset',
+            m.offsetX,
+            (x, v) => x.copyWith(offsetX: v),
           ),
-          if (m.normalMap.isNotEmpty)
-            _slider(
-              'Normal strength',
-              key: 'normalScale',
-              m.normalScale,
-              2,
-              (x, v) => x.copyWith(normalScale: v),
-            ),
-          _map(
-            'Occlusion',
-            key: 'occlusionMap',
-            m.occlusionMap,
-            (x, p) => x.copyWith(occlusionMap: p),
+          _number(
+            'Shift down',
+            key: 'offset',
+            m.offsetY,
+            (x, v) => x.copyWith(offsetY: v),
           ),
-          if (m.occlusionMap.isNotEmpty)
-            _slider(
-              'Occlusion strength',
-              key: 'occlusionStrength',
-              m.occlusionStrength,
-              1,
-              (x, v) => x.copyWith(occlusionStrength: v),
-            ),
-          _map(
-            'Glow',
-            key: 'emissionMap',
-            m.emissionMap,
-            (x, p) => x.copyWith(emissionMap: p),
+          _slider(
+            'Turn',
+            key: 'rotation',
+            m.rotation,
+            180,
+            (x, v) => x.copyWith(rotation: v),
+            min: -180,
+            step: 1,
+            decimals: 0,
+            unit: '°',
           ),
-        ] else ...[
-          EditorSectionHeader(
-            'Layers',
-            trailing: material.isVariant ? _inherit('layers') : null,
-          ),
-          _note(
-            "Blended by a mesh's vertex red, green, blue and alpha; each "
-            "layer's colour map, tiled per metre as that layer says.",
-          ),
-          for (var i = 0; i < MaterialFile.maxLayers; i++)
-            _layer(i, i < m.layers.length ? m.layers[i] : ''),
-        ],
-        const EditorSectionHeader('Laid out'),
-        _row(
-          key: 'uv',
-          'How',
-          EditorSegmented<MaterialUv>(
-            value: m.uv,
-            options: const [
-              (MaterialUv.natural, 'Mesh'),
-              (MaterialUv.metres, 'Metres'),
-              (MaterialUv.world, 'World'),
-            ],
-            tooltips: const {
-              MaterialUv.natural: "As the mesh's own coordinates say",
-              MaterialUv.metres:
-                  'Repeated per metre along the mesh, at any size',
-              MaterialUv.world:
-                  'Projected from the world: no seams between pieces side by '
-                  'side',
-            },
-            onChanged: (v) => change((x) => x.copyWith(uv: v)),
-          ),
-        ),
-        _number(
-          m.uv == MaterialUv.natural ? 'Repeat across' : 'Repeat per m',
-          key: 'tiling',
-          m.tilingX,
-          (x, v) => x.copyWith(tilingX: v),
-          positive: true,
-        ),
-        _number(
-          m.uv == MaterialUv.natural ? 'Repeat down' : 'Repeat per m (down)',
-          key: 'tiling',
-          m.tilingY,
-          (x, v) => x.copyWith(tilingY: v),
-          positive: true,
-        ),
-        _number(
-          'Shift across',
-          key: 'offset',
-          m.offsetX,
-          (x, v) => x.copyWith(offsetX: v),
-        ),
-        _number(
-          'Shift down',
-          key: 'offset',
-          m.offsetY,
-          (x, v) => x.copyWith(offsetY: v),
-        ),
-        _slider(
-          'Turn',
-          key: 'rotation',
-          m.rotation,
-          180,
-          (x, v) => x.copyWith(rotation: v),
-          min: -180,
-          step: 1,
-          decimals: 0,
-          unit: '°',
-        ),
+        ]),
         for (final problem in problems)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
@@ -1159,61 +1426,163 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
 
   // ── Preview ───────────────────────────────────────────────────────────
 
-  Widget _previewPane() {
+  static const Map<PreviewShape, (IconData, String)> _shapeLooks = {
+    PreviewShape.ball: (
+      Icons.circle_outlined,
+      'On a ball: every angle at once',
+    ),
+    PreviewShape.cube: (
+      Icons.view_in_ar_outlined,
+      'On a cube: flat faces and edges',
+    ),
+    PreviewShape.cylinder: (
+      Icons.crop_portrait,
+      'On a cylinder: a curve one way, flat the other',
+    ),
+    PreviewShape.torus: (Icons.donut_large, 'On a ring'),
+    PreviewShape.plane: (
+      Icons.crop_landscape,
+      'On a floor tile: how the maps tile and lie',
+    ),
+  };
+
+  Widget _previewPane() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _toolbar(),
+      Expanded(
+        child: Stack(
+          children: [
+            Positioned.fill(child: _view()),
+            Positioned(left: 10, right: 10, bottom: 8, child: _chips()),
+          ],
+        ),
+      ),
+    ],
+  );
+
+  Widget _toolbar() {
     final hasScene = sceneLighting != null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
-          child: Row(
-            children: [
-              Expanded(
-                child: EditorSegmented<PreviewShape>(
-                  value: _shape,
-                  options: [for (final s in PreviewShape.values) (s, s.label)],
-                  onChanged: setShape,
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 140,
-                child: EditorDropdown<PreviewLighting>(
-                  value: _lighting,
-                  tooltip: 'The light the preview is drawn in',
-                  options: [
-                    for (final l in PreviewLighting.values)
-                      EditorDropdownOption(
-                        value: l,
-                        label: l.label,
-                        detail: l == PreviewLighting.scene && !hasScene
-                            ? 'No 3-D scene open: studio light'
-                            : null,
-                      ),
-                  ],
-                  onChanged: setLighting,
-                ),
-              ),
-              WorkspaceToolButtons(view: _extensionView),
-            ],
-          ),
+    final left = <Widget>[
+      for (final s in PreviewShape.values)
+        EditorChip(
+          label: s.label,
+          icon: _shapeLooks[s]!.$1,
+          tooltip: _shapeLooks[s]!.$2,
+          selected: _shape == s,
+          onTap: () => setShape(s),
         ),
-        Expanded(child: _view()),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
-          child: Text(
-            [
-              'Drag to turn · scroll to zoom · double-click to face it again',
-              if (_drawError != null) '$_drawError',
-            ].join('\n'),
-            style: _drawError == null
-                ? _label
-                : TextStyle(color: EditorTheme.warning, fontSize: 11),
-          ),
+    ];
+    final right = <Widget>[
+      EditorIconButton(
+        icon: Icons.compare,
+        tooltip: 'Compare with a plain grey material (C; hold Space)',
+        isActive: _compareAt != null,
+        onTap: () => setCompare(_compareAt == null ? 0.5 : null),
+      ),
+      const ToolSeparator(),
+      SizedBox(
+        width: 120,
+        child: EditorDropdown<PreviewLighting>(
+          value: _lighting,
+          tooltip: 'The light the preview is drawn in',
+          options: [
+            for (final l in PreviewLighting.values)
+              EditorDropdownOption(
+                value: l,
+                label: l.label,
+                detail: l == PreviewLighting.scene && !hasScene
+                    ? 'No 3-D scene open: studio light'
+                    : null,
+              ),
+          ],
+          onChanged: setLighting,
         ),
-      ],
+      ),
+      const ToolSeparator(),
+      // Its own size: in a wrap it would take the whole line.
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          EditorSegmented<PreviewBackdrop>(
+            value: _backdrop,
+            options: [for (final b in PreviewBackdrop.values) (b, b.label)],
+            tooltips: const {
+              PreviewBackdrop.sky: "The light's own sky behind it (B)",
+              PreviewBackdrop.dark: 'A dark background (B)',
+              PreviewBackdrop.bright: 'A light background (B)',
+            },
+            onChanged: setBackdrop,
+          ),
+        ],
+      ),
+      const ToolSeparator(),
+      ZoomControls(
+        label: Text('${(zoom * 100).round()}%', style: _label),
+        onZoomOut: () => zoomBy(-1),
+        onZoomIn: () => zoomBy(1),
+        steps: [
+          ZoomStep(
+            'Fit',
+            'Face it again, as it started (F; double-click)',
+            selected: atStart,
+            onTap: fit,
+          ),
+        ],
+      ),
+      WorkspaceToolButtons(view: _extensionView),
+      const ToolSeparator(),
+      const ShortcutsHint(shortcuts),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        runSpacing: 6,
+        children: [
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: left,
+          ),
+          Wrap(
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: right,
+          ),
+        ],
+      ),
     );
   }
+
+  // What the preview says: in chips over its foot.
+  Widget _chips() => Wrap(
+    spacing: 6,
+    runSpacing: 4,
+    children: [
+      if (_holdingPlain)
+        const PreviewChip('A plain grey in its place', icon: Icons.compare),
+      if (_drawError case final error?)
+        PreviewChip('$error', icon: Icons.warning_amber_rounded, warn: true),
+      if (_lighting == PreviewLighting.scene && sceneLighting == null)
+        const PreviewChip(
+          'No 3-D scene open: studio light',
+          icon: Icons.info_outline,
+        ),
+      const PreviewChip(
+        'Drag to turn · scroll to zoom · double-click to face it again',
+        icon: Icons.threed_rotation,
+      ),
+    ],
+  );
+
+  Widget _picture(ui.Image? image) => Center(
+    child: image == null
+        ? Text(_noGpu ? 'No GPU for a preview.' : 'Loading…', style: _label)
+        : RawImage(image: image, fit: BoxFit.contain),
+  );
 
   Widget _view() => LayoutBuilder(
     builder: (context, constraints) {
@@ -1221,17 +1590,15 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
       if (size != _size && size.width > 0 && size.height > 0) {
         _size = size;
         _surface = null;
+        _plainSurface = null;
         WidgetsBinding.instance.addPostFrameCallback((_) => _redraw());
       }
+      final split = _holdingPlain ? 1.0 : _compareAt;
+      final plain = _plainImage;
       return Listener(
         onPointerSignal: (event) {
           if (event is! PointerScrollEvent) return;
-          final next = (_zoom * math.pow(0.999, event.scrollDelta.dy))
-              .clamp(0.5, 3.0)
-              .toDouble();
-          if (next == _zoom) return;
-          _zoom = next;
-          _redraw();
+          _zoomTo(_zoom * math.pow(0.999, event.scrollDelta.dy));
         },
         child: GestureDetector(
           onPanUpdate: (d) {
@@ -1239,27 +1606,62 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
             _pitch = (_pitch - d.delta.dy * 0.01).clamp(-1.5, 1.5);
             _redraw();
           },
-          onDoubleTap: () {
-            _yaw = -0.6;
-            _pitch = -0.45;
-            _zoom = _startZoom;
-            _redraw();
-          },
+          onDoubleTap: fit,
           child: Stack(
             children: [
               Positioned.fill(
                 child: ColoredBox(
                   color: const Color(0xFF15181D),
-                  child: Center(
-                    child: _image == null
-                        ? Text(
-                            _noGpu ? 'No GPU for a preview.' : 'Loading…',
-                            style: _label,
-                          )
-                        : RawImage(image: _image, fit: BoxFit.contain),
-                  ),
+                  child: split == null || plain == null
+                      ? _picture(_image)
+                      : Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            ClipRect(
+                              clipper: _Side(split, left: true),
+                              child: _picture(plain),
+                            ),
+                            if (split < 1)
+                              ClipRect(
+                                clipper: _Side(split, left: false),
+                                child: _picture(_image),
+                              ),
+                          ],
+                        ),
                 ),
               ),
+              if (_compareAt case final at? when !_holdingPlain) ...[
+                Positioned(
+                  left: at * size.width - 12,
+                  top: 0,
+                  bottom: 0,
+                  width: 24,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.resizeColumn,
+                    child: GestureDetector(
+                      onHorizontalDragUpdate: (d) => setCompare(
+                        (at * size.width + d.delta.dx) / size.width,
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 2,
+                          color: Colors.white.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: size.width * (1 - at) + 10,
+                  child: const PreviewChip('Plain', icon: Icons.chevron_left),
+                ),
+                Positioned(
+                  top: 8,
+                  left: at * size.width + 10,
+                  child: const PreviewChip('With', icon: Icons.chevron_right),
+                ),
+              ],
               ...workspaceOverlays(_extensionView, size),
             ],
           ),
@@ -1336,4 +1738,23 @@ final class _Material3DView implements Material3DWorkspaceView {
 
   @override
   void endPreview() => _state.endPreview();
+}
+
+// One side of the compare line at [at] (a share across) of what it clips.
+class _Side extends CustomClipper<Rect> {
+  _Side(this.at, {required this.left});
+
+  final double at;
+  final bool left;
+
+  @override
+  Rect getClip(Size size) {
+    final x = size.width * at;
+    return left
+        ? Rect.fromLTWH(0, 0, x, size.height)
+        : Rect.fromLTWH(x, 0, size.width - x, size.height);
+  }
+
+  @override
+  bool shouldReclip(_Side old) => old.at != at || old.left != left;
 }

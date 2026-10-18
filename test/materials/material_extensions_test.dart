@@ -143,6 +143,12 @@ void main() {
     final state = key.currentState!;
     await tester.runAsync(state.load);
     await tester.pump();
+    // A module's sections come after the window's own cards.
+    await tester.dragUntilVisible(
+      find.text('NOTES'),
+      find.byType(ListView).first,
+      const Offset(0, -300),
+    );
     expect(find.text('NOTES'), findsOneWidget);
     expect(find.text('About a.material.json'), findsOneWidget);
     await tester.tap(find.byTooltip('Make it gold'));

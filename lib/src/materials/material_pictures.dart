@@ -176,8 +176,9 @@ final class MaterialPictures {
   /// (the picture size by default), seen turned [yaw] and tipped [pitch]
   /// (radians) from [zoom] times as close as fits it; its parents, maps and
   /// layers read from the project. [scene] is the open scene's drawing, for
-  /// [PreviewLighting.scene]. Drawn [into] a surface when given (resized to
-  /// fit). Null without a GPU; throws what reading a map or layer throws.
+  /// [PreviewLighting.scene]. In front of [background] (sRGB) when given,
+  /// else the light's own sky. Drawn [into] a surface when given (resized
+  /// to fit). Null without a GPU; throws what reading a map or layer throws.
   Future<ui.Image?> render(
     MaterialFile file, {
     int? width,
@@ -188,6 +189,7 @@ final class MaterialPictures {
     PreviewShape shape = PreviewShape.ball,
     PreviewLighting lighting = PreviewLighting.studio,
     RenderScene? scene,
+    int? background,
     GpuSurface? into,
   }) async {
     final gpu = await renderer();
@@ -207,6 +209,12 @@ final class MaterialPictures {
       map: lighting.gradient == null ? null : await _mapOf(gpu, lighting),
       from: scene,
     );
+    if (background != null) {
+      stage.environment
+        ..sky = false
+        ..skybox = false
+        ..clearColor = GraphicsShapes.linear(ui.Color(background));
+    }
     final w = width ?? size, h = height ?? size;
     final view = framePreview(
       w,

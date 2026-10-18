@@ -149,19 +149,40 @@ void main() {
       return state;
     }
 
-    testWidgets('a sprite material: its sections; an effect on shows its '
-        'values', (tester) async {
+    // The Add effect menu, opened: it fades in, and the window's ticker
+    // never lets the frames settle.
+    Future<void> openMenu(WidgetTester tester) async {
+      await tester.tap(find.text('Add effect'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    testWidgets('a sprite material: its groups to add from; an effect on '
+        'shows its values', (tester) async {
       write('a.material2d.json', {});
       final state = await open(tester, 'a.material2d.json');
+      await openMenu(tester);
+      // A group's name finds all of it, wherever it is in the list.
       for (final h in ['COLOUR', 'EDGES', 'MOTION', 'LIGHT']) {
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Search effects'),
+          h.toLowerCase(),
+        );
+        await tester.pump();
         expect(find.text(h), findsOneWidget, reason: h);
       }
-      expect(find.text('THE FRAME'), findsNothing);
-      expect(find.text('Width'), findsNothing);
-      state.change((m) => m.withEffect('outline', true));
+      await tester.enterText(find.byType(TextField).last, 'frame');
       await tester.pump();
+      expect(find.text('THE FRAME'), findsNothing);
+      await tester.enterText(find.byType(TextField).last, '');
+      await tester.pump();
+      expect(find.text('Width'), findsNothing);
+      await tester.tap(find.text('Outline'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('Width'), findsOneWidget, reason: "the outline's");
       expect(state.material.isOn('outline'), isTrue);
+      expect(find.text('COLOUR'), findsNothing, reason: 'the menu closed');
       expect(tester.takeException(), isNull);
     });
 
@@ -181,9 +202,12 @@ void main() {
       expect(state.material.isOn('outline'), isFalse, reason: 'sprites only');
       expect(state.material.values.containsKey('outline.width'), isFalse);
       expect(state.material.isOn('greyscale'), isTrue, reason: 'both kinds');
+      await openMenu(tester);
       expect(find.text('THE FRAME'), findsOneWidget);
       expect(find.text('EDGES'), findsNothing);
-      expect(find.text('Light'), findsNothing, reason: 'a screen is not lit');
+      expect(find.text('LIGHT'), findsNothing, reason: 'a screen is not lit');
+      await tester.tapAt(const Offset(4, 4));
+      await tester.pump(const Duration(milliseconds: 400));
     });
 
     testWidgets('a preset is one undo step', (tester) async {
@@ -252,6 +276,22 @@ void main() {
       );
       expect(saved.parent, 'base.material2d.json');
       expect(saved.effects, {'vignette': false});
+
+      // Off here alone: listed under the cards, with a way back.
+      await tester.pump();
+      expect(find.text('OFF IN THIS VARIANT'), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('Vignette'),
+            matching: find.byType(Row),
+          ),
+          matching: find.byTooltip("Its own: back to the parent's"),
+        ),
+      );
+      await tester.pump();
+      expect(state.shown.isOn('vignette'), isTrue, reason: "the parent's");
+      expect(find.text('OFF IN THIS VARIANT'), findsNothing);
     });
 
     testWidgets('the preview: subject, light, and the selected sprite', (

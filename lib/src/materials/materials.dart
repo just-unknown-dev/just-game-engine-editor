@@ -18,6 +18,7 @@ export 'material_pictures.dart';
 export 'material_presets.dart';
 export 'material_preview.dart';
 export 'material_workspace.dart';
+export 'material_window_kit.dart';
 export 'model_materials.dart';
 export 'normal_maps.dart';
 export 'texture_sets.dart';

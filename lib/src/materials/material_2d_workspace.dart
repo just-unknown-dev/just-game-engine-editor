@@ -16,14 +16,17 @@ import 'material_2d_samples.dart';
 import 'normal_maps.dart';
 import 'material_2d_stage.dart';
 import 'material_2d_users.dart';
+import 'material_window_kit.dart';
 
 /// A 2-D material file's look (`*.material2d.json`), drawn live as the
 /// game will draw it: the workspace a 2-D material opens in.
 ///
-/// A sprite material's effects are in sections — Colour, Edges, Motion,
-/// Light — each switched on with its values below; a screen material's are
-/// the frame's (pixelate, an old screen, a colour grade, a vignette) and
-/// its colour. Presets start one off. A value being dragged or a colour
+/// The material itself — its preset, kind and parent — is in a panel on
+/// the left, as in the 3-D material window; its effects are in a panel on
+/// the right, each that is on a card with its values, the rest added from
+/// a menu grouped as Colour, Edges, Motion and Light (a screen material's:
+/// the frame's — pixelate, an old screen, a colour grade, a vignette — and
+/// its colour). Presets start one off. A value being dragged or a colour
 /// being picked shows at once and becomes one undo step when let go.
 ///
 /// The preview draws through the engine's own shaders on a world of its
@@ -33,8 +36,8 @@ import 'material_2d_users.dart';
 /// over it — and a screen material over a little scene. It zooms and pans,
 /// repeats the subject three by three, compares it with and without the
 /// material, shows the normals the light sees, and plays, pauses and
-/// scrubs what moves. Effects that are on come first, each with what it
-/// does, a reset and a solo; the rest are added from a list below.
+/// scrubs what moves. Each effect's card says what it does, and has a
+/// reset, a solo, a fold and a × that takes the effect out.
 ///
 /// A variant (a material with a parent) shows its parent's effects and
 /// values where it has none of its own; whatever is changed becomes its
@@ -155,10 +158,20 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   bool get lightBackground => _lightBackground;
   bool _lightBackground = _lastLight;
 
-  /// The settings panel's width, kept for the next material.
-  static double _lastPanelWidth = 340;
+  /// The material's panel's width (on the left), kept for the next
+  /// material.
+  static double _lastPanelWidth = 280;
   double get panelWidth => _panelWidth;
   double _panelWidth = _lastPanelWidth;
+
+  /// The effects panel's width (on the right), kept for the next material.
+  static double _lastEffectsWidth = 340;
+  double get effectsWidth => _effectsWidth;
+  double _effectsWidth = _lastEffectsWidth;
+
+  // Each effect's card, to scroll to one just added.
+  final Map<String, GlobalKey> _cardKeys = {};
+  final ScrollController _effectsScroll = ScrollController();
 
   /// The same subject drawn without the material, to compare with.
   late final Material2DStage plainStage = Material2DStage(root: widget.root)
@@ -211,8 +224,6 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   /// What zooming in and out steps through: whole numbers from 1 up, so
   /// pixel art stays crisp.
   static const List<double> zoomSteps = [0.25, 0.5, 1, 2, 3, 4, 6, 8, 12, 16];
-
-  String _search = '';
 
   /// What modules adding to the window see of it ([WorkspaceIds.material2D]).
   Material2DWorkspaceView get view => _extensionView;
@@ -613,10 +624,65 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     'Rim': (Offset(0.86, 0.14), 0.08),
   };
 
-  /// Sizes the settings panel [width] logical pixels wide.
+  /// Sizes the material's panel [width] logical pixels wide.
   void setPanelWidth(double width) => setState(
-    () => _panelWidth = _lastPanelWidth = width.clamp(260, 640).toDouble(),
+    () => _panelWidth = _lastPanelWidth = width.clamp(220, 560).toDouble(),
   );
+
+  /// Sizes the effects panel [width] logical pixels wide.
+  void setEffectsWidth(double width) => setState(
+    () => _effectsWidth = _lastEffectsWidth = width.clamp(260, 640).toDouble(),
+  );
+
+  /// Switches [effect] on (one undo step) and shows its card, unfolded.
+  void addEffect(String effect) {
+    MaterialCardFolds.set('2d.$effect', false);
+    change((x) => x.withEffect(effect, true));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final card = _cardKeys[effect]?.currentContext;
+      if (card != null && card.mounted) {
+        Scrollable.ensureVisible(card, alignment: 0.1);
+      }
+    });
+  }
+
+  /// Takes [effect] out of the material, as one undo step: switched off
+  /// and its values gone. In a variant its own values go, and it is
+  /// switched off over its parent's only when the parent has it on.
+  void removeEffect(String effect) {
+    if (_solo == effect) _solo = null;
+    final m = material;
+    if (!m.isVariant) {
+      edit(resetEffect(m, effect).withEffect(effect, false));
+      return;
+    }
+    final mine = m.withoutEffectOverride(effect);
+    final parentHasIt = MaterialChain.resolve2D(
+      widget.path,
+      (p) => p == widget.path ? mine : _parent(p),
+    ).value.isOn(effect);
+    edit(parentHasIt ? mine.withEffect(effect, false) : mine);
+  }
+
+  /// Opens the menu of the effects that are off below [anchor], grouped
+  /// and searched, and switches on the one picked.
+  Future<void> openAddEffect(BuildContext anchor) async {
+    final m = shown;
+    final groups = [
+      for (final group in groupsOf(m.kind))
+        PickMenuGroup(_groups[group]!, [
+          for (final e in Material2DEffects.forKind(m.kind))
+            if (e.group == group && !m.isOn(e.id))
+              PickMenuItem(e.id, e.label, detail: e.description),
+        ]),
+    ]..removeWhere((g) => g.items.isEmpty);
+    final picked = await showPickMenu<String>(
+      anchor,
+      groups: groups,
+      hint: 'Search effects',
+    );
+    if (picked != null && mounted) addEffect(picked);
+  }
 
   /// The sprite selected in the scene, if one is: its image and the part
   /// of it it shows.
@@ -730,6 +796,7 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     stage.dispose();
     plainStage.dispose();
     _repaint.dispose();
+    _effectsScroll.dispose();
     _clock.dispose();
     _drawnScale.dispose();
     _extensionView.dispose();
@@ -740,9 +807,10 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   static const String shortcuts =
       'F  fit      1 / 2 / 4  zoom      + / −  zoom in, out\n'
       'Wheel  zoom      Drag  pan      Double-click  fit\n'
-      'L  light      N  normals      T  tile 3 × 3\n'
       'C  compare      Hold Space  without the material\n'
-      'P  play or pause';
+      'B  background      L  light      N  normals\n'
+      'T  tile 3 × 3      P  play or pause\n'
+      'Ctrl+S  save      Ctrl+Z / Ctrl+Y  undo, redo';
 
   KeyEventResult _onKey(KeyEvent event) {
     final screen = shown.kind == Material2DKind.screen;
@@ -781,6 +849,8 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
           setTiled(!stage.tiled);
         case LogicalKeyboardKey.keyC:
           setCompare(_compareAt == null ? 0.5 : null);
+        case LogicalKeyboardKey.keyB:
+          setLightBackground(!_lightBackground);
         case LogicalKeyboardKey.keyP:
           setPlaying(!_playing);
         default:
@@ -840,8 +910,14 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   SizedBox(width: _panelWidth, child: _fields()),
-                  _resizeHandle(),
+                  PanelResizeHandle(
+                    onDrag: (dx) => setPanelWidth(_panelWidth + dx),
+                  ),
                   Expanded(child: _previewPane()),
+                  PanelResizeHandle(
+                    onDrag: (dx) => setEffectsWidth(_effectsWidth - dx),
+                  ),
+                  SizedBox(width: _effectsWidth, child: _effects()),
                 ],
               ),
             ),
@@ -1104,8 +1180,6 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
             onChanged: (k) => change((x) => _asKind(x, k)),
           ),
         ),
-        ..._active(m),
-        ..._add(m),
         WorkspaceSections(view: _extensionView),
         for (final problem in problems)
           Padding(
@@ -1139,31 +1213,53 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     );
   }
 
-  // The divider between the panel and the preview, dragged to size it.
-  Widget _resizeHandle() => MouseRegion(
-    cursor: SystemMouseCursors.resizeColumn,
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onHorizontalDragUpdate: (d) => setPanelWidth(_panelWidth + d.delta.dx),
-      child: const SizedBox(
-        width: 5,
-        child: Center(child: VerticalDivider(width: 1)),
-      ),
-    ),
-  );
+  // ── Effects ───────────────────────────────────────────────────────────
 
-  // The effects that are on, in the order they are applied: each a card.
-  List<Widget> _active(Material2DFile m) {
+  // The effects panel, on the right: the effects that are on, in the order
+  // they are applied, each a card; more are added from a menu.
+  Widget _effects() {
+    final m = shown;
     final on = [
       for (final e in Material2DEffects.forKind(m.kind))
         if (m.isOn(e.id)) e,
     ];
-    return [
-      EditorSectionHeader(on.isEmpty ? 'On' : 'On · ${on.length}'),
-      if (on.isEmpty)
-        _note('No effect is on yet: add one below, or start from a preset.'),
-      for (final e in on) _card(e, m),
+    // In a variant: effects it switches off itself, whatever its parent's.
+    final offHere = [
+      if (material.isVariant)
+        for (final e in Material2DEffects.forKind(m.kind))
+          if (material.effects[e.id] == false) e,
     ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        EditorSectionHeader(
+          on.isEmpty ? 'Effects' : 'Effects · ${on.length}',
+          trailing: Builder(
+            builder: (context) => EditorButton(
+              label: 'Add effect',
+              icon: Icons.add,
+              kind: EditorButtonKind.ghost,
+              onPressed: _loaded ? () => openAddEffect(context) : null,
+            ),
+          ),
+        ),
+        Expanded(
+          child: ListView(
+            controller: _effectsScroll,
+            padding: const EdgeInsets.only(bottom: 16),
+            children: [
+              if (on.isEmpty)
+                _note('No effect is on yet: add one, or start from a preset.'),
+              for (final e in on) _card(e, m),
+              if (offHere.isNotEmpty) ...[
+                const EditorSectionHeader('Off in this variant'),
+                for (final e in offHere) _offRow(e),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   /// [m] with [effect]'s values back to its defaults (a variant's to its
@@ -1181,147 +1277,63 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     final changed = material.values.keys.any(
       (k) => k.startsWith('${effect.id}.'),
     );
-    return Container(
-      margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-      decoration: BoxDecoration(
-        color: EditorTheme.textPrimary.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: solo
-              ? EditorTheme.accent
-              : EditorTheme.textPrimary.withValues(alpha: 0.10),
+    final fold = '2d.${effect.id}';
+    return MaterialCard(
+      key: _cardKeys.putIfAbsent(effect.id, () => GlobalKey()),
+      title: effect.label,
+      description: effect.description,
+      folded: MaterialCardFolds.isFolded(fold),
+      onFold: (folded) => setState(() => MaterialCardFolds.set(fold, folded)),
+      highlighted: solo,
+      actions: [
+        EditorIconButton(
+          icon: Icons.center_focus_strong_outlined,
+          tooltip: solo
+              ? 'Showing it alone: show every effect'
+              : 'Solo: show it alone in the preview',
+          isActive: solo,
+          iconSize: 14,
+          size: 22,
+          onTap: () => setSolo(solo ? null : effect.id),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(6, 4, 4, 0),
-            child: Row(
-              children: [
-                switchRow(effect.label, true, (v) {
-                  if (!v && _solo == effect.id) _solo = null;
-                  change((x) => x.withEffect(effect.id, v));
-                }, strong: true),
-                const Spacer(),
-                EditorIconButton(
-                  icon: Icons.center_focus_strong_outlined,
-                  tooltip: solo
-                      ? 'Showing it alone: show every effect'
-                      : 'Solo: show it alone in the preview',
-                  isActive: solo,
-                  iconSize: 14,
-                  size: 22,
-                  onTap: () => setSolo(solo ? null : effect.id),
-                ),
-                EditorIconButton(
-                  icon: Icons.restart_alt,
-                  tooltip: material.isVariant
-                      ? "Back to its parent's values"
-                      : 'Back to its defaults',
-                  iconSize: 14,
-                  size: 22,
-                  onTap: changed
-                      ? () => change((x) => resetEffect(x, effect.id))
-                      : null,
-                ),
-                if (material.isVariant) _inheritEffect(effect.id),
-              ],
-            ),
-          ),
-          if (effect.description.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 2),
-              child: Text(effect.description, style: _label),
-            ),
-          for (final p in effect.params) _param(effect, p, m),
-          const SizedBox(height: 6),
-        ],
-      ),
+        EditorIconButton(
+          icon: Icons.restart_alt,
+          tooltip: material.isVariant
+              ? "Back to its parent's values"
+              : 'Back to its defaults',
+          iconSize: 14,
+          size: 22,
+          onTap: changed
+              ? () => change((x) => resetEffect(x, effect.id))
+              : null,
+        ),
+        if (material.isVariant) _inheritEffect(effect.id),
+        EditorIconButton(
+          icon: Icons.close,
+          tooltip: 'Remove the effect',
+          iconSize: 14,
+          size: 22,
+          onTap: () => removeEffect(effect.id),
+        ),
+      ],
+      children: [for (final p in effect.params) _param(effect, p, m)],
     );
   }
 
-  // The effects that are off, to add: searched, in their groups.
-  List<Widget> _add(Material2DFile m) {
-    final query = _search.trim().toLowerCase();
-    bool matches(Material2DEffect e) =>
-        query.isEmpty ||
-        e.label.toLowerCase().contains(query) ||
-        e.description.toLowerCase().contains(query) ||
-        (_groups[e.group] ?? '').toLowerCase().contains(query);
-    final off = [
-      for (final e in Material2DEffects.forKind(m.kind))
-        if (!m.isOn(e.id) && matches(e)) e,
-    ];
-    return [
-      EditorSectionHeader(
-        'Add effect',
-        trailing: SizedBox(
-          width: 150,
-          child: EditorSearchField(
-            hint: 'Search effects',
-            width: null,
-            initial: _search,
-            onChanged: (q) => setState(() => _search = q),
+  // An effect a variant switches off itself, with a way back to its
+  // parent's.
+  Widget _offRow(Material2DEffect effect) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 2, 12, 2),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            effect.label,
+            style: TextStyle(color: EditorTheme.textPrimary, fontSize: 12),
           ),
         ),
-      ),
-      if (off.isEmpty && query.isNotEmpty) _note('No effect matches "$query".'),
-      for (final group in groupsOf(m.kind))
-        if (off.any((e) => e.group == group)) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
-            child: Text(
-              _groups[group]!.toUpperCase(),
-              style: TextStyle(
-                color: EditorTheme.textMuted,
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ),
-          for (final e in off)
-            if (e.group == group) _addRow(e),
-        ],
-    ];
-  }
-
-  Widget _addRow(Material2DEffect effect) => InkWell(
-    onTap: () => change((x) => x.withEffect(effect.id, true)),
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(10, 3, 12, 3),
-      child: Row(
-        children: [
-          Icon(Icons.add, size: 14, color: EditorTheme.textMuted),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  effect.label,
-                  style: TextStyle(
-                    color: EditorTheme.textPrimary,
-                    fontSize: 12,
-                  ),
-                ),
-                if (effect.description.isNotEmpty)
-                  Text(
-                    effect.description,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: EditorTheme.textMuted,
-                      fontSize: 10,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (material.isVariant) _inheritEffect(effect.id),
-        ],
-      ),
+        _inheritEffect(effect.id),
+      ],
     ),
   );
 
@@ -1614,13 +1626,6 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     );
   }
 
-  Widget _toolSeparator() => Container(
-    width: 1,
-    height: 18,
-    margin: const EdgeInsets.symmetric(horizontal: 6),
-    color: EditorTheme.textPrimary.withValues(alpha: 0.12),
-  );
-
   Widget _toolbar(bool screen) {
     final left = <Widget>[
       if (!screen)
@@ -1657,7 +1662,7 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
         onTap: () => setCompare(_compareAt == null ? 0.5 : null),
       ),
       if (!screen) ...[
-        _toolSeparator(),
+        const ToolSeparator(),
         EditorIconButton(
           icon: Icons.light_mode_outlined,
           tooltip: _lit ? 'Light on (L)' : 'Light off (L)',
@@ -1671,27 +1676,27 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
           onTap: () => setLightSettingsOpen(!_lightSettingsOpen),
         ),
       ],
-      _toolSeparator(),
-      EditorSegmented<bool>(
-        value: _lightBackground,
-        options: const [(false, 'Dark'), (true, 'Bright')],
-        tooltips: const {
-          false: 'A dark background',
-          true: 'A light background',
-        },
-        onChanged: setLightBackground,
+      const ToolSeparator(),
+      // Its own size: in a wrap it would take the whole line.
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          EditorSegmented<bool>(
+            value: _lightBackground,
+            options: const [(false, 'Dark'), (true, 'Bright')],
+            tooltips: const {
+              false: 'A dark background (B)',
+              true: 'A light background (B)',
+            },
+            onChanged: setLightBackground,
+          ),
+        ],
       ),
-      _toolSeparator(),
-      EditorIconButton(
-        icon: Icons.remove,
-        tooltip: 'Zoom out (−)',
-        onTap: () => zoomBy(-1),
-      ),
-      ValueListenableBuilder<double>(
-        valueListenable: _drawnScale,
-        builder: (context, scale, _) => SizedBox(
-          width: 78,
-          child: Text(
+      const ToolSeparator(),
+      ZoomControls(
+        label: ValueListenableBuilder<double>(
+          valueListenable: _drawnScale,
+          builder: (context, scale, _) => Text(
             stage.zoom == null
                 ? 'Fit · ${(scale * 100).round()}%'
                 : '${(scale * 100).round()}%',
@@ -1699,39 +1704,26 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
             style: _label,
           ),
         ),
+        onZoomOut: () => zoomBy(-1),
+        onZoomIn: () => zoomBy(1),
+        steps: [
+          for (final (label, zoom, tip) in const [
+            ('Fit', null, 'Fit it to the preview (F; double-click)'),
+            ('1:1', 1.0, 'A pixel of it a pixel of the screen (1)'),
+            ('2×', 2.0, 'Twice as big (2)'),
+            ('4×', 4.0, 'Four times as big (4)'),
+          ])
+            ZoomStep(
+              label,
+              tip,
+              selected: zoom == null ? stage.zoom == null : stage.zoom == zoom,
+              onTap: () => zoom == null ? fit() : setZoom(zoom),
+            ),
+        ],
       ),
-      EditorIconButton(
-        icon: Icons.add,
-        tooltip: 'Zoom in (+)',
-        onTap: () => zoomBy(1),
-      ),
-      for (final (label, zoom, tip) in const [
-        ('Fit', null, 'Fit it to the preview (F; double-click)'),
-        ('1:1', 1.0, 'A pixel of it a pixel of the screen (1)'),
-        ('2×', 2.0, 'Twice as big (2)'),
-        ('4×', 4.0, 'Four times as big (4)'),
-      ])
-        EditorChip(
-          label: label,
-          tooltip: tip,
-          selected: zoom == null ? stage.zoom == null : stage.zoom == zoom,
-          onTap: () => zoom == null ? fit() : setZoom(zoom),
-        ),
       WorkspaceToolButtons(view: _extensionView),
-      _toolSeparator(),
-      Tooltip(
-        message: shortcuts,
-        textStyle: const TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 11,
-          color: Colors.white,
-        ),
-        child: Icon(
-          Icons.keyboard_outlined,
-          size: 16,
-          color: EditorTheme.textMuted,
-        ),
-      ),
+      const ToolSeparator(),
+      const ShortcutsHint(shortcuts),
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
@@ -1746,7 +1738,11 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
             crossAxisAlignment: WrapCrossAlignment.center,
             children: left,
           ),
-          Row(mainAxisSize: MainAxisSize.min, children: right),
+          Wrap(
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: right,
+          ),
         ],
       ),
     );
@@ -1830,33 +1826,34 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
       if (!screen &&
           _subject == Material2DSubject.selected &&
           selectedSprite == null)
-        _chip(
+        PreviewChip(
           'Select a sprite in the scene to see it here; the sample shows '
           'meanwhile',
           icon: Icons.info_outline,
         ),
       if (_solo case final id?)
-        _chip(
+        PreviewChip(
           'Solo: ${Material2DEffects.byId(id)?.label ?? id}',
           icon: Icons.center_focus_strong_outlined,
           onClose: () => setSolo(null),
         ),
       if (!screen && stage.showNormals)
-        _chip(
+        PreviewChip(
           'Normals: red, green across and up; flat is blue',
           icon: Icons.terrain_outlined,
           onClose: () => setShowNormals(false),
         ),
-      if (_holdingPlain) _chip('Without the material', icon: Icons.compare),
+      if (_holdingPlain)
+        PreviewChip('Without the material', icon: Icons.compare),
       if (_lit && !screen && !stage.showNormals)
-        _chip(
+        PreviewChip(
           'Drag the sun to move the light',
           icon: Icons.light_mode_outlined,
         ),
       if (stage.library.errorOf(widget.path) case final error?)
-        _chip('$error', icon: Icons.warning_amber_rounded, warn: true),
+        PreviewChip('$error', icon: Icons.warning_amber_rounded, warn: true),
       if (_generateNote case final note?)
-        _chip(
+        PreviewChip(
           note,
           icon: Icons.auto_fix_high,
           onClose: () => setState(() => _generateNote = null),
@@ -1864,53 +1861,6 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     ];
     return Wrap(spacing: 6, runSpacing: 4, children: chips);
   }
-
-  Widget _chip(
-    String text, {
-    required IconData icon,
-    bool warn = false,
-    VoidCallback? onClose,
-  }) => Container(
-    padding: EdgeInsets.fromLTRB(8, 3, onClose == null ? 8 : 2, 3),
-    decoration: BoxDecoration(
-      color: Colors.black.withValues(alpha: 0.55),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(
-        color: warn
-            ? EditorTheme.warning
-            : Colors.white.withValues(alpha: 0.10),
-      ),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          size: 12,
-          color: warn ? EditorTheme.warning : Colors.white70,
-        ),
-        const SizedBox(width: 5),
-        Flexible(
-          child: Text(
-            text,
-            style: TextStyle(
-              color: warn ? EditorTheme.warning : Colors.white,
-              fontSize: 11,
-            ),
-          ),
-        ),
-        if (onClose != null)
-          EditorIconButton(
-            icon: Icons.close,
-            tooltip: 'Close',
-            iconSize: 12,
-            size: 18,
-            color: Colors.white70,
-            onTap: onClose,
-          ),
-      ],
-    ),
-  );
 
   // The light's settings, over the preview's corner.
   Widget _lightSettings() {
@@ -2128,12 +2078,12 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
                 Positioned(
                   top: 8,
                   right: size.width * (1 - split) + 10,
-                  child: _chip('Without', icon: Icons.chevron_left),
+                  child: PreviewChip('Without', icon: Icons.chevron_left),
                 ),
                 Positioned(
                   top: 8,
                   left: split * size.width + 10,
-                  child: _chip('With', icon: Icons.chevron_right),
+                  child: PreviewChip('With', icon: Icons.chevron_right),
                 ),
               ],
               if (lit) _lightHandle(size),

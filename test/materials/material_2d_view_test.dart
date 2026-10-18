@@ -139,35 +139,127 @@ void main() {
       return state;
     }
 
-    testWidgets('effects on first, with what they do; the rest to add, '
-        'searched', (tester) async {
+    // The menu fades in and out; the window's ticker never lets the
+    // frames settle.
+    Future<void> settleMenu(WidgetTester tester) async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    testWidgets('effects on the right, with what they do; more added from a '
+        'menu, searched', (tester) async {
       write('a.material2d.json', {
         'outline': {'width': 2},
       });
       final state = await open(tester, 'a.material2d.json');
-      expect(find.text('ON · 1'), findsOneWidget);
+      expect(find.text('EFFECTS · 1'), findsOneWidget);
       expect(
         find.text(Material2DEffects.byId('outline')!.description),
         findsOneWidget,
         reason: 'what it does, under its name',
       );
-      expect(find.text('ADD EFFECT'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('EFFECTS · 1')).dx,
+        greaterThan(tester.getTopLeft(find.text('Preset')).dx + 800),
+        reason: "on the preview's right; the material on its left",
+      );
+      expect(find.text('Tint'), findsNothing, reason: 'off: in the menu');
 
+      await tester.tap(find.text('Add effect'));
+      await settleMenu(tester);
+      expect(find.text('Outline'), findsOneWidget, reason: 'its card only');
       await tester.tap(find.text('Tint'));
-      await tester.pump();
+      await settleMenu(tester);
       expect(state.material.isOn('tint'), isTrue, reason: 'added');
-      expect(find.text('ON · 2'), findsOneWidget);
+      expect(state.material.isOn('outline'), isTrue);
+      expect(find.text('EFFECTS · 2'), findsOneWidget);
+      expect(find.text('Tint'), findsOneWidget, reason: 'its card');
 
+      await tester.tap(find.text('Add effect'));
+      await settleMenu(tester);
       await tester.enterText(
-        find.descendant(
-          of: find.byType(EditorSearchField),
-          matching: find.byType(TextField),
-        ),
+        find.widgetWithText(TextField, 'Search effects'),
         'glow',
       );
       await tester.pump();
       expect(find.text('Glow'), findsOneWidget);
       expect(find.text('Flash'), findsNothing, reason: 'not what was asked');
+      await tester.tap(find.text('Glow'));
+      await settleMenu(tester);
+      expect(state.material.isOn('glow'), isTrue);
+      expect(find.text('EFFECTS · 3'), findsOneWidget);
+    });
+
+    testWidgets("an effect's × takes it out, values and all, as one undo "
+        'step; in a variant, over its parent only when the parent has it', (
+      tester,
+    ) async {
+      write('a.material2d.json', {
+        'outline': {'width': 3},
+        'tint': {'colour': 0xFF00FF00},
+      });
+      final state = await open(tester, 'a.material2d.json');
+      state.setSolo('outline');
+      await tester.pump();
+      await tester.tap(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('Outline'),
+            matching: find.byType(MaterialCard),
+          ),
+          matching: find.byTooltip('Remove the effect'),
+        ),
+      );
+      await tester.pump();
+      expect(state.material.isOn('outline'), isFalse);
+      expect(state.material.values.keys, ['tint.colour'], reason: 'gone');
+      expect(state.material.effects.containsKey('outline'), isFalse);
+      expect(state.solo, isNull, reason: 'nothing left to show alone');
+      expect(find.text('Outline'), findsNothing, reason: 'its card went');
+      expect(find.text('EFFECTS · 1'), findsOneWidget);
+      state.undo();
+      expect(state.material.isOn('outline'), isTrue, reason: 'one step');
+      expect(state.material.values['outline.width'], 3);
+
+      // A variant: the parent's effect is switched off over it; its own
+      // effect just goes.
+      write('base.material2d.json', {
+        'outline': {'width': 2},
+      });
+      write('v.material2d.json', {
+        'parent': 'base.material2d.json',
+        'outline': {'width': 5},
+        'tint': {'colour': 0xFF0000FF},
+      });
+      final variant = await open(tester, 'v.material2d.json');
+      variant.removeEffect('outline');
+      expect(variant.material.effects['outline'], isFalse);
+      expect(variant.material.values.containsKey('outline.width'), isFalse);
+      expect(variant.shown.isOn('outline'), isFalse);
+      variant.removeEffect('tint');
+      expect(variant.material.effects.containsKey('tint'), isFalse);
+      expect(variant.material.values.containsKey('tint.colour'), isFalse);
+      expect(variant.shown.isOn('tint'), isFalse, reason: 'never the parent');
+    });
+
+    testWidgets('a card folds, and stays folded in the next material', (
+      tester,
+    ) async {
+      MaterialCardFolds.clear();
+      addTearDown(MaterialCardFolds.clear);
+      write('a.material2d.json', {
+        'outline': {'width': 2},
+      });
+      await open(tester, 'a.material2d.json');
+      expect(find.text('Width'), findsOneWidget);
+      await tester.tap(find.byTooltip('Fold'));
+      await tester.pump();
+      expect(find.text('Width'), findsNothing);
+      expect(find.text('Outline'), findsOneWidget, reason: 'its header stays');
+      expect(MaterialCardFolds.isFolded('2d.outline'), isTrue);
+      await tester.tap(find.byTooltip('Unfold'));
+      await tester.pump();
+      expect(find.text('Width'), findsOneWidget);
     });
 
     testWidgets('reset to its defaults; solo shows it alone in the preview', (
@@ -235,6 +327,13 @@ void main() {
       await tester.dragFrom(edge + const Offset(2, 300), const Offset(80, 0));
       await tester.pump();
       expect(state.panelWidth, closeTo(width + 80, 1));
+
+      // The effects panel's edge, on the other side: dragged left, wider.
+      final effects = state.effectsWidth;
+      final right = tester.getTopLeft(find.byType(VerticalDivider).last);
+      await tester.dragFrom(right + const Offset(2, 300), const Offset(-60, 0));
+      await tester.pump();
+      expect(state.effectsWidth, closeTo(effects + 60, 1));
     });
 
     testWidgets('keys: tile, normals, light, compare, play, Space held', (
@@ -258,6 +357,9 @@ void main() {
       expect(state.compareAt, 0.5);
       expect(find.text('Without'), findsOneWidget);
       expect(find.text('With'), findsOneWidget);
+      final bright = state.lightBackground;
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
+      expect(state.lightBackground, !bright, reason: 'B: the background');
       await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
       expect(state.playing, isFalse);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.space);

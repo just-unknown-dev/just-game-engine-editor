@@ -1,12 +1,13 @@
-// The material workspace: its sections, presets as one undo step, a value
-// being dragged shown without an undo step, a variant's own values, the
-// preview's shape and light, a map's picture and size, and a parent
-// changed on disk.
+// The material workspace: its cards (reset, fold), presets as one undo
+// step, a value being dragged shown without an undo step, a variant's own
+// values, the preview's toolbar (shape, light, background, zoom, compare)
+// and keys, a map's picture and size, and a parent changed on disk.
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_editor_core/just_editor_core.dart';
 import 'package:just_game_engine/graphics_3d.dart';
@@ -71,8 +72,8 @@ void main() {
   ) async {
     write('a.material.json', const MaterialFile());
     final state = await open(tester, 'a.material.json');
-    for (final header in ['SURFACE', 'TRANSPARENCY', 'MAPS', 'LAID OUT']) {
-      expect(find.text(header), findsOneWidget, reason: header);
+    for (final card in ['Surface', 'Transparency', 'Maps']) {
+      expect(find.text(card), findsOneWidget, reason: card);
     }
     expect(find.text('Cutoff'), findsNothing);
     state.change((m) => m.copyWith(alpha: MaterialAlpha.cutout));
@@ -84,8 +85,113 @@ void main() {
     expect(find.text('Opacity'), findsOneWidget);
     state.change((m) => m.copyWith(kind: MaterialKind.layered));
     await tester.pump();
-    expect(find.text('LAYERS'), findsOneWidget);
-    expect(find.text('TRANSPARENCY'), findsNothing);
+    expect(find.text('Layers'), findsOneWidget);
+    expect(find.text('Transparency'), findsNothing);
+    expect(find.text('Laid out'), findsOneWidget, reason: 'every kind has it');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a card resets what it holds as one undo step, and folds', (
+    tester,
+  ) async {
+    MaterialCardFolds.clear();
+    addTearDown(MaterialCardFolds.clear);
+    write(
+      'a.material.json',
+      const MaterialFile(color: 0xFF336699, metallic: 0.8, tilingX: 2),
+    );
+    final state = await open(tester, 'a.material.json');
+    expect(state.cardChanged('surface'), isTrue);
+    expect(state.cardChanged('transparency'), isFalse);
+    expect(state.cardChanged('layout'), isTrue);
+    await tester.tap(find.byTooltip('Back to its defaults').first);
+    await tester.pump();
+    expect(state.material.color, const MaterialFile().color);
+    expect(state.material.metallic, const MaterialFile().metallic);
+    expect(state.material.tilingX, 2, reason: "another card's");
+    state.undo();
+    expect(state.material.metallic, 0.8, reason: 'one undo step');
+
+    await tester.pump();
+    expect(find.text('Metallic'), findsOneWidget);
+    await tester.tap(find.byTooltip('Fold').first);
+    await tester.pump();
+    expect(find.text('Metallic'), findsNothing);
+    expect(find.text('Surface'), findsOneWidget, reason: 'its header stays');
+    expect(MaterialCardFolds.isFolded('3d.surface'), isTrue);
+  });
+
+  testWidgets("a variant's card takes its own values back to the parent's", (
+    tester,
+  ) async {
+    write(
+      'rock.material.json',
+      const MaterialFile(color: 0xFF808080, roughness: 0.9),
+    );
+    write(
+      'mossy.material.json',
+      const MaterialFile(
+        parent: 'rock.material.json',
+        color: 0xFF336633,
+        tilingX: 3,
+        overrides: {'color', 'tiling'},
+      ),
+    );
+    final state = await open(tester, 'mossy.material.json');
+    expect(state.cardChanged('surface'), isTrue);
+    expect(state.cardChanged('maps'), isFalse);
+    state.resetCard('surface');
+    expect(state.material.overrides, {'tiling'});
+    expect(state.shown.color, 0xFF808080, reason: "the parent's");
+    expect(state.shown.tilingX, 3, reason: 'still its own');
+  });
+
+  testWidgets('the toolbar: shapes, background, zoom and fit, compare; '
+      'and their keys', (tester) async {
+    write('a.material.json', const MaterialFile());
+    final state = await open(tester, 'a.material.json');
+    await tester.tap(find.text('Cube'));
+    await tester.pump();
+    expect(state.shape, PreviewShape.cube);
+    await tester.tap(find.text('Bright'));
+    await tester.pump();
+    expect(state.backdrop, PreviewBackdrop.bright);
+
+    state.fit();
+    await tester.pump();
+    expect(state.atStart, isTrue);
+    expect(find.text('100%'), findsOneWidget);
+    await tester.tap(find.byTooltip('Zoom in (+)'));
+    await tester.pump();
+    expect(state.zoom, closeTo(1.25, 1e-9));
+    expect(find.text('125%'), findsOneWidget);
+    expect(state.atStart, isFalse);
+    await tester.tap(find.text('Fit'));
+    await tester.pump();
+    expect(state.atStart, isTrue);
+
+    await tester.tap(
+      find.byTooltip('Compare with a plain grey material (C; hold Space)'),
+    );
+    await tester.pump();
+    expect(state.compareAt, 0.5);
+    expect(find.text('Plain'), findsOneWidget);
+    expect(find.text('With'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+    expect(state.compareAt, isNull);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
+    expect(state.backdrop, PreviewBackdrop.sky, reason: 'round after Bright');
+    await tester.sendKeyEvent(LogicalKeyboardKey.equal);
+    expect(state.atStart, isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    expect(state.atStart, isTrue);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.space);
+    expect(state.holdingPlain, isTrue);
+    await tester.pump();
+    expect(find.text('A plain grey in its place'), findsOneWidget);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.space);
+    expect(state.holdingPlain, isFalse);
     expect(tester.takeException(), isNull);
   });
 
