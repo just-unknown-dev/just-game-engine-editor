@@ -9,7 +9,8 @@ import '../../../core/scope/editor_scope_services.dart';
 
 /// All, Move, Scale and Rotate — Q, W, E and R — in a column at the top
 /// right of the viewport, in the editor and the Level Designer alike; the
-/// designer's tool strip hangs below it.
+/// editor's own features ([ToolColumnButtons]) and the designer's tool
+/// strip hang below it.
 ///
 /// Each button picks which gizmo the selection shows; in the designer they
 /// are the select tool, so picking one picks that up too. The one showing
@@ -86,6 +87,59 @@ class TransformToolbar extends StatelessWidget {
   String _tooltip(TransformMode mode) {
     final key = _keyOf(mode);
     return key == null ? mode.label : '${mode.label}  ($key)';
+  }
+}
+
+/// The buttons that stand in a frame of their own under the
+/// [TransformToolbar] ([ToolbarSlot.toolColumn]): features of the editor
+/// itself rather than a module's tools, such as the Asset Store. As wide as
+/// the column, with its buttons; up in the transform tools' place while
+/// they are gone (no scene, a play-test); nothing when there are none.
+class ToolColumnButtons extends StatelessWidget {
+  const ToolColumnButtons({
+    super.key,
+    required this.plugin,
+    required this.settings,
+  });
+
+  final JustGameEditorPlugin plugin;
+  final OverlayUiSettings settings;
+
+  /// The buttons that stand here, in order.
+  static List<ToolbarButton> buttonsOf(EditorScope scope) => [
+    for (final b in scope.toolbarButtons)
+      if (b.slot == ToolbarSlot.toolColumn) b,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = plugin.scope;
+    final buttons = buttonsOf(scope);
+    if (buttons.isEmpty) return const SizedBox.shrink();
+    // A button lit while its workspace is open (`isActive`) has to hear the
+    // workspace open and close.
+    return SignalBuilder<OpenWorkspace?>(
+      signal: scope.activeWorkspace,
+      builder: (context, _, _) => FloatingToolFrame(
+        settings: settings,
+        child: SizedBox(
+          width: ToolPalette.width,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final b in buttons)
+                ToolStripButton(
+                  icon: b.icon,
+                  tooltip: b.tooltip,
+                  isActive: b.isActive?.call(scope) ?? false,
+                  enabled: b.isEnabled?.call(scope) ?? true,
+                  onTap: () => b.onPressed(scope),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

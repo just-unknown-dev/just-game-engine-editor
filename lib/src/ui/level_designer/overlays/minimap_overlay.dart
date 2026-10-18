@@ -137,6 +137,10 @@ class MinimapOverlay extends DesignerOverlay with InteractiveOverlay {
   /// Stable id, for toggling and for hit-testing.
   static const String overlayId = 'minimap';
 
+  // The designer's own chrome, not a gizmo: it stays.
+  @override
+  GizmoKind? get gizmoKind => null;
+
   @override
   String get id => overlayId;
 

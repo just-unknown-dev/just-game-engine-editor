@@ -267,6 +267,10 @@ class CameraRigOverlay extends DesignerOverlay {
 
   static const String overlayId = 'camera.rigs';
 
+  // What each camera frames.
+  @override
+  GizmoKind? get gizmoKind => GizmoKind.cameras;
+
   @override
   String get id => overlayId;
 
@@ -289,7 +293,7 @@ class CameraRigOverlay extends DesignerOverlay {
     context.world,
     brain: brain(),
     isSelected: context.isSelected,
-    isShown: context.isShown,
+    isShown: context.showsGizmosOf,
     editingTrack: context.controller.toolId.value == BuiltInTools.dolly,
   );
 }

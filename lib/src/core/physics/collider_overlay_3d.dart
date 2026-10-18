@@ -16,6 +16,10 @@ final class ColliderOverlay3D extends ViewportOverlay {
   // The outlines of matched shapes, by their key: worked out once each.
   final Map<Object, List<(Vector3, Vector3)>> _matched = {};
 
+  // Collision shapes in space.
+  @override
+  GizmoKind get gizmoKind => GizmoKind.colliders;
+
   @override
   String get id => 'physics3d.colliders';
 

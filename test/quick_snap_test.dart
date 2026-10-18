@@ -1,4 +1,4 @@
-// Snapping at hand: a magnet and a grid button standing on the settings
+// Snapping at hand: the gizmos, a magnet and a grid button standing on the settings
 // gear while editing — and one snap switch for the whole editor, the Level
 // Designer's included.
 
@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/shared/gizmo_menu.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/shared/quick_snap_bar.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/shared/transform_toolbar.dart';
 
@@ -128,6 +129,134 @@ void main() {
       await stop(tester);
     });
 
+    Finder gizmoButton() =>
+        inBar(find.byIcon(Icons.filter_center_focus_rounded));
+
+    testWidgets("the top button, over the magnet, hides and shows the "
+        "mode's gizmos, and only that mode's", (tester) async {
+      if (!kDebugMode) return;
+      await start(tester);
+      expect(
+        tester.getRect(gizmoButton()).bottom,
+        lessThanOrEqualTo(tester.getRect(inBar(find.byType(MagnetGlyph))).top),
+        reason: 'on top of the snapping',
+      );
+      expect(plugin.areGizmosVisible, isTrue, reason: 'the editor: shown');
+
+      await tester.tap(gizmoButton());
+      await tester.pump();
+      await tester.pump();
+      final gizmos = plugin.scope.prefs.settings.value.gizmos;
+      expect(gizmos.editor.shown, isFalse);
+      expect(gizmos.designer, GizmoSettings.defaults.designer);
+      expect(gizmos.play, GizmoSettings.defaults.play);
+      expect(plugin.areGizmosVisible, isFalse);
+      expect(
+        find.byTooltip(
+          'Editor gizmos are hidden — markers, camera frames, colliders, '
+          'outlines. Right-click for which.',
+        ),
+        findsOneWidget,
+      );
+
+      // The Level Designer's own: hidden as it starts, shown when asked.
+      plugin.openLevelDesigner();
+      await tester.pump();
+      expect(plugin.areGizmosVisible, isFalse);
+      await tester.tap(gizmoButton());
+      await tester.pump();
+      await tester.pump();
+      expect(plugin.areGizmosVisible, isTrue);
+      expect(
+        plugin.scope.prefs.settings.value.gizmos.editor.shown,
+        isFalse,
+        reason: 'the editor keeps its own',
+      );
+      await stop(tester);
+    });
+
+    testWidgets('in the Level Designer the button brings back the collider '
+        'outlines of what is off the Level Map', (tester) async {
+      if (!kDebugMode) return;
+      await start(tester);
+      final physics = PhysicsSystem(plugin.engine.physics);
+      plugin.engine.world.addSystem(physics);
+      final solid = plugin.engine.world.createEntityWithComponents([
+        TransformComponent(),
+        RigidBody2D(),
+        Collider2D(),
+      ], name: 'Floor_solid');
+      plugin.openLevelDesigner();
+      await tester.pump();
+      plugin.onUpdate(1 / 60);
+      expect(physics.drawsOutlines, isFalse, reason: 'hidden as it starts');
+
+      await tester.tap(gizmoButton());
+      await tester.pump();
+      await tester.pump();
+      plugin.onUpdate(1 / 60);
+      expect(plugin.gizmoMode, GizmoMode.designer);
+      expect(physics.drawsOutlines, isTrue);
+      expect(physics.outlineFilter!(solid), isTrue, reason: 'off the map');
+
+      await tester.tap(gizmoButton());
+      await tester.pump();
+      await tester.pump();
+      plugin.onUpdate(1 / 60);
+      expect(physics.drawsOutlines, isFalse);
+      await stop(tester);
+    });
+
+    testWidgets('a right-click on it slides out the kinds, for the mode now',
+        (tester) async {
+      if (!kDebugMode) return;
+      await start(tester);
+      await tester.tap(gizmoButton(), buttons: kSecondaryButton);
+      await tester.pump();
+      expect(find.byType(GizmoMenu), findsOneWidget);
+      expect(find.text('· Editor'), findsOneWidget);
+      final menu = tester.getRect(find.byType(GizmoMenu));
+      final bar = tester.getRect(
+        find
+            .descendant(
+              of: find.byType(QuickSnapBar),
+              matching: find.byType(FloatingToolFrame),
+            )
+            .last,
+      );
+      expect(menu.right, lessThanOrEqualTo(bar.left), reason: 'to its left');
+
+      // Colliders off: in the editor only, and counted on the button.
+      await tester.tap(find.text('Colliders'));
+      await tester.pump();
+      await tester.pump();
+      var gizmos = plugin.scope.prefs.settings.value.gizmos;
+      expect(gizmos.editor.hidden, {GizmoKind.colliders});
+      expect(gizmos.play.hidden, isEmpty);
+      expect(plugin.showsGizmo(GizmoKind.colliders), isFalse);
+      expect(plugin.showsGizmo(GizmoKind.icons), isTrue);
+      expect(inBar(find.text('${GizmoKind.values.length - 1}')), findsOneWidget);
+
+      // The same in every mode, then this mode back as it starts.
+      await tester.tap(find.text('Every mode'));
+      await tester.pump();
+      await tester.pump();
+      gizmos = plugin.scope.prefs.settings.value.gizmos;
+      expect(gizmos.designer, gizmos.editor);
+      expect(gizmos.play, gizmos.editor);
+      await tester.tap(find.text('Reset'));
+      await tester.pump();
+      await tester.pump();
+      gizmos = plugin.scope.prefs.settings.value.gizmos;
+      expect(gizmos.editor, GizmoSettings.defaults.editor);
+      expect(gizmos.play.hidden, {GizmoKind.colliders}, reason: 'its own');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(find.byType(GizmoMenu), findsNothing);
+      await stop(tester);
+    });
+
     testWidgets('a right-click on the magnet slides out the steps', (
       tester,
     ) async {
@@ -152,7 +281,7 @@ void main() {
             .last,
       );
       expect(row.right, lessThanOrEqualTo(bar.left), reason: 'to its left');
-      // Level with the magnet, at the top of the column.
+      // Level with the magnet, in the middle of the column.
       final at = tester.getRect(magnet);
       expect((row.center.dy - at.center.dy).abs(), lessThan(4));
 
@@ -222,18 +351,33 @@ void main() {
       await stop(tester);
     });
 
-    testWidgets('gone in a play-test, back after it', (tester) async {
+    testWidgets("in a play-test only the gizmos stay, the play-test's own; "
+        'snapping is back after it', (tester) async {
       if (!kDebugMode) return;
       await start(tester);
+      final settings = plugin.scope.prefs.settings.value;
       plugin.play();
       await tester.pump();
-      expect(find.byType(QuickSnapBar), findsNothing);
+      expect(find.byType(QuickSnapBar), findsOneWidget);
+      expect(inBar(find.byType(MagnetGlyph)), findsNothing);
+      expect(gizmoButton(), findsOneWidget);
+      expect(
+        tester.getSize(find.byType(QuickSnapBar)).height,
+        closeTo(QuickSnapBar.heightFor(settings, snapping: false), 1),
+      );
+      expect(plugin.areGizmosVisible, isFalse, reason: 'as it starts');
+      await tester.tap(gizmoButton());
+      await tester.pump();
+      await tester.pump();
+      expect(plugin.areGizmosVisible, isTrue);
+      expect(plugin.scope.prefs.settings.value.gizmos.play.shown, isTrue);
       plugin.pause();
       await tester.pump();
-      expect(find.byType(QuickSnapBar), findsNothing, reason: 'still one');
+      expect(inBar(find.byType(MagnetGlyph)), findsNothing, reason: 'still');
       plugin.stop();
       await tester.pump();
-      expect(find.byType(QuickSnapBar), findsOneWidget);
+      expect(inBar(find.byType(MagnetGlyph)), findsOneWidget);
+      expect(plugin.areGizmosVisible, isTrue, reason: "the editor's own");
       await stop(tester);
     });
 

@@ -56,10 +56,12 @@ class LevelDesignerSession implements DesignerSession {
     ModifierKeys Function()? readModifiers,
     EditorView Function()? camera,
     this.splitViews,
+    bool Function(GizmoKind kind)? showsGizmo,
   }) : history = scope.history,
        _uniqueName = uniqueName,
        _readModifiers = readModifiers ?? ModifierKeys.fromHardwareKeyboard,
-       _camera = camera {
+       _camera = camera,
+       _showsGizmo = showsGizmo {
     controller = LevelDesignerController(
       sceneState: sceneState,
       history: history,
@@ -78,6 +80,10 @@ class LevelDesignerSession implements DesignerSession {
   }
 
   late final VoidCallback _stopWatchingDesigner;
+
+  /// Whether gizmos of a kind are drawn now, in the editor's mode (the
+  /// plugin's `showsGizmo`); always, when the session was made without it.
+  final bool Function(GizmoKind kind)? _showsGizmo;
 
   /// The editor this session belongs to: its prefabs, layers, codec, log.
   @override
@@ -834,7 +840,7 @@ class LevelDesignerSession implements DesignerSession {
     final context = _chromeContext(screen, canvasSize, gridSize);
     for (final overlay in overlays.all.reversed) {
       if (overlay is! InteractiveOverlay) continue;
-      if (!controller.isOverlayVisible(overlay.id)) continue;
+      if (!isOverlayDrawn(overlay)) continue;
       if (overlay.onPointerDown(context)) {
         _chromeOverlay = overlay;
         return true;
@@ -1016,8 +1022,25 @@ class LevelDesignerSession implements DesignerSession {
 
   /// Draws every designer overlay. Called from the plugin's render hook, after
   /// the world and before the base editor's gizmos.
-  void paint(Canvas canvas, Size canvasSize, EditorView camera) => _painter
-      .paint(canvas, canvasSize, camera, world, controller, overlays.all);
+  void paint(Canvas canvas, Size canvasSize, EditorView camera) =>
+      _painter.paint(
+        canvas,
+        canvasSize,
+        camera,
+        world,
+        controller,
+        overlays.all,
+        isDrawn: isOverlayDrawn,
+        showsGizmo: _showsGizmo,
+      );
+
+  /// Whether [overlay] is drawn, and offered the pointer, now: its toggle
+  /// on, and a gizmo only while its kind is shown in the editor's mode.
+  bool isOverlayDrawn(DesignerOverlay overlay) {
+    if (!controller.isOverlayVisible(overlay.id)) return false;
+    final kind = overlay.gizmoKind;
+    return kind == null || (_showsGizmo?.call(kind) ?? true);
+  }
 
   /// Releases what this session owns.
   ///

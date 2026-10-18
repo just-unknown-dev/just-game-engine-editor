@@ -111,7 +111,8 @@ class GizmoPainter {
   /// Paints [mode]'s gizmo for [entity] using [camera] to convert
   /// positions: all of them in one, arrows to move it, handles to scale it,
   /// or a ring to turn it — as the toolbar says. [allows] is what [entity]
-  /// can take; All leaves the rest off.
+  /// can take; All leaves the rest off. [outline] draws the frame round it,
+  /// a gizmo the editor's switch hides; the handles stay.
   ///
   /// [canvasSize] is the full viewport size.
   void paintGizmos(
@@ -121,6 +122,7 @@ class GizmoPainter {
     Size canvasSize, {
     TransformMode mode = TransformMode.all,
     Set<TransformMode>? allows,
+    bool outline = true,
   }) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
@@ -131,7 +133,7 @@ class GizmoPainter {
     final bounds = _computeScreenBounds(entity, transform, camera);
 
     // Selection outline
-    _paintSelectionRect(canvas, bounds.corners);
+    if (outline) _paintSelectionRect(canvas, bounds.corners);
 
     switch (mode) {
       case TransformMode.all:
@@ -162,6 +164,21 @@ class GizmoPainter {
       ..style = PaintingStyle.fill
       ..color = _colOrigin;
     canvas.drawCircle(screenPos, 3.5, _paint);
+  }
+
+  /// The outline round [entity] alone, with no handles: a selection none
+  /// can move, or one looked at in a play-test.
+  void paintSelectionOutline(
+    Canvas canvas,
+    Entity entity,
+    EditorView camera,
+    Size canvasSize,
+  ) {
+    final transform = entity.getComponent<TransformComponent>();
+    if (transform == null) return;
+    camera.viewportSize = canvasSize;
+    final bounds = _computeScreenBounds(entity, transform, camera);
+    _paintSelectionRect(canvas, bounds.corners);
   }
 
   /// Draws [marker]'s icon at each of [entities], regardless of selection,

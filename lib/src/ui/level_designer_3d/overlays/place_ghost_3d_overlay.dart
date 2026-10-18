@@ -13,6 +13,10 @@ class PlaceGhost3DOverlay extends DesignerOverlay {
   /// The tool whose preview it draws.
   final Place3DTool tool;
 
+  // What a tool in use draws: it stays with the gizmos hidden.
+  @override
+  GizmoKind? get gizmoKind => null;
+
   @override
   String get id => 'designer3d.placeGhost';
 

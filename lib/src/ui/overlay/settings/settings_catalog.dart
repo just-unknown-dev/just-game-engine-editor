@@ -591,6 +591,42 @@ extension _SettingsCatalog on _EditorSettingsDialogState {
         ),
       ),
     ),
+    for (final mode in GizmoMode.values)
+      _Setting(
+        page: _viewport,
+        group: 'Gizmos',
+        label: switch (mode) {
+          GizmoMode.editor => 'Gizmos while editing',
+          GizmoMode.designer => 'Gizmos in the Level Designer',
+          GizmoMode.play => 'Gizmos in a play-test',
+        },
+        hint:
+            'Draw the editor\'s aids over the level ${switch (mode) {
+              GizmoMode.editor => 'while editing',
+              GizmoMode.designer => 'with the Level Designer open',
+              GizmoMode.play => 'during a play-test',
+            }}: markers, camera frames, light and sound reach, collider and '
+            'selection outlines, a kit\'s paths and bounds. The button '
+            'above snapping switches this while there; right-click it for '
+            'which kinds.',
+        keywords: 'gizmos outlines markers icons colliders overlays clean',
+        isDefault: s.gizmos.of(mode) == d.gizmos.of(mode),
+        reset: (s) =>
+            s.copyWith(gizmos: s.gizmos.withMode(mode, d.gizmos.of(mode))),
+        control: EditorToggle(
+          value: s.gizmos.of(mode).shown,
+          label: 'Gizmos in ${mode.label}',
+          accent: accent,
+          onChanged: (v) => _save(
+            s.copyWith(
+              gizmos: s.gizmos.withMode(
+                mode,
+                s.gizmos.of(mode).copyWith(shown: v),
+              ),
+            ),
+          ),
+        ),
+      ),
     _Setting(
       page: _viewport,
       group: 'Drawing',

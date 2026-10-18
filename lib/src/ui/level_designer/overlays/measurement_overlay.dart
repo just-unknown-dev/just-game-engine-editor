@@ -16,6 +16,10 @@ class MeasurementOverlay extends DesignerOverlay {
   /// The tool whose measurement is being drawn.
   final MeasureTool tool;
 
+  // What a tool in use draws: it stays with the gizmos hidden.
+  @override
+  GizmoKind? get gizmoKind => null;
+
   @override
   String get id => 'measurement';
 

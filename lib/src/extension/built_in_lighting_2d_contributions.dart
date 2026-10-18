@@ -213,6 +213,10 @@ abstract final class BuiltInLighting2DContributions {
 /// In a 2-D scene: how far a selected light reaches — a ring, and a spot's
 /// cone — and the outline of a selected shadow caster.
 class Light2DOverlay extends ViewportOverlay {
+  // How far a selected light reaches.
+  @override
+  GizmoKind get gizmoKind => GizmoKind.reach;
+
   @override
   String get id => 'lighting.lights2D';
 

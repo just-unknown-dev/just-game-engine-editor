@@ -108,9 +108,10 @@ EdgeInsets editorGameInsets({
 
 /// Chrome shown while the full editor is open: the right panel, the docks
 /// along the foot of the canvas column, the controls floating over the
-/// viewport's corners — play top left, transform top right, the settings
-/// gear bottom right with messages above it, the designer's minimap bottom
-/// left — and the dialogs over it all.
+/// viewport's corners — play top left, transform top right with the Asset
+/// Store under it, the settings gear bottom right with messages above it,
+/// the designer's minimap or, in space, the view cube bottom left — and the
+/// dialogs over it all.
 /// See [CompactChrome] for the sizing assumption.
 class FullEditorChrome extends StatelessWidget {
   const FullEditorChrome({
@@ -191,26 +192,41 @@ class FullEditorChrome extends StatelessWidget {
             controlsAt +
             Offset(0, PlayControlsToolbar.heightFor(settings) + 8) -
             Offset(gameInsets.left, gameInsets.top);
-        // Clear of the minimap, bottom left, while designing; of the canvas's
-        // edge otherwise. The gear is at the other corner.
-        plugin.gamePreviewBottomReserve = ruled
-            ? MinimapLayout.margin * 2 + MinimapLayout.size.height
-            : controlsAt.dy;
         // What stands in the bottom right corner: the gear, snapping at hand
         // on it while editing, and above them the messages; the transform
         // column and tool strip stop short of them.
         final gearMargin = ruled ? MinimapLayout.margin : 16.0;
+        // Editing a scene: the transform column and the snapping show.
         final quickSnap =
             !plugin.playController.isRunning && plugin.sceneState.hasScene;
-        // In space, the axes as the view sees them, over the snapping.
+        // The gizmos button over them, with a scene open: in a play-test
+        // too, alone, for the play-test's own gizmos.
+        final quickBar = plugin.sceneState.hasScene;
+        final gizmoMode = plugin.gizmoMode ?? GizmoMode.editor;
+        // Under the transform column, what stands apart from the modules'
+        // tools: the editor's own features, such as the Asset Store. Up in
+        // its place when the column is gone (no scene, a play-test).
+        final inToolColumn = ToolColumnButtons.buttonsOf(plugin.scope);
+        // In space, the axes as the view sees them, in the bottom left
+        // corner: the one the minimap has in the plane, which space has no
+        // minimap for.
         final view = plugin.scope.editorView;
         final cube = quickSnap && !flat && view is OrbitFlyEditorView;
+        // Clear of the minimap, bottom left, while designing, or of the view
+        // cube in space; of the canvas's edge otherwise. The gear is at the
+        // other corner.
+        plugin.gamePreviewBottomReserve = ruled
+            ? MinimapLayout.margin * 2 + MinimapLayout.size.height
+            : cube
+            ? gearMargin + ViewCube.size + 10 + 8
+            : controlsAt.dy;
         final aboveGear =
             gameInsets.bottom +
             gearMargin +
             SettingsGearButton.heightFor(settings) +
-            (quickSnap ? QuickSnapBar.heightFor(settings) + 8 : 0) +
-            (cube ? ViewCube.size + 10 + 8 : 0) +
+            (quickBar
+                ? QuickSnapBar.heightFor(settings, snapping: quickSnap) + 8
+                : 0) +
             8;
         // The same frame as the toolbar above it: radius, border, padding.
         plugin.gamePreviewStyle = GamePreviewStyle(
@@ -286,9 +302,23 @@ class FullEditorChrome extends StatelessWidget {
                     12,
               ),
             ),
+            // The axes and the lens, bottom left in space, as far in as the
+            // gear is at the other corner.
+            if (cube)
+              Positioned(
+                left: gameInsets.left + gearMargin,
+                bottom: gameInsets.bottom + gearMargin,
+                child: ViewCube(
+                  view: view,
+                  onViewAlong: (yaw, pitch) =>
+                      plugin.viewAlong(yaw: yaw, pitch: pitch),
+                  onToggleOrthographic: plugin.toggleOrthographic,
+                ),
+              ),
             // The settings, bottom right, under the transform column: the
-            // corner the minimap leaves free while designing. Snapping
-            // stands on the gear while editing — not in a play-test.
+            // corner the minimap leaves free while designing. The gizmos
+            // and snapping stand on the gear while editing; in a play-test
+            // the gizmos alone.
             Positioned(
               right: gameInsets.right + gearMargin,
               bottom: gameInsets.bottom + gearMargin,
@@ -296,17 +326,13 @@ class FullEditorChrome extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  if (cube) ...[
-                    ViewCube(
-                      view: view,
-                      onViewAlong: (yaw, pitch) =>
-                          plugin.viewAlong(yaw: yaw, pitch: pitch),
-                      onToggleOrthographic: plugin.toggleOrthographic,
+                  if (quickBar) ...[
+                    QuickSnapBar(
+                      scope: plugin.scope,
+                      settings: settings,
+                      mode: gizmoMode,
+                      snapping: quickSnap,
                     ),
-                    const SizedBox(height: 8),
-                  ],
-                  if (quickSnap) ...[
-                    QuickSnapBar(scope: plugin.scope, settings: settings),
                     // The gap between the frames of the column above.
                     const SizedBox(height: 8),
                   ],
@@ -316,7 +342,8 @@ class FullEditorChrome extends StatelessWidget {
             ),
             // All, Move, Scale, Rotate: the play controls' mirror, at the
             // top right of the level — clear of the designer's panel and,
-            // at the top, of its ruler — and the designer's tool strip
+            // at the top, of its ruler — the editor's own features such as
+            // the Asset Store under it, and the designer's tool strip
             // hanging below, as tall as the level lets it be.
             Positioned(
               right: gameInsets.right + (ruled ? MinimapLayout.margin : 16),
@@ -326,6 +353,10 @@ class FullEditorChrome extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   TransformToolbar(plugin: plugin, settings: settings),
+                  if (inToolColumn.isNotEmpty) ...[
+                    if (quickSnap) const SizedBox(height: 8),
+                    ToolColumnButtons(plugin: plugin, settings: settings),
+                  ],
                   if (designer != null) ...[
                     const SizedBox(height: 8),
                     Flexible(

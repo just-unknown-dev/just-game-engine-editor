@@ -119,6 +119,10 @@ abstract final class BuiltInAudioContributions {
 /// to fade from full volume, and a fainter one where it falls silent — in
 /// a 3-D scene three of each, round the three axes.
 class AudioRangeOverlay extends ViewportOverlay {
+  // How far a selected sound carries.
+  @override
+  GizmoKind get gizmoKind => GizmoKind.reach;
+
   @override
   String get id => 'audio.ranges';
 

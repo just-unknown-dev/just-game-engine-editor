@@ -18,6 +18,11 @@ class SelectionHandlesOverlay extends DesignerOverlay {
   /// Where the knob and handles sit; the scope's, shared with the tool.
   final SelectionHandleLayout layout;
 
+  // What a tool in use draws: it stays with the gizmos hidden, all but
+  // the outline round the selection (the selection outline gizmo).
+  @override
+  GizmoKind? get gizmoKind => null;
+
   @override
   String get id => 'selectionHandles';
 
@@ -44,7 +49,9 @@ class SelectionHandlesOverlay extends DesignerOverlay {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
       ..color = OverlayColors.selection;
-    draw.canvas.drawRect(screen, stroke);
+    if (context.showsGizmo(GizmoKind.selection)) {
+      draw.canvas.drawRect(screen, stroke);
+    }
 
     final centre = draw.toScreen(bounds.center);
     final available = TransformModes.forEntities(context.world, entities);
@@ -147,6 +154,10 @@ class SmartGuidesOverlay extends DesignerOverlay {
 
   /// Spacing readouts.
   static const Color spacingColor = Color(0xFFFFAB40);
+
+  // What a tool in use draws: it stays with the gizmos hidden.
+  @override
+  GizmoKind? get gizmoKind => null;
 
   @override
   String get id => 'smartGuides';

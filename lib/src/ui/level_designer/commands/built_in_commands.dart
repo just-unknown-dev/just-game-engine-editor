@@ -247,6 +247,13 @@ abstract final class BuiltInCommands {
           c.plugin!.showGamePreview.value = !c.plugin!.showGamePreview.value,
     ),
     // The quick snapping bar's: no keys until one is given them.
+    // The mode's own: the editor's, the Level Designer's or a play-test's.
+    DesignerCommand(
+      id: 'editor.gizmos.toggle',
+      label: 'Show or hide the gizmos',
+      scope: CommandScope.always,
+      run: (c) => c.plugin!.toggleGizmos(),
+    ),
     DesignerCommand(
       id: 'editor.snap.toggle',
       label: 'Snapping on or off',

@@ -6,6 +6,10 @@ import 'package:just_editor_core/host.dart';
 /// The 3-D Select's marquee: the rectangle being dragged on the screen,
 /// whatever is drawn under it.
 class Marquee3DOverlay extends DesignerOverlay {
+  // What a tool in use draws: it stays with the gizmos hidden.
+  @override
+  GizmoKind? get gizmoKind => null;
+
   @override
   String get id => 'designer3d.marquee';
 

@@ -254,6 +254,13 @@ class JustGameEditorPlugin implements EnginePlugin {
   final Signal<bool> showGrid = Signal(true, debugLabel: 'showGrid');
   bool _gridSnappingEnabled = true;
 
+  /// The gizmos of each mode, as the settings have them (the Gizmos button
+  /// above the snapping, and its menu); [gizmoMode] is the mode now.
+  final Signal<GizmoSettings> gizmoSettings = Signal(
+    GizmoSettings.defaults,
+    debugLabel: 'gizmoSettings',
+  );
+
   /// Whether a small view through the game's live camera is drawn over
   /// the editor while authoring.
   final Signal<bool> showGamePreview = Signal(true, debugLabel: 'gamePreview');
@@ -748,6 +755,43 @@ class JustGameEditorPlugin implements EnginePlugin {
     debugLabel: 'gridVisible',
   );
 
+  /// Which mode's gizmos apply now: a play-test (running or paused), the
+  /// Level Designer, or the editor; null with the editor closed. Each
+  /// keeps its own ([gizmoSettings]).
+  ///
+  /// Worked out on each read, not a `Computed`: it reads the designer only
+  /// outside a play-test, and a `Computed` reading one whose signals change
+  /// like that keeps the old ones, so it stopped hearing the designer open.
+  GizmoMode? get gizmoMode {
+    if (!isVisible.value) return null;
+    if (!isAuthoring.value) return GizmoMode.play;
+    return designer.value == null ? GizmoMode.editor : GizmoMode.designer;
+  }
+
+  /// Whether the mode now shows its gizmos at all: the Gizmos button.
+  bool get areGizmosVisible {
+    final mode = gizmoMode;
+    return mode != null && gizmoSettings.value.of(mode).shown;
+  }
+
+  /// Whether gizmos of [kind] are drawn now: markers, camera frames, what
+  /// the modules draw over the level, the collider outlines, the
+  /// selection's outline, the designer's aids — each as the mode now has
+  /// it. The selection's handles, and what a tool in use draws, are not
+  /// gizmos and stay.
+  bool showsGizmo(GizmoKind kind) {
+    final mode = gizmoMode;
+    return mode != null && gizmoSettings.value.of(mode).shows(kind);
+  }
+
+  /// Shows the mode's gizmos if hidden, hides them if shown; the other
+  /// modes keep theirs.
+  void toggleGizmos() {
+    final mode = gizmoMode;
+    if (mode == null) return;
+    scope.prefs.change((s) => s.copyWith(gizmos: s.gizmos.toggled(mode)));
+  }
+
   /// Whether the Level Designer workspace is currently open.
   bool get isLevelDesignerOpen => designer.value != null;
 
@@ -839,6 +883,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       onDelete: deleteSelection,
       onArray: (count, step) => arraySelection(count: count, step: step),
       onArray3D: arraySelection3D,
+      showsGizmo: showsGizmo,
     )..restoreEditorData(sceneIO.editorData);
     // Its panel is a tab of the right panel: the one to see on opening.
     scope.chrome.rightPanelTab.value = EditorChromeState.levelTab;
@@ -870,6 +915,19 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (scope.view.isHiddenIn(entity)) return false;
     final session = designer.value;
     return session == null || session.controller.isShownInViewport(entity);
+  }
+
+  /// Whether [entity]'s gizmos (its marker, camera frame, collider outline,
+  /// what a module draws for it) may be drawn: as [_isDrawn], but in the
+  /// Level Designer what is off the Level Map too. Out of reach and out of
+  /// sight while designing, its gizmos still show once the designer's are
+  /// asked for, which is what the Gizmos button there is for.
+  bool _gizmosShownFor(Entity entity) {
+    if (!isAuthoring.value) return true;
+    final session = designer.value;
+    return session == null
+        ? !scope.view.isHiddenIn(entity)
+        : session.controller.showsGizmosOf(entity);
   }
 
   /// Closes the Level Designer and releases its state.
@@ -1535,6 +1593,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (_isInitialized) _syncRuntimeSystems(dt);
     if (_isInitialized) _syncSplit();
     if (_isInitialized) _syncSceneAids();
+    if (_isInitialized) _syncColliderOutlines();
     if (!_isInitialized || !isVisible.value) return;
     // Right button held in 3-D: WASD flies the view.
     viewport.flyTick(dt, HardwareKeyboard.instance.logicalKeysPressed);
@@ -1558,15 +1617,23 @@ class JustGameEditorPlugin implements EnginePlugin {
     ..drawFilter = _isDrawn
     ..highlighted = () => selectionEntities;
 
+  /// In a play-test: the selection's outline, when its gizmos show it,
+  /// and nothing else of the editor's.
+  late final g3.SceneEditorAids _playAids = g3.SceneEditorAids()
+    ..plainViews.add(_previewFrame)
+    ..highlighted = () => selectionEntities;
+
   void _syncSceneAids() {
     if (!engine.isInitialized) return;
     final graphics = engine.services.maybe<g3.Graphics3D>();
     if (graphics == null || !graphics.isStarted) return;
     final renderer = graphics.sceneRenderer;
-    if (!isVisible.value ||
-        !isAuthoring.value ||
-        sceneState.editingMode != SceneMode.threeD) {
+    if (!isVisible.value || sceneState.editingMode != SceneMode.threeD) {
       renderer.aids = null;
+      return;
+    }
+    if (!isAuthoring.value) {
+      renderer.aids = showsGizmo(GizmoKind.selection) ? _playAids : null;
       return;
     }
     final state = scope.designer3D;
@@ -1576,10 +1643,26 @@ class JustGameEditorPlugin implements EnginePlugin {
         ViewMode3D.unlit || ViewMode3D.collision => g3.RenderViewMode.unlit,
         ViewMode3D.wireframe => g3.RenderViewMode.wireframe,
       }
-      ..highlighted = state.outline.value ? () => selectionEntities : null
+      // The outline is a gizmo: shown as the mode's say.
+      ..highlighted = state.outline.value && showsGizmo(GizmoKind.selection)
+          ? () => selectionEntities
+          : null
       ..sliceY = state.sliceOn.value ? state.sliceY.value : null;
     sceneAids.skippedViews.clear();
     if (activeSplit != null) sceneAids.skippedViews.add(engine.rendering.view);
+  }
+
+  /// The engine's 2-D collider outlines: drawn while the mode now shows
+  /// colliders (in a play-test or the Level Designer only once asked
+  /// for), never with the editor closed; not for what the eye or a hidden
+  /// layer hid.
+  void _syncColliderOutlines() {
+    if (!engine.isInitialized) return;
+    final physics = engine.world.getSystem<PhysicsSystem>();
+    if (physics == null) return;
+    physics
+      ..drawsOutlines = showsGizmo(GizmoKind.colliders)
+      ..outlineFilter = _gizmosShownFor;
   }
 
   /// Switches the 3-D view between perspective and orthographic (pad 5).
@@ -1881,8 +1964,9 @@ class JustGameEditorPlugin implements EnginePlugin {
     designer.value?.paint(canvas, size, camera);
 
     // The designer draws the camera rigs as one of its overlays; with it
-    // closed the base editor draws them itself.
-    if (flat && designer.value == null && isAuthoring.value) {
+    // closed the base editor draws them itself. Each gizmo as the mode now
+    // shows it.
+    if (flat && designer.value == null && showsGizmo(GizmoKind.cameras)) {
       CameraRigPainter.paint(
         DesignerCanvas(canvas: canvas, size: size, camera: camera),
         engine.world,
@@ -1890,12 +1974,13 @@ class JustGameEditorPlugin implements EnginePlugin {
         isSelected: (entity) =>
             sceneState.selectedEntity.value?.id == entity.id ||
             sceneState.isInMultiSelection(entity.id),
-        isShown: _isDrawn,
+        isShown: _gizmosShownFor,
       );
     }
 
     // Cameras, spawn points and whatever else a module marks.
-    for (final marker in scope.markers) {
+    final icons = showsGizmo(GizmoKind.icons);
+    for (final marker in icons ? scope.markers : const <EditorMarker>[]) {
       final where = marker.where;
       _gizmoPainter.paintMarkers(
         canvas,
@@ -1905,7 +1990,7 @@ class JustGameEditorPlugin implements EnginePlugin {
             TransformComponent,
             ...marker.components,
           ]))
-            if (_isDrawn(e) && (where == null || where(e))) e,
+            if (_gizmosShownFor(e) && (where == null || where(e))) e,
         ],
         camera,
         size,
@@ -1913,20 +1998,26 @@ class JustGameEditorPlugin implements EnginePlugin {
     }
 
     // What the modules draw over the level: a light's reach, a frustum.
-    if (isAuthoring.value && scope.viewportOverlays.isNotEmpty) {
+    // The 3-D Collision view mode is for its colliders, gizmos or not.
+    if (scope.viewportOverlays.isNotEmpty) {
       final hidden = scope.hiddenOverlays.value;
       final overlayContext = ViewportOverlayContext(
         canvas: canvas,
         size: size,
         view: camera,
         scope: scope,
-        isShown: _isDrawn,
+        // Every viewport overlay is a gizmo.
+        isShown: _gizmosShownFor,
       );
       final collisionView =
-          !flat && scope.designer3D.viewMode.value == ViewMode3D.collision;
+          !flat &&
+          isAuthoring.value &&
+          scope.designer3D.viewMode.value == ViewMode3D.collision;
       for (final overlay in scope.viewportOverlays) {
-        if (hidden.contains(overlay.id) &&
-            !(collisionView && overlay is ColliderOverlay3D)) {
+        final forced = collisionView && overlay is ColliderOverlay3D;
+        if (!forced &&
+            (!showsGizmo(overlay.gizmoKind) ||
+                hidden.contains(overlay.id))) {
           continue;
         }
         if (!overlay.dimensions.allows(sceneState.editingMode)) continue;
@@ -1947,7 +2038,9 @@ class JustGameEditorPlugin implements EnginePlugin {
       );
     }
 
-    final highlighted = scope.highlightedTag.value;
+    // A tag or physics layer hovered in the inspector: what has it. Asked
+    // for there, so shown with the gizmos hidden too; not in a play-test.
+    final highlighted = isAuthoring.value ? scope.highlightedTag.value : null;
     if (highlighted != null) {
       final world = engine.world;
       _gizmoPainter.paintTagHighlight(
@@ -1965,7 +2058,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       );
     }
 
-    final layer = scope.highlightedLayer.value;
+    final layer = isAuthoring.value ? scope.highlightedLayer.value : null;
     if (layer != null) {
       final layers = scope.physicsLayers.value;
       _gizmoPainter.paintHighlight(
@@ -1999,8 +2092,17 @@ class JustGameEditorPlugin implements EnginePlugin {
         isAuthoring.value) {
       return;
     }
+    final outline = showsGizmo(GizmoKind.selection);
     final mode = shownTransformMode;
-    if (mode == null) return;
+    if (mode == null) {
+      // No handles (a play-test, or a selection none can move): its
+      // outline alone, when the mode shows it. In space the renderer
+      // outlines it.
+      if (flat && outline) {
+        _gizmoPainter.paintSelectionOutline(canvas, selected, camera, size);
+      }
+      return;
+    }
     if (!flat) {
       final gizmo = Gizmo3D.of(
         selected,
@@ -2022,6 +2124,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       size,
       mode: mode,
       allows: transformModesAvailable,
+      outline: outline,
     );
   }
 
@@ -2256,9 +2359,11 @@ class JustGameEditorPlugin implements EnginePlugin {
     required bool showGrid,
     required bool gridSnappingEnabled,
     required double gridSize,
+    GizmoSettings gizmos = GizmoSettings.defaults,
   }) {
     final nextGridSize = gridSize <= 0 ? 32.0 : gridSize;
     this.showGrid.value = showGrid;
+    gizmoSettings.value = gizmos;
     _gridSnappingEnabled = gridSnappingEnabled;
     this.gridSize.value = nextGridSize;
     sceneState.setGridSnapping(
@@ -2878,6 +2983,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     ]) {
       signal.dispose();
     }
+    gizmoSettings.dispose();
     designer.dispose();
   }
 }

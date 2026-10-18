@@ -32,7 +32,9 @@ String formatBytes(int bytes) {
 /// Three frames, left to right: **transport** (Play, Pause, Step, Stop,
 /// Restart, the speed, and what the play-test is doing), **view and mode**
 /// (the game camera preview and the Level Designer), and what **modules**
-/// add, each parted from the next. The transport frame takes the play
+/// add, each parted from the next. A button that asks for the column down
+/// the right ([ToolbarSlot.toolColumn]) is not here: it is in
+/// [ToolColumnButtons]. The transport frame takes the play
 /// state's colour — a tint in its fill, and in its line mixed into that
 /// fill so the two sit together — and its chip says it at full strength: a
 /// running play-test is visible from the corner of the eye. The other
@@ -167,7 +169,11 @@ class PlayControlsToolbar extends StatelessWidget {
           child: Row(mainAxisSize: MainAxisSize.min, children: children),
         );
 
-        final modules = plugin.scope.toolbarButtons;
+        // The ones in the column down the right are [ToolColumnButtons].
+        final modules = [
+          for (final b in plugin.scope.toolbarButtons)
+            if (b.slot == ToolbarSlot.playToolbar) b,
+        ];
         final row = Row(
           mainAxisSize: MainAxisSize.min,
           spacing: EditorMetrics.space(4),

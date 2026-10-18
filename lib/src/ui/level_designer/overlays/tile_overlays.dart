@@ -146,6 +146,10 @@ class TileGridOverlay extends DesignerOverlay {
 
   final EditorScope scope;
 
+  // What a tool in use draws: it stays with the gizmos hidden.
+  @override
+  GizmoKind? get gizmoKind => null;
+
   @override
   String get id => TileOverlays.grid;
   @override
@@ -298,6 +302,10 @@ class TileBrushOverlay extends DesignerOverlay {
   TileBrushOverlay(this.scope);
 
   final EditorScope scope;
+
+  // What a tool in use draws: it stays with the gizmos hidden.
+  @override
+  GizmoKind? get gizmoKind => null;
 
   @override
   String get id => TileOverlays.brush;

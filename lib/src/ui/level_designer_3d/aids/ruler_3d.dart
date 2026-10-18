@@ -89,6 +89,10 @@ class Ruler3DOverlay extends DesignerOverlay {
 
   final Measure3DTool tool;
 
+  // What a tool in use draws: it stays with the gizmos hidden.
+  @override
+  GizmoKind? get gizmoKind => null;
+
   @override
   String get id => 'designer3d.ruler';
 

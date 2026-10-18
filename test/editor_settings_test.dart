@@ -50,6 +50,14 @@ void main() {
     backdrop: const Color(0xFF0E1726),
     gizmoScale: 1.5,
     selectionColour: const Color(0xFFFFD60A),
+    gizmos: const GizmoSettings(
+      editor: GizmoModeSettings(shown: false),
+      designer: GizmoModeSettings(
+        shown: true,
+        hidden: {GizmoKind.colliders, GizmoKind.icons},
+      ),
+      play: GizmoModeSettings(shown: true, hidden: {GizmoKind.aids}),
+    ),
     pauseOnError: true,
     hideChromeWhilePlaying: true,
     undoLimit: 50,

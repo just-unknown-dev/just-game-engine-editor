@@ -61,6 +61,7 @@ class _OverlayUiSettingsWatcherState extends State<OverlayUiSettingsWatcher> {
           showGrid: widget.settings.showGrid,
           gridSnappingEnabled: widget.settings.gridSnappingEnabled,
           gridSize: widget.settings.gridSize,
+          gizmos: widget.settings.gizmos,
         );
       }
     });

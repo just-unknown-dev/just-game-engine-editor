@@ -22,6 +22,10 @@ abstract final class OverlayColors {
 /// Only draws for a multi-selection: a single selection already gets the base
 /// editor's gizmos, and drawing both would just be two outlines on one entity.
 class EntitySelectionOverlay extends DesignerOverlay {
+  // The outlines round a selection of many.
+  @override
+  GizmoKind? get gizmoKind => GizmoKind.selection;
+
   @override
   String get id => 'selection';
 
@@ -69,6 +73,10 @@ class EntitySelectionOverlay extends DesignerOverlay {
 
 /// The in-progress marquee or draw rectangle.
 class DragRectOverlay extends DesignerOverlay {
+  // What a tool in use draws: it stays with the gizmos hidden.
+  @override
+  GizmoKind? get gizmoKind => null;
+
   @override
   String get id => 'drag_rect';
 
@@ -110,6 +118,10 @@ class DragRectOverlay extends DesignerOverlay {
 
 /// Alignment guides dragged out from the rulers.
 class GuidesOverlay extends DesignerOverlay {
+  // The guides dragged out of the rulers: always there.
+  @override
+  GizmoKind? get gizmoKind => null;
+
   @override
   String get id => 'guides';
 
@@ -252,6 +264,10 @@ class RulersOverlay extends DesignerOverlay with InteractiveOverlay {
 
   /// The id the session and the status bar refer to it by.
   static const String overlayId = 'rulers';
+
+  // The designer's own chrome, not a gizmo: it stays.
+  @override
+  GizmoKind? get gizmoKind => null;
 
   @override
   String get id => overlayId;
