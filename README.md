@@ -38,7 +38,7 @@ dev_dependencies:
   just_game_engine_editor: ^0.1.0-dev.1
 ```
 
-The packages that bring editor modules (a kit's tools, the sprite or interface editors) go in `dev_dependencies` too. A project made with `just create` has all of this already.
+Plugins that only add to the editor (the sprite or input editors) go in `dev_dependencies` too. A kit's game half ships with the game, so a kit is a regular dependency ([Plugins and kits](#plugins-and-kits)). A project made with `just create` has all of this already.
 
 ## The editor entry point
 
@@ -248,6 +248,197 @@ The editor's own tools arrive the same way: `BuiltInEditorModule` (field editors
 | `InputEditorModule` | `just_input_editor` | The input actions asset |
 | `AssetStoreModule` | `just_asset_store_editor` | The Asset Store window |
 | `MaterialEditorModule` | `just_material_editor` | Room for advanced material tools beside the built-in ones |
+
+---
+
+## Plugins and kits
+
+A module reaches other projects inside a package. There are two kinds:
+
+| | What it brings | Examples | In the game's pubspec |
+|---|---|---|---|
+| **Plugin** | Tools for the editor only: a window, a dock, an asset editor. Nothing of it ships. | `just_sprite_editor`, `just_input_editor` | `dev_dependencies` |
+| **Kit** | Game code and its editor half: components and systems the game runs, plus the prefabs, tools and inspector fields to place them. | `just_platformer_kit`, `just_third_person_kit`, `just_world_builder_kit` | `dependencies` |
+
+In the Asset Store, a plugin is an item of kind `editor-extension` and a kit an item of kind `kit`.
+
+### Adding one
+
+**From the Asset Store.** Ctrl+Shift+G (Cmd+Shift+G on macOS) opens the store window, to browse, install, update and remove items. The same store runs from a terminal in the project folder:
+
+```bash
+just add just_sprite_editor      # just store install
+just remove just_sprite_editor   # just store uninstall
+just store list
+```
+
+The store puts the package in `packages/{category}/{name}/`, adds it to `pubspec.yaml` (a plugin under `dev_dependencies`) and rewrites two generated files:
+
+- `lib/editor/store_modules.g.dart`: `storeModules()`, the editor modules of every installed item, spread into the editor entry point's `modules`
+- `lib/game/store_extensions.g.dart`: `storeExtensions`, the engine extensions of every installed kit, spread into the game's `EngineConfig(extensions: …)`
+
+A project made with `just create` already uses both. Hot restart (**R**) the editor after installing code. A kit may also show a snippet of setup code the store can't write for you, such as adding its systems.
+
+**By hand.** Any package with an editor module works without the store:
+
+1. Add the package to `pubspec.yaml`, under `dev_dependencies` for a plugin or `dependencies` for a kit. It can come from a package server, a `git:` repository or a `path:` on disk.
+2. Add its module in `lib/main_editor.dart`:
+
+   ```dart
+   import 'package:just_platformer_kit/editor.dart';
+   import 'package:just_sprite_editor/editor.dart';
+
+   final plugin = await JustGameEditorPlugin.register(
+     engine: engine,
+     modules: [MyGameModule(), SpriteStudioModule(), PlatformerModule()],
+   );
+   ```
+
+3. For a kit, give its engine extension to every engine the game makes, in `lib/main.dart` as well as the editor entry point. Without it the game can't load what you place:
+
+   ```dart
+   import 'package:just_platformer_kit/just_platformer_kit.dart';
+
+   final engine = Engine(
+     config: const EngineConfig(extensions: [PlatformerKit.extension]),
+   );
+   ```
+
+   Then add its systems as its README says (`PlatformerKit.registerSystems(…)`).
+
+Import a package's editor library (`editor.dart`) from `lib/main_editor.dart` only. `lib/main.dart` imports the runtime library alone, so a release build holds no editor code ([below](#keeping-the-editor-out-of-a-release-build)).
+
+### Making your own
+
+A plugin or a kit is an ordinary Flutter package with an `EditorModule` in it ([above](#extending-the-editor)). Build it on `just_editor_core`, not on this package: the module contract, the scope, undo and the UI kit are all there.
+
+**A plugin** keeps everything in its editor library:
+
+```text
+my_level_tools/
+  pubspec.yaml            dependencies: flutter, just_editor_core
+  just_store.json         only to share it through the Asset Store
+  lib/
+    editor.dart           export 'src/level_tools_module.dart';
+    src/level_tools_module.dart
+```
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:just_editor_core/just_editor_core.dart';
+
+class LevelToolsModule extends EditorModule {
+  static const _windowId = 'my_level_tools.stats';
+
+  @override
+  String get id => 'my_level_tools';
+
+  @override
+  String get name => 'Level Tools';
+
+  // A window of its own, opened over the viewport.
+  @override
+  List<WorkspaceDefinition> get workspaces => [
+    WorkspaceDefinition(
+      id: _windowId,
+      label: 'Level stats',
+      icon: Icons.insights,
+      build: (context, workspace) => LevelStats(scope: workspace.scope),
+    ),
+  ];
+
+  // Its button, with the modules' tools on the play toolbar.
+  @override
+  List<ToolbarButton> get toolbarButtons => [
+    ToolbarButton(
+      id: 'my_level_tools.open',
+      icon: Icons.insights,
+      tooltip: 'Level stats',
+      isActive: (scope) =>
+          scope.activeWorkspace.value?.definition.id == _windowId,
+      onPressed: (scope) => scope.openWorkspace(_windowId),
+    ),
+  ];
+}
+```
+
+`LevelStats` is your own widget. Give the module a constructor with no arguments, so the store can register it.
+
+**A kit** is two libraries in one package:
+
+- **`lib/my_kit.dart`**, the runtime half: the components, the systems and a `ContextExtension` that teaches an engine to save and load the components. It never imports `just_editor_core`.
+- **`lib/editor.dart`**, the editor half: the module, with the kit's prefabs, tools, inspector fields and icons. Its code lives under `lib/src/editor/`, and only an editor entry point imports it.
+
+```dart
+// lib/src/my_kit.dart, exported by lib/my_kit.dart
+import 'package:just_game_engine/just_game_engine.dart';
+
+abstract final class MyKit {
+  /// Give it to the engine: EngineConfig(extensions: [MyKit.extension]).
+  static const ContextExtension extension = _MyKitExtension();
+}
+
+final class _MyKitExtension implements RefreshableExtension {
+  const _MyKitExtension();
+
+  @override
+  String get id => 'my_kit';
+
+  @override
+  void install(EngineContext context) =>
+      context.definitions.registerAll(myKitDefinitions, ifAbsent: true);
+
+  // After a hot reload, so a new field shows in the inspector.
+  @override
+  void refresh(EngineContext context) =>
+      context.definitions.refresh(myKitDefinitions);
+}
+```
+
+`myKitDefinitions` is the list of your components' definitions; the [Quick Start Guide](https://github.com/just-unknown-dev/just-game-engine-editor/blob/main/QUICKSTART.md) shows how to write one. `just_platformer_kit` is a complete kit to copy from.
+
+**Try it in a game.** Point the game at your checkout with a path dependency (`dev_dependencies` for a plugin, `dependencies` for a kit) and add the module by hand, as in [Adding one](#adding-one):
+
+```yaml
+dev_dependencies:
+  my_level_tools:
+    path: ../my_level_tools
+```
+
+In a project the store manages, `just store link ../my_level_tools` registers it in the generated files instead, as if it were installed. The store never moves or updates a linked package. `just store unlink my_level_tools` forgets it. A hot reload (**r**) brings the editor up to your module's code ([Hot reload and hot restart](#hot-reload-and-hot-restart)).
+
+**Share it through the Asset Store.** Add a `just_store.json` beside the pubspec:
+
+```json
+{
+  "schema": 1,
+  "id": "my_level_tools",
+  "name": "Level Tools",
+  "version": "0.1.0",
+  "kind": "editor-extension",
+  "category": "editors",
+  "license": {"spdx": "MIT"},
+  "requires": {"just_game_engine": "^2.0.0"},
+  "dependencies": {"just_game_engine_editor": "^0.1.0-dev.1"},
+  "editor": {
+    "editorOnlyLibraries": ["*"],
+    "modules": [
+      {"library": "package:my_level_tools/editor.dart", "class": "LevelToolsModule"}
+    ]
+  }
+}
+```
+
+- **`id` and `version`** match the pubspec's `name` and `version`.
+- **`requires`** holds the constraints on the engine, and **`dependencies`** the other store items the package needs.
+- **For a kit**, set `"kind": "kit"` and `"category": "kits"`. List only its editor libraries in `editorOnlyLibraries` (`["editor.dart", "src/editor/"]`), and add a `runtime` block:
+  - `extensions`: `[{"library": "package:my_kit/my_kit.dart", "const": "MyKit.extension"}]`
+  - `componentTypes`: the component type names, so uninstalling can find the scenes that use them
+  - `setup.snippet`: optional setup code the store shows after installing
+
+Then check it with `just store validate .`. A store package holds no native code or platform folders, no build hooks, no hidden folders and no `pubspec.lock`. It depends on other store items by version, never by `path:` or `git:`.
+
+To publish, copy [the item template](https://github.com/just-unknown-dev/just-asset-store/tree/main/packages/just_asset_store/templates/item) into your repository. Its workflow packs the package and attaches it to a GitHub Release when you push a `v<version>` tag. Then open a pull request that adds the release's version file to a catalog. The template's README has each step.
 
 ---
 
