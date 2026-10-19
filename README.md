@@ -4,6 +4,19 @@ A level editor that runs inside your [`just_game_engine`](https://pub.dev/packag
 
 Press **F1** to show or hide the editor over the game.
 
+| 2D | 3D |
+|---|---|
+| ![The editor over a 2D level: scene tree, inspector, gizmo, game camera preview and Assets dock](assets/screenshots/editor_2d_scene.png) | ![A 3D scene: orbit view, 3D gizmo, level aids, game camera preview and materials in the Assets dock](assets/screenshots/editor_3d_scene.png) |
+| ![The Level Designer: a tile stamp over the Level Map, its layers, the tileset palette and the tool strip](assets/screenshots/editor_2d_level_designer.png) | ![The 3D Level Designer in four views, with the World Builder kit](assets/screenshots/editor_3d_level_designer.png) |
+| ![The 2D Material window: a normal-mapped wall under a light, its effect cards and the light's settings](assets/screenshots/editor_2d_material.png) | ![The 3D Material window: a material variant on a ball, lit by the scene's sky](assets/screenshots/editor_3d_material.png) |
+
+| Timeline and physics | Play-testing and settings |
+|---|---|
+| ![The Timeline dock's curves and a motion path drawn in the level](assets/screenshots/editor_timeline.png) | ![A play-test running in the editor, with the Profiler dock](assets/screenshots/editor_play_test.png) |
+| ![A collider edited with handles, the rigid body's card and the Physics Layers dock](assets/screenshots/editor_physics.png) | ![Settings on the Accessibility page](assets/screenshots/editor_settings.png) |
+
+The levels are the templates' showcase scenes: `showcase_2d` and `showcase_2d_cave` (platformer) and `showcase_3d` (third person). The 3D Level Designer is shown with the World Builder kit (`just_world_builder_kit`), and the toolbar's extra buttons come from the modules the templates install (the Asset Store, Sprite Studio, the input and interface editors).
+
 ## Documentation
 
 - **[Quick Start Guide](https://github.com/just-unknown-dev/just-game-engine-editor/blob/main/QUICKSTART.md)**: the editor entry point, hot reload, your own components, a first level, cameras

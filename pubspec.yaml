@@ -11,6 +11,28 @@ topics:
   - editor
   - game
 
+screenshots:
+  - description: "The editor over a 2D level: scene tree, inspector, transform gizmo, a live preview of the game camera and the Assets dock."
+    path: assets/screenshots/editor_2d_scene.png
+  - description: "A 3D scene: the orbit view, the 3D gizmo, level aids, the game camera's preview and materials pictured in the Assets dock."
+    path: assets/screenshots/editor_3d_scene.png
+  - description: "The Level Designer: a tile stamp over the Level Map, the map's layers, the tileset palette, the tool strip and the minimap."
+    path: assets/screenshots/editor_2d_level_designer.png
+  - description: "The 3D Level Designer in four views with the World Builder kit: prefabs, view modes, materials and groups."
+    path: assets/screenshots/editor_3d_level_designer.png
+  - description: "The Timeline dock: curves for a ball's roll, hop, spin and squash, and its motion path drawn in the level."
+    path: assets/screenshots/editor_timeline.png
+  - description: "Physics: a collider edited with handles in the viewport, the rigid body's card, and named collision layers with their grid."
+    path: assets/screenshots/editor_physics.png
+  - description: "Play-testing in place: the game runs inside the editor and the Profiler times each system; Stop puts the level back."
+    path: assets/screenshots/editor_play_test.png
+  - description: "The 2D Material window: a normal-mapped wall under a light you drag, its effect cards and the light's settings."
+    path: assets/screenshots/editor_2d_material.png
+  - description: "The 3D Material window: a variant of the temple stone on a ball, lit by the open scene's own sky."
+    path: assets/screenshots/editor_3d_material.png
+  - description: "Settings, searchable: appearance, accessibility (text size, contrast, colour-blind safe colours), keys and more."
+    path: assets/screenshots/editor_settings.png
+
 # Declared, so pub.dev does not infer platforms from dependencies. The
 # package compiles everywhere Flutter does (web and wasm too); it edits a
 # project only on a desktop — Windows, macOS or Linux — in a debug build.
