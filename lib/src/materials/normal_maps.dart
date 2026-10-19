@@ -1,11 +1,16 @@
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart' show compute;
+import 'package:just_editor_core/io.dart';
+import 'package:just_editor_core/just_editor_core.dart'
+    show PackageAssetPaths, ProjectFiles;
 
 import 'image_pixels.dart';
 
 /// How a normal map is made from a picture.
 final class NormalMapOptions {
+  /// Options of a plain picture: no rounding, not repeating.
   const NormalMapOptions({
     this.strength = 2,
     this.bevel = 0,
@@ -163,12 +168,32 @@ abstract final class NormalMaps {
   /// Makes the normal map of the image at [path] (project-relative) under
   /// [root], beside it — `<name>_normal.png`, `_2` and on when that is
   /// taken — and gives its path.
+  ///
+  /// Throws an [ArgumentError] for a path outside the project — absolute,
+  /// or climbing out with `..` (a path read from a scene may) — or in a
+  /// package (`packages/<name>/…`, the package's own): nothing is written
+  /// there. The pixels are worked out off the UI's isolate.
   static Future<String> generate(
     String root,
     String path, {
     NormalMapOptions options = const NormalMapOptions(),
   }) async {
-    final map = of(await Pixels.read('$root/$path'), options: options);
+    if (!ProjectFiles.isContained(path)) {
+      throw ArgumentError.value(
+        path,
+        'path',
+        'is outside the project: no normal map is made beside it',
+      );
+    }
+    if (PackageAssetPaths.isPackageKey(path)) {
+      throw ArgumentError.value(
+        path,
+        'path',
+        "is a package's: no normal map is made in it",
+      );
+    }
+    final picture = await Pixels.read('$root/$path');
+    final map = await compute(_make, (picture, options));
     final dot = path.lastIndexOf('.');
     final stem = dot <= path.lastIndexOf('/') ? path : path.substring(0, dot);
     var n = 1;
@@ -180,6 +205,10 @@ abstract final class NormalMaps {
     await map.writePng('$root/$made');
     return made;
   }
+
+  // [of], on another isolate.
+  static Pixels _make((Pixels, NormalMapOptions) job) =>
+      of(job.$1, options: job.$2);
 
   /// [map], a DirectX-style normal map (green down), as an OpenGL-style
   /// one: its green turned over.

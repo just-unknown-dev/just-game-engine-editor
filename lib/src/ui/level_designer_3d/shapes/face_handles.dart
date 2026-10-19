@@ -37,7 +37,6 @@ abstract final class FaceHandles {
     required void Function(Vector3 origin) moveTo,
     required Component component,
     List<Component> alsoEdits = const [],
-    required String what,
   }) {
     final box = boundsOf();
     if (box.isEmpty) return const [];
@@ -66,8 +65,9 @@ abstract final class FaceHandles {
             component: component,
             alsoEdits: alsoEdits,
             style: ViewportHandleStyle.size,
-            tooltip: 'Drag to size ${_axisName(a)} — the face opposite stays; '
-                'Ctrl snaps',
+            tooltip:
+                'Drag to size ${_axisName(a)} — the face opposite stays; '
+                '${EditorKeys.primaryLabel} snaps',
             onDrag: (drag) {
               final t = drag.alongLine(at, direction);
               if (t == null) return;

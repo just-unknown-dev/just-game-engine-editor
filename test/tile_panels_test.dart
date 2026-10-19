@@ -9,6 +9,12 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/level_designer_workspace.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/level_layers_panel.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/prefab_palette_panel.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/tileset_palette_panel.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/tools/tiles/tile_tool_base.dart';
 
 void main() {
   late World world;
@@ -66,7 +72,6 @@ void main() {
             child: LevelDesignerWorkspace(
               session: session,
               gridSize: 16,
-              onGridSizeChanged: (_) {},
               onClose: () {},
             ),
           ),
@@ -454,6 +459,51 @@ void main() {
       );
       scope.history.undo();
       expect(data.layers.map((l) => l.name), ['Ground']);
+    });
+
+    testWidgets('a depth\'s eye hides its entities in the viewport only, '
+        'never in the game', (tester) async {
+      final hill = world.createEntityWithComponents([
+        TransformComponent(),
+        RectangleComponent(width: 10, height: 10),
+        LayerComponent(layerId: 'background'),
+      ], name: 'Hill');
+      await pump(tester);
+      const hide = 'Hide the entities at this depth (editor only)';
+      final count = find.byTooltip(hide).evaluate().length;
+      for (var i = 0; i < count; i++) {
+        await tester.tap(find.byTooltip(hide).first);
+        await tester.pump();
+      }
+      expect(session.controller.isLayerHidden('background'), isTrue);
+      expect(session.controller.isShownInViewport(hill), isFalse);
+      // A play-test, or the designer closed, still shows it.
+      expect(hill.getComponent<LayerComponent>()!.visible, isTrue);
+      expect(
+        hill.components
+            .whereType<RectangleComponent>()
+            .single
+            .renderable
+            .visible,
+        isTrue,
+      );
+    });
+
+    testWidgets('a layer added at a depth but Main, in a scene with no map, '
+        'is decoration', (tester) async {
+      world.destroyEntity(map);
+      scope.tiles.reset();
+      await pump(tester);
+      await tapTooltip(tester, 'Add a map layer at Background');
+      final layer = world
+          .query([LevelMapComponent])
+          .single
+          .getComponent<LevelMapComponent>()!
+          .inline!
+          .layers
+          .single;
+      expect(layer.sortLayerId, 'background');
+      expect(layer.collides, isFalse);
     });
 
     testWidgets('the map settings open from the gear, each change one undo '

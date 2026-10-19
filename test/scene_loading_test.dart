@@ -16,6 +16,9 @@ import 'package:just_game_engine_editor/src/ui/overlay/start/scene_loading_view.
 
 import 'support/memory_settings_store.dart';
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/scene/scene_io.dart';
+import 'package:just_game_engine_editor/src/core/scene/scene_loading.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart';
 
 void main() {
   group('SceneLoading', () {
@@ -306,7 +309,7 @@ void main() {
         settingsStore: MemorySettingsStore(),
       );
       final plugin = JustGameEditorPlugin(engine: engine, scope: scope);
-      await tester.runAsync(plugin.onInitialize);
+      await tester.runAsync(() => plugin.attach(plugin.engine));
       plugin.setVisible(true);
       await tester.pumpWidget(
         MaterialApp(

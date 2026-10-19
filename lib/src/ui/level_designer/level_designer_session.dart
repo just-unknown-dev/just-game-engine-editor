@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 export 'package:just_editor_core/host.dart' show ModifierKeys;
 
+import 'package:flutter/foundation.dart' show internal;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
@@ -41,14 +42,17 @@ import '../../extension/built_in_3d_designer_contributions.dart';
 
 /// Owns the Level Designer's runtime: state, tools, history and painting.
 ///
-/// The plugin delegates pointer events and canvas painting here when the
-/// designer is open, and keeps its existing behaviour when it is closed. That
-/// split is deliberate — with the designer off, the overlay behaves exactly as
-/// it always has, so this feature cannot regress the base editor.
+/// While the designer is open, the plugin hands its pointer events and
+/// canvas painting here; with it closed, the editor works without one. A
+/// module's tests drive a session over a scope made with
+/// `builtIns: const [BuiltInEditorModule.new]`, the way the designer runs
+/// the module's tools, overlays and commands.
 class LevelDesignerSession implements DesignerSession {
+  /// A session over [scope]. [uniqueName] names what its tools make — the
+  /// scope's own entity namer when null, as a module's tests can leave it.
   LevelDesignerSession({
     required this.scope,
-    required String Function(String prefix) uniqueName,
+    String Function(String prefix)? uniqueName,
     required this.onDuplicate,
     required this.onDelete,
     required this.onArray,
@@ -58,7 +62,7 @@ class LevelDesignerSession implements DesignerSession {
     this.splitViews,
     bool Function(GizmoKind kind)? showsGizmo,
   }) : history = scope.history,
-       _uniqueName = uniqueName,
+       _uniqueName = uniqueName ?? scope.entities.uniqueName.call,
        _readModifiers = readModifiers ?? ModifierKeys.fromHardwareKeyboard,
        _camera = camera,
        _showsGizmo = showsGizmo {
@@ -108,25 +112,31 @@ class LevelDesignerSession implements DesignerSession {
     ..modeOf = () => scope.sceneState.editingMode;
 
   /// Prefabs that exist only for this session: the eyedropper's samples.
+  @internal
   final PrefabRegistry sessionPrefabs = PrefabRegistry();
 
   /// Whoever snaps for this session: the built-ins and the modules'
   /// providers, by priority.
-  SnapResolver snapper = SnapResolver(const [
+  @internal
+  SnapResolver get snapper => _snapper;
+  SnapResolver _snapper = SnapResolver(const [
     EntitySnapProvider(),
     GridSnapProvider(),
   ]);
 
-  final Map<String, Object> _moduleStates = {};
+  /// Each module's session state, by module id, with the module that made
+  /// it — which is what releases it.
+  final Map<String, (EditorModule, Object)> _moduleStates = {};
 
   /// The session state a module created, by type; null when none did.
   @override
   T? stateOf<T extends Object>() =>
-      _moduleStates.values.whereType<T>().firstOrNull;
+      _moduleStates.values.map((s) => s.$2).whereType<T>().firstOrNull;
 
   /// Rebuilds [tools] and [overlays] from the built-ins and the scope's
   /// modules. Called on construction and after a hot reload, so an edited
   /// module takes effect without reopening the designer.
+  @internal
   void reloadModules() {
     final active = controller.toolId.value;
     tools.clear();
@@ -154,12 +164,17 @@ class LevelDesignerSession implements DesignerSession {
       // State survives a reload: a route half-edited is still being edited.
       if (!_moduleStates.containsKey(module.id)) {
         final state = module.createSessionState(context);
-        if (state != null) _moduleStates[module.id] = state;
+        if (state != null) _moduleStates[module.id] = (module, state);
       }
     }
+    // What a module that has left the session kept goes with it.
     final live = {for (final module in scope.designerModules) module.id};
-    _moduleStates.removeWhere((id, _) => !live.contains(id));
-    snapper = SnapResolver(providers);
+    for (final id in [..._moduleStates.keys]) {
+      if (live.contains(id)) continue;
+      final (module, state) = _moduleStates.remove(id)!;
+      module.disposeSessionState(state);
+    }
+    _snapper = SnapResolver(providers);
     if (tools.byId(active) == null && tools.all.isNotEmpty) {
       controller.toolId.value = tools.all.first.id;
     }
@@ -232,6 +247,7 @@ class LevelDesignerSession implements DesignerSession {
         layout: scope.handleLayout,
         mapDocs: scope.mapDocs,
         rotationStep: () => scope.prefs.settings.value.rotationStepRadians,
+        copySpecs: scope.entities.copySpecs,
       ),
       DrawRectTool(
         sceneState: sceneState,
@@ -324,20 +340,10 @@ class LevelDesignerSession implements DesignerSession {
   /// In 3-D: copies the selection as the spec lays them out (ARRAY).
   final void Function(Array3DSpec spec)? onArray3D;
 
-  /// The entities the current selection covers: the multi-selection when there
-  /// is one, otherwise just the primary selection.
-  List<jge.Entity> selectionEntities() {
-    final ids = sceneState.multiSelectedIds.value;
-    if (ids.isNotEmpty) {
-      return ids
-          .map(world.getEntity)
-          .whereType<jge.Entity>()
-          .where((e) => e.isActive)
-          .toList();
-    }
-    final selected = sceneState.selectedEntity.value;
-    return selected == null ? <jge.Entity>[] : [selected];
-  }
+  /// The entities the current selection covers that the designer can move:
+  /// see [SelectionOps.selectedIn].
+  List<jge.Entity> selectionEntities() =>
+      SelectionOps.selectedIn(sceneState, world);
 
   final String Function(String prefix) _uniqueName;
 
@@ -353,6 +359,7 @@ class LevelDesignerSession implements DesignerSession {
 
   /// The viewport's four views, where the editor splits it: what the VIEW
   /// section's switch turns on.
+  @internal
   final SplitViews Function()? splitViews;
   late final EditorView _detachedCamera = GameCameraEditorView.of(jge.Camera());
 
@@ -368,26 +375,29 @@ class LevelDesignerSession implements DesignerSession {
   );
 
   /// Whole-selection edits: nudge, turn, flip, resize, replace.
+  @internal
   late final SelectionOps ops = SelectionOps(
     codec: scope.codec,
     world: world,
     sceneState: sceneState,
     history: history,
     uniqueName: _uniqueName,
+    deletable: scope.deletable,
   );
 
   /// Saved camera views, by slot 1–9.
-  final Map<int, CameraBookmark> bookmarks = {};
+  final Map<int, _CameraBookmark> _bookmarks = {};
 
   /// Saved views of a 3-D scene, by slot 1–9: where the orbit is and how
   /// it looks.
-  final Map<int, ViewPose3D> bookmarks3D = {};
+  final Map<int, ViewPose3D> _bookmarks3D = {};
   final LevelDesignerPainter _painter = LevelDesignerPainter();
 
   LevelToolHandler? _activeGesture;
 
   /// True while a tool is mid-gesture, so the plugin leaves its gizmo handling
   /// alone rather than fighting the tool for the same drag.
+  @internal
   bool get hasActiveGesture => _activeGesture != null;
 
   // ── Pointer routing ───────────────────────────────────────────────────────
@@ -425,6 +435,7 @@ class LevelDesignerSession implements DesignerSession {
   /// Whether a right-button press should go to the active tool rather than
   /// open the context menu: only when the tool asks for it, and never with
   /// Shift held, so the menu is always one chord away.
+  @internal
   bool claimsSecondary() =>
       (controller.activeTool?.acceptsSecondaryButton ?? false) &&
       !_readModifiers().shift;
@@ -436,9 +447,11 @@ class LevelDesignerSession implements DesignerSession {
   int _gestureClicks = 1;
 
   /// How soon a second press must follow the first to make a double-click.
+  @internal
   static const Duration doubleClickTime = Duration(milliseconds: 350);
 
   /// How far apart, in screen pixels, the two presses may be.
+  @internal
   static const double doubleClickSlop = 6;
 
   Duration? _lastPressAt;
@@ -508,15 +521,21 @@ class LevelDesignerSession implements DesignerSession {
     controller.activeTool?.onPointerExit();
   }
 
-  /// Forwards a pointer move to the tool that claimed the gesture.
+  /// Forwards a pointer move to the tool that claimed the gesture. The
+  /// pointer is where keys pressed mid-drag act, as it is when hovering.
   void onPointerMove(
     Offset worldPosition,
     double gridSize, {
     Offset? screen,
     Size? canvasSize,
-  }) => _activeGesture?.onPointerMove(
-    _context(worldPosition, gridSize, screen: screen, canvasSize: canvasSize),
-  );
+  }) {
+    _hoverWorld = worldPosition;
+    _hoverScreen = screen;
+    _hoverGrid = gridSize;
+    _activeGesture?.onPointerMove(
+      _context(worldPosition, gridSize, screen: screen, canvasSize: canvasSize),
+    );
+  }
 
   /// Completes the gesture.
   void onPointerUp(
@@ -540,8 +559,12 @@ class LevelDesignerSession implements DesignerSession {
     _activeGesture?.onCancel();
     _activeGesture = null;
     _gestureButton = ToolButton.primary;
-    controller.dragRect.value = null;
-    controller.screenRect.value = null;
+    controller
+      ..dragRect.value = null
+      ..screenRect.value = null
+      // A cancelled move's alignment lines and gap readouts with it.
+      ..snapGuides = const []
+      ..spacingGuides = const [];
   }
 
   ToolContext _context(
@@ -584,6 +607,7 @@ class LevelDesignerSession implements DesignerSession {
 
   /// In 3-D: the plane the designer builds on — the scope's, moved to the
   /// base of the selection while it follows the selection.
+  @internal
   WorkingPlane get workingPlane {
     final state = scope.designer3D;
     if (!state.followSelection.value) return state.plane;
@@ -593,6 +617,7 @@ class LevelDesignerSession implements DesignerSession {
   /// In 3-D: the surface under [screen] on [view] — the nearest shown
   /// thing's, by its real shape where a pick test knows it, else the
   /// ground — leaving out [ignore].
+  @internal
   SurfacePoint surfaceAt(
     EditorView view,
     Offset screen, {
@@ -602,9 +627,7 @@ class LevelDesignerSession implements DesignerSession {
     screen,
     world.entities.where(
       (e) =>
-          e.isActive &&
-          controller.isShownInViewport(e) &&
-          !ignore.contains(e),
+          e.isActive && controller.isShownInViewport(e) && !ignore.contains(e),
     ),
   );
 
@@ -629,10 +652,10 @@ class LevelDesignerSession implements DesignerSession {
     controller.activeTool?.onActivate();
   }
 
-  /// Switches to whichever tool claims [shortcut], if any.
   /// Takes up the Move, Scale or Rotate mode just chosen: those are the
   /// select tool's gizmos, so it is picked up — unless tiles are selected
   /// with Select tiles, whose selection takes the same gizmos.
+  @internal
   void adoptTransformMode() {
     final tool = controller.toolId.value;
     if (tool == BuiltInTools.select) return;
@@ -642,6 +665,8 @@ class LevelDesignerSession implements DesignerSession {
     setTool(BuiltInTools.select);
   }
 
+  /// Switches to whichever tool claims [shortcut], if any; whether one did.
+  @internal
   bool selectToolByShortcut(String shortcut) {
     final tool = tools.byShortcut(shortcut);
     if (tool == null) return false;
@@ -652,6 +677,7 @@ class LevelDesignerSession implements DesignerSession {
   // ── Navigation ────────────────────────────────────────────────────────────
 
   /// Centres and zooms the view on the selection (F).
+  @internal
   void frameSelection() {
     final entities = selectionEntities();
     if (entities.isEmpty) {
@@ -662,6 +688,7 @@ class LevelDesignerSession implements DesignerSession {
   }
 
   /// Centres and zooms the view on everything visible (Shift+F).
+  @internal
   void frameAll() => _frame(
     SelectionOps.boundsOf([
       for (final e in world.query([jge.TransformComponent]))
@@ -687,31 +714,33 @@ class LevelDesignerSession implements DesignerSession {
 
   /// Saves the current view in [slot] (Ctrl+1-9): in 3-D the orbit, its
   /// turn and its lens.
+  @internal
   void storeBookmark(int slot) {
     final view = camera;
     if (view is OrbitFlyEditorView) {
-      bookmarks3D[slot] = view.pose;
+      _bookmarks3D[slot] = view.pose;
     } else {
-      bookmarks[slot] = CameraBookmark(camera.position, camera.zoom);
+      _bookmarks[slot] = _CameraBookmark(camera.position, camera.zoom);
     }
     controller.setStatus('View saved to $slot');
   }
 
   /// Returns to the view saved in [slot] (1-9).
+  @internal
   void recallBookmark(int slot) {
     final view = camera;
     if (view is OrbitFlyEditorView) {
-      final pose = bookmarks3D[slot];
+      final pose = _bookmarks3D[slot];
       if (pose == null) {
-        controller.setStatus('No view saved in $slot - Ctrl+$slot saves one');
+        controller.setStatus(_noBookmark(slot));
         return;
       }
       view.pose = pose;
       return;
     }
-    final bookmark = bookmarks[slot];
+    final bookmark = _bookmarks[slot];
     if (bookmark == null) {
-      controller.setStatus('No view saved in $slot - Ctrl+$slot saves one');
+      controller.setStatus(_noBookmark(slot));
       return;
     }
     camera
@@ -719,9 +748,19 @@ class LevelDesignerSession implements DesignerSession {
       ..setZoom(bookmark.zoom);
   }
 
+  /// What the status bar says when [slot] has no view: with the keys that
+  /// save one, as they are bound now — `Cmd+3` on a Mac.
+  String _noBookmark(int slot) {
+    final keys = scope.commands.bindingsFor('designer.bookmark.store.$slot');
+    return keys.isEmpty
+        ? 'No view saved in $slot'
+        : 'No view saved in $slot - ${keys.first.shortcut} saves one';
+  }
+
   // ── Visibility ────────────────────────────────────────────────────────────
 
   /// Hides the selection in the viewport (H). Editor-only.
+  @internal
   void hideSelection() {
     final ids = [for (final e in selectionEntities()) e.id];
     if (ids.isEmpty) return;
@@ -731,20 +770,24 @@ class LevelDesignerSession implements DesignerSession {
   }
 
   /// Hides everything except the selection (Shift+H), to work on it alone.
+  ///
+  /// What holds the selection stays shown, and what it holds: hiding an
+  /// entity hides everything under it, so hiding the Level Map — or the
+  /// group a thing is in — would hide the very thing being isolated.
+  @internal
   void isolateSelection() {
     final keep = {for (final e in selectionEntities()) e.id};
     if (keep.isEmpty) return;
-    controller.setEntitiesHidden([
-      for (final e in world.query([jge.TransformComponent]))
-        if (!keep.contains(e.id)) e.id,
-    ], hidden: true);
+    controller.view.isolate(world, keep);
     controller.setStatus('Isolated ${keep.length} - Alt+H shows everything');
   }
 
   /// Shows every hidden entity (Alt+H).
+  @internal
   void unhideAll() => controller.hiddenEntities.value = <jge.EntityId>{};
 
   /// Locks the selection against picking (L).
+  @internal
   void lockSelection() {
     final ids = [for (final e in selectionEntities()) e.id];
     if (ids.isEmpty) return;
@@ -754,20 +797,28 @@ class LevelDesignerSession implements DesignerSession {
   }
 
   /// Unlocks every locked entity (Alt+L).
+  @internal
   void unlockAll() => controller.lockedEntities.value = <jge.EntityId>{};
 
-  /// Selects everything that can be picked (Ctrl+A).
+  /// Selects everything that can be picked (Ctrl+A) — what is on the
+  /// level's map, never the map itself, as a marquee does: it is under
+  /// everything, and moving it moves all of it.
+  @internal
   void selectAll() {
+    final all = [
+      for (final e in world.query([jge.TransformComponent]))
+        if (e.isActive &&
+            controller.isPickable(e) &&
+            !SelectTool.isWholeMap(world, e))
+          e,
+    ];
     sceneState.clearSelection();
-    for (final e in world.query([jge.TransformComponent])) {
-      if (e.isActive && controller.isPickable(e)) {
-        sceneState.toggleMultiSelect(e);
-      }
-    }
+    if (all.isNotEmpty) sceneState.selectRange(all, anchor: all.first);
   }
 
   /// Selects everything like what is selected (Shift+G): the same model,
   /// the same kind of shape, or the same name but its number.
+  @internal
   void selectSimilar() {
     final picked = selectionEntities();
     if (picked.isEmpty) {
@@ -777,13 +828,13 @@ class LevelDesignerSession implements DesignerSession {
     final kinds = {for (final e in picked) _kindOf(e)};
     final like = [
       for (final e in world.query([jge.TransformComponent]))
-        if (e.isActive && controller.isPickable(e) && kinds.contains(_kindOf(e)))
+        if (e.isActive &&
+            controller.isPickable(e) &&
+            kinds.contains(_kindOf(e)))
           e,
     ];
     sceneState.clearSelection();
-    for (final e in like) {
-      sceneState.toggleMultiSelect(e);
-    }
+    if (like.isNotEmpty) sceneState.selectRange(like, anchor: like.first);
     controller.setStatus('Selected ${like.length} like it');
   }
 
@@ -799,10 +850,20 @@ class LevelDesignerSession implements DesignerSession {
   }
 
   /// Replaces the selection with the active prefab (Shift+R).
+  @internal
   void replaceSelection() {
     final prefab = controller.activePrefab;
     final entities = selectionEntities();
     if (prefab == null || entities.isEmpty) return;
+    if (prefab.instanceOf != null) {
+      // A prefab file places an instance of itself; it builds nothing to
+      // swap in, and an empty swap would only delete the selection.
+      controller.setStatus(
+        '${prefab.name} is a prefab file: place it with Draw (B), it '
+        'cannot replace what is selected',
+      );
+      return;
+    }
     ops.replaceWith(entities, prefab);
   }
 
@@ -811,6 +872,7 @@ class LevelDesignerSession implements DesignerSession {
   InteractiveOverlay? _chromeOverlay;
 
   /// Whether an overlay (rulers, minimap, a module's) owns the pointer.
+  @internal
   bool get hasChromeGesture => _chromeOverlay != null;
 
   OverlayPointerContext _chromeContext(
@@ -832,6 +894,7 @@ class LevelDesignerSession implements DesignerSession {
   /// Offers a press to the interactive overlays, topmost first, before any
   /// tool sees it. Screen-space chrome sits on top of the level, so it gets
   /// first refusal.
+  @internal
   bool onChromePointerDown(
     Offset screen,
     Size canvasSize, {
@@ -850,12 +913,14 @@ class LevelDesignerSession implements DesignerSession {
   }
 
   /// Continues the overlay's drag.
+  @internal
   void onChromePointerMove(Offset screen, Size canvasSize, double gridSize) =>
       _chromeOverlay?.onPointerMove(
         _chromeContext(screen, canvasSize, gridSize),
       );
 
   /// Ends the overlay's drag.
+  @internal
   void onChromePointerUp(
     Offset screen,
     Size canvasSize, {
@@ -867,6 +932,7 @@ class LevelDesignerSession implements DesignerSession {
 
   /// The designer in use, ruler guides and camera bookmarks, for the scene
   /// file's `editor` section. Authoring aids, not level content: the game never reads them.
+  @internal
   Map<String, dynamic> editorData() => {
     'designer': ?scope.activeDesigner.value,
     'guides': [
@@ -874,12 +940,12 @@ class LevelDesignerSession implements DesignerSession {
         {'vertical': g.isVertical, 'position': g.position},
     ],
     'bookmarks': {
-      for (final entry in bookmarks.entries)
+      for (final entry in _bookmarks.entries)
         '${entry.key}': entry.value.toJson(),
     },
-    if (bookmarks3D.isNotEmpty)
+    if (_bookmarks3D.isNotEmpty)
       'bookmarks3d': {
-        for (final entry in bookmarks3D.entries)
+        for (final entry in _bookmarks3D.entries)
           '${entry.key}': entry.value.toJson(),
       },
     'modules': {
@@ -890,13 +956,14 @@ class LevelDesignerSession implements DesignerSession {
 
   /// Restores what [editorData] saved. Tolerates a missing or partial section
   /// — every scene saved before this existed has none.
+  @internal
   void restoreEditorData(Map<String, dynamic>? data) {
     // The designer the level was authored in, first: what follows is
     // restored into it.
     final designer = data?['designer'];
     scope.selectDesigner(designer is String ? designer : null);
-    bookmarks.clear();
-    bookmarks3D.clear();
+    _bookmarks.clear();
+    _bookmarks3D.clear();
     final byModule = data?['modules'];
     for (final module in scope.modules.all) {
       final saved = byModule is Map ? byModule[module.id] : null;
@@ -906,7 +973,9 @@ class LevelDesignerSession implements DesignerSession {
     }
     final guides = <DesignerGuide>[];
     if (data != null) {
-      for (final g in (data['guides'] as List? ?? const []).whereType<Map>()) {
+      final savedGuides = data['guides'];
+      final guideList = savedGuides is List ? savedGuides : const [];
+      for (final g in guideList.whereType<Map>()) {
         final position = g['position'];
         if (position is! num) continue;
         guides.add(
@@ -923,7 +992,7 @@ class LevelDesignerSession implements DesignerSession {
           final value = entry.value;
           if (slot == null || value is! Map) continue;
           try {
-            bookmarks3D[slot] = ViewPose3D.fromJson(
+            _bookmarks3D[slot] = ViewPose3D.fromJson(
               value.cast<String, dynamic>(),
             );
           } on Object {
@@ -938,7 +1007,7 @@ class LevelDesignerSession implements DesignerSession {
           final value = entry.value;
           if (slot == null || value is! Map) continue;
           try {
-            bookmarks[slot] = CameraBookmark.fromJson(
+            _bookmarks[slot] = _CameraBookmark.fromJson(
               value.cast<String, dynamic>(),
             );
           } on Object {
@@ -993,8 +1062,9 @@ class LevelDesignerSession implements DesignerSession {
     )) {
       return true;
     }
-    // A bare letter is a tool shortcut; a chord is somebody else's.
-    if (isRepeat || mods.control || mods.alt) return false;
+    // A bare letter is a tool shortcut; a chord is somebody else's — Cmd+S
+    // on a Mac too, and a letter with the Mac's Ctrl (or the Windows key).
+    if (isRepeat || mods.control || mods.alt || mods.other) return false;
     final label = key.keyLabel;
     return label.length == 1 && selectToolByShortcut(label.toUpperCase());
   }
@@ -1003,6 +1073,7 @@ class LevelDesignerSession implements DesignerSession {
 
   /// Snapping on or off. One switch for the whole editor: the settings'
   /// Snap to grid, which the magnet over the viewport shows too.
+  @internal
   void setSnapping(bool on) {
     controller.snapEnabled.value = on;
     if (scope.prefs.settings.value.gridSnappingEnabled != on) {
@@ -1011,6 +1082,7 @@ class LevelDesignerSession implements DesignerSession {
   }
 
   /// Smart snap on or off, kept in the settings.
+  @internal
   void setSmartSnap(bool on) {
     controller.smartSnap.value = on;
     if (scope.prefs.settings.value.smartSnap != on) {
@@ -1036,6 +1108,7 @@ class LevelDesignerSession implements DesignerSession {
 
   /// Whether [overlay] is drawn, and offered the pointer, now: its toggle
   /// on, and a gizmo only while its kind is shown in the editor's mode.
+  @internal
   bool isOverlayDrawn(DesignerOverlay overlay) {
     if (!controller.isOverlayVisible(overlay.id)) return false;
     final kind = overlay.gizmoKind;
@@ -1045,22 +1118,37 @@ class LevelDesignerSession implements DesignerSession {
   /// Releases what this session owns.
   ///
   /// Not the history: the scope owns that, and closing the designer must
-  /// not throw away what was done while it was open.
+  /// not throw away what was done while it was open. A gesture under way —
+  /// the designer closed with a button held — is put back as an Esc would,
+  /// never left half-applied with no undo step; and the tool in hand lets
+  /// go of what it shows on the scope (a tile brush's preview, the area
+  /// being dragged), which outlives the session.
   void dispose() {
+    // Unless the scope went first (an app closing): then nothing is left
+    // to put back.
+    if (!scope.container.isClosed) {
+      onPointerCancel();
+      controller.activeTool?.onDeactivate();
+    }
+    for (final (module, state) in _moduleStates.values) {
+      module.disposeSessionState(state);
+    }
+    _moduleStates.clear();
     _stopWatchingDesigner();
     controller.dispose();
   }
 }
 
 /// A saved view: where the camera was and how far it was zoomed.
-class CameraBookmark {
-  const CameraBookmark(this.position, this.zoom);
+class _CameraBookmark {
+  const _CameraBookmark(this.position, this.zoom);
 
   /// Restores one from [toJson]'s output.
-  factory CameraBookmark.fromJson(Map<String, dynamic> json) => CameraBookmark(
-    Offset((json['x'] as num).toDouble(), (json['y'] as num).toDouble()),
-    (json['zoom'] as num).toDouble(),
-  );
+  factory _CameraBookmark.fromJson(Map<String, dynamic> json) =>
+      _CameraBookmark(
+        Offset((json['x'] as num).toDouble(), (json['y'] as num).toDouble()),
+        (json['zoom'] as num).toDouble(),
+      );
 
   /// Camera centre, in world space.
   final Offset position;

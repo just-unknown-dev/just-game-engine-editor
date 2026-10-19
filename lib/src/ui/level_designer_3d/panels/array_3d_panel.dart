@@ -3,23 +3,17 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
 import 'package:just_editor_core/host.dart';
+import '../../../core/entity/entity_ops.dart';
+import '../../../core/scope/editor_scope_services.dart';
 
 /// The 3-D designer's ARRAY section: copies of the selection in a row, a
 /// grid or round a circle, made as one undo step. Distances are in metres,
 /// up as up (the engine's -Y).
 class Array3DPanel extends StatelessWidget {
-  const Array3DPanel({
-    super.key,
-    required this.scope,
-    required this.selection,
-    required this.make,
-  });
+  const Array3DPanel({super.key, required this.scope, required this.make});
 
   /// The editor whose array settings it shows.
   final EditorScope scope;
-
-  /// What is selected now.
-  final List<jge.Entity> Function() selection;
 
   /// Makes the copies [spec] lays out.
   final void Function(Array3DSpec spec) make;
@@ -44,7 +38,9 @@ class Array3DPanel extends StatelessWidget {
                 value: spec.mode,
                 expand: true,
                 options: [for (final m in ArrayMode3D.values) (m, m.label)],
-                tooltips: {for (final m in ArrayMode3D.values) m: m.description},
+                tooltips: {
+                  for (final m in ArrayMode3D.values) m: m.description,
+                },
                 onChanged: (m) => set(spec.copyWith(mode: m)),
               ),
               const SizedBox(height: 6),
@@ -66,20 +62,42 @@ class Array3DPanel extends StatelessWidget {
                     _whole(spec.rows, (v) => set(spec.copyWith(rows: v))),
                   ]),
                   _row('Spacing', 'How far apart: X, up, Z (m)', [
-                    _metres(spec.spacingX, (v) => set(spec.copyWith(spacingX: v))),
-                    _metres(spec.spacingY, (v) => set(spec.copyWith(spacingY: v))),
-                    _metres(spec.spacingZ, (v) => set(spec.copyWith(spacingZ: v))),
+                    _metres(
+                      spec.spacingX,
+                      (v) => set(spec.copyWith(spacingX: v)),
+                    ),
+                    _metres(
+                      spec.spacingY,
+                      (v) => set(spec.copyWith(spacingY: v)),
+                    ),
+                    _metres(
+                      spec.spacingZ,
+                      (v) => set(spec.copyWith(spacingZ: v)),
+                    ),
                   ]),
                 ],
                 ArrayMode3D.radial => [
-                  _row('Count', 'How many round the circle, the original among them', [
-                    _whole(spec.around, (v) => set(spec.copyWith(around: v))),
-                  ]),
-                  _row('Radius', 'The circle\'s middle is this far along -X (m)', [
-                    _metres(spec.radius, (v) => set(spec.copyWith(radius: v))),
-                  ]),
+                  _row(
+                    'Count',
+                    'How many round the circle, the original among them',
+                    [_whole(spec.around, (v) => set(spec.copyWith(around: v)))],
+                  ),
+                  _row(
+                    'Radius',
+                    'The circle\'s middle is this far along -X (m)',
+                    [
+                      _metres(
+                        spec.radius,
+                        (v) => set(spec.copyWith(radius: v)),
+                      ),
+                    ],
+                  ),
                   _row('Sweep', 'How far round they go (degrees)', [
-                    _metres(spec.sweep, (v) => set(spec.copyWith(sweep: v)), digits: 0),
+                    _metres(
+                      spec.sweep,
+                      (v) => set(spec.copyWith(sweep: v)),
+                      digits: 0,
+                    ),
                   ]),
                   _row('Face the middle', 'Each turns as it goes round', [
                     EditorToggle(
@@ -93,15 +111,35 @@ class Array3DPanel extends StatelessWidget {
               const SizedBox(height: 6),
               SignalBuilder<jge.Entity?>(
                 signal: scope.sceneState.selectedEntity,
-                builder: (context, selected, _) => EditorButton(
-                  label: spec.total <= 1
-                      ? 'Nothing to make'
-                      : 'Make ${spec.total - 1} cop${spec.total == 2 ? 'y' : 'ies'}',
-                  icon: Icons.grid_view,
-                  onPressed: selected == null || spec.total <= 1
-                      ? null
-                      : () => make(spec),
-                ),
+                builder: (context, selected, _) {
+                  // What it makes, in entities: each copy holds a copy of
+                  // everything in what is selected.
+                  final made = selected == null
+                      ? 0
+                      : scope.entities.arrayEntityCount3D(spec);
+                  final tooMany = made > EntityOps.maxArrayEntities;
+                  final copies = spec.total - 1;
+                  final why = tooMany
+                      ? 'One array makes at most '
+                            '${EntityOps.maxArrayEntities} entities'
+                      : made > copies
+                      ? '$made entities, with what they hold'
+                      : null;
+                  final button = EditorButton(
+                    label: spec.total <= 1
+                        ? 'Nothing to make'
+                        : tooMany
+                        ? 'Too many: $made entities'
+                        : 'Make $copies cop${copies == 1 ? 'y' : 'ies'}',
+                    icon: Icons.grid_view,
+                    onPressed: selected == null || spec.total <= 1 || tooMany
+                        ? null
+                        : () => make(spec),
+                  );
+                  return why == null
+                      ? button
+                      : Tooltip(message: why, child: button);
+                },
               ),
             ],
           ),

@@ -9,11 +9,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
+import 'support/real_io.dart';
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/extension/built_in_camera_contributions.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/camera_rig_painter.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  // Each test boots an engine and the editor: see bootTimeout.
   group('with a running engine', () {
     late Engine engine;
     late JustGameEditorPlugin plugin;
@@ -30,7 +34,7 @@ void main() {
 
       // Closed to begin with, so the hand-over can be watched from the start.
       plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
-      await plugin.onInitialize();
+      await plugin.attach(plugin.engine);
     });
 
     tearDown(() {
@@ -68,23 +72,23 @@ void main() {
       expect(brain().driveOutput, isFalse);
       expect(output().position, const Offset(-40, 25));
       expect(output().zoom, 0.5);
-    });
+    }, timeout: bootTimeout);
 
     test('closing the editor gives the camera back to the game', () {
       plugin.setVisible(true);
       plugin.setVisible(false);
       expect(brain().driveOutput, isTrue);
-    });
+    }, timeout: bootTimeout);
 
     test('the brain keeps thinking while the game is frozen', () {
       shot('Main', const Offset(640, 0));
       plugin.setVisible(true);
       output().setPosition(const Offset(5, 5));
-      plugin.onUpdate(1 / 60);
+      plugin.update(1 / 60);
       expect(brain().liveCamera?.name, 'Main');
       expect(brain().liveState?.position, const Offset(640, 0));
       expect(output().position, const Offset(5, 5), reason: 'only thinking');
-    });
+    }, timeout: bootTimeout);
 
     test('the game preview is drawn without disturbing the editor view', () {
       shot('Main', const Offset(2000, 1000), zoom: 3);
@@ -92,17 +96,17 @@ void main() {
       output()
         ..setPosition(const Offset(12, 34))
         ..setZoom(0.75);
-      plugin.onUpdate(1 / 60);
+      plugin.update(1 / 60);
 
       final canvas = ui.Canvas(ui.PictureRecorder());
-      plugin.onRender(canvas, const Size(1280, 720));
+      plugin.renderOverlay(canvas, const Size(1280, 720));
       expect(output().position, const Offset(12, 34));
       expect(output().zoom, 0.75);
 
       plugin.showGamePreview.value = false;
-      plugin.onRender(canvas, const Size(1280, 720));
+      plugin.renderOverlay(canvas, const Size(1280, 720));
       expect(output().position, const Offset(12, 34));
-    });
+    }, timeout: bootTimeout);
 
     test(
       'the preview is a panel: a header, then the game view in its shape',
@@ -129,6 +133,7 @@ void main() {
         expect(moved.topLeft, const Offset(74, 70));
         expect(moved.size, panel.size);
       },
+      timeout: bootTimeout,
     );
 
     test('Solo looks through one camera, and toggles off again', () {
@@ -142,13 +147,13 @@ void main() {
       expect(solo.isEnabled!(low, scope), isTrue);
 
       solo.run(low, scope);
-      plugin.onUpdate(1 / 60);
+      plugin.update(1 / 60);
       expect(brain().liveCamera?.name, 'Low');
 
       solo.run(low, scope);
-      plugin.onUpdate(1 / 60);
+      plugin.update(1 / 60);
       expect(brain().liveCamera?.name, 'High');
-    });
+    }, timeout: bootTimeout);
 
     test('Solo is for cameras only', () {
       final crate = engine.world.createEntityWithComponents([
@@ -158,7 +163,7 @@ void main() {
         (a) => a.id == BuiltInCameraContributions.soloActionId,
       );
       expect(solo.isEnabled!(crate, plugin.scope), isFalse);
-    });
+    }, timeout: bootTimeout);
   });
 
   group('in the Level Designer', () {

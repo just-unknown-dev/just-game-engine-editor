@@ -85,7 +85,9 @@ class PlaceGhost3DOverlay extends DesignerOverlay {
       final origin = jge.Vector3.zero();
       ghost.world.transformPointInto(jge.Vector3.zero(), origin);
       final a = view.projectToScreen(from);
-      final b = view.projectToScreen(from + (forward - origin).normalized() * 1.5);
+      final b = view.projectToScreen(
+        from + (forward - origin).normalized() * 1.5,
+      );
       if (a != null && b != null) {
         canvas.drawLine(
           a,

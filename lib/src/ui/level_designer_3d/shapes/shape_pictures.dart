@@ -10,30 +10,45 @@ import 'package:just_editor_core/host.dart';
 /// seen from above at an angle, its faces lit from one side, in the
 /// prefab's colour (a [PrefabPicture]).
 abstract final class ShapePictures {
-  static final Map<String, ModelGeometry?> _geometry = {};
+  /// The meshes drawn so far, by the shape's own key ([Primitive3D.
+  /// shapeKey]: its kind and sizes), so a prefab file whose shape changes
+  /// is drawn anew, and two prefabs of one shape share one mesh.
+  static final Map<Object, ModelGeometry?> _geometry = {};
+
+  /// How many meshes are kept; past it the oldest go.
+  static const int _kept = 64;
 
   /// [prefab]'s picture, [size] pixels square; null for a prefab that
   /// is not a shape.
   static Widget? picture(PrefabDefinition prefab, double size) {
-    final geometry = _geometry.putIfAbsent(prefab.id, () => _shapeOf(prefab));
+    final shape = _shapeOf(prefab);
+    if (shape == null) return null;
+    final key = shape.shapeKey;
+    var geometry = _geometry.remove(key);
+    if (geometry == null && !_geometry.containsKey(key)) {
+      final mesh = shape.buildMesh().geometry;
+      geometry = mesh.triangleCount == 0 ? null : mesh;
+    }
+    // Last used, last in: the first is the one to go.
+    _geometry[key] = geometry;
+    while (_geometry.length > _kept) {
+      _geometry.remove(_geometry.keys.first);
+    }
     if (geometry == null) return null;
     return SizedBox.square(
       dimension: size,
-      child: CustomPaint(
-        painter: _ShapePainter(geometry, prefab.color),
-      ),
+      child: CustomPaint(painter: _ShapePainter(geometry, prefab.color)),
     );
   }
 
-  static ModelGeometry? _shapeOf(PrefabDefinition prefab) {
+  /// The shape [prefab] makes, as it makes it now; null when it makes
+  /// none.
+  static Primitive3D? _shapeOf(PrefabDefinition prefab) {
     if (!prefab.dimensions.allows(SceneMode.threeD)) return null;
     final buildAt = prefab.buildAt;
     if (buildAt == null) return null;
     final components = buildAt(SurfacePoint(Vector3.zero(), Placement3D.up));
-    final shape = components.whereType<Primitive3D>().firstOrNull;
-    if (shape == null) return null;
-    final geometry = shape.buildMesh().geometry;
-    return geometry.triangleCount == 0 ? null : geometry;
+    return components.whereType<Primitive3D>().firstOrNull;
   }
 }
 
@@ -70,7 +85,8 @@ class _ShapePainter extends CustomPainter {
     if (extent <= 0) return;
     final scale = size.shortestSide * 0.86 / extent;
     final centre = Offset((minX + maxX) / 2, (minY + maxY) / 2);
-    Offset screen(Vector3 v) => size.center(Offset.zero) + (Offset(v.x, v.y) - centre) * scale;
+    Offset screen(Vector3 v) =>
+        size.center(Offset.zero) + (Offset(v.x, v.y) - centre) * scale;
 
     final toLight = Vector3(-0.45, -0.75, -0.5)..normalize();
     final faces = <(double, Path, double)>[];

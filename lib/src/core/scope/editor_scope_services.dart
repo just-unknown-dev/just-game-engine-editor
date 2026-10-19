@@ -57,7 +57,7 @@ extension EditorScopeServices on EditorScope {
   /// then following the disk. Shared by the Assets dock and every panel
   /// that lists files (the 3-D designer's materials).
   AssetIndex get assetIndex => _service(
-    () => AssetIndex()
+    () => AssetIndex(kinds: assetKinds)
       ..scan()
       ..startWatching(),
     dispose: (index) => index.dispose(),

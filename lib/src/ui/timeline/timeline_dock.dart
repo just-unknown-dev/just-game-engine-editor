@@ -51,6 +51,9 @@ class TimelineDockState extends State<TimelineDock>
   @override
   void initState() {
     super.initState();
+    // The key buttons, the motion paths and the timeline's commands work
+    // while a dock shows the session.
+    session.attachView();
     _ticker = createTicker(_tick);
     void rebuild() {
       if (mounted) setState(() {});
@@ -68,6 +71,7 @@ class TimelineDockState extends State<TimelineDock>
       session.snap,
       session.showFrames,
       session.isDirty,
+      session.message,
       session.workRange,
       session.showCurves,
       session.record,
@@ -80,12 +84,25 @@ class TimelineDockState extends State<TimelineDock>
     _recordPoll = Timer.periodic(const Duration(milliseconds: 120), (_) {
       if (session.record.value) session.captureEdits();
     });
+    void resync() => unawaited(session.resync());
     _stop
       ..add(session.isPlaying.watch(_syncTicker))
       // Only a different timeline is worth re-fitting for; an edit must
       // leave the zoom and the scroll where they are.
       ..add(session.opened.watch(() => _fitted = false))
-      ..add(widget.scope.sceneState.selectedEntity.watch(_follow));
+      ..add(widget.scope.sceneState.selectedEntity.watch(_follow))
+      // The scene changed under the timeline with the selection where it
+      // was — an undo of "Extract", a play-test's Stop — so show what the
+      // player plays now.
+      ..add(widget.scope.history.revision.watch(resync))
+      // After the frame: the scene is put back as Stop finishes.
+      ..add(
+        widget.scope.isPlayTesting.watch(
+          () => WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) resync();
+          }),
+        ),
+      );
     final path = widget.openPath;
     if (path != null) {
       session.openFile(
@@ -141,12 +158,10 @@ class TimelineDockState extends State<TimelineDock>
     }
     _ticker.dispose();
     _recordPoll?.cancel();
-    // The dock going away ends the look at the timeline: the world is the
-    // scene again, and a file's changes are on disk.
-    session
-      ..pause()
-      ..endPreview();
-    if (session.isDirty.value) unawaited(session.save());
+    // The dock going away ends the look at the timeline: recording stops,
+    // the world is the scene again, and a file's changes are on disk — or,
+    // when they could not be written, still in the session, to show again.
+    unawaited(session.detachView());
     _vertical.dispose();
     _focus.dispose();
     super.dispose();
@@ -197,8 +212,8 @@ class TimelineDockState extends State<TimelineDock>
   /// left to both: it saves the timeline and the scene.
   bool _claims(KeyEvent event) {
     if (session.asset.value == null) return false;
-    final keys = HardwareKeyboard.instance;
-    if (keys.isControlPressed || keys.isMetaPressed) {
+    // Ctrl is Cmd on macOS.
+    if (EditorKeys.primaryPressed) {
       return _ctrlKeys.contains(event.logicalKey);
     }
     return _plainKeys.contains(event.logicalKey);
@@ -209,7 +224,7 @@ class TimelineDockState extends State<TimelineDock>
       return KeyEventResult.ignored;
     }
     final keys = HardwareKeyboard.instance;
-    final ctrl = keys.isControlPressed || keys.isMetaPressed;
+    final ctrl = EditorKeys.primaryPressed;
     final key = event.logicalKey;
     if (ctrl && key == LogicalKeyboardKey.keyZ) {
       keys.isShiftPressed ? session.redo() : session.undo();
@@ -248,6 +263,9 @@ class TimelineDockState extends State<TimelineDock>
       session.selection.value.isEmpty
           ? session.stepFrames(step)
           : session.nudge(step);
+    } else if (ctrl || EditorKeys.otherPressed) {
+      // The rest are bare keys: Cmd+F on a Mac is not F, nor Ctrl+M M.
+      return KeyEventResult.ignored;
     } else if (key == LogicalKeyboardKey.keyM) {
       session.addMarker(
         session.playhead.value,
@@ -488,6 +506,13 @@ class TimelineDockState extends State<TimelineDock>
                 session: session,
                 onFit: () => session.zoomToFit(_sheetWidth),
               ),
+              // Why a save failed or an edit was refused: said where the
+              // timeline is, until it is dismissed or another is shown.
+              if (session.message.value case final note?)
+                _MessageStrip(
+                  text: note,
+                  onDismiss: () => session.message.value = null,
+                ),
               // Always there, so the sheet does not jump when a selection
               // comes or goes — between the two clicks of a double click, say.
               TimelineItemBar(session: session),
@@ -619,6 +644,39 @@ class TimelineDockState extends State<TimelineDock>
       onAction: entity == null ? null : () => session.createInlineFor(entity),
     );
   }
+}
+
+/// A line saying what went wrong, with a cross to put it away.
+class _MessageStrip extends StatelessWidget {
+  const _MessageStrip({required this.text, required this.onDismiss});
+
+  final String text;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.fromLTRB(10, 3, 4, 3),
+    color: EditorTheme.warning.withValues(alpha: 0.12),
+    child: Row(
+      children: [
+        Icon(Icons.warning_amber_rounded, size: 13, color: EditorTheme.warning),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: EditorTheme.textPrimary, fontSize: 11),
+          ),
+        ),
+        EditorIconButton(
+          icon: Icons.close_rounded,
+          tooltip: 'Dismiss',
+          onTap: onDismiss,
+        ),
+      ],
+    ),
+  );
 }
 
 class _TreeHeader extends StatelessWidget {

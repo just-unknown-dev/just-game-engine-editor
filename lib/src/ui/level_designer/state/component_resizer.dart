@@ -24,7 +24,7 @@ abstract final class ComponentResizer {
   /// could be resized.
   static bool scale(jge.Entity entity, double sx, double sy) {
     final rotation = entity.getComponent<jge.TransformComponent>()?.angle;
-    if (rotation != null && _isQuarterTurn(rotation)) {
+    if (rotation != null && isQuarterTurn(rotation)) {
       (sx, sy) = (sy, sx);
     }
     var resized = false;
@@ -62,7 +62,9 @@ abstract final class ComponentResizer {
     return extent.scale(component, sx, sy);
   }
 
-  static bool _isQuarterTurn(double radians) {
+  /// Whether [radians] is an odd number of quarter turns: a thing turned
+  /// so has its own width along the world's Y.
+  static bool isQuarterTurn(double radians) {
     final quarters = radians / (math.pi / 2);
     final nearest = quarters.roundToDouble();
     return (quarters - nearest).abs() < 1e-3 && nearest.toInt().isOdd;

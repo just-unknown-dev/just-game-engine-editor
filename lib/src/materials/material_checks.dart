@@ -98,7 +98,7 @@ abstract final class MaterialChecks {
       if (!lit && (file.isOn('normalMap') || file.isOn('emissive'))) {
         needsLight ??= e;
       }
-      out.addAll(_unknown2D(scope, e, m.overrides, m.remove));
+      out.addAll(_unknown2D(scope, e, m, m.overrides, m.remove));
     }
 
     final screens = [
@@ -121,7 +121,7 @@ abstract final class MaterialChecks {
           ),
         );
       }
-      out.addAll(_unknown2D(scope, e, s.overrides, s.remove));
+      out.addAll(_unknown2D(scope, e, s, s.overrides, s.remove));
     }
     if (screens.length > 1) {
       final top = screens.reduce(
@@ -283,9 +283,13 @@ abstract final class MaterialChecks {
     return (pair == 'tiling' || pair == 'offset') && (i == '0' || i == '1');
   }
 
+  // The problem with [component]'s own values ([overrides], taken out by
+  // [remove]) that change nothing. The undo step is [component]'s own: an
+  // entity can have a Material2D and a ScreenMaterial both.
   static List<SceneProblem> _unknown2D(
     EditorScope scope,
     Entity e,
+    Component component,
     Map<String, Object> overrides,
     void Function(String key) remove,
   ) {
@@ -294,9 +298,6 @@ abstract final class MaterialChecks {
         if (!Material2DShader.overrides(key, value)) key,
     ];
     if (unknown.isEmpty) return const [];
-    final component =
-        e.getComponent<Material2D>() as Component? ??
-        e.getComponent<ScreenMaterial>();
     return [
       SceneProblem(
         entity: e,
@@ -304,15 +305,14 @@ abstract final class MaterialChecks {
             '${_name(e)}: its own values for ${unknown.join(', ')} change '
             'nothing: no effect has them, or they are the wrong kind.',
         fixes: [
-          if (component != null)
-            ProblemFix(
-              label: 'Remove them',
-              apply: () {
-                final edit = ComponentEdit.begin(scope, component);
-                unknown.forEach(remove);
-                edit.commit('Material values removed');
-              },
-            ),
+          ProblemFix(
+            label: 'Remove them',
+            apply: () {
+              final edit = ComponentEdit.begin(scope, component);
+              unknown.forEach(remove);
+              edit.commit('Material values removed');
+            },
+          ),
         ],
       ),
     ];

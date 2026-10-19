@@ -8,6 +8,8 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/tools/tiles/tile_tool_base.dart';
 
 /// Records how many presses each gesture began with.
 class _Clicks extends LevelToolHandler {
@@ -102,7 +104,7 @@ void main() {
       addTearDown(engine.dispose);
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine);
-      await plugin.onInitialize();
+      await plugin.attach(plugin.engine);
       plugin.sceneState.openScene(EditorScene(name: 'level'));
     });
 

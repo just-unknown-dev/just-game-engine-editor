@@ -45,8 +45,11 @@ class Select3DTool extends LevelToolHandler {
   bool onPointerDown(ToolContext context) {
     final space = context.space, at = context.screenPosition;
     if (space == null || at == null) return false;
-    // Something under the pointer: picking it is the viewport's.
-    if (space.surface().onto != null) return false;
+    // Something under the pointer that can be picked: picking it is the
+    // viewport's. A locked thing cannot be, so a marquee starts over it —
+    // over a locked floor, say, to box the things standing on it.
+    final onto = space.surface().onto;
+    if (onto != null && context.controller.isPickable(onto)) return false;
     _from = at;
     _adding = context.isShiftDown || context.isCtrlDown;
     context.controller.screenRect.value = Rect.fromPoints(at, at);

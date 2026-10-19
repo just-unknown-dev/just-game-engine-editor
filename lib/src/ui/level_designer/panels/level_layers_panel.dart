@@ -7,10 +7,12 @@ import '../../../core/level_map/level_map_documents.dart';
 import '../../../core/level_map/tile_commands.dart';
 import '../controls/designer_controls.dart';
 import '../level_designer_session.dart';
+import '../tools/tiles/tile_tool_base.dart' show TileTool;
 import '../../../core/scope/editor_scope_services.dart';
 
 /// Makes the scene's Level Map, empty, and selects it to paint — or, when
 /// the scene has one, selects that. One undo step.
+@visibleForTesting
 void createLevelMap(LevelDesignerSession session) {
   final scope = session.scope;
   final existing = jge.LevelMaps.primaryEntity(session.world);
@@ -49,6 +51,53 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
 
   LevelDesignerSession get session => widget.session;
 
+  VoidCallback? _unwatch;
+
+  /// Whether the scene changed during a gesture, unseen.
+  bool _missed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _watch();
+  }
+
+  @override
+  void didUpdateWidget(LevelLayersPanel old) {
+    super.didUpdateWidget(old);
+    if (old.session != widget.session) _watch();
+  }
+
+  @override
+  void dispose() {
+    _unwatch?.call();
+    super.dispose();
+  }
+
+  /// Maps and entities come and go with the scene: its revision. Not
+  /// mid-gesture — a drag bumps it on every pointer move, and what a depth
+  /// counts does not change until the drag ends; then the step it records
+  /// (the history's revision) catches the panel up.
+  void _watch() {
+    _unwatch?.call();
+    final scene = session.sceneState.revision.watch(() {
+      if (session.hasActiveGesture) {
+        _missed = true;
+      } else if (mounted) {
+        setState(() {});
+      }
+    });
+    final history = session.history.revision.watch(() {
+      if (!_missed || !mounted) return;
+      _missed = false;
+      setState(() {});
+    });
+    _unwatch = () {
+      scene();
+      history();
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final tiles = session.scope.tiles;
@@ -57,11 +106,9 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
       signal1: session.scope.mapDocs.revision,
       signal2: tiles.mapEntityId,
       signal3: tiles.layerId,
-      builder: (context, _, _, _, _) => SignalBuilder2<int, String?>(
-        // Maps and entities come and go with the scene.
-        signal1: session.sceneState.revision,
-        signal2: session.scope.activeDesigner,
-        builder: (context, _, _, _) =>
+      builder: (context, _, _, _, _) => SignalBuilder<String?>(
+        signal: session.scope.activeDesigner,
+        builder: (context, _, _) =>
             SignalBuilder3<String, Set<String>, Set<String>>(
               signal1: controller.activeLayerId,
               signal2: controller.hiddenLayers,
@@ -133,6 +180,18 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
     final active = target == null ? null : tiles.peekLayer(target);
     final counts = _entityCounts();
     final mapLayers = target?.data.layers ?? const <jge.MapLayerData>[];
+    // How many of the map's children are on each of its layers: one walk,
+    // not one per layer.
+    final onLayer = <int, int>{};
+    for (final id
+        in target?.entity.getComponent<jge.ChildrenComponent>()?.childIds ??
+            const <jge.EntityId>[]) {
+      final at = session.world
+          .getEntity(id)
+          ?.getComponent<jge.LayerComponent>()
+          ?.mapLayer;
+      if (at != null) onLayer[at] = (onLayer[at] ?? 0) + 1;
+    }
     // Registered depths, and any the scene uses without declaring, so a
     // level authored elsewhere still shows all of its layers. Front first.
     final depths = <String>{
@@ -170,52 +229,55 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
                     onAdd: editable ? () => _addLayer(target, depth) : null,
                   ),
                   // Top first, as they draw.
-                  for (final layer in mapLayers.reversed)
-                    if (layer.sortLayerId == depth) ...[
-                      _MapLayerRow(
-                        layer: layer,
-                        count: _membersOf(target!, layer).length,
-                        isActive: layer.id == active?.id,
-                        isOpen: layer.id == _open,
-                        editable: editable,
-                        onSelect: () => _selectLayer(layer),
-                        onMoveSelection: () =>
-                            _moveSelectionOnto(target, layer),
-                        onToggleOpen: () => setState(
-                          () => _open = _open == layer.id ? null : layer.id,
+                  if (target != null)
+                    for (final layer in TileTool.drawOrder(mapLayers).reversed)
+                      if (layer.sortLayerId == depth) ...[
+                        _MapLayerRow(
+                          layer: layer,
+                          count: onLayer[layer.id] ?? 0,
+                          isActive: layer.id == active?.id,
+                          isOpen: layer.id == _open,
+                          editable: editable,
+                          onSelect: () => _selectLayer(layer),
+                          onMoveSelection: () =>
+                              _moveSelectionOnto(target, layer),
+                          onToggleOpen: () => setState(
+                            () => _open = _open == layer.id ? null : layer.id,
+                          ),
+                          onToggleVisible: () => _edit(
+                            target,
+                            layer.visible ? 'Hide map layer' : 'Show map layer',
+                            (_) => layer.visible = !layer.visible,
+                          ),
+                          onToggleLocked: () => _edit(
+                            target,
+                            layer.locked
+                                ? 'Unlock map layer'
+                                : 'Lock map layer',
+                            (_) => layer.locked = !layer.locked,
+                          ),
+                          onToggleCollides: () => _edit(
+                            target,
+                            layer.collides
+                                ? 'Tiles stop colliding'
+                                : 'Tiles collide',
+                            (_) => layer.collides = !layer.collides,
+                          ),
                         ),
-                        onToggleVisible: () => _edit(
-                          target,
-                          layer.visible ? 'Hide map layer' : 'Show map layer',
-                          (_) => layer.visible = !layer.visible,
-                        ),
-                        onToggleLocked: () => _edit(
-                          target,
-                          layer.locked ? 'Unlock map layer' : 'Lock map layer',
-                          (_) => layer.locked = !layer.locked,
-                        ),
-                        onToggleCollides: () => _edit(
-                          target,
-                          layer.collides
-                              ? 'Tiles stop colliding'
-                              : 'Tiles collide',
-                          (_) => layer.collides = !layer.collides,
-                        ),
-                      ),
-                      if (layer.id == _open) _layerSettings(target, layer),
-                    ],
+                        if (layer.id == _open) _layerSettings(target, layer),
+                      ],
                   _EntitiesRow(
                     count: counts[depth] ?? 0,
                     isHidden: hidden.contains(depth),
                     isLocked: locked.contains(depth),
-                    onToggleHidden: () {
-                      final nowHidden = !hidden.contains(depth);
-                      session.controller.setLayerHidden(
-                        depth,
-                        hidden: nowHidden,
-                      );
-                      _applyVisibility(depth, visible: !nowHidden);
-                    },
+                    // The editor's alone: the viewport's render filter
+                    // leaves them out while authoring, and nothing about
+                    // the entities changes — a play-test, and the designer
+                    // closed, show them as they are.
+                    onToggleHidden: () => session.controller.setLayerHidden(
+                      depth,
+                      hidden: !hidden.contains(depth),
+                    ),
                     onToggleLocked: () => session.controller.setLayerLocked(
                       depth,
                       locked: !locked.contains(depth),
@@ -244,10 +306,8 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
       session.controller.activeLayerId.value = depth;
 
   /// [layer] is painted from now on, and what is placed goes to its depth.
-  void _selectLayer(jge.MapLayerData layer) {
-    session.scope.tiles.layerId.value = layer.id;
-    session.controller.activeLayerId.value = layer.sortLayerId;
-  }
+  void _selectLayer(jge.MapLayerData layer) =>
+      session.scope.tiles.selectLayer(layer, controller: session.controller);
 
   // ── The toolbar ──────────────────────────────────────────────────────────
 
@@ -296,6 +356,9 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
     void remove() {
       const label = 'Delete map layer';
       final members = _membersOf(target!, active!);
+      // A layer goes with what is on it: not while a module protects any of
+      // that, which would be left on a layer that is gone.
+      if (scope.deletable(members).length != members.length) return;
       final delete = members.isEmpty
           ? null
           : (DeleteEntitiesCommand(
@@ -412,6 +475,9 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
       if (layer != null && depth != 'main') {
         place(layer);
         layer.name = nameIn(made!.data);
+        // The new map's layer is the ground its player stands on; a layer
+        // in front or behind is decoration, as a layer added to a map is.
+        layer.collides = false;
       }
       provision.keep('Add map layer');
       if (layer != null) _selectLayer(layer);
@@ -431,22 +497,6 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
   }
 
   // ── Entities ─────────────────────────────────────────────────────────────
-
-  /// Hides or shows every renderable at [depth].
-  ///
-  /// Writes `renderable.visible` rather than deactivating the entity: an
-  /// inactive entity stops being simulated, which would change what the level
-  /// does rather than just what the editor shows.
-  void _applyVisibility(String depth, {required bool visible}) {
-    for (final entity in session.world.query([jge.LayerComponent])) {
-      final layer = entity.getComponent<jge.LayerComponent>()!;
-      if (layer.layerId != depth || layer.mapLayer != null) continue;
-      layer.visible = visible;
-      entity.getComponent<jge.RenderableComponent>()?.renderable.visible =
-          visible;
-    }
-    session.sceneState.refresh();
-  }
 
   List<jge.Entity> _selection() {
     final state = session.sceneState;

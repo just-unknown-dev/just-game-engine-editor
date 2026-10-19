@@ -47,9 +47,7 @@ class LevelMapProvision {
       TransformComponent(),
       LevelMapComponent(inline: BuiltInPrefabs.newLevelMap(tileSize: size)),
     ], name: LevelMaps.primaryName);
-    scope.sceneState
-      ..syncEntityNode(entity)
-      ..refresh();
+    scope.sceneState.refresh();
     _made = entity;
     _world = world;
     tiles.selectMap(entity);

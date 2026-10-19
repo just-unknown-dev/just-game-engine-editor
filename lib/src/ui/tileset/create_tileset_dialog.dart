@@ -1,7 +1,7 @@
-import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:just_editor_core/io.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import 'package:just_editor_core/host.dart';
@@ -16,6 +16,8 @@ class TilesetCut {
     required this.tileHeight,
     this.margin = 0,
     this.spacing = 0,
+    this.imageWidth,
+    this.imageHeight,
   });
 
   final String image;
@@ -24,6 +26,11 @@ class TilesetCut {
   final int tileHeight;
   final int margin;
   final int spacing;
+
+  /// The image's size, when the form has it already: the tileset is cut
+  /// without loading the image again just to measure it.
+  final int? imageWidth;
+  final int? imageHeight;
 }
 
 /// Every `.png` under [root]/assets, project-relative — the images a
@@ -49,13 +56,12 @@ List<String> findImages(String root) {
     }
   }
   out.sort();
-  return out
-    ..addAll([
-      for (final p in PackageAssetPaths.of(
-        root,
-      ).packageFiles(endings: const ['.png']))
-        if (!p.toLowerCase().endsWith('.original.png')) p,
-    ]);
+  return out..addAll([
+    for (final p in PackageAssetPaths.of(
+      root,
+    ).packageFiles(endings: const ['.png']))
+      if (!p.toLowerCase().endsWith('.original.png')) p,
+  ]);
 }
 
 /// The file name of [path] without its folder or `.png`.
@@ -78,6 +84,7 @@ class CreateTilesetForm extends StatefulWidget {
     this.image,
     this.loadImage,
     this.onCancel,
+    this.disposesImages,
   });
 
   /// The project folder.
@@ -87,6 +94,11 @@ class CreateTilesetForm extends StatefulWidget {
   final String? image;
 
   final TilesetImageLoader? loadImage;
+
+  /// Whether the images [loadImage] hands back are the form's to dispose;
+  /// by default only when it loads from the bundle itself.
+  final bool? disposesImages;
+
   final ValueChanged<TilesetCut> onCreate;
   final VoidCallback? onCancel;
 
@@ -104,25 +116,48 @@ class _CreateTilesetFormState extends State<CreateTilesetForm> {
   int _margin = 0;
   int _spacing = 0;
 
+  /// The images to choose from: listed once, not on every change to the
+  /// form (the whole of `assets/` is walked).
+  late final List<String> _images = widget.image == null
+      ? findImages(widget.root)
+      : const <String>[];
+
+  bool get _ownsImages => widget.disposesImages ?? widget.loadImage == null;
+
   @override
   void initState() {
     super.initState();
     if (widget.image != null) _choose(widget.image!);
   }
 
+  @override
+  void dispose() {
+    _letGo(_picture);
+    super.dispose();
+  }
+
+  void _letGo(ui.Image? picture) {
+    if (_ownsImages) picture?.dispose();
+  }
+
   Future<void> _choose(String image) async {
+    final previous = _picture;
     setState(() {
       _image = image;
       _picture = null;
       _error = null;
       _name = imageBaseName(image);
     });
+    _letGo(previous);
     try {
       final picture =
           await (widget.loadImage ?? BundleSpriteAssetLoader().loadImage)(
             image,
           );
-      if (!mounted || _image != image) return;
+      if (!mounted || _image != image) {
+        _letGo(picture);
+        return;
+      }
       setState(() {
         _picture = picture;
         // Small pictures are usually small tiles.
@@ -144,9 +179,7 @@ class _CreateTilesetFormState extends State<CreateTilesetForm> {
 
   @override
   Widget build(BuildContext context) {
-    final images = widget.image == null
-        ? findImages(widget.root)
-        : const <String>[];
+    final images = _images;
     final ready = _picture != null && _columns > 0 && _rows > 0;
     return Material(
       color: EditorTheme.panelBg,
@@ -236,6 +269,8 @@ class _CreateTilesetFormState extends State<CreateTilesetForm> {
                                 tileHeight: _tileHeight,
                                 margin: _margin,
                                 spacing: _spacing,
+                                imageWidth: _picture!.width,
+                                imageHeight: _picture!.height,
                               ),
                             )
                           : null,
@@ -305,7 +340,10 @@ class _IntRow extends StatelessWidget {
           child: MiniNumberField(
             value: value.toDouble(),
             fractionDigits: 0,
-            onSubmitted: (v) => onChanged(v.round()),
+            // `Infinity` reads as a number but is no size.
+            onSubmitted: (v) {
+              if (v.isFinite) onChanged(v.round());
+            },
           ),
         ),
       ],

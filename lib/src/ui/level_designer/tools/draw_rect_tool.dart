@@ -24,9 +24,10 @@ class DrawRectTool extends LevelToolHandler {
   /// at the depth being placed at; without it, an entity of its own.
   final EditorScope? scope;
 
-  /// Shared selection and dirty state.
   /// Encodes and decodes components; the scope's codec.
   final SceneCodec codec;
+
+  /// Shared selection and dirty state.
   final EditorSceneState sceneState;
 
   /// Where the create command is recorded.
@@ -158,7 +159,9 @@ class DrawRectTool extends LevelToolHandler {
         under: jge.LevelMaps.primaryEntity(context.world),
       );
       context.controller.setStatus(
-        placed == null ? 'The prefab $path is not read yet' : 'Placed ${placed.name}',
+        placed == null
+            ? 'The prefab $path is not read yet'
+            : 'Placed ${placed.name}',
       );
       return;
     }

@@ -95,7 +95,10 @@ class TranslateSnaps3D {
     _startBox
       ..sizeInto(size)
       ..centerInto(centre);
-    final reach = n.x.abs() * size.x / 2 + n.y.abs() * size.y / 2 + n.z.abs() * size.z / 2;
+    final reach =
+        n.x.abs() * size.x / 2 +
+        n.y.abs() * size.y / 2 +
+        n.z.abs() * size.z / 2;
     final wanted = at.position + n * reach;
     return wanted - centre;
   }
@@ -131,7 +134,11 @@ class TranslateSnaps3D {
 
   /// The corner of [entities] nearest [screen] on it, within [reach]
   /// pixels; null for none.
-  Vector3? _nearestVertex(Iterable<Entity> entities, Offset screen, double reach) {
+  Vector3? _nearestVertex(
+    Iterable<Entity> entities,
+    Offset screen,
+    double reach,
+  ) {
     final v = view();
     Vector3? best;
     var bestDistance = reach;

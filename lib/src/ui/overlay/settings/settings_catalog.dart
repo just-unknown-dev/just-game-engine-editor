@@ -46,7 +46,7 @@ const List<(String, Color)> _selectionColours = [
 extension _SettingsCatalog on _EditorSettingsDialogState {
   List<_Setting> _settingsFor(OverlayUiSettings s) {
     const d = OverlayUiSettings.defaults();
-    final accent = s.themeColor;
+    final accent = s.accent;
     return [
       ..._appearanceSettings(s, d, accent),
       ..._accessibilitySettings(s, d),
@@ -218,7 +218,7 @@ extension _SettingsCatalog on _EditorSettingsDialogState {
           EditorToggle(
             value: s.colourBlindSafe,
             label: 'Colour-blind safe colours',
-            accent: s.themeColor,
+            accent: s.accent,
             onChanged: (v) => _save(s.copyWith(colourBlindSafe: v)),
           ),
         ],
@@ -284,8 +284,9 @@ extension _SettingsCatalog on _EditorSettingsDialogState {
       group: 'History',
       label: 'Undo steps',
       hint:
-          'How far Ctrl+Z can go back. More keeps more in memory; fewer '
-          'drops the oldest at once.',
+          'How far ${_scope.commands.shortcutOf('editor.undo') ?? 'Undo'} '
+          'can go back. More keeps more in memory; fewer drops the oldest '
+          'at once.',
       keywords: 'undo redo history memory limit',
       isDefault: s.undoLimit == d.undoLimit,
       reset: (s) => s.copyWith(undoLimit: d.undoLimit),
@@ -295,6 +296,7 @@ extension _SettingsCatalog on _EditorSettingsDialogState {
         OverlayUiSettings.undoLimitRange,
         10,
         (v) => s.copyWith(undoLimit: v.round()),
+        preview: false,
       ),
     ),
     _toggleSetting(
@@ -347,7 +349,8 @@ extension _SettingsCatalog on _EditorSettingsDialogState {
       hint:
           'Moving, turning and scaling snap, in the viewport and the Level '
           'Designer. The same switch as the magnet over the viewport and '
-          'the designer\'s Snap; Ctrl while dragging there moves freely.',
+          'the designer\'s Snap; ${EditorKeys.primaryLabel} while dragging '
+          'there moves freely.',
       keywords: 'snap grid snapping align magnet on off',
       isDefault: s.gridSnappingEnabled == d.gridSnappingEnabled,
       reset: (s) => s.copyWith(gridSnappingEnabled: d.gridSnappingEnabled),
@@ -817,6 +820,7 @@ extension _SettingsCatalog on _EditorSettingsDialogState {
         OverlayUiSettings.consoleEntriesRange,
         100,
         (v) => s.copyWith(consoleMaxEntries: v.round()),
+        preview: false,
       ),
     ),
     _Setting(

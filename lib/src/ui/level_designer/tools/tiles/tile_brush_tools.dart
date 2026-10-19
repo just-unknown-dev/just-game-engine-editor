@@ -44,8 +44,7 @@ class StampTool extends TileTool {
 
   @override
   bool onPaintDown(ToolContext c) {
-    final stamp = state.stamp.value;
-    if (stamp == null) {
+    if (state.stamp.value == null) {
       c.controller.setStatus(
         'Pick a tile in the Tileset panel first, or right-click one on the map',
       );
@@ -53,6 +52,8 @@ class StampTool extends TileTool {
     }
     final a = aim(c, create: true);
     if (a == null) return true;
+    final stamp = brushFor(a, c);
+    if (stamp == null) return true;
     _aim = a;
     _stroke = strokeOn(a);
     final at = cellAt(a, c.worldPosition, c);
@@ -65,7 +66,8 @@ class StampTool extends TileTool {
   void onPaintMove(ToolContext c) {
     final stroke = _stroke;
     final a = _aim;
-    final stamp = state.stamp.value;
+    // Read on each move: X, Y and Z turn the brush mid-stroke.
+    final stamp = a == null ? null : brushFor(a, c, quiet: true);
     if (stroke == null || a == null || stamp == null) return;
     final at = cellAt(a, c.worldPosition, c);
     if (at == _last) return;
@@ -93,7 +95,7 @@ class StampTool extends TileTool {
 
   @override
   Map<TileCoord, int> previewAt(TileAim aim, TileCoord at) {
-    final stamp = state.stamp.value;
+    final stamp = state.stampIn(aim.target.data).stamp;
     if (stamp == null) return const {};
     return {for (final (c, v) in stamp.placeAt(at, aim.target.geometry)) c: v};
   }
@@ -267,13 +269,19 @@ class TileFillTool extends TileTool {
   TileCoord? _start;
   TileStamp? _stamp;
 
+  /// Where the dragged shape ends now, and what it would paint — kept here
+  /// rather than read back from the overlay's preview, which a key pressed
+  /// mid-drag may redraw.
+  TileCoord? _end;
+  Map<TileCoord, int> _pending = const {};
+
   @override
   void onActivate() => state.paletteTerrains.value = false;
 
   @override
   bool onKey(LogicalKeyboardKey key, ToolContext context) {
     final m = context.modifiers;
-    if (key == LogicalKeyboardKey.keyG && !m.control && !m.alt) {
+    if (key == LogicalKeyboardKey.keyG && !m.control && !m.alt && !m.other) {
       final shapes = TileFillShape.values;
       final next = shapes[(state.fillShape.value.index + 1) % shapes.length];
       state.fillShape.value = next;
@@ -342,13 +350,14 @@ class TileFillTool extends TileTool {
 
   @override
   bool onPaintDown(ToolContext c) {
-    final stamp = state.stamp.value;
-    if (stamp == null) {
+    if (state.stamp.value == null) {
       c.controller.setStatus('Pick a tile in the Tileset panel first');
       return true;
     }
     final a = aim(c, create: true);
     if (a == null) return true;
+    final stamp = brushFor(a, c);
+    if (stamp == null) return true;
     _stamp = stamp;
     final at = cellAt(a, c.worldPosition, c);
     if (state.fillShape.value == TileFillShape.bucket) {
@@ -358,20 +367,33 @@ class TileFillTool extends TileTool {
         at,
         TileTool.floodLimit(a, c),
       );
+      if (region.length >= TileTool.maxRegion) {
+        // Stopped part way: what it reached is a diamond round the click,
+        // not the region. Nothing rather than that.
+        c.controller.setStatus(
+          'That region is more than ${TileTool.maxRegion} cells: zoom in, '
+          'or fill a rectangle',
+        );
+        return true;
+      }
       final stroke = strokeOn(a);
       _fillValues(a, region, at).forEach(stroke.set);
       commit(stroke, 'Fill tiles');
       c.controller.setStatus(
-        region.length >= TileTool.maxRegion
-            ? 'Filled ${TileTool.maxRegion} cells and stopped'
-            : 'Filled ${region.length} cell${region.length == 1 ? '' : 's'}',
+        'Filled ${region.length} cell${region.length == 1 ? '' : 's'}',
       );
       return true;
     }
     _aim = a;
     _start = at;
-    state.preview = _fillValues(a, [at], at);
+    _end = at;
+    _show(_fillValues(a, [at], at));
     return true;
+  }
+
+  void _show(Map<TileCoord, int> values) {
+    _pending = values;
+    state.preview = values;
   }
 
   @override
@@ -380,19 +402,27 @@ class TileFillTool extends TileTool {
     final start = _start;
     if (a == null || start == null) return;
     final at = cellAt(a, c.worldPosition, c);
-    state.preview = _fillValues(
-      a,
-      shapeCells(state.fillShape.value, start, at),
-      start,
-    );
+    // Only when the shape changes: a move within the end cell is the same
+    // fill, and laying one out is the costly part.
+    if (at == _end) return;
+    _end = at;
+    final area = ((at.x - start.x).abs() + 1) * ((at.y - start.y).abs() + 1);
+    if (area > TileTool.maxRegion) {
+      c.controller.setStatus(
+        'Too big to fill at once: at most ${TileTool.maxRegion} cells',
+      );
+      _show(const {});
+      return;
+    }
+    _show(_fillValues(a, shapeCells(state.fillShape.value, start, at), start));
   }
 
   @override
   void onPaintUp(ToolContext c) {
     final a = _aim;
-    if (a != null && state.preview.isNotEmpty) {
+    if (a != null && _pending.isNotEmpty) {
       final stroke = strokeOn(a);
-      state.preview.forEach(stroke.set);
+      _pending.forEach(stroke.set);
       commit(
         stroke,
         state.fillShape.value == TileFillShape.ellipse
@@ -400,21 +430,23 @@ class TileFillTool extends TileTool {
             : 'Fill rectangle',
       );
     }
-    state.preview = const {};
-    _aim = null;
-    _start = null;
+    _finish();
   }
 
   @override
-  void onPaintCancel() {
+  void onPaintCancel() => _finish();
+
+  void _finish() {
     state.preview = const {};
+    _pending = const {};
     _aim = null;
     _start = null;
+    _end = null;
   }
 
   @override
   Map<TileCoord, int> previewAt(TileAim aim, TileCoord at) {
-    final stamp = state.stamp.value;
+    final stamp = state.stampIn(aim.target.data).stamp;
     if (stamp == null || stamp.cells.isEmpty) return const {};
     return {at: stamp.cells.first.cell};
   }

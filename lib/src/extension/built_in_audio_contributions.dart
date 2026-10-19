@@ -65,7 +65,10 @@ abstract final class BuiltInAudioContributions {
         'A sound heard the same wherever the listener is — ambience, a '
         'drone. Pick its file in the inspector.',
     namePrefix: 'Sound',
-    build: (position, _) => [..._at2d(position), AudioDrop.source('', in3d: false)],
+    build: (position, _) => [
+      ..._at2d(position),
+      AudioDrop.source('', in3d: false),
+    ],
     buildAt: (at) => [_above(at), AudioDrop.source('', in3d: true)],
   );
 
@@ -82,8 +85,14 @@ abstract final class BuiltInAudioContributions {
         'A sound heard from where it is: louder near, panned by side, '
         'muffled far away. Pick its file in the inspector.',
     namePrefix: 'Sound',
-    build: (position, _) => [..._at2d(position), AudioDrop.source('', in3d: false, spatial: true)],
-    buildAt: (at) => [_above(at), AudioDrop.source('', in3d: true, spatial: true)],
+    build: (position, _) => [
+      ..._at2d(position),
+      AudioDrop.source('', in3d: false, spatial: true),
+    ],
+    buildAt: (at) => [
+      _above(at),
+      AudioDrop.source('', in3d: true, spatial: true),
+    ],
   );
 
   static PrefabDefinition get _listener => PrefabDefinition(
@@ -109,10 +118,11 @@ abstract final class BuiltInAudioContributions {
     jge.LayerComponent(),
   ];
 
-  static jge.TransformComponent _above(SurfacePoint at) => jge.TransformComponent(
-    position: jge.Vector3.copy(at.position)..addScaled(at.normal, AudioDrop.lift),
-  );
-
+  static jge.TransformComponent _above(SurfacePoint at) =>
+      jge.TransformComponent(
+        position: jge.Vector3.copy(at.position)
+          ..addScaled(at.normal, AudioDrop.lift),
+      );
 }
 
 /// How far a selected 3-D sound carries: a ring at the distance it starts

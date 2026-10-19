@@ -10,13 +10,20 @@ import 'package:just_editor_core/host.dart';
 
 /// The 3-D designer's Measure: drag from one surface point to another for
 /// the distance between them in metres, and how much of it is across, up
-/// and along; the measurement stays until the next one, or Escape.
+/// and along; the measurement stays until the next one, Escape, or another
+/// tool is picked, and is shown only over the scene it was taken in.
 /// Snapping puts each end on the move step.
 class Measure3DTool extends LevelToolHandler {
   /// The measurement shown, ends in the world; null for none.
-  final Signal<(jge.Vector3, jge.Vector3)?> measured = Signal(null, debugLabel: 'measure3D');
+  final Signal<(jge.Vector3, jge.Vector3)?> measured = Signal(
+    null,
+    debugLabel: 'measure3D',
+  );
 
   jge.Vector3? _from;
+
+  /// The scene [measured] was taken in: over another one it is not drawn.
+  Object? _scene;
 
   @override
   String get id => BuiltInTools.measure;
@@ -31,7 +38,8 @@ class Measure3DTool extends LevelToolHandler {
   String? get shortcut => 'M';
 
   @override
-  String? get description => 'Drag between two points for the distance in metres; Escape clears it';
+  String? get description =>
+      'Drag between two points for the distance in metres; Escape clears it';
 
   @override
   int get order => 90;
@@ -47,6 +55,7 @@ class Measure3DTool extends LevelToolHandler {
     final space = context.space;
     if (space == null) return false;
     _from = space.snappedSurface().position;
+    _scene = context.controller.sceneState.activeScene.value;
     measured.value = (_from!, _from!);
     return true;
   }
@@ -68,9 +77,19 @@ class Measure3DTool extends LevelToolHandler {
   @override
   void onCancel() => _from = null;
 
+  /// Leaving Measure takes the measurement away: nothing else could clear
+  /// it, and it would stay over whatever came next.
+  @override
+  void onDeactivate() {
+    _from = null;
+    measured.value = null;
+  }
+
   @override
   bool onKey(LogicalKeyboardKey key, ToolContext context) {
-    if (key != LogicalKeyboardKey.escape || measured.value == null) return false;
+    if (key != LogicalKeyboardKey.escape || measured.value == null) {
+      return false;
+    }
     measured.value = null;
     return true;
   }
@@ -112,6 +131,12 @@ class Ruler3DOverlay extends DesignerOverlay {
   void paint(OverlayPaintContext context) {
     final m = tool.measured.value;
     if (m == null) return;
+    // Only while measuring, and only over the scene it was measured in.
+    final controller = context.controller;
+    if (controller.toolId.value != BuiltInTools.measure ||
+        !identical(controller.sceneState.activeScene.value, tool._scene)) {
+      return;
+    }
     final view = context.draw.camera;
     final a = view.projectToScreen(m.$1), b = view.projectToScreen(m.$2);
     if (a == null || b == null) return;
@@ -126,17 +151,28 @@ class Ruler3DOverlay extends DesignerOverlay {
     final label = TextPainter(
       text: TextSpan(
         text: Measure3DTool.describe(m.$1, m.$2),
-        style: const TextStyle(color: Color(0xFFFFE082), fontSize: 11, fontWeight: FontWeight.w600),
+        style: const TextStyle(
+          color: Color(0xFFFFE082),
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
     final at = Offset.lerp(a, b, 0.5)! + const Offset(8, -18);
-    final box = Rect.fromLTWH(at.dx - 4, at.dy - 2, label.width + 8, label.height + 4);
+    final box = Rect.fromLTWH(
+      at.dx - 4,
+      at.dy - 2,
+      label.width + 8,
+      label.height + 4,
+    );
     context.draw.canvas.drawRRect(
       RRect.fromRectAndRadius(box, const Radius.circular(3)),
       Paint()..color = const Color(0xDD1E1F24),
     );
-    label.paint(context.draw.canvas, at);
+    label
+      ..paint(context.draw.canvas, at)
+      ..dispose();
   }
 }
 
@@ -194,7 +230,9 @@ class KillHeight3DOverlay extends DesignerOverlay {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    label.paint(context.draw.canvas, at + const Offset(4, 2));
+    label
+      ..paint(context.draw.canvas, at + const Offset(4, 2))
+      ..dispose();
   }
 }
 
@@ -226,8 +264,16 @@ class _PerformanceMeterState extends State<PerformanceMeter> {
 
   void _read() {
     final service = widget.scope.engine?.services.maybe<Graphics3D>();
-    final stats = service == null || !service.isStarted ? null : service.renderer.stats;
-    final next = stats == null ? null : (stats.drawCalls + stats.shadowDrawCalls, stats.triangles, stats.instances);
+    final stats = service == null || !service.isStarted
+        ? null
+        : service.renderer.stats;
+    final next = stats == null
+        ? null
+        : (
+            stats.drawCalls + stats.shadowDrawCalls,
+            stats.triangles,
+            stats.instances,
+          );
     if (next != _seen && mounted) setState(() => _seen = next);
   }
 

@@ -37,6 +37,18 @@ class PlanarGizmoDragSolver implements GizmoDragSolver {
 
   final EditorSceneState sceneState;
 
+  /// The smallest size a scale handle makes, either way: never zero.
+  static const double minScale = 0.01;
+
+  /// [start] — a scale on one axis when the drag began — made [ratio] times
+  /// as large, its sign kept (a flipped entity stays flipped) and its size
+  /// at least [minScale]. No upper cap: a background already at 64× stays
+  /// there rather than jumping to a limit.
+  static double scaledBy(double start, double ratio) {
+    final size = math.max(minScale, start.abs() * ratio);
+    return start < 0 ? -size : size;
+  }
+
   Offset? _dragStartScreen;
 
   /// Where a turn or a scale began, and what it began from: each is worked
@@ -152,8 +164,8 @@ class PlanarGizmoDragSolver implements GizmoDragSolver {
           sceneState.setScale(
             entity,
             Offset(
-              (_startScale.dx * ratio).clamp(0.01, 50.0),
-              (_startScale.dy * ratio).clamp(0.01, 50.0),
+              scaledBy(_startScale.dx, ratio),
+              scaledBy(_startScale.dy, ratio),
             ),
           );
         }
@@ -167,10 +179,7 @@ class PlanarGizmoDragSolver implements GizmoDragSolver {
             ((_dragOriginScreen ?? _dragStartScreen!).dx - center.dx).abs();
         final currDistX = (screen.dx - center.dx).abs();
         if (fromDistX > 0.5) {
-          final newSx = (_startScale.dx * currDistX / fromDistX).clamp(
-            0.01,
-            50.0,
-          );
+          final newSx = scaledBy(_startScale.dx, currDistX / fromDistX);
           sceneState.setScaleX(entity, newSx);
         }
         _dragStartScreen = screen;
@@ -183,10 +192,7 @@ class PlanarGizmoDragSolver implements GizmoDragSolver {
             ((_dragOriginScreen ?? _dragStartScreen!).dy - center.dy).abs();
         final currDistY = (screen.dy - center.dy).abs();
         if (fromDistY > 0.5) {
-          final newSy = (_startScale.dy * currDistY / fromDistY).clamp(
-            0.01,
-            50.0,
-          );
+          final newSy = scaledBy(_startScale.dy, currDistY / fromDistY);
           sceneState.setScaleY(entity, newSy);
         }
         _dragStartScreen = screen;

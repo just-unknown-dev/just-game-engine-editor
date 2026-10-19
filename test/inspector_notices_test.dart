@@ -8,6 +8,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/ui/panels/entity_inspector_panel.dart';
 
 void main() {
   late EditorScope scope;
@@ -33,7 +34,6 @@ void main() {
             sceneState: scope.sceneState,
             world: scope.world,
             scope: scope,
-            onDetachFromParent: (_) {},
             onGroupSelection: () {},
           ),
         ),

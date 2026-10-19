@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
@@ -8,7 +9,11 @@ Future<void> main() async {
   final engine = Engine();
   // The editor attaches to a ready engine: its world and camera exist.
   await engine.initialize();
-  final plugin = await JustGameEditorPlugin.register(engine: engine);
+  // kDebugMode is a compile-time constant: a profile or release build drops
+  // the editor and holds only the game (register returns null there too).
+  final plugin = kDebugMode
+      ? await JustGameEditorPlugin.register(engine: engine)
+      : null;
   // The game loop drives the editor too: Play, autosave and the 3-D fly
   // keys all run on its frames.
   engine.start();

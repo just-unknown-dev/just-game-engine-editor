@@ -85,7 +85,7 @@ class PlayControlsToolbar extends StatelessWidget {
   /// Side of one button: a comfortable target, the height of an inspector
   /// field, growing with the text scale.
   static double buttonSize(OverlayUiSettings settings) =>
-      math.max(EditorMetrics.controlMd, 16 * settings.effectiveTextScale + 12);
+      math.max(EditorMetrics.controlMd, 16 * settings.textScale + 12);
 
   /// The toolbar's height for [settings], so whatever hangs below it — the
   /// game camera preview — knows where it ends. Mirrors the layout below: a
@@ -153,7 +153,7 @@ class PlayControlsToolbar extends StatelessWidget {
             onTap: onTap,
             width: side,
             height: side,
-            iconSize: 16 * settings.effectiveTextScale,
+            iconSize: 16 * settings.textScale,
           ),
         );
 

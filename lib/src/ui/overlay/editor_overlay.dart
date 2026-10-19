@@ -101,10 +101,10 @@ class JustGameEditorOverlay extends StatefulWidget {
   final Widget gameChild;
 
   @override
-  State<JustGameEditorOverlay> createState() => JustGameEditorOverlayState();
+  State<JustGameEditorOverlay> createState() => _JustGameEditorOverlayState();
 }
 
-class JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
+class _JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
   final OverlayPortalController _chromeController = OverlayPortalController();
   final List<void Function()> _stop = [];
 
@@ -118,7 +118,9 @@ class JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
       ..add(scope.prefs.settings.watch(_syncTheme))
       ..add(scope.theme.current.watch(() => _applyTheme()));
     // The questions only the editor's window can ask.
-    widget.plugin.askToRecover = _askToRecover;
+    widget.plugin
+      ..askToRecover = _askToRecover
+      ..askToLeaveScene = _askToLeaveScene;
     _entities = scope.entities..confirmDelete = _confirmDelete;
     scope.prefs.load().then((_) {
       if (!mounted) return;
@@ -172,6 +174,17 @@ class JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
     );
   }
 
+  Future<UnsavedChoice?> _askToLeaveScene(String leaving, String opening) {
+    if (!mounted) return Future.value();
+    return askToSaveChanges(
+      context,
+      title: 'Save changes to $leaving?',
+      message:
+          'Opening $opening closes $leaving, and loses what has not been '
+          'saved.',
+    );
+  }
+
   Future<bool> _confirmDelete(String what) {
     if (!mounted) return Future.value(false);
     return showEditorConfirm(
@@ -186,6 +199,9 @@ class JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
   void dispose() {
     if (widget.plugin.askToRecover == _askToRecover) {
       widget.plugin.askToRecover = null;
+    }
+    if (widget.plugin.askToLeaveScene == _askToLeaveScene) {
+      widget.plugin.askToLeaveScene = null;
     }
     // Held from the start: the scope may already be closed by now.
     final entities = _entities;
@@ -251,17 +267,22 @@ class JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
     var data = source;
     if (settings.highContrast) data = data.highContrast();
     if (settings.colourBlindSafe) data = data.colourBlindSafe();
-    EditorTheme.apply(data);
+    // From the picked theme: `EditorTheme.of(context)` then hands out the
+    // adjusted palette too, not the preset beneath it.
+    EditorTheme.apply(data, from: source);
     _rebuildAll();
     return true;
   }
 
   /// Every colour and size is read as the chrome builds, so a new theme or
   /// density means building all of it again. Its state — scroll positions,
-  /// open menus, typed text — stays.
+  /// open menus, typed text — stays. The game's own widgets are left alone:
+  /// they read none of the editor's look.
   void _rebuildAll() {
     if (!mounted) return;
+    final game = widget.gameChild;
     void mark(Element element) {
+      if (identical(element.widget, game)) return;
       element.markNeedsBuild();
       element.visitChildren(mark);
     }
@@ -536,6 +557,7 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
                   JustGameEditorPlugin.canDropAsset(
                     d.data,
                     mode: widget.plugin.sceneState.editingMode,
+                    scope: widget.plugin.scope,
                   ),
               onAcceptWithDetails: (d) {
                 final box = context.findRenderObject() as RenderBox?;

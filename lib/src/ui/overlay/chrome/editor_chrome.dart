@@ -228,10 +228,8 @@ class FullEditorChrome extends StatelessWidget {
         final aboveGear =
             gameInsets.bottom +
             gearMargin +
-            SettingsGearButton.heightFor(settings) +
-            (quickBar
-                ? QuickSnapBar.heightFor(settings, snapping: quickSnap) + 8
-                : 0) +
+            SettingsGearButton.height +
+            (quickBar ? QuickSnapBar.heightFor(snapping: quickSnap) + 8 : 0) +
             8;
         // The same frame as the toolbar above it: radius, border, padding.
         plugin.gamePreviewStyle = GamePreviewStyle(

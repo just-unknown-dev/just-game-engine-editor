@@ -27,19 +27,52 @@ abstract final class BuiltInPrefabs {
   /// Scene infrastructure: cameras, spawn points, markers.
   static const Color sceneColor = PrefabColours.scene;
 
-  /// Ids of the prefabs the editor provides.
+  /// Id of Rectangle: a plain filled rectangle, no collider.
+  ///
+  /// The ids below are the built-in prefabs'; a module's prefab with the
+  /// same id takes that one's place.
   static const String rectangleId = 'builtin.rectangle';
+
+  /// Id of Circle: a plain filled circle, no collider.
   static const String circleId = 'builtin.circle';
+
+  /// Id of Sprite: an image, its asset set in the inspector.
   static const String spriteId = 'builtin.sprite';
+
+  /// Id of Empty: a transform with nothing on it, a parent or an anchor.
   static const String emptyId = 'builtin.empty';
+
+  /// Id of Solid: a static body matching its rectangle (walls, floors).
   static const String solidId = 'builtin.solid';
+
+  /// Id of Trigger: a sensor that detects overlap without blocking.
   static const String triggerId = 'builtin.trigger';
+
+  /// Id of Virtual camera: a shot the game can show; the
+  /// highest-priority enabled camera is live.
   static const String cameraId = 'builtin.camera';
+
+  /// Id of Camera zone: a shot of its own while its target is inside the
+  /// rectangle.
   static const String cameraZoneId = 'builtin.camera_zone';
+
+  /// Id of Camera bounds: the area a camera may show, named in a camera's
+  /// Confiner.
   static const String cameraBoundsId = 'builtin.camera_bounds';
+
+  /// Id of Target group: sits at the centre of its members, so a camera
+  /// following it frames them all.
   static const String targetGroupId = 'builtin.target_group';
+
+  /// Id of Dolly camera: a camera that rides a track to the point nearest
+  /// what it follows.
   static const String dollyCameraId = 'builtin.dolly_camera';
+
+  /// Id of Spawn Point: where a spawner places an entity when Play is
+  /// pressed.
   static const String spawnId = 'builtin.spawn';
+
+  /// Id of Region: an annotation rectangle, an outline with no collider.
   static const String markerId = 'builtin.marker';
 
   /// A new map: [tileSize]-square cells and one layer, `Ground`, whose
@@ -165,12 +198,17 @@ abstract final class BuiltInPrefabs {
     category: 'Physics',
     icon: Icons.rectangle,
     color: solidColor,
-    description: 'A static body matching its rectangle. Walls, floors, obstacles.',
+    description:
+        'A static body matching its rectangle. Walls, floors, obstacles.',
     namePrefix: 'Solid',
     build: (position, size) => [
       ..._base(position),
       _rect(size, solidColor),
-      jge.RigidBody2D(bodyType: jge.BodyType.static, lockRotation: true, restitution: 0),
+      jge.RigidBody2D(
+        bodyType: jge.BodyType.static,
+        lockRotation: true,
+        restitution: 0,
+      ),
       jge.Collider2D(shape: jge.ColliderShape2D.matchShape),
     ],
   );
@@ -185,10 +223,14 @@ abstract final class BuiltInPrefabs {
     namePrefix: 'Trigger',
     build: (position, size) => [
       ..._base(position),
-      // Outline only: a trigger is an authoring concept, and a solid fill
-      // would read as geometry in the viewport.
+      // Outline only: a solid fill would read as geometry. The outline
+      // draws in the game too.
       _rect(size, triggerColor, filled: false),
-      jge.RigidBody2D(bodyType: jge.BodyType.static, isSensor: true, lockRotation: true),
+      jge.RigidBody2D(
+        bodyType: jge.BodyType.static,
+        isSensor: true,
+        lockRotation: true,
+      ),
       jge.Collider2D(shape: jge.ColliderShape2D.matchShape),
     ],
   );
@@ -347,7 +389,9 @@ abstract final class BuiltInPrefabs {
     icon: Icons.crop_free,
     color: sceneColor,
     defaultSize: const Size(256, 256),
-    description: 'An annotation rectangle. No collider, no rendering in game.',
+    description:
+        'An annotation rectangle: an outline with no collider. It draws in '
+        'the game too.',
     namePrefix: 'Region',
     build: (position, size) => [
       jge.TransformComponent(

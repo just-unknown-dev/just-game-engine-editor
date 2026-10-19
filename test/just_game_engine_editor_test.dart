@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
+import 'package:just_game_engine_editor/src/core/ecs/systems/editor_log_capture_system.dart';
+import 'package:just_game_engine_editor/src/core/ecs/systems/physics_body_binding_system.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -37,7 +39,7 @@ void main() {
       return;
     }
 
-    await plugin.onInitialize();
+    await plugin.attach(plugin.engine);
     expect(plugin.isVisible.value, isTrue, reason: 'F1 state');
     expect(plugin.isStatusPanelVisible.value, isTrue, reason: 'F2 state');
     expect(engine.time.timeScale, 0, reason: 'authoring pauses the game');
@@ -55,7 +57,7 @@ void main() {
       return;
     }
 
-    await plugin.onInitialize();
+    await plugin.attach(plugin.engine);
     expect(plugin.isVisible.value, isFalse);
     expect(plugin.isStatusPanelVisible.value, isFalse);
 
@@ -73,12 +75,16 @@ void main() {
       return;
     }
 
-    await plugin.onInitialize();
-    await plugin.onInitialize();
+    await plugin.attach(plugin.engine);
+    await plugin.attach(plugin.engine);
 
     int countSystem<T>() => engine.world.systems.whereType<T>().length;
 
-    expect(countSystem<SimpleMovementSystem>(), 1);
+    expect(
+      countSystem<SimpleMovementSystem>(),
+      0,
+      reason: "the game's own systems are its boot's to add",
+    );
     expect(countSystem<PhysicsBodyBindingSystem>(), 1);
     expect(countSystem<PhysicsJointBindingSystem>(), 1);
     expect(countSystem<EditorLogCaptureSystem>(), 1);
@@ -97,13 +103,17 @@ void main() {
       return;
     }
 
-    await plugin.onInitialize();
+    await plugin.attach(plugin.engine);
     plugin.reassemble();
     plugin.reassemble();
 
     int countSystem<T>() => engine.world.systems.whereType<T>().length;
 
-    expect(countSystem<SimpleMovementSystem>(), 1);
+    expect(
+      countSystem<SimpleMovementSystem>(),
+      0,
+      reason: "the game's own systems are its boot's to add",
+    );
     expect(countSystem<PhysicsBodyBindingSystem>(), 1);
     expect(countSystem<PhysicsJointBindingSystem>(), 1);
     expect(countSystem<EditorLogCaptureSystem>(), 1);
@@ -131,7 +141,7 @@ void main() {
       );
     }
 
-    await plugin.onInitialize();
+    await plugin.attach(plugin.engine);
 
     final afterCounts = <Type, int>{};
     for (final system in engine.world.systems) {
@@ -146,7 +156,6 @@ void main() {
     // exported from the package's public barrel, so this test file (which
     // only imports the barrel) has no `Type` literal to reference them with.
     const allowedAddedTypeNames = <String>{
-      'SimpleMovementSystem',
       'PhysicsBodyBindingSystem',
       'PhysicsJointBindingSystem',
       'EditorLogCaptureSystem',
@@ -170,7 +179,7 @@ void main() {
     }
 
     expect(actuallyAddedTypeNames.difference(allowedAddedTypeNames), isEmpty);
-    expect(engine.world.systems.whereType<SimpleMovementSystem>().length, 1);
+    expect(engine.world.systems.whereType<SimpleMovementSystem>(), isEmpty);
     expect(
       engine.world.systems.whereType<PhysicsBodyBindingSystem>().length,
       1,
@@ -195,7 +204,7 @@ void main() {
       return;
     }
 
-    await plugin.onInitialize();
+    await plugin.attach(plugin.engine);
 
     final definitions = plugin.scope.definitions.definitions;
     expect(definitions, isNotEmpty);
@@ -211,28 +220,4 @@ void main() {
 
     plugin.dispose();
   });
-
-  test(
-    'serialization service returns non-blocking draft payload shape',
-    () async {
-      const service = EditorSerializationService();
-
-      final result = await service.saveDraft(
-        const EditorSerializationRequest(
-          levelId: 'level_runtime_01',
-          ecsSnapshot: <String, dynamic>{
-            'entities': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'id': 'e_player',
-                'components': <String>['Transform', 'Velocity'],
-              },
-            ],
-          },
-        ),
-      );
-
-      expect(result.jsonDraft, contains('level_runtime_01'));
-      expect(result.todos, isNotEmpty);
-    },
-  );
 }

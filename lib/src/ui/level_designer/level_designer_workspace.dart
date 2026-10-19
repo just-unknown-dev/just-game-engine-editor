@@ -31,7 +31,6 @@ class LevelDesignerWorkspace extends StatelessWidget {
     super.key,
     required this.session,
     required this.gridSize,
-    required this.onGridSizeChanged,
     required this.onClose,
   });
 
@@ -40,9 +39,6 @@ class LevelDesignerWorkspace extends StatelessWidget {
 
   /// Current grid size, owned by the plugin's overlay settings.
   final double gridSize;
-
-  /// Propagates a grid-size change back to the plugin.
-  final ValueChanged<double> onGridSizeChanged;
 
   /// Closes the designer.
   final VoidCallback onClose;
@@ -131,10 +127,8 @@ class _DesignerSidePanel extends StatelessWidget {
           id: 'materials3d',
           title: 'MATERIALS',
           groups: const {ToolGroups.shapes},
-          build: (_) => Materials3DPanel(
-            scope: session.scope,
-            setTool: session.setTool,
-          ),
+          build: (_) =>
+              Materials3DPanel(scope: session.scope, setTool: session.setTool),
         ),
       // The groups, with their eyes and locks.
       if (!flat)
@@ -152,7 +146,6 @@ class _DesignerSidePanel extends StatelessWidget {
           groups: _entityTools,
           build: (_) => Array3DPanel(
             scope: session.scope,
-            selection: session.selectionEntities,
             make: session.onArray3D ?? (_) {},
           ),
         ),

@@ -7,6 +7,9 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/level_map/tiled_export.dart';
+import 'package:just_game_engine_editor/src/core/validation/built_in_validators.dart';
+import 'package:just_game_engine_editor/src/ui/tileset/tileset_session.dart';
 
 void main() {
   test('the checks say nothing of a map painted with it', () {

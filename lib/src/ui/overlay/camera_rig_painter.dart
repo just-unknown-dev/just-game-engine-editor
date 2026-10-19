@@ -60,7 +60,7 @@ abstract final class CameraRigPainter {
 
   /// What [entity]'s camera shows: from the brain when it has run, else from
   /// where the entity sits.
-  static jge.CameraState stateOf(jge.Entity entity, jge.CameraBrain? brain) {
+  static jge.CameraState _stateOf(jge.Entity entity, jge.CameraBrain? brain) {
     final vcam = entity.getComponent<jge.VirtualCameraComponent>()!;
     return brain?.stateOf(entity) ??
         jge.CameraState(position: _at(entity), zoom: vcam.zoom);
@@ -87,7 +87,7 @@ abstract final class CameraRigPainter {
     final vcam = entity.getComponent<jge.VirtualCameraComponent>()!;
     final isLive = brain?.liveCamera?.id == entity.id;
     final isSolo = brain?.soloEntity == entity.id;
-    final frame = frameOf(stateOf(entity, brain), draw.size);
+    final frame = frameOf(_stateOf(entity, brain), draw.size);
     final name = entity.name ?? 'camera';
 
     if (isLive) {

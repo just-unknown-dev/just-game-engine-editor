@@ -47,6 +47,12 @@ class _PropertyTableEditorState extends State<PropertyTableEditor> {
   void _add() {
     final name = _newName.text.trim();
     if (name.isEmpty) return;
+    // Adding one that is there would quietly put its value (and type) back
+    // to a new one's: it is changed in its own row instead.
+    if (widget.properties.typeOf(name) != null) {
+      widget.onInvalid?.call('"$name" is already a property: change it above');
+      return;
+    }
     widget.onSet(name, defaultOf(_newType), _newType);
     _newName.clear();
   }
@@ -66,13 +72,23 @@ class _PropertyTableEditorState extends State<PropertyTableEditor> {
     TilePropertyType.string || TilePropertyType.file => text,
     TilePropertyType.int ||
     TilePropertyType.object => int.tryParse(text.trim()),
-    TilePropertyType.color => int.tryParse(
-      text.trim().replaceFirst('#', ''),
-      radix: 16,
-    ),
-    TilePropertyType.float => double.tryParse(text.trim()),
+    TilePropertyType.color => _argb(text),
+    TilePropertyType.float => switch (double.tryParse(text.trim())) {
+      // `NaN` and `Infinity` read as numbers, but no file can hold them.
+      final v? when v.isFinite => v,
+      _ => null,
+    },
     TilePropertyType.bool => text.trim() == 'true',
   };
+
+  /// `#AARRGGBB`, or `#RRGGBB` for an opaque colour (the `#` optional).
+  static int? _argb(String text) {
+    final hex = text.trim().replaceFirst('#', '');
+    if (hex.length != 6 && hex.length != 8) return null;
+    final n = int.tryParse(hex, radix: 16);
+    if (n == null) return null;
+    return hex.length == 6 ? 0xFF000000 | n : n;
+  }
 
   static String _show(TilePropertyType type, Object? value) => switch (type) {
     TilePropertyType.color when value is int =>
@@ -88,6 +104,9 @@ class _PropertyTableEditorState extends State<PropertyTableEditor> {
       children: [
         for (final name in props.names.toList())
           _Row(
+            // Its own state (a half-typed value) stays with its name when
+            // a row above it goes.
+            key: ValueKey(name),
             label: name,
             labelWidth: widget.labelWidth,
             trailing: IconButton(
@@ -184,6 +203,7 @@ class _PropertyTableEditorState extends State<PropertyTableEditor> {
 
 class _Row extends StatelessWidget {
   const _Row({
+    super.key,
     required this.label,
     required this.child,
     required this.labelWidth,

@@ -3,9 +3,11 @@
 /// without changing the scene.
 library;
 
-import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' show Offset;
 
+import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
+import 'package:just_editor_core/io.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import 'package:just_editor_core/host.dart';
@@ -71,21 +73,54 @@ class _FieldEdit {
   final Object? was;
 }
 
+// A copied item: where it came from, what kind of track can take it, its
+// time after the first copied item, and the item itself.
+class _Copied {
+  const _Copied(this.track, this.signature, this.kind, this.offset, this.item);
+
+  /// The index of the track it came from, when it was copied.
+  final int track;
+
+  /// Which track that was, to find it again after tracks came and went.
+  final String signature;
+
+  /// What can take it: a key of a colour, a number, a flag or a name; an
+  /// event; a block of one kind of block track.
+  final String kind;
+
+  final double offset;
+  final Object item;
+}
+
+// The scene's value of a field before and after a step of the editor's
+// history made while a preview showed.
+typedef _Authored = (Object? before, Object? after);
+
 class TimelineSession {
   TimelineSession(this.scope, {String? root})
     : root = (root ?? Directory.current.path).replaceAll('\\', '/') {
     scope.authoredStateGuards.add(endPreview);
     scope.authoredStateHeld.add(_previewing);
+    _noteHistory();
+    _stopHistory = scope.history.revision.watch(_onHistory);
   }
 
   bool _previewing() => isPreviewing;
 
-  static final Expando<TimelineSession> _sessions = Expando('timelineSession');
-
   /// The one session of [scope]: the dock, the inspector's key buttons and
   /// the viewport's motion paths all look at the same timeline.
-  static TimelineSession of(EditorScope scope) =>
-      _sessions[scope] ??= TimelineSession(scope);
+  ///
+  /// Kept in the scope's container, so it is disposed with the scope.
+  static TimelineSession of(EditorScope scope) {
+    final container = scope.container;
+    if (!container.isRegistered<TimelineSession>()) {
+      container.registerLazySingleton<TimelineSession>(
+        () => TimelineSession(scope),
+        dispose: (session) => session.dispose(),
+      );
+    }
+    return container.get<TimelineSession>();
+  }
 
   final EditorScope scope;
 
@@ -97,6 +132,33 @@ class TimelineSession {
   bool Function() isAuthoring = () => true;
 
   static const String newTimelineFolder = 'assets/timelines';
+
+  // ── Who is looking ───────────────────────────────────────────────────────
+
+  int _views = 0;
+
+  /// Whether a Timeline dock shows this session. The inspector's key
+  /// buttons, the motion paths and the timeline commands only work while
+  /// one does: an edit made with nobody looking would land in a timeline
+  /// nobody can see.
+  bool get isShown => _views > 0;
+
+  /// A Timeline dock shows the session from now on.
+  void attachView() => _views++;
+
+  /// A Timeline dock showing the session went away. With none left,
+  /// recording stops, the preview ends — the world is the scene again — and
+  /// a file's changes are written. False when that write failed: the
+  /// changes are still here, and the next dock to open shows them and why.
+  Future<bool> detachView() async {
+    if (_views > 0) _views--;
+    if (_views > 0) return true;
+    record.value = false;
+    pause();
+    endPreview();
+    if (isDirty.value && _path != null) return save();
+    return true;
+  }
 
   // ── What is open ─────────────────────────────────────────────────────────
 
@@ -112,6 +174,19 @@ class TimelineSession {
   Entity? get owner => _owner;
   Entity? _owner;
 
+  // Whether what is shown is what the owner's player plays — its inline
+  // timeline or its file — rather than a file opened with the owner only
+  // lending "self" to the preview.
+  bool _followsPlayer = false;
+
+  // The file last asked for, so one that would not open is not read again
+  // and again.
+  String? _requested;
+
+  // Bumped by every open and close: one that finishes after a later one
+  // began leaves the later one's timeline showing.
+  int _opening = 0;
+
   bool get isInline => asset.value != null && _path == null;
 
   /// A file with changes not yet written.
@@ -120,6 +195,8 @@ class TimelineSession {
   /// Bumped on anything a view draws that is not a signal of its own.
   final Signal<int> revision = Signal(0, debugLabel: 'timelineRevision');
 
+  /// What the author should know: why a file did not open or save, why an
+  /// edit was refused. Cleared when another timeline is shown.
   final Signal<String?> message = Signal(null, debugLabel: 'timelineMessage');
 
   /// Bumped when a *different* timeline is opened — not when this one is
@@ -151,6 +228,9 @@ class TimelineSession {
 
   static const double minZoom = 8, maxZoom = 2400;
 
+  /// The most frames a second a timeline can be set to.
+  static const int maxFps = 240;
+
   final List<_Step> _undo = [];
   final List<_Step> _redo = [];
 
@@ -163,32 +243,56 @@ class TimelineSession {
   // ── Opening ──────────────────────────────────────────────────────────────
 
   /// Shows what [entity] plays: its timeline file, else its inline timeline,
-  /// else nothing. A dirty file is saved on the way out.
+  /// else nothing. A dirty file is saved on the way out; when that save
+  /// fails, the file stays open with its changes, saying why.
+  ///
+  /// An entity that plays nothing but that one of the open timeline's
+  /// tracks moves leaves the timeline open: that is how it is keyed.
   Future<void> follow(Entity? entity) async {
     final player = entity?.getComponent<TimelinePlayerComponent>();
     if (player == null) {
       // A file opened by itself stays open while nothing else is chosen.
-      if (_owner != null || asset.value == null) await close();
+      if (asset.value != null && (_owner == null || _bindsTrack(entity))) {
+        return;
+      }
+      await close();
       return;
     }
     final file = player.timelinePath.trim();
     if (identical(entity, _owner) &&
-        (file.isEmpty ? isInline : file == _path)) {
+        (file.isEmpty
+            ? isInline && identical(player.inline, asset.value)
+            : file == _path)) {
       return;
     }
     if (file.isNotEmpty) {
       await openFile(file, owner: entity);
     } else {
-      await _leave();
+      final ticket = ++_opening;
+      if (!await _leave() || ticket != _opening) return;
       _show(player.inline, path: null, owner: entity);
     }
   }
 
+  // Whether [entity] is someone a track of the open timeline moves.
+  bool _bindsTrack(Entity? entity) {
+    if (entity == null) return false;
+    for (final track in asset.value?.tracks ?? const <TimelineTrack>[]) {
+      if (track.binding.isSelf) continue;
+      if (identical(_resolve(track.binding), entity)) return true;
+    }
+    return false;
+  }
+
   /// Opens the project's [file]. With [owner], "self" tracks preview on it.
+  /// False when it did not open — or when what was open could not be saved
+  /// first, and so stays open.
   Future<bool> openFile(String file, {Entity? owner}) async {
-    await _leave();
+    final ticket = ++_opening;
+    if (!await _leave() || ticket != _opening) return false;
     try {
       final source = await PackageAssetPaths.of(root).file(file).readAsString();
+      if (ticket != _opening) return false;
       _show(
         TimelineAsset.parse(
           source,
@@ -200,29 +304,72 @@ class TimelineSession {
       );
       return true;
     } catch (e) {
+      if (ticket != _opening) return false;
       _show(null, path: null, owner: owner);
+      _requested = file;
       message.value = 'Could not open $file: $e';
       return false;
     }
   }
 
-  Future<void> close() async {
-    await _leave();
+  /// Closes the timeline. False when its file had changes that could not
+  /// be written: it stays open, saying why.
+  Future<bool> close() async {
+    final ticket = ++_opening;
+    if (!await _leave() || ticket != _opening) return false;
     _show(null, path: null, owner: null);
+    return true;
   }
 
-  Future<void> _leave() async {
+  /// Shows again what the owner's player plays, when the scene changed
+  /// under the open timeline with the selection where it was: an editor
+  /// undo of "Extract" or of "Add a Timeline Player", a play-test's Stop
+  /// putting the scene back as it was.
+  Future<void> resync() async {
+    final owner = _owner;
+    if (owner == null || !_followsPlayer || !isAuthoring()) return;
+    final player = owner.isAlive
+        ? owner.getComponent<TimelinePlayerComponent>()
+        : null;
+    if (player == null) {
+      await close();
+      return;
+    }
+    final file = player.timelinePath.trim();
+    if (file.isNotEmpty) {
+      if (file != _path && file != _requested) {
+        await openFile(file, owner: owner);
+      }
+      return;
+    }
+    if (_path == null && identical(player.inline, asset.value)) return;
+    final ticket = ++_opening;
+    if (!await _leave() || ticket != _opening) return;
+    _show(player.inline, path: null, owner: owner);
+  }
+
+  // The look at the open timeline ends: the preview, playing, and a file's
+  // changes written. False when that write failed: the file and its
+  // changes stay open, and nothing else should be shown over them.
+  Future<bool> _leave() async {
     endPreview();
     isPlaying.value = false;
-    if (isDirty.value && _path != null) await save();
+    if (isDirty.value && _path != null) return save();
+    return true;
   }
 
   void _show(TimelineAsset? next, {required String? path, Entity? owner}) {
     _path = path;
     _owner = owner;
+    _requested = path;
+    final player = owner?.getComponent<TimelinePlayerComponent>();
+    _followsPlayer =
+        player != null && (path == null || player.timelinePath.trim() == path);
     _undo.clear();
     _redo.clear();
+    _lastRecord = null;
     isDirty.value = false;
+    message.value = null;
     selection.value = const {};
     selectedTrack.value = null;
     playhead.value = 0;
@@ -236,28 +383,79 @@ class TimelineSession {
   }
 
   /// Gives [entity] a Timeline Player (if it has none) holding an empty
-  /// inline timeline, and opens it.
+  /// inline timeline, and opens it — one step of the editor's undo.
   void createInlineFor(Entity entity) {
+    if (!isAuthoring()) {
+      message.value =
+          'A timeline in an entity is part of the scene: stop the '
+          'play-test to make one.';
+      return;
+    }
+    final file = _path;
+    if (isDirty.value && file != null) {
+      message.value = 'Save $file first: it has changes not written yet.';
+      return;
+    }
+    endPreview();
+    isPlaying.value = false;
+    final fresh = TimelineAsset(duration: 2);
     var player = entity.getComponent<TimelinePlayerComponent>();
     if (player == null) {
-      player = TimelinePlayerComponent();
-      entity.addComponent(player);
+      player = TimelinePlayerComponent(inline: fresh);
+      scope.history.push(
+        AddComponentCommand(
+          entity: entity,
+          component: player,
+          sceneState: scope.sceneState,
+        ),
+      );
+    } else {
+      final edit = ComponentEdit.begin(scope, player);
+      player
+        ..timelinePath = ''
+        ..inline = fresh;
+      edit.commit('Create a timeline');
     }
-    player
-      ..timelinePath = ''
-      ..inline = TimelineAsset(duration: 2);
-    scope.sceneState
-      ..markDirty()
-      ..refresh();
     _show(player.inline, path: null, owner: entity);
   }
 
   // ── Editing ──────────────────────────────────────────────────────────────
 
+  /// Why the open timeline cannot be changed now; null when it can.
+  String? get _lockedBecause {
+    final file = _path;
+    if (file != null && !ProjectFiles.isContained(file)) {
+      return '$file is outside the project, so the editor does not write '
+          'it: copy it into the project to change it.';
+    }
+    if (file != null && !PackageAssetPaths.of(root).isWritable(file)) {
+      return '$file is in pub\'s shared cache, which is read-only: copy it '
+          'into the project to change it.';
+    }
+    if (file == null && !isAuthoring()) {
+      return 'This timeline is part of the scene: stop the play-test to '
+          'change it.';
+    }
+    return null;
+  }
+
+  /// Whether the open timeline can be changed now: it is not a file in
+  /// pub's shared cache, nor a timeline inside the scene during a
+  /// play-test.
+  bool get canEdit => asset.value != null && _lockedBecause == null;
+
+  // Whether an edit may go ahead; says why not when it may not.
+  bool _mayEdit() {
+    final why = _lockedBecause;
+    if (why == null) return true;
+    message.value = why;
+    return false;
+  }
+
   /// Replaces the timeline with [next], undoably.
   void apply(String label, TimelineAsset next) {
     final current = asset.value;
-    if (current == null) return;
+    if (current == null || !_mayEdit()) return;
     _lastRecord = null;
     _undo.add(_Step(label, current));
     if (_undo.length > 200) _undo.removeAt(0);
@@ -267,7 +465,7 @@ class TimelineSession {
 
   void undo() {
     final current = asset.value;
-    if (current == null || _undo.isEmpty) return;
+    if (current == null || _undo.isEmpty || !_mayEdit()) return;
     final step = _undo.removeLast();
     _lastRecord = null;
     _redo.add(_Step(step.label, current));
@@ -277,7 +475,7 @@ class TimelineSession {
 
   void redo() {
     final current = asset.value;
-    if (current == null || _redo.isEmpty) return;
+    if (current == null || _redo.isEmpty || !_mayEdit()) return;
     final step = _redo.removeLast();
     _undo.add(_Step(step.label, current));
     selection.value = const {};
@@ -288,7 +486,7 @@ class TimelineSession {
     // The preview was built from the old timeline; put the world back before
     // building one from the new, so relative tracks start from the truth.
     final wasPreviewing = _playback != null;
-    endPreview();
+    if (wasPreviewing) _quietly(_endPreview);
     asset.value = next;
     if (_path == null) {
       // An inline timeline lives in the scene: the scene is what changed.
@@ -303,7 +501,8 @@ class TimelineSession {
     if (playhead.value > next.duration) playhead.value = next.duration;
     revision.value++;
     if (wasPreviewing) {
-      scrubTo(playhead.value);
+      _quietly(() => scrubTo(playhead.value));
+      if (_playback == null) _destroyScratch();
     } else {
       // The viewport draws the timeline's motion paths.
       scope.sceneState.refresh();
@@ -311,47 +510,133 @@ class TimelineSession {
   }
 
   /// Writes a file timeline to disk. An inline one is saved with the scene.
-  Future<bool> save() async {
+  ///
+  /// Saves follow one another, so two quick ones never write at once. A
+  /// file outside the project, or in pub's shared cache, is not written. A
+  /// failure is said in [message] and in the log; the changes stay.
+  Future<bool> save() {
     final current = asset.value, file = _path;
-    if (current == null || file == null) return false;
-    try {
-      final target = PackageAssetPaths.of(root).file(file);
-      await target.parent.create(recursive: true);
-      await target.writeAsString('${current.encode()}\n');
-      isDirty.value = false;
-      onSaved?.call(file);
-      return true;
-    } catch (e) {
-      message.value = 'Could not save $file: $e';
+    if (current == null || file == null) return Future.value(false);
+    final previous = _saving;
+    final write = () async {
+      if (previous != null) await previous;
+      return _write(current, file);
+    }();
+    _saving = write;
+    return write;
+  }
+
+  Future<bool>? _saving;
+
+  Future<bool> _write(TimelineAsset current, String file) async {
+    final paths = PackageAssetPaths.of(root);
+    if (!ProjectFiles.isContained(file)) {
+      _saveFailed(file, 'it is not inside the project');
       return false;
     }
+    if (!paths.isWritable(file)) {
+      _saveFailed(file, 'it is in pub\'s shared cache, which is read-only');
+      return false;
+    }
+    try {
+      await ProjectFiles.writeString(
+        paths.absolute(file),
+        '${current.encode()}\n',
+      );
+    } catch (e) {
+      _saveFailed(file, '$e');
+      return false;
+    }
+    // Still the timeline written, unchanged since: nothing left to write.
+    if (_path == file && identical(asset.value, current)) {
+      isDirty.value = false;
+    }
+    onSaved?.call(file);
+    return true;
+  }
+
+  void _saveFailed(String file, String why) {
+    final text = 'Could not save $file: $why. Its changes are still open.';
+    message.value = text;
+    scope.log.log(
+      text,
+      source: 'editor',
+      category: 'timeline',
+      level: DebuggerLogLevel.warning,
+    );
   }
 
   /// Told the file that was written, so running players can reload it.
   void Function(String path)? onSaved;
 
+  static String _safeName(String name) =>
+      name.trim().replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), '_');
+
+  static String? _timelineFileFor(String name) {
+    final safe = _safeName(name);
+    return safe.isEmpty
+        ? null
+        : '$newTimelineFolder/$safe.${TimelineAsset.fileExtension}';
+  }
+
+  /// Whether a timeline file called [name] — as [extractToAsset] would name
+  /// it — is in the project already.
+  bool isTimelineNameTaken(String name) {
+    final file = _timelineFileFor(name);
+    return file != null && PackageAssetPaths.of(root).file(file).existsSync();
+  }
+
+  /// [base] as a timeline name no file in the project has yet: itself, or
+  /// with `_2`, `_3`… after it.
+  String freeTimelineName(String base) {
+    final safe = _safeName(base);
+    final stem = safe.isEmpty || safe == '_' ? 'timeline' : safe;
+    if (!isTimelineNameTaken(stem)) return stem;
+    for (var i = 2; ; i++) {
+      if (!isTimelineNameTaken('${stem}_$i')) return '${stem}_$i';
+    }
+  }
+
   /// Moves an inline timeline into a file of its own, which the player then
-  /// names — so other entities can play it too.
+  /// names — so other entities can play it too. The player's change is one
+  /// step of the editor's undo.
+  ///
+  /// Never over a file that is there already: whoever plays that one would
+  /// play this from then on, and its keys would be gone. False then, saying
+  /// so in [message].
   Future<bool> extractToAsset(String name) async {
     final current = asset.value, entity = _owner;
     final player = entity?.getComponent<TimelinePlayerComponent>();
     if (current == null || player == null || !isInline) return false;
-    final safe = name.trim().replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), '_');
-    if (safe.isEmpty) return false;
-    final file = '$newTimelineFolder/$safe.${TimelineAsset.fileExtension}';
-    endPreview();
-    _path = file;
-    asset.value = current.copyWith(name: safe);
-    if (!await save()) {
-      _path = null;
+    if (!_mayEdit()) return false;
+    final file = _timelineFileFor(name);
+    if (file == null) return false;
+    if (await PackageAssetPaths.of(root).file(file).exists()) {
+      message.value =
+          '$file is there already: pick another name. Nothing was written.';
       return false;
     }
+    // Something else was opened while the disk was asked.
+    if (!identical(asset.value, current) || !identical(_owner, entity)) {
+      return false;
+    }
+    endPreview();
+    _path = file;
+    final named = current.copyWith(name: _safeName(name));
+    asset.value = named;
+    if (!await save()) {
+      if (identical(asset.value, named)) {
+        _path = null;
+        asset.value = current;
+      }
+      return false;
+    }
+    final edit = ComponentEdit.begin(scope, player);
     player
       ..timelinePath = file
       ..inline = null;
-    scope.sceneState
-      ..markDirty()
-      ..refresh();
+    edit.commit('Extract the timeline');
+    _followsPlayer = true;
     revision.value++;
     return true;
   }
@@ -360,7 +645,7 @@ class TimelineSession {
 
   void addTrack(TimelineTrack track) {
     final current = asset.value;
-    if (current == null) return;
+    if (current == null || !_mayEdit()) return;
     apply('Add track', current.copyWith(tracks: [...current.tracks, track]));
     selectedTrack.value = current.tracks.length;
   }
@@ -368,6 +653,7 @@ class TimelineSession {
   void removeTrack(int index) {
     final current = asset.value;
     if (current == null || index < 0 || index >= current.tracks.length) return;
+    if (!_mayEdit()) return;
     selection.value = const {};
     selectedTrack.value = null;
     apply(
@@ -486,7 +772,7 @@ class TimelineSession {
   /// Adds a key at [time] (or replaces the one there). Returns where it is.
   TimelineItemRef? setKey(int trackIndex, double time, {Object? value}) {
     final current = asset.value;
-    if (current == null) return null;
+    if (current == null || !_mayEdit()) return null;
     final track = current.tracks[trackIndex];
     if (track is! PropertyTrack || track.locked) return null;
     final at = snapTime(time);
@@ -503,12 +789,16 @@ class TimelineSession {
     return TimelineItemRef(trackIndex, index);
   }
 
-  /// Replaces the key at [ref].
+  /// Replaces the key at [ref]. A key moved onto another's time takes its
+  /// place: a track never holds two keys at one time.
   void updateKey(TimelineItemRef ref, TimelineKey key, {String label = 'Key'}) {
     final current = asset.value;
     final track = current?.tracks[ref.track];
     if (current == null || track is! PropertyTrack || track.locked) return;
-    final keys = List.of(track.curve.keys)..[ref.index] = key;
+    final keys = [
+      for (final (i, k) in track.curve.keys.indexed)
+        if (i == ref.index) key else if ((k.time - key.time).abs() >= 1e-6) k,
+    ];
     apply(
       label,
       current.withTrackAt(
@@ -522,6 +812,7 @@ class TimelineSession {
     final current = asset.value;
     final track = current?.tracks[trackIndex];
     if (current == null || track is! EventTrack || track.locked) return null;
+    if (!_mayEdit()) return null;
     final at = snapTime(time);
     final next = track.copyWith(
       events: [
@@ -541,6 +832,7 @@ class TimelineSession {
     final current = asset.value;
     final track = current?.tracks[ref.track];
     if (current == null || track is! EventTrack || track.locked) return;
+    if (!_mayEdit()) return;
     final next = track.copyWith(
       events: List.of(track.events)..[ref.index] = event,
     );
@@ -554,6 +846,7 @@ class TimelineSession {
     final current = asset.value;
     final track = current?.tracks[ref.track];
     if (current == null || track is! BlockTrack || track.locked) return;
+    if (!_mayEdit()) return;
     final next = track.rebuild(
       blocks: List.of(track.blocks)..[ref.index] = _fitted(block, current),
     );
@@ -576,6 +869,10 @@ class TimelineSession {
 
   /// A frame of dragging one edge of the block at [ref] in [start] to
   /// [time]: the other edge stays put. See [dragItems].
+  ///
+  /// A block that sits at or past the timeline's end (the end was dragged
+  /// in over it), or is shorter than a frame (the frame rate went down),
+  /// is trimmed as far as it can be rather than refused.
   TimelineItemRef dragTrim(
     TimelineAsset start,
     TimelineItemRef ref,
@@ -587,16 +884,17 @@ class TimelineSession {
     final block = track.blocks[ref.index];
     final least = start.fps > 0 ? 1 / start.fps : 0.01;
     final at = snapTime(time);
-    final trimmed = leadingEdge
-        ? block.copyWith(
-            start: at.clamp(0.0, block.end - least).toDouble(),
-            length: block.end - at.clamp(0.0, block.end - least),
-          )
-        : block.copyWith(
-            length: (at - block.start)
-                .clamp(least, start.duration - block.start)
-                .toDouble(),
-          );
+    final TimelineBlock trimmed;
+    if (leadingEdge) {
+      final from = at.clamp(0.0, math.max(0.0, block.end - least)).toDouble();
+      trimmed = block.copyWith(start: from, length: block.end - from);
+    } else {
+      final room = start.duration - block.start;
+      final most = room >= least ? room : math.max(least, block.length);
+      trimmed = block.copyWith(
+        length: (at - block.start).clamp(least, most).toDouble(),
+      );
+    }
     final next = track.rebuild(
       blocks: List.of(track.blocks)..[ref.index] = trimmed,
     );
@@ -610,6 +908,7 @@ class TimelineSession {
     final current = asset.value;
     final track = current?.tracks[trackIndex];
     if (current == null || track is! BlockTrack || track.locked) return null;
+    if (!_mayEdit()) return null;
     final at = snapTime(time);
     final block = track.defaultBlock.copyWith(start: at);
     final next = track.rebuild(blocks: [...track.blocks, block]);
@@ -620,7 +919,7 @@ class TimelineSession {
   /// Removes [refs] (on tracks that are not locked).
   void removeItems(Set<TimelineItemRef> refs) {
     final current = asset.value;
-    if (current == null || refs.isEmpty) return;
+    if (current == null || refs.isEmpty || !_mayEdit()) return;
     final tracks = List.of(current.tracks);
     for (var t = 0; t < tracks.length; t++) {
       final gone = {
@@ -683,19 +982,23 @@ class TimelineSession {
   /// are now.
   Set<TimelineItemRef> moveItems(Set<TimelineItemRef> refs, double delta) {
     final current = asset.value;
-    if (current == null || refs.isEmpty) return refs;
+    if (current == null || refs.isEmpty || !_mayEdit()) return refs;
     final (next, moved) = _shifted(current, refs, delta);
     apply('Move', next);
     selection.value = moved;
     return moved;
   }
 
-  /// A drag of items begins. The timeline as it is now comes back: every
-  /// [dragItems] is measured from it, and the whole drag is one undo step.
-  TimelineAsset? beginDrag() {
+  /// A drag begins. The timeline as it is now comes back: every frame of
+  /// the drag ([dragItems], [dragKeys], [dragMarker]…) is measured from it,
+  /// and the whole drag is one undo step called [label]. Null when the
+  /// timeline cannot be changed now.
+  TimelineAsset? beginDrag({String label = 'Move'}) {
     final current = asset.value;
-    if (current == null) return null;
-    _undo.add(_Step('Move', current));
+    if (current == null || !_mayEdit()) return null;
+    _lastRecord = null;
+    _undo.add(_Step(label, current));
+    if (_undo.length > 200) _undo.removeAt(0);
     _redo.clear();
     return current;
   }
@@ -861,6 +1164,7 @@ class TimelineSession {
     final current = asset.value;
     final span = current == null ? null : _span(current, refs);
     if (current == null || span == null || factor <= 0) return refs;
+    if (!_mayEdit()) return refs;
     final (next, moved) = _scaled(current, refs, factor, span.$1);
     apply('Scale', next);
     selection.value = moved;
@@ -881,11 +1185,55 @@ class TimelineSession {
     return moved;
   }
 
-  // What was copied: for each item its track (to go back where it came
-  // from), its time after the first copied item, and the item itself.
-  final List<(int track, double offset, Object item)> _clipboard = [];
+  // What was copied, oldest first.
+  final List<_Copied> _clipboard = [];
 
   bool get canPaste => _clipboard.isNotEmpty;
+
+  // Which track [track] is, by what it is rather than where it is in the
+  // list: its kind, who it acts on and, for a field, which field.
+  static String _signatureOf(TimelineTrack track) =>
+      '${track.runtimeType}|${track.binding.kind.name}:${track.binding.value}|'
+      '${track is PropertyTrack ? track.path : ''}';
+
+  // What kind of item [track] takes: a key of a colour, a number, a flag or
+  // a name; an event; a block of its own kind.
+  String _kindOfTrack(TimelineTrack track) => switch (track) {
+    PropertyTrack t => 'key:${_valueKindOf(t)}',
+    EventTrack _ => 'event',
+    BlockTrack _ => 'block:${track.runtimeType}',
+    _ => 'other:${track.runtimeType}',
+  };
+
+  String _valueKindOf(PropertyTrack track) {
+    if (track.isColor) return 'color';
+    if (track.curve.keys.isNotEmpty) {
+      return switch (track.curve.keys.first.value) {
+        num _ => 'number',
+        bool _ => 'bool',
+        _ => 'text',
+      };
+    }
+    // An empty track: what its field holds.
+    final field = scope.definitions
+        .definitionByType(track.component)
+        ?.field(track.field);
+    final kind = field?.kind;
+    if (kind == null) return 'number';
+    if (kind.id == 'color') return 'color';
+    if (kind.id == 'boolean') return 'bool';
+    if (kind is EnumFieldType ||
+        const {
+          'text',
+          'assetRef',
+          'entityRef',
+          'enumeration',
+          'enum',
+        }.contains(kind.id)) {
+      return 'text';
+    }
+    return 'number';
+  }
 
   /// Copies the selection.
   void copy() {
@@ -903,40 +1251,59 @@ class TimelineSession {
       };
       final time = _timeIn(current, r);
       if (item != null && time != null) {
-        _clipboard.add((r.track, time - span.$1, item));
+        _clipboard.add(
+          _Copied(
+            r.track,
+            _signatureOf(track),
+            _kindOfTrack(track),
+            time - span.$1,
+            item,
+          ),
+        );
       }
     }
   }
 
   /// Pastes at [time] (the playhead by default). What was copied from one
   /// track goes to the selected track when it holds the same kind of thing —
-  /// that is how keys get from one field, or one entity, to another;
-  /// otherwise everything goes back to the track it came from.
+  /// a number's keys onto a number, a colour's onto a colour; that is how
+  /// keys get from one field, or one entity, to another. Otherwise each
+  /// item goes back to the track it came from, found by what that track is
+  /// (in this timeline or another); an item with nowhere to go is left out.
   Set<TimelineItemRef> paste({double? time}) {
     final current = asset.value;
-    if (current == null || _clipboard.isEmpty) return const {};
+    if (current == null || _clipboard.isEmpty || !_mayEdit()) return const {};
     final at = snapTime(time ?? playhead.value);
-    final sources = {for (final c in _clipboard) c.$1};
+    final sources = {for (final c in _clipboard) c.signature};
     final target = selectedTrack.value;
-    int trackFor(int source) {
+    int? trackFor(_Copied copied) {
       if (sources.length == 1 &&
           target != null &&
+          target >= 0 &&
           target < current.tracks.length &&
-          _sameKind(current.tracks[target], _clipboard.first.$3)) {
+          _kindOfTrack(current.tracks[target]) == copied.kind) {
         return target;
       }
-      return source;
+      if (copied.track < current.tracks.length &&
+          _signatureOf(current.tracks[copied.track]) == copied.signature) {
+        return copied.track;
+      }
+      final found = current.tracks.indexWhere(
+        (t) => _signatureOf(t) == copied.signature,
+      );
+      return found < 0 ? null : found;
     }
 
     final tracks = List.of(current.tracks);
     final pasted = <(int, double)>[];
-    for (final (source, offset, item) in _clipboard) {
-      final t = trackFor(source);
-      if (t >= tracks.length || tracks[t].locked) continue;
-      if (!_sameKind(tracks[t], item)) continue;
-      final to = at + offset;
+    for (final copied in _clipboard) {
+      final t = trackFor(copied);
+      if (t == null || tracks[t].locked) continue;
+      if (_kindOfTrack(tracks[t]) != copied.kind) continue;
+      final to = at + copied.offset;
       if (to > current.duration + 1e-9) continue;
       final track = tracks[t];
+      final item = copied.item;
       if (track is PropertyTrack && item is TimelineKey) {
         tracks[t] = track.copyWith(
           curve: track.curve.withKey(item.copyWith(time: to)),
@@ -955,6 +1322,8 @@ class TimelineSession {
             item.copyWith(start: to),
           ],
         );
+      } else {
+        continue;
       }
       pasted.add((t, to));
     }
@@ -968,11 +1337,6 @@ class TimelineSession {
     selection.value = refs;
     return refs;
   }
-
-  static bool _sameKind(TimelineTrack track, Object item) =>
-      track is PropertyTrack && item is TimelineKey ||
-      track is EventTrack && item is TimelineEvent ||
-      track is BlockTrack && item is TimelineBlock;
 
   /// Copies the selection to just after itself.
   Set<TimelineItemRef> duplicate() {
@@ -993,7 +1357,7 @@ class TimelineSession {
   /// to close the gap.
   void rippleDelete(Set<TimelineItemRef> refs) {
     final current = asset.value;
-    if (current == null || refs.isEmpty) return;
+    if (current == null || refs.isEmpty || !_mayEdit()) return;
     final tracks = List.of(current.tracks);
     for (var t = 0; t < tracks.length; t++) {
       final gone = {
@@ -1062,21 +1426,40 @@ class TimelineSession {
   void updateMarker(int index, {double? time, String? name}) {
     final current = asset.value;
     if (current == null) return;
-    final m = current.markers[index];
-    apply(
-      'Marker',
-      current.copyWith(
-        markers: [
-          for (var i = 0; i < current.markers.length; i++)
-            if (i == index)
-              TimelineMarker(
-                time: time == null ? m.time : snapTime(time),
-                name: name ?? m.name,
-              )
-            else
-              current.markers[i],
-        ],
-      ),
+    apply('Marker', _withMarker(current, index, time: time, name: name));
+  }
+
+  TimelineAsset _withMarker(
+    TimelineAsset base,
+    int index, {
+    double? time,
+    String? name,
+  }) {
+    final m = base.markers[index];
+    return base.copyWith(
+      markers: [
+        for (var i = 0; i < base.markers.length; i++)
+          if (i == index)
+            TimelineMarker(
+              time: time == null ? m.time : snapTime(time),
+              name: name ?? m.name,
+            )
+          else
+            base.markers[i],
+      ],
+    );
+  }
+
+  /// A frame of dragging marker [index] of [start] to [time]; the drag
+  /// begins with [beginDrag] and ends with [endDrag], one undo step. Returns
+  /// where the marker is now: markers sort by time. -1 when it is gone.
+  int dragMarker(TimelineAsset start, int index, double time) {
+    if (index < 0 || index >= start.markers.length) return -1;
+    final name = start.markers[index].name;
+    final at = snapTime(time);
+    _set(_withMarker(start, index, time: at));
+    return asset.value!.markers.indexWhere(
+      (m) => m.name == name && (m.time - at).abs() < 1e-9,
     );
   }
 
@@ -1102,25 +1485,61 @@ class TimelineSession {
     return setPlayRange(range.$1, range.$2);
   }
 
-  /// Sets what the entity's player runs, in seconds. Zero for [to] plays to
-  /// the end; the two are sorted, so dragging one edge past the other is not
-  /// an error.
+  /// Sets what the entity's player runs, in seconds, as one step of the
+  /// editor's undo. Zero for [to] plays to the end; the two are sorted, so
+  /// dragging one edge past the other is not an error.
   bool setPlayRange(double from, double to) {
     final target = player;
-    if (target == null) return false;
-    final end = to <= 0 ? duration : to;
-    final lo = (from < end ? from : end).clamp(0.0, duration).toDouble();
-    final hi = (from < end ? end : from).clamp(0.0, duration).toDouble();
+    if (target == null || !isAuthoring()) return false;
+    final edit = ComponentEdit.begin(scope, target);
+    _writePlayRange(target, from, to <= 0 ? duration : to);
+    edit.commit('Play range');
+    revision.value++;
+    return true;
+  }
+
+  void _writePlayRange(TimelinePlayerComponent target, double a, double b) {
+    final lo = math.min(a, b).clamp(0.0, duration).toDouble();
+    final hi = math.max(a, b).clamp(0.0, duration).toDouble();
     // A range that is the whole thing is no range at all.
     final whole = lo <= 0 && hi >= duration - 1e-6;
     target
       ..from = whole ? 0 : lo
       ..to = whole ? 0 : hi;
-    scope.sceneState
-      ..markDirty()
-      ..refresh();
+  }
+
+  /// A drag of an end of the play range begins. What comes back makes the
+  /// whole drag one step of the editor's undo: hand it to
+  /// [endPlayRangeDrag].
+  ComponentEdit? beginPlayRangeDrag() {
+    final target = player;
+    if (target == null || !isAuthoring()) return null;
+    return ComponentEdit.begin(scope, target);
+  }
+
+  /// A frame of dragging an end of the play range to [moving], the other
+  /// end staying at [fixed] — where it was when the drag began, so dragging
+  /// one past the other does not drag the other along. The range is a frame
+  /// long at the least.
+  void dragPlayRange(double moving, double fixed) {
+    final target = player;
+    if (target == null) return;
+    final frame = fps > 0 ? 1 / fps : 0.01;
+    var a = moving, b = fixed;
+    if ((a - b).abs() < frame) {
+      a = a >= b ? b + frame : b - frame;
+      if (a < 0) a = b + frame;
+      if (a > duration) a = b - frame;
+    }
+    _writePlayRange(target, a, b);
     revision.value++;
-    return true;
+  }
+
+  /// The drag that [beginPlayRangeDrag] began is over.
+  void endPlayRangeDrag(ComponentEdit? edit) {
+    if (edit == null) return;
+    edit.commit('Play range');
+    revision.value++;
   }
 
   /// What the player runs, in seconds, or null when it plays the lot.
@@ -1130,16 +1549,15 @@ class TimelineSession {
     return (target.from, target.to <= 0 ? duration : target.to);
   }
 
-  /// Back to playing the whole timeline.
+  /// Back to playing the whole timeline, as one step of the editor's undo.
   bool clearPlayRange() {
     final target = player;
-    if (target == null || !target.hasRange) return false;
+    if (target == null || !target.hasRange || !isAuthoring()) return false;
+    final edit = ComponentEdit.begin(scope, target);
     target
       ..from = 0
       ..to = 0;
-    scope.sceneState
-      ..markDirty()
-      ..refresh();
+    edit.commit('Play the whole timeline');
     revision.value++;
     return true;
   }
@@ -1171,6 +1589,7 @@ class TimelineSession {
     double dt,
     double dv,
   ) {
+    if (!dt.isFinite || !dv.isFinite) return refs;
     final (shifted, moved) = _shifted(start, refs, dt);
     final tracks = List.of(shifted.tracks);
     if (dv != 0) {
@@ -1209,6 +1628,7 @@ class TimelineSession {
     KeyTangent tangent, {
     bool breakApart = false,
   }) {
+    if (!tangent.dt.isFinite || !tangent.dv.isFinite) return;
     final track = start.tracks[ref.track];
     if (track is! PropertyTrack || track.locked) return;
     final keys = track.curve.keys;
@@ -1253,6 +1673,7 @@ class TimelineSession {
 
   void setRecording(bool on) {
     if (asset.value == null) return;
+    if (on && !_mayEdit()) return;
     record.value = on;
     // Recording compares the world with what the timeline shows, so there
     // has to be something shown.
@@ -1323,17 +1744,45 @@ class TimelineSession {
   static bool _same(Object? a, Object? b) =>
       a is num && b is num ? (a - b).abs() < 1e-6 : a == b;
 
+  // [_same], into maps and lists: two saved values that say the same.
+  static bool _sameSaved(Object? a, Object? b) {
+    if (a is Map && b is Map) {
+      if (a.length != b.length) return false;
+      for (final MapEntry(:key, :value) in a.entries) {
+        if (!b.containsKey(key) || !_sameSaved(value, b[key])) return false;
+      }
+      return true;
+    }
+    if (a is List && b is List) {
+      if (a.length != b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        if (!_sameSaved(a[i], b[i])) return false;
+      }
+      return true;
+    }
+    return _same(a, b);
+  }
+
   static Object? _channelOf(Object? saved, String channel) =>
       channel.isEmpty ? saved : (saved is Map ? saved[channel] : null);
 
   String? _lastRecord;
 
+  // Whether something other than this preview is showing a value nobody
+  // chose yet — a colour picker trying colours out.
+  bool _othersHold() =>
+      scope.authoredStateHeld.any((held) => held != _previewing && held());
+
   /// Looks for fields that are no longer what the timeline showed and keys
   /// them at the playhead. Returns how many keys it wrote. Cheap when
   /// nothing changed, so it can be called often.
+  ///
+  /// Nothing is keyed while a value is only being tried out (a colour
+  /// picker's live preview): what the author settles on is.
   int captureEdits() {
     final current = asset.value;
     if (current == null || !record.value || !isAuthoring()) return 0;
+    if (_othersHold()) return 0;
     final edits = <_FieldEdit>[];
     for (final MapEntry(key: entity, value: binding) in _watched().entries) {
       for (final (component, definition, field) in _fieldsOf(entity)) {
@@ -1390,11 +1839,13 @@ class TimelineSession {
       keyFields(entity, component, [field]);
 
   /// [keyField] for several fields of one component, as one undo step.
+  /// Nothing during a play-test: what the game did is not a key.
   bool keyFields(Entity entity, Component component, List<SchemaField> fields) {
     final current = asset.value;
     final binding = bindingFor(entity);
     final definition = scope.definitions.definitionFor(component);
     if (current == null || binding == null || definition == null) return false;
+    if (!isAuthoring() || !_mayEdit()) return false;
     final edits = <_FieldEdit>[];
     for (final field in fields) {
       if (!PropertyAccess.canAnimate(field)) continue;
@@ -1426,6 +1877,7 @@ class TimelineSession {
     List<_FieldEdit> edits, {
     required String label,
   }) {
+    if (!_mayEdit()) return;
     final at = snapTime(playhead.value);
     final tracks = List.of(current.tracks);
     for (final e in edits) {
@@ -1535,6 +1987,7 @@ class TimelineSession {
     double time,
     Offset world,
   ) {
+    if (!world.dx.isFinite || !world.dy.isFinite) return;
     final tracks = List.of(start.tracks);
     for (final (index, target, base) in [
       (path.x, world.dx, path.base.dx),
@@ -1582,6 +2035,7 @@ class TimelineSession {
   /// new end are kept, not cut: shortening a timeline by accident should
   /// cost nothing but another drag.
   void dragDuration(TimelineAsset start, double time) {
+    if (!time.isFinite) return;
     final least = fps > 0 ? 1 / fps : 0.01;
     final next = snapFrame(time);
     final length = next < least ? least : next;
@@ -1679,6 +2133,18 @@ class TimelineSession {
   // field's saved form.
   final Map<Component, Map<SchemaField, Object?>> _authored = Map.identity();
 
+  // What the preview showed in each field it wrote, after its last seek: a
+  // field that holds something else has been changed by somebody.
+  final Map<Component, Map<SchemaField, Object?>> _shown = Map.identity();
+
+  // An edit while Recording was off changed what the scene holds: the
+  // preview is built again before it next shows a moment.
+  bool _previewStale = false;
+
+  // Set while the preview is ended only to be started again at once: the
+  // scratch owner stays, and the editor's undo groups as it did.
+  bool _rebuilding = false;
+
   bool get isPreviewing => _playback != null;
 
   /// The value [field] of [component] has in the scene — not what a preview
@@ -1693,20 +2159,44 @@ class TimelineSession {
       binding.resolve(scope.world, _owner);
 
   /// Moves the playhead to [time] and shows the timeline there.
-  void scrubTo(double time) {
+  void scrubTo(double time) => _scrub(time, refresh: true);
+
+  void _scrub(double time, {required bool refresh}) {
     final current = asset.value;
-    if (current == null) return;
+    if (current == null || !time.isFinite) return;
     playhead.value = time.clamp(0.0, current.duration).toDouble();
     if (!isAuthoring()) return;
+    if (_previewStale) _restartPreview();
     final playback = _playback ??= _startPreview(current);
     playback.seek(playhead.value);
+    _afterSeek();
+    if (refresh) scope.sceneState.refresh();
+  }
+
+  // What the preview shows now is what an edit is told apart from.
+  void _afterSeek() {
+    _shown.clear();
+    for (final MapEntry(key: component, value: fields) in _authored.entries) {
+      _shown[component] = Map.identity()
+        ..addEntries([
+          for (final field in fields.keys)
+            MapEntry(field, field.encodeFrom(component)),
+        ]);
+    }
     _captureExpected();
-    scope.sceneState.refresh();
   }
 
   TimelinePlayback _startPreview(TimelineAsset current) {
-    final owner = _owner ?? scope.world.createEntity(name: '');
-    if (_owner == null) _scratchOwner = owner;
+    // What is done from here on is one step of the editor's undo of its
+    // own, not folded into one made before the preview.
+    if (!_rebuilding) scope.history.breakMerge();
+    var owner = _owner;
+    if (owner == null) {
+      final scratch = _scratchOwner;
+      owner = scratch != null && scratch.isAlive
+          ? scratch
+          : (_scratchOwner = scope.world.createEntity(name: ''));
+    }
     final player = _owner?.getComponent<TimelinePlayerComponent>();
     player?.suspended = true;
     return TimelinePlayback(
@@ -1722,7 +2212,41 @@ class TimelineSession {
     );
   }
 
+  // Runs [body] with the preview being ended and started again rather than
+  // for good; see [_rebuilding].
+  void _quietly(void Function() body) {
+    final was = _rebuilding;
+    _rebuilding = true;
+    try {
+      body();
+    } finally {
+      _rebuilding = was;
+    }
+  }
+
+  // Ends the preview and starts it again at once, over what the scene
+  // holds now: after the scene changed under it.
+  void _restartPreview() {
+    if (_playback == null) return;
+    _quietly(() {
+      _endPreview();
+      final current = asset.value;
+      if (current == null || !isAuthoring()) return;
+      _playback = _startPreview(current)..seek(playhead.value);
+      _afterSeek();
+    });
+    if (_playback == null) _destroyScratch();
+  }
+
+  // The entity "self" stands for while a file opened by itself previews.
   Entity? _scratchOwner;
+
+  void _destroyScratch() {
+    final scratch = _scratchOwner;
+    if (scratch == null) return;
+    _scratchOwner = null;
+    if (scratch.isAlive) scope.world.destroyEntity(scratch);
+  }
 
   Future<TimelineAsset> _readTimeline(String file) async => TimelineAsset.parse(
     await PackageAssetPaths.of(root).file(file).readAsString(),
@@ -1742,13 +2266,34 @@ class TimelineSession {
     isPlaying.value = true;
   }
 
-  void pause() => isPlaying.value = false;
+  void pause() {
+    if (!isPlaying.value) return;
+    isPlaying.value = false;
+    // What the panels show caught up with the last frame played.
+    scope.sceneState.refresh();
+  }
 
   /// Stops, rewinds, and puts the world back as authored.
   void stop() {
     isPlaying.value = false;
     playhead.value = 0;
     endPreview();
+  }
+
+  // How long since the panels were last told the world moved while
+  // playing: a dozen times a second is plenty for numbers to follow, and
+  // every frame rebuilds every panel that shows the scene.
+  final Stopwatch _sinceRefresh = Stopwatch();
+
+  bool _refreshDue() {
+    if (!isPlaying.value) return true;
+    if (_sinceRefresh.isRunning && _sinceRefresh.elapsedMilliseconds < 80) {
+      return false;
+    }
+    _sinceRefresh
+      ..reset()
+      ..start();
+    return true;
   }
 
   /// A frame of playing: called by whoever owns a ticker.
@@ -1770,7 +2315,7 @@ class TimelineSession {
         next %= current.duration;
       }
     }
-    scrubTo(next);
+    _scrub(next, refresh: _refreshDue());
     // Zoomed in, the playhead would otherwise run off the right edge.
     revealTime(next);
   }
@@ -1783,9 +2328,14 @@ class TimelineSession {
 
   /// Puts back every field the preview wrote, exactly as it was. After this
   /// the world is the scene as authored again.
-  void endPreview() {
+  void endPreview() => _endPreview();
+
+  void _endPreview() {
     final playback = _playback;
-    if (playback == null) return;
+    if (playback == null) {
+      if (!_rebuilding) _destroyScratch();
+      return;
+    }
     _playback = null;
     playback.dispose();
     for (final entry in _authored.entries) {
@@ -1794,21 +2344,209 @@ class TimelineSession {
       }
     }
     _authored.clear();
+    _shown.clear();
+    _previewStale = false;
     // Nothing is shown any more, so there is nothing to compare with.
     _expected.clear();
     _owner?.getComponent<TimelinePlayerComponent>()?.suspended = false;
-    final scratch = _scratchOwner;
-    if (scratch != null) {
-      _scratchOwner = null;
-      if (scratch.isAlive) scope.world.destroyEntity(scratch);
-    }
+    if (_rebuilding) return;
+    _destroyScratch();
+    // The scope is going, and its history and scene state with it.
+    if (_disposed) return;
+    // What is done from here on is the scene's own, not folded into a step
+    // made while the preview showed.
+    scope.history.breakMerge();
     scope.sceneState.refresh();
   }
 
+  // ── The editor's undo, while a preview shows ─────────────────────────────
+  //
+  // A preview writes into the scene's own fields, so a step of the editor's
+  // history made while it shows — an inspector edit, a gizmo drag — holds
+  // what the preview showed as its "before". Left alone, undoing that step
+  // once the preview has ended would put a previewed value into the scene,
+  // a value nobody authored. So each such step is remembered with what the
+  // scene really held before and after it, and its undo and redo leave
+  // those in the fields the preview showed.
+
+  final Expando<Map<Component, Map<SchemaField, _Authored>>> _tainted = Expando(
+    'timelineTainted',
+  );
+
+  void Function()? _stopHistory;
+  EditorCommand? _lastTop, _lastRedoTop;
+  int _lastRedoDepth = 0;
+
+  void _noteHistory() {
+    final undo = scope.history.undoEntries, redo = scope.history.redoEntries;
+    _lastTop = undo.isEmpty ? null : undo.last;
+    _lastRedoTop = redo.isEmpty ? null : redo.last;
+    _lastRedoDepth = redo.length;
+  }
+
+  void _onHistory() {
+    final undo = scope.history.undoEntries, redo = scope.history.redoEntries;
+    final top = undo.isEmpty ? null : undo.last;
+    final redoTop = redo.isEmpty ? null : redo.last;
+    EditorCommand? undone, redone;
+    if (redoTop != null &&
+        redo.length == _lastRedoDepth + 1 &&
+        identical(redoTop, _lastTop)) {
+      undone = redoTop;
+    } else if (top != null &&
+        redo.length == _lastRedoDepth - 1 &&
+        identical(top, _lastRedoTop)) {
+      redone = top;
+    }
+    _lastTop = top;
+    _lastRedoTop = redoTop;
+    _lastRedoDepth = redo.length;
+    if (undone != null) {
+      _replayed(undone, undo: true);
+    } else if (redone != null) {
+      _replayed(redone, undo: false);
+    } else if (top != null && redo.isEmpty && _playback != null) {
+      _madeWhilePreviewing(top);
+    }
+  }
+
+  // [step] was just done while the preview showed: what it changed of what
+  // the preview shows is remembered with the scene's values.
+  void _madeWhilePreviewing(EditorCommand step) {
+    if (_othersHold()) return;
+    final edits = <(Component, SchemaField, Object?)>[];
+    for (final MapEntry(key: component, value: fields) in _authored.entries) {
+      final shown = _shown[component];
+      if (shown == null) continue;
+      for (final field in fields.keys) {
+        if (!shown.containsKey(field)) continue;
+        final live = field.encodeFrom(component);
+        if (!_sameSaved(live, shown[field])) {
+          edits.add((component, field, live));
+        }
+      }
+    }
+    if (edits.isEmpty) return;
+    final taint = _tainted[step] ??= Map.identity();
+    for (final (component, field, live) in edits) {
+      final authored = _authored[component]!;
+      final fields = taint.putIfAbsent(component, () => Map.identity());
+      final was = authored[field];
+      final before = fields.containsKey(field) ? fields[field]!.$1 : was;
+      if (record.value) {
+        // Recording: the edit becomes a key, and the scene keeps its value.
+        fields[field] = (before, was);
+      } else {
+        // Not recording: the edit is the scene's own, kept when the
+        // preview ends.
+        final shown = _shown[component]!;
+        final now = _authoredAfterEdit(
+          component,
+          field,
+          was,
+          shown[field],
+          live,
+        );
+        fields[field] = (before, now);
+        authored[field] = now;
+        shown[field] = live;
+        _previewStale = true;
+      }
+    }
+  }
+
+  // What the scene holds for [field] once the author, with Recording off,
+  // changed what the preview showed from [shown] to [live]: a channel a
+  // relative track moves keeps its offset — the thing was moved by so
+  // much — and the rest takes what was put there.
+  Object? _authoredAfterEdit(
+    Component component,
+    SchemaField field,
+    Object? authored,
+    Object? shown,
+    Object? live,
+  ) {
+    final relative = <String>{
+      for (final t in asset.value?.propertyTracks ?? const <PropertyTrack>[])
+        if (t.isRelative && t.field == field.name && _moves(t, component))
+          t.channel,
+    };
+    if (relative.isEmpty) return live;
+    num? moved(Object? a, Object? s, Object? l) =>
+        a is num && s is num && l is num ? a + (l - s) : null;
+    if (live is Map && authored is Map && shown is Map) {
+      return <String, dynamic>{
+        for (final MapEntry(:key, :value) in live.entries)
+          '$key': relative.contains(key)
+              ? (moved(authored[key], shown[key], value) ?? value)
+              : value,
+      };
+    }
+    if (relative.contains('')) return moved(authored, shown, live) ?? live;
+    return live;
+  }
+
+  // Whether [track] animates [component].
+  bool _moves(PropertyTrack track, Component component) {
+    final entity = track.binding.isSelf
+        ? (_owner ?? _scratchOwner)
+        : _resolve(track.binding);
+    if (entity == null) return false;
+    return identical(
+      PropertyAccess.of(entity, track.component, track.field)?.component,
+      component,
+    );
+  }
+
+  // [step] of the editor's history was just undone ([undo]) or redone.
+  void _replayed(EditorCommand step, {required bool undo}) {
+    final taint = _tainted[step];
+    final previewing = _playback != null;
+    if (taint != null) {
+      for (final MapEntry(key: component, value: fields) in taint.entries) {
+        for (final MapEntry(key: field, value: values) in fields.entries) {
+          final value = undo ? values.$1 : values.$2;
+          final authored = _authored[component];
+          if (previewing && authored != null && authored.containsKey(field)) {
+            authored[field] = value;
+          } else {
+            field.decodeInto(component, value);
+          }
+        }
+      }
+    }
+    if (!previewing) return;
+    // Whatever else the step put in a field the preview shows is the
+    // scene's own value now: an edit made before the preview, undone
+    // while it shows.
+    for (final MapEntry(key: component, value: fields) in _authored.entries) {
+      final shown = _shown[component];
+      if (shown == null) continue;
+      for (final field in fields.keys.toList()) {
+        if (taint?[component]?.containsKey(field) ?? false) continue;
+        if (!shown.containsKey(field)) continue;
+        final live = field.encodeFrom(component);
+        if (!_sameSaved(live, shown[field])) fields[field] = live;
+      }
+    }
+    // Shown again over what the scene now holds — and none of it is an
+    // edit for Record to key.
+    _restartPreview();
+  }
+
+  bool _disposed = false;
+
+  /// Lets go of the scope, which disposes it with itself ([of]): a preview
+  /// that shows ends — the world holds the scene's values again — and
+  /// nothing of the scope's is watched any more.
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
     endPreview();
+    _destroyScratch();
+    _stopHistory?.call();
+    _stopHistory = null;
     scope.authoredStateGuards.remove(endPreview);
     scope.authoredStateHeld.remove(_previewing);
-    _sessions[scope] = null;
   }
 }

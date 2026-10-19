@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -8,6 +7,7 @@ import 'package:flutter/gestures.dart'
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:just_debugger/just_debugger.dart';
+import 'package:just_editor_core/io.dart' show FileSystemException, Platform;
 import 'package:just_game_engine/just_game_engine.dart';
 
 import '../../debugger/engine_debugger.dart';
@@ -46,44 +46,81 @@ import '../level_map/level_map_provision.dart';
 import '../level_map/tile_commands.dart';
 import '../../ui/level_designer/tools/tiles/tile_tool_base.dart';
 import '../../extension/built_in_editor_module.dart';
+import '../../extension/built_in_lighting_2d_contributions.dart';
 import '../../materials/built_in_materials_module.dart';
 import '../../ui/overlay/camera_rig_painter.dart';
 import '../prefs/recent_scenes.dart';
 import '../scope/editor_scope_services.dart';
 
-export '../play/play_controller.dart' show EditorPlayState, EntitySpawner;
+export '../play/play_controller.dart' show EditorPlayState;
 
-/// Debug-only runtime editor plugin scaffold.
+/// The level editor, as an engine plugin: it runs inside a debug build of
+/// the game, over the running world, and saves the project's scenes on
+/// disk.
+///
+/// A game's editor entry point makes it with [register] — null in a
+/// profile or release build, and where the editor cannot run
+/// ([supportsPlatform]) — and shows it with `JustGameEngineEditor`, which
+/// registers it with the engine. It owns the editor's [scope] (registries,
+/// undo [history], scene files, log), the play-test ([play], [pause],
+/// [stop]), opening and saving scenes ([openScene], [saveScene]), and
+/// whether the editor is shown ([isVisible], [toggleKey]).
+///
+/// What the editor can do comes from modules: the editor's own
+/// ([BuiltInEditorModule], and [BuiltInMaterialsModule] of `materials.dart`)
+/// and the game's, passed as `modules:` or later through [syncModules].
 class JustGameEditorPlugin implements EnginePlugin {
-  // EnginePlugin — the engine's contract, forwarded to the older names the
-  // editor's own code and tests still use.
+  // EnginePlugin — the engine's contract.
   @override
   String get id => 'editor';
 
+  /// The engine calls this when the plugin is registered with it: the first
+  /// time it initializes the editor; put back after [detach], the editor
+  /// takes up again where it left off.
   @override
-  Future<void> attach(Engine engine) => onInitialize();
+  Future<void> attach(Engine engine) async {
+    if (_isInitialized) {
+      _resume();
+      return;
+    }
+    await _initialize();
+  }
 
   @override
-  void update(double dt) => onUpdate(dt);
+  void update(double dt) => _update(dt);
 
   /// The engine calls this over the world every frame (its plugin overlay
   /// hook, order 100); the editor draws only while it is shown.
   @override
   void renderOverlay(Canvas canvas, Size size) {
-    if (isVisible.value) onRender(canvas, size);
+    if (isVisible.value) _render(canvas, size);
   }
 
+  /// The engine calls this when the plugin is taken off it — its widget
+  /// went away. Until it is put back ([attach]) the editor leaves the game
+  /// alone: it is closed (a play-test stopped, the game's time scale given
+  /// back), its keys let go, the systems it holds off in authoring run
+  /// again, its outlines and 3-D aids are gone, and the `just` tool is told
+  /// the editor is no longer open. Nothing is disposed — the same plugin may
+  /// be put back; [dispose] is for whoever made it.
   @override
-  void detach() {}
+  void detach() => _suspend();
 
+  /// Makes the editor for [engine] without the checks [register] makes —
+  /// a debug build, a desktop — and without starting it: it starts when it
+  /// is registered with the engine ([attach]). [register] is the way a game
+  /// makes one; this is for tests and for hosts that make those checks
+  /// themselves.
+  ///
+  /// With no [scope], the plugin makes one over [engine] with the editor's
+  /// own modules and [modules], and [dispose] disposes it. A [scope] passed
+  /// in is the caller's to dispose; the editor's own modules and [modules]
+  /// are added to it. The other parameters are as [register] has them.
   JustGameEditorPlugin({
     required Engine engine,
     EditorScope? scope,
     List<EditorModule> modules = const [],
     List<Spawner> spawners = const [],
-    @Deprecated('Use spawners, which also say what each one is.')
-    Map<String, Entity Function(World world, Entity spawnPoint)> spawnRegistry =
-        const {},
     bool bindPhysicsBodies = true,
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
@@ -100,15 +137,11 @@ class JustGameEditorPlugin implements EnginePlugin {
                  BuiltInEditorModule.new,
                  BuiltInMaterialsModule.make,
                ],
-               modules: [..._staticModules, ...modules],
+               modules: modules,
              ),
          ownsScope: scope == null,
          lateModules: scope == null ? const [] : modules,
-         spawners: [
-           ...spawners,
-           for (final s in Spawner.fromMap(spawnRegistry))
-             if (!spawners.any((x) => x.id == s.id)) s,
-         ],
+         spawners: spawners,
          bindPhysicsBodies: bindPhysicsBodies,
          toggleKey: toggleKey,
          statusPanelToggleKey: statusPanelToggleKey,
@@ -157,6 +190,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     }
   }
 
+  /// The game's engine: the editor edits its world and draws over it.
   final Engine engine;
 
   /// Everything this editor owns: registries, codec, scene files, log and
@@ -168,6 +202,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Scene lifecycle operations (list/delete/rename/duplicate) for the
   /// scene picker.
+  @internal
   final SceneManager sceneManager;
 
   /// What a spawn point can create, as the app registers it. The editor's
@@ -184,44 +219,23 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// What the app does after each hot reload — see [register].
   final void Function(JustGameEditorPlugin plugin)? _onReassemble;
 
-  /// [spawners] by id, as the old constructor took them.
-  @Deprecated('Use spawners.')
-  Map<String, Entity Function(World world, Entity spawnPoint)>
-  get spawnRegistry => {for (final s in spawners) s.id: s.spawn};
-
-  /// Whether to enable gizmo-drag-to-move authoring for physics bodies
-  /// (registers [PhysicsBodyBindingSystem]/[PhysicsJointBindingSystem]).
+  /// Whether to enable gizmo-drag-to-move for physics bodies (registers
+  /// [PhysicsBodyBindingSystem]/[PhysicsJointBindingSystem]).
   ///
   /// [PhysicsSystem] (core engine) always owns physics-body lifecycle and
   /// [Engine.physics] stepping when it's present in the game's `World` —
-  /// this flag doesn't affect that. It only gates the thin authoring
-  /// override that makes a selected/dragged body feel immediate (zeroing
-  /// residual velocity, waking the body) and joint authoring. Safe to leave
-  /// at its default in any game.
+  /// this flag doesn't affect that. It only gates the thin override that
+  /// makes a body dragged during a play-test feel immediate (zeroing its
+  /// velocity, waking it) and joint authoring. Safe to leave at its default
+  /// in any game.
   final bool bindPhysicsBodies;
-
-  // ── Static registration (compatibility) ───────────────────────────────────
-  //
-  // Process-wide, which is exactly what EditorScope exists to avoid. It
-  // survives so a 0.1.0 app keeps working: the constructor folds it into the
-  // scope it builds. Prefer `modules:` on the constructor.
-
-  static final List<EditorModule> _staticModules = [];
-
-  /// Registers [module] for every plugin created after this call.
-  @Deprecated('Pass modules: [...] to JustGameEditorPlugin or EditorScope')
-  static void registerExtension(EditorModule module) {
-    _staticModules.removeWhere((m) => m.id == module.id);
-    _staticModules.add(module);
-  }
-
-  /// Removes a module registered with [registerExtension].
-  @Deprecated('Pass modules: [...] to JustGameEditorPlugin or EditorScope')
-  static void unregisterExtension(String id) =>
-      _staticModules.removeWhere((m) => m.id == id);
 
   final LogicalKeyboardKey _toggleKey;
   final LogicalKeyboardKey _statusPanelToggleKey;
+
+  /// The engine's debugger, attached while the editor is open; the log
+  /// captures what it reports.
+  @internal
   final JustDebuggerController debuggerController;
 
   /// Shared scene state — read by overlay widgets and gizmo logic.
@@ -229,6 +243,11 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// The editor log.
   EditorLogService get logService => scope.log;
+
+  /// When this editor started: the log also holds earlier sessions' lines,
+  /// loaded back, and what is counted as wrong now starts here.
+  @internal
+  final DateTime sessionStartedAt = DateTime.now();
 
   final GizmoPainter _gizmoPainter;
 
@@ -243,6 +262,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Whether the status bar is shown. It comes and goes with the editor
   /// (F1); F2 opens and shuts the dock panel above it.
+  @internal
   final Signal<bool> isStatusPanelVisible = Signal(
     false,
     debugLabel: 'statusPanelVisible',
@@ -251,11 +271,13 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Whether the authoring grid is wanted; [isGridVisible] is whether it
   /// is drawn right now.
+  @internal
   final Signal<bool> showGrid = Signal(true, debugLabel: 'showGrid');
   bool _gridSnappingEnabled = true;
 
   /// The gizmos of each mode, as the settings have them (the Gizmos button
   /// above the snapping, and its menu); [gizmoMode] is the mode now.
+  @internal
   final Signal<GizmoSettings> gizmoSettings = Signal(
     GizmoSettings.defaults,
     debugLabel: 'gizmoSettings',
@@ -263,21 +285,25 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Whether a small view through the game's live camera is drawn over
   /// the editor while authoring.
+  @internal
   final Signal<bool> showGamePreview = Signal(true, debugLabel: 'gamePreview');
 
   /// The authoring grid size, in world units.
+  @internal
   final Signal<double> gridSize = Signal(32.0, debugLabel: 'gridSize');
 
   /// [engine.time.timeScale] captured when the editor is opened, restored
   /// when it's closed again.
   double? _preEditorTimeScale;
 
+  /// Where the play-test is: stopped (authoring), playing or paused.
   EditorPlayState get playState => playController.state.value;
 
-  /// True whenever the editor should behave as "authoring" (camera-entity
-  /// sync, transform→physics-body pushes, and the Timeline preview's
-  /// timeScale bump all pause/suppress) rather than "simulating" — i.e. the
-  /// editor is open and no play-test is in progress.
+  /// True whenever the editor should behave as "authoring" (the game's time
+  /// held at 0, the editor's view owning the camera, play-only systems off)
+  /// rather than "simulating" — i.e. the editor is open and no play-test is
+  /// in progress.
+  @internal
   late final Computed<bool> isAuthoring = Computed(
     () => isVisible.value && !playController.isRunning,
     debugLabel: 'isAuthoring',
@@ -291,12 +317,14 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// The play-test: Play, Pause, Stop, and the authored snapshot a save
   /// during play writes.
+  @internal
   late final PlayController playController = PlayController(
     engine: engine,
     scope: scope,
   );
 
   /// Opens and saves scenes through the scope's store.
+  @internal
   late final SceneIO sceneIO = SceneIO(
     scope: scope,
     world: () => engine.world,
@@ -305,9 +333,11 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Create, delete, group, re-parent and clipboard operations — the
   /// scope's, shared with the windows that open over the editor.
+  @internal
   EntityOps get entities => scope.entities;
 
   /// Pointer handling for the game canvas: gizmos, pan, zoom, designer tools.
+  @internal
   late final ViewportInput viewport = ViewportInput(
     world: () => engine.world,
     sceneState: sceneState,
@@ -361,15 +391,29 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   // ── Focus nodes ───────────────────────────────────────────────────────────
 
+  /// The game's keyboard focus: it has the keys while the editor is
+  /// closed or a play-test runs.
+  @internal
   final FocusScopeNode gameFocusScopeNode = FocusScopeNode(
     debugLabel: 'just-game-editor-game-scope',
   );
+
+  /// The editor's keyboard focus while it is open.
+  @internal
   final FocusNode editorFocusNode = FocusNode(
     debugLabel: 'just-game-editor-overlay-focus',
   );
 
+  /// Whether the editor has started: [register] did it, or the engine did
+  /// when the plugin was registered with it ([attach]).
   bool get isInitialized => _isInitialized;
+
+  /// The key that opens and closes the editor (F1 unless [register] was
+  /// given another). No command of the editor's can be bound to it.
   LogicalKeyboardKey get toggleKey => _toggleKey;
+
+  /// The key that opens and shuts the dock panel above the status bar while
+  /// the editor is open (F2 unless [register] was given another).
   LogicalKeyboardKey get statusPanelToggleKey => _statusPanelToggleKey;
 
   /// Whether the editor can run here: on a desktop — Windows, macOS or
@@ -383,10 +427,26 @@ class JustGameEditorPlugin implements EnginePlugin {
   static bool get supportsPlatform =>
       !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
-  /// Factory for debug-only plugin registration.
+  /// Makes and starts the editor for [engine]; a game's editor entry point
+  /// calls this, then shows the plugin with `JustGameEngineEditor`.
   ///
   /// Null in a profile or release build, and where the editor cannot run
   /// ([supportsPlatform]): the host then shows just the game.
+  ///
+  /// - [modules]: the game's own editor modules (its kits, its
+  ///   components' editors); the editor's own come first.
+  /// - [scope]: an editor scope made beforehand, which the caller then
+  ///   disposes; usually left out, and the plugin makes it.
+  /// - [spawners]: what a spawn point can create when Play is pressed
+  ///   ([EditorScope.spawners]).
+  /// - [bindPhysicsBodies]: whether a body dragged during a play-test
+  ///   follows the drag at once (and joints can be authored).
+  /// - [toggleKey] opens and closes the editor (F1);
+  ///   [statusPanelToggleKey] opens and shuts the dock panel (F2).
+  /// - [protectedSceneNames]: scenes the game's own code loads by name,
+  ///   which the Scenes list will not delete or rename.
+  /// - [startVisible]: whether the editor opens at once (true) or waits
+  ///   for [toggleKey].
   ///
   /// [onReassemble] runs after each hot reload, before the editor rebuilds
   /// its registries: the place for the app to do again what its `main` did
@@ -399,9 +459,6 @@ class JustGameEditorPlugin implements EnginePlugin {
     EditorScope? scope,
     List<EditorModule> modules = const [],
     List<Spawner> spawners = const [],
-    @Deprecated('Use spawners, which also say what each one is.')
-    Map<String, Entity Function(World world, Entity spawnPoint)> spawnRegistry =
-        const {},
     bool bindPhysicsBodies = true,
     LogicalKeyboardKey toggleKey = LogicalKeyboardKey.f1,
     LogicalKeyboardKey statusPanelToggleKey = LogicalKeyboardKey.f2,
@@ -423,7 +480,6 @@ class JustGameEditorPlugin implements EnginePlugin {
       scope: scope,
       modules: modules,
       spawners: spawners,
-      spawnRegistry: spawnRegistry,
       bindPhysicsBodies: bindPhysicsBodies,
       toggleKey: toggleKey,
       statusPanelToggleKey: statusPanelToggleKey,
@@ -431,21 +487,35 @@ class JustGameEditorPlugin implements EnginePlugin {
       startVisible: startVisible,
       onReassemble: onReassemble,
     );
-    await plugin.onInitialize();
+    await plugin._initialize();
     return plugin;
   }
 
   EditorPresence? _presence;
 
-  Future<void> onInitialize() async {
+  /// The systems of the editor's own [_initialize] added to the game's
+  /// world — they read the editor's state — taken out again by [dispose].
+  final List<System> _ownSystems = [];
+
+  Future<void> _initialize() async {
     if (!kDebugMode || _isInitialized) return;
     _isInitialized = true;
     // So `just game scene` and `just upgrade` wait while the editor is open.
     _presence = EditorPresence.start();
     await logService.startSession(controller: debuggerController);
-    if (!engine.world.systems.any((system) => system is SimpleMovementSystem)) {
-      engine.world.addSystem(SimpleMovementSystem(engine.input));
+    // A project the editor cannot write — a sandboxed macOS debug app, a
+    // read-only checkout — said now, not as a failed save later.
+    if (scope.scenes.writeAccessProblem() case final problem?) {
+      scope.log.log(
+        problem,
+        source: 'editor',
+        category: 'scene',
+        level: DebuggerLogLevel.warning,
+      );
     }
+    // No gameplay systems of the editor's own (a movement system, say):
+    // what runs in a play-test is what the game's boot registered, or an
+    // entity would move in the editor and stand still in the shipped game.
     if (bindPhysicsBodies) {
       // No bridge system here — PhysicsSystem (core engine) owns
       // syncing PhysicsBody results back to TransformComponent itself, for
@@ -453,13 +523,15 @@ class JustGameEditorPlugin implements EnginePlugin {
       if (!engine.world.systems.any(
         (system) => system is PhysicsBodyBindingSystem,
       )) {
-        engine.world.addSystem(
+        _ownSystems.add(
+          // A drag is what it acts on: during a play-test, where bodies
+          // move. (Authoring, nothing steps.)
           PhysicsBodyBindingSystem(
             sceneState: sceneState,
-            isAuthoringActive: () => isAuthoring.value,
             isDraggingActive: () => viewport.isDragging,
           ),
         );
+        engine.world.addSystem(_ownSystems.last);
       }
       if (!engine.world.systems.any(
         (system) => system is PhysicsJointBindingSystem,
@@ -470,7 +542,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (!engine.world.systems.any(
       (system) => system is EditorLogCaptureSystem,
     )) {
-      engine.world.addSystem(EditorLogCaptureSystem(logService));
+      _ownSystems.add(EditorLogCaptureSystem(logService));
+      engine.world.addSystem(_ownSystems.last);
     }
     // Sprites are shown and played by the engine's own systems, as in the
     // game — but read from the project's files, so a sheet saved a moment
@@ -509,10 +582,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     playController.state.addListener(_releasePointerUnlessPlaying);
     _attachDebuggerIfReady();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
-    // Register game custom components; a component refresh asked for by
-    // hand goes the way a hot reload does.
+    // Register game custom components.
     _runComponentRegistrar();
-    sceneState.onComponentsRefreshed = reassemble;
     logService.log(
       'Runtime editor initialized.',
       source: 'editor',
@@ -701,10 +772,22 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (changed) scope.reload();
   }
 
+  /// Feeds [debuggerController] from the engine — only while the editor is
+  /// shown: it walks the whole world four times a second, for the docks and
+  /// the status bar, which show only then.
   void _attachDebuggerIfReady() {
-    if (_isDebuggerAttached || !engine.isInitialized) return;
+    if (_isDebuggerAttached || !engine.isInitialized || !isVisible.value) {
+      return;
+    }
     engine.attachDebugger(debuggerController);
     _isDebuggerAttached = true;
+  }
+
+  /// Stops feeding [debuggerController]: the editor is closed.
+  void _detachDebugger() {
+    if (!_isDebuggerAttached) return;
+    debuggerController.stopBinding();
+    _isDebuggerAttached = false;
   }
 
   // ── Level Designer ────────────────────────────────────────────────────────
@@ -719,6 +802,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// Null until then, so a session that is never used costs nothing — and,
   /// more importantly, so the base editor's behaviour is completely unchanged
   /// for anyone who does not open the designer.
+  @internal
   final Signal<LevelDesignerSession?> designer = Signal(
     null,
     debugLabel: 'designer',
@@ -730,6 +814,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// settings, so the designer's control and the settings dialog never
   /// disagree about what the grid is — and the next settings change does not
   /// put the old size back.
+  @internal
   void setGridSize(double size) {
     if (size <= 0 || size == gridSize.value) return;
     gridSize.value = size;
@@ -750,6 +835,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// Paused counts as playing: you are still in a play session, just a frozen
   /// one, and having the grid blink in and out on every pause would be worse
   /// than either state alone.
+  @internal
   late final Computed<bool> isGridVisible = Computed(
     () => showGrid.value && isAuthoring.value,
     debugLabel: 'gridVisible',
@@ -762,6 +848,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// Worked out on each read, not a `Computed`: it reads the designer only
   /// outside a play-test, and a `Computed` reading one whose signals change
   /// like that keeps the old ones, so it stopped hearing the designer open.
+  @internal
   GizmoMode? get gizmoMode {
     if (!isVisible.value) return null;
     if (!isAuthoring.value) return GizmoMode.play;
@@ -769,6 +856,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// Whether the mode now shows its gizmos at all: the Gizmos button.
+  @internal
   bool get areGizmosVisible {
     final mode = gizmoMode;
     return mode != null && gizmoSettings.value.of(mode).shown;
@@ -779,6 +867,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// selection's outline, the designer's aids — each as the mode now has
   /// it. The selection's handles, and what a tool in use draws, are not
   /// gizmos and stay.
+  @internal
   bool showsGizmo(GizmoKind kind) {
     final mode = gizmoMode;
     return mode != null && gizmoSettings.value.of(mode).shows(kind);
@@ -786,6 +875,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Shows the mode's gizmos if hidden, hides them if shown; the other
   /// modes keep theirs.
+  @internal
   void toggleGizmos() {
     final mode = gizmoMode;
     if (mode == null) return;
@@ -793,6 +883,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// Whether the Level Designer workspace is currently open.
+  @internal
   bool get isLevelDesignerOpen => designer.value != null;
 
   // ── Move, Scale, Rotate ───────────────────────────────────────────────────
@@ -801,6 +892,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// during a play-test. With Select tiles in hand, the tiles it has
   /// selected; otherwise what is selected — in the designer all of it, in
   /// the editor the one entity its gizmo is on.
+  @internal
   Set<TransformMode> get transformModesAvailable {
     if (!isAuthoring.value) return TransformModes.none;
     final session = designer.value;
@@ -827,6 +919,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// Whether the gizmos are in hand: always in the editor; in the designer
   /// with the select tool — which All, Move, Scale and Rotate are — or with
   /// Select tiles and tiles selected.
+  @internal
   bool get isTransformToolInHand {
     final session = designer.value;
     if (session == null) return true;
@@ -837,6 +930,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// The gizmo the selection shows: the mode chosen when it can take it,
   /// else Move; null when nothing selected can take any.
+  @internal
   TransformMode? get shownTransformMode => TransformModes.shown(
     scope.view.transformMode.value,
     transformModesAvailable,
@@ -844,6 +938,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Picks Move, Scale or Rotate — the toolbar's buttons, W, E and R. In
   /// the designer the select tool comes with it, whose gizmos they are.
+  @internal
   void chooseTransformMode(TransformMode mode) {
     scope.view.transformMode.value = mode;
     if (isAuthoring.value) designer.value?.adoptTransformMode();
@@ -854,6 +949,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// — the tileset or interface editor, which work on things off the map —
   /// is open over it. A 3-D scene has no Level Map: its designer works on
   /// the whole scene.
+  @internal
   late final Computed<bool> keepsToLevelMap = Computed(
     () =>
         designer.value != null &&
@@ -872,6 +968,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   );
 
   /// Opens the Level Designer, creating its session if needed.
+  @internal
   void openLevelDesigner() {
     if (designer.value != null || !sceneState.hasScene) return;
     designer.value = LevelDesignerSession(
@@ -935,6 +1032,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// History is dropped rather than retained: its commands hold references to
   /// entities in this scene, and replaying one after a scene change would
   /// write into destroyed entities.
+  @internal
   void closeLevelDesigner() {
     final session = designer.value;
     if (session == null) return;
@@ -946,6 +1044,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// Toggles the Level Designer workspace.
+  @internal
   void toggleLevelDesigner() =>
       isLevelDesignerOpen ? closeLevelDesigner() : openLevelDesigner();
 
@@ -1072,15 +1171,17 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Where sprites are read from while the editor runs: the project's files.
   /// What they are not in comes from the engine's own loaders.
+  @internal
   late final FileSpriteAssetLoader spriteAssets = FileSpriteAssetLoader(
     context: engine.context,
   );
 
-  /// What [onInitialize] pointed the engine's loaders at, to put back.
+  /// What [_initialize] pointed the engine's loaders at, to put back.
   LoaderOverride? _loaders;
 
   /// A sprite file changed on disk: show the new one. [atlasPath] limits it
   /// to one atlas (and the sheet beside it); without it everything reloads.
+  @internal
   void reloadSprites([String? atlasPath]) {
     if (atlasPath == null) spriteAssets.clear();
     for (final system in engine.world.systems) {
@@ -1092,31 +1193,54 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// The JSON files that are something other than a sprite atlas. Every
   /// other `.json` in a project is taken to be an atlas — the one kind of
   /// JSON that carries no suffix of its own.
+  @internal
   static const List<String> dataJsonSuffixes = [
     '.scene.json',
     '.animator.json',
     '.timeline.json',
     '.tileset.json',
+    PrefabFile.ending,
+    '.input.json',
     LevelMapFiles.suffix,
     LevelMapFiles.legacySuffix,
     '/scenes.json',
     '/palettes.json',
+    // The project's own settings files (assets/project/…).
+    '/tags.json',
+    '/physics.json',
+  ];
+
+  /// The data files above that may also be the whole path, with no folder
+  /// before them.
+  static const List<String> _bareDataFiles = [
+    'scenes.json',
+    'palettes.json',
+    'tags.json',
+    'physics.json',
   ];
 
   /// Whether [path] is a sprite atlas: a `.json` that is none of the
-  /// editor's other data files.
-  static bool isSpriteAtlasPath(String path) {
+  /// editor's other data files, nor one of [scope]'s modules'
+  /// ([EditorScope.dataFileSuffixes]).
+  @internal
+  static bool isSpriteAtlasPath(String path, {EditorScope? scope}) {
     final p = path.toLowerCase().replaceAll('\\', '/');
-    if (!p.endsWith('.json') || p == 'scenes.json') return false;
-    return !dataJsonSuffixes.any(p.endsWith) &&
-        !ModuleDataFiles.suffixes.any(p.endsWith);
+    if (!p.endsWith('.json') || _bareDataFiles.contains(p)) return false;
+    final modules = scope?.dataFileSuffixes ?? const <String>{};
+    return !dataJsonSuffixes.any(p.endsWith) && !modules.any(p.endsWith);
   }
 
   /// Whether dropping [path] on the viewport of a scene of [mode] makes
-  /// something: a kind a module knows how to drop (a model); in 2-D also
-  /// an image, a sprite project, a sprite atlas, a tileset or a map.
-  static bool canDropAsset(String path, {SceneMode mode = SceneMode.twoD}) {
-    if (AssetKind.of(path).drop != null) return true;
+  /// something: a kind one of [scope]'s modules knows how to drop (a
+  /// model); in 2-D also an image, a sprite project, a sprite atlas, a
+  /// tileset or a map.
+  @internal
+  static bool canDropAsset(
+    String path, {
+    SceneMode mode = SceneMode.twoD,
+    EditorScope? scope,
+  }) {
+    if (scope?.assetKinds.of(path).drop != null) return true;
     // Sprites and tile maps are 2-D: a 3-D scene does not draw them.
     if (mode != SceneMode.twoD) return false;
     final p = path.toLowerCase();
@@ -1128,7 +1252,7 @@ class JustGameEditorPlugin implements EnginePlugin {
         p.endsWith('.jpeg') ||
         p.endsWith('.webp') ||
         p.endsWith('.jsprite') ||
-        isSpriteAtlasPath(path);
+        isSpriteAtlasPath(path, scope: scope);
   }
 
   /// Makes an entity for the asset at [path], where it was dropped on the
@@ -1136,9 +1260,10 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// for an image, a sprite animation for an atlas or a sprite project (whose
   /// atlas sits beside it). One undo step while the Level Designer is open.
   /// Null when there is no scene, or the file is not something to place.
+  @internal
   Entity? dropAsset(String path, Offset canvasPosition) {
     if (!sceneState.hasScene ||
-        !canDropAsset(path, mode: sceneState.editingMode)) {
+        !canDropAsset(path, mode: sceneState.editingMode, scope: scope)) {
       return null;
     }
     final at = engine.cameraSystem.mainCamera.screenToWorld(canvasPosition);
@@ -1148,7 +1273,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     final ground = view.isPlanar ? null : view.screenToGround(canvasPosition);
     final surface = view.isPlanar ? null : surfaceAt(canvasPosition);
     // A kind a module knows makes what it makes.
-    if (AssetKind.of(path).drop case final drop?) {
+    if (scope.assetKinds.of(path).drop case final drop?) {
       return drop(
         AssetDrop(
           scope: scope,
@@ -1176,9 +1301,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     final stem = path.substring(path.lastIndexOf('/') + 1, dot);
     final isImage = !lower.endsWith('.json') && !lower.endsWith('.jsprite');
     final components = <Component>[
-      TransformComponent(
-        position: ground ?? Vector3(at.dx, at.dy, 0),
-      ),
+      TransformComponent(position: ground ?? Vector3(at.dx, at.dy, 0)),
       if (isImage)
         SpriteComponent(spritePath: path, pixelArt: true)
       else
@@ -1209,7 +1332,6 @@ class JustGameEditorPlugin implements EnginePlugin {
       name: stem,
     );
     sceneState
-      ..syncEntityNode(entity)
       ..markDirty()
       ..refresh()
       ..selectEntity(entity);
@@ -1234,7 +1356,6 @@ class JustGameEditorPlugin implements EnginePlugin {
       name: name ?? tiledStem(path),
     );
     sceneState
-      ..syncEntityNode(entity)
       ..markDirty()
       ..refresh()
       ..selectEntity(entity);
@@ -1322,6 +1443,7 @@ class JustGameEditorPlugin implements EnginePlugin {
           label: 'Use ${tiledStem(path)}',
           docs: scope.mapDocs,
           entityId: existing.id,
+          entityName: existing.name,
           before: (path: '', inline: inline.toJson()),
           after: (path: path, inline: null),
         )..redo(),
@@ -1342,6 +1464,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// A file a tool wrote changed: whatever in the level shows it, shows the
   /// new version.
+  @internal
   void reloadAsset(String path) {
     final lower = path.toLowerCase();
     _reloadMaterials(path);
@@ -1356,17 +1479,18 @@ class JustGameEditorPlugin implements EnginePlugin {
         lower.endsWith('.tsx') ||
         lower.endsWith('.tsj')) {
       reloadLevelMaps(path);
-    } else if (isSpriteAtlasPath(path)) {
-      reloadSprites(path);
     } else if (PrefabFile.isPrefabPath(lower)) {
       unawaited(scope.prefabInstances.refresh(path));
+    } else if (isSpriteAtlasPath(path, scope: scope)) {
+      reloadSprites(path);
     } else if (lower.endsWith('.json')) {
       // Some other data file: nothing a sprite shows.
     } else if (!_isFont(lower) && !_isAudio(lower)) {
       reloadSprites();
     }
-    // And whatever a module shows from it — a theme, a font, a screen.
-    for (final module in scope.modules.all) {
+    // And whatever a module shows from it — a theme, a font, a screen —
+    // the editor's own built-in modules (its materials) among them.
+    for (final module in scope.modules.withBuiltIns) {
       module.onAssetChanged(path);
     }
   }
@@ -1385,6 +1509,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Many files changed at once — a package installed, updated or removed:
   /// each kind is reloaded once, not once per file.
+  @internal
   void reloadAssets(Iterable<String> paths) {
     var sprites = false;
     var allMaps = false;
@@ -1403,10 +1528,10 @@ class JustGameEditorPlugin implements EnginePlugin {
           lower.endsWith('.tmx') ||
           lower.endsWith('.tmj')) {
         maps.add(path);
-      } else if (isSpriteAtlasPath(path)) {
-        sprites = true;
       } else if (PrefabFile.isPrefabPath(lower)) {
         unawaited(scope.prefabInstances.refresh(path));
+      } else if (isSpriteAtlasPath(path, scope: scope)) {
+        sprites = true;
       } else if (!lower.endsWith('.json') &&
           !_isFont(lower) &&
           !_isAudio(lower)) {
@@ -1420,7 +1545,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     }
     if (sprites) reloadSprites();
     for (final path in paths) {
-      for (final module in scope.modules.all) {
+      for (final module in scope.modules.withBuiltIns) {
         module.onAssetChanged(path);
       }
     }
@@ -1440,6 +1565,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// An animator graph changed on disk: animators running it start over
   /// with the new one.
+  @internal
   void reloadAnimators([String? graphPath]) {
     for (final system in engine.world.systems) {
       if (system is AnimatorSystem) system.reload(graphPath);
@@ -1448,6 +1574,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// A tileset or map file changed on disk: every map using it reads it
   /// again. A Tiled `.tsx` could belong to any `.tmx`, so it reloads all.
+  @internal
   void reloadLevelMaps([String? path]) {
     final lower = path?.toLowerCase() ?? '';
     final all =
@@ -1463,6 +1590,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// A timeline changed on disk: players of it start over with the new one.
+  @internal
   void reloadTimelines([String? timelinePath]) {
     for (final system in engine.world.systems) {
       if (system is TimelineSystem) system.reload(timelinePath);
@@ -1502,6 +1630,8 @@ class JustGameEditorPlugin implements EnginePlugin {
         if (!run) system.clockMs += dt * 1000;
       }
     }
+    // Shift+L's unlit view: only while authoring.
+    BuiltInLighting2DContributions.syncUnlit(scope, authoring: !run);
     scope.mapDocs.pollAssets();
     // Only the layer being painted at full strength, while painting.
     scope.tiles.syncHighlight(
@@ -1521,7 +1651,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     scope.isPlayTesting.value = playing;
     if (playing == _modulesThinkPlaying) return;
     _modulesThinkPlaying = playing;
-    for (final module in scope.modules.all) {
+    for (final module in scope.modules.withBuiltIns) {
       module.onPlayStateChanged(playing);
     }
   }
@@ -1534,6 +1664,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// it plays: a game that looks with the mouse
   /// (`input.lockPointerOnClick`) holds it, as it would outside the editor.
   /// Escape, Pause and Stop let go.
+  @internal
   void pressedPlayingGame(PointerDownEvent event) {
     if (playController.state.value != EditorPlayState.playing) return;
     if (event.kind != PointerDeviceKind.mouse ||
@@ -1557,6 +1688,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// still until the editor was restarted. Called when a play-test starts or
   /// resumes, and when the viewport is pressed during one (the editor's
   /// viewport absorbs the press the game would otherwise refocus on).
+  @internal
   void focusGame() {
     FocusNode? game;
     for (final node in gameFocusScopeNode.descendants) {
@@ -1583,11 +1715,12 @@ class JustGameEditorPlugin implements EnginePlugin {
         context.findAncestorWidgetOfExactType<EditableText>() != null;
   }
 
-  void onUpdate(double dt) {
+  void _update(double dt) {
     scope.modules.notifyUpdate(dt);
     _attachDebuggerIfReady();
     // After the frame's game update: play time, and the end of a stepped frame.
     if (_isInitialized) playController.tick(dt);
+    if (_isInitialized) BuiltInDocks.captureFrame(this);
     if (_isInitialized) sceneIO.loading.tick();
     if (_isInitialized) _autosaveTick();
     if (_isInitialized) _syncRuntimeSystems(dt);
@@ -1597,7 +1730,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (!_isInitialized || !isVisible.value) return;
     // Right button held in 3-D: WASD flies the view.
     viewport.flyTick(dt, HardwareKeyboard.instance.logicalKeysPressed);
-    _syncTimeScaleForPreview();
+    _holdTimeWhileAuthoring();
     // The game is frozen while authoring, so the brain is asked directly:
     // every camera snaps to what it would frame, which is what the camera
     // gizmos and the game preview draw.
@@ -1612,6 +1745,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// selection's outline, the view mode, the slice — handed to the 3-D
   /// renderer while authoring a 3-D scene; taken back otherwise, so a
   /// play-test shows the level as it ships.
+  @internal
   late final g3.SceneEditorAids sceneAids = g3.SceneEditorAids()
     ..plainViews.add(_previewFrame)
     ..drawFilter = _isDrawn
@@ -1666,6 +1800,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// Switches the 3-D view between perspective and orthographic (pad 5).
+  @internal
   void toggleOrthographic() {
     if (scope.editorView case final OrbitFlyEditorView view) {
       view.orthographic = !view.orthographic;
@@ -1696,33 +1831,46 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// While the editor is open and authoring (Play not pressed),
-  /// [engine.time.timeScale] is held at 0 so the game underneath is
-  /// effectively paused. If the selected entity's animation preview
-  /// (Timeline dock's Play button) is running, the preview systems ride on
-  /// the same scaled deltaTime as gameplay — so timeScale is bumped back to
-  /// 1 for as long as it's playing, and dropped back to 0 once it
-  /// stops/pauses. Deliberately skipped outside pure authoring — [play]/
-  /// [pause]/[stop] own timeScale once a play-test session has started.
-  void _syncTimeScaleForPreview() {
+  /// [engine.time.timeScale] is held at 0, every frame, so the game
+  /// underneath stands still: nothing the game does (a pause menu setting
+  /// its time back to 1, say) can start the simulation on the level being
+  /// edited.
+  ///
+  /// It used to go to 1 whenever the selected entity's sprite animation was
+  /// playing — which every animated sprite is from its first frame — and
+  /// then the whole world ran: bodies fell (with no tile collision while
+  /// authoring), platforms moved, and the next save wrote where they had
+  /// got to. Previews run by themselves now (the Timeline dock ticks its
+  /// own clock), so nothing needs the game's time. Skipped outside pure
+  /// authoring — [play]/[pause]/[stop] own timeScale once a play-test has
+  /// started.
+  void _holdTimeWhileAuthoring() {
     if (!engine.isInitialized) return;
     if (playController.isRunning) return;
-    final entity = sceneState.selectedEntity.value;
-    final isPreviewPlaying =
-        entity != null &&
-        (entity.getComponent<SpriteAnimationComponent>()?.isPlaying ?? false);
-    engine.time.timeScale = isPreviewPlaying ? 1.0 : 0.0;
+    _holdGameTime();
   }
 
-  /// Called by [GameEditorAdapter] via the [onRenderOverlay] chain,
-  /// AFTER [engine.world.render].  Applies the camera transform so gizmos
-  /// render in world space on top of all ECS entities.
+  /// Stops the game's clock, keeping what it ran at to give back when the
+  /// editor closes — taken the first time the engine is there to ask, so an
+  /// editor opened before the engine started still gives back the game's
+  /// own scale, not a guess.
+  void _holdGameTime() {
+    if (!engine.isInitialized) return;
+    _preEditorTimeScale ??= engine.time.timeScale;
+    engine.time.timeScale = 0.0;
+  }
+
+  /// Draws the editor over the world: called from [renderOverlay], which
+  /// the engine calls after [engine.world.render], while the editor is
+  /// shown. Gizmos, markers and aids are drawn through the editor's view,
+  /// in world space, on top of every entity.
   ///
   /// [size] is the actual canvas size [RenderingEngine] just rendered with —
   /// used here (rather than the separately-tracked [ViewportInput.canvasSize], which is
   /// only updated via a post-frame callback from pointer-event plumbing and
   /// can drift/lag a frame behind) so gizmo/marker positions always match
   /// where entities were actually drawn.
-  void onRender(Canvas canvas, Size size) {
+  void _render(Canvas canvas, Size size) {
     if (!_isInitialized || !isVisible.value) return;
     if (size == Size.zero) return;
     final split = activeSplit;
@@ -1735,11 +1883,13 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// The viewport split four ways (top, front, side, perspective) — while
   /// [SplitViews.on], authoring a 3-D scene.
+  @internal
   late final SplitViews splitViews = SplitViews(
     () => scope.sceneView as OrbitFlyEditorView,
   );
 
   /// [splitViews] while they are what the viewport shows; null otherwise.
+  @internal
   SplitViews? get activeSplit =>
       splitViews.on.value &&
           isAuthoring.value &&
@@ -1749,6 +1899,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       : null;
 
   /// Splits the 3-D viewport four ways, or joins it again.
+  @internal
   void toggleSplitViews() {
     if (sceneState.editingMode != SceneMode.threeD) return;
     splitViews.toggle();
@@ -1798,7 +1949,12 @@ class JustGameEditorPlugin implements EnginePlugin {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    final box = Rect.fromLTWH(at.dx + 16, at.dy + 16, label.width + 12, label.height + 6);
+    final box = Rect.fromLTWH(
+      at.dx + 16,
+      at.dy + 16,
+      label.width + 12,
+      label.height + 6,
+    );
     canvas.drawRRect(
       RRect.fromRectAndRadius(box, const Radius.circular(4)),
       Paint()..color = EditorTheme.panelBg.withValues(alpha: 0.9),
@@ -1833,7 +1989,11 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Runs [handle] with [event] as [pane] sees it: its position in the
   /// pane, the pane's view as the editor's, the canvas the pane's size.
-  T _inPane<T>(ViewPane pane, PointerEvent event, T Function(PointerEvent) handle) {
+  T _inPane<T>(
+    ViewPane pane,
+    PointerEvent event,
+    T Function(PointerEvent) handle,
+  ) {
     final shift = Matrix4.translationValues(-pane.rect.left, -pane.rect.top, 0);
     final local = event.transformed(
       event.transform == null ? shift : (shift..multiply(event.transform!)),
@@ -1879,6 +2039,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// A press on the canvas, sent on to the viewport through its pane.
+  @internal
   bool pointerDown(PointerDownEvent event) => _routed(
     event,
     (e) => viewport.onPointerDown(e as PointerDownEvent),
@@ -1887,6 +2048,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   );
 
   /// The pointer moving with no button down.
+  @internal
   void pointerHover(PointerHoverEvent event) => _routed(
     event,
     (e) => viewport.onPointerHover(e as PointerHoverEvent),
@@ -1895,14 +2057,20 @@ class JustGameEditorPlugin implements EnginePlugin {
   );
 
   /// The pointer moving with a button down.
-  void pointerMove(PointerMoveEvent event) =>
-      _routed(event, (e) => viewport.onPointerMove(e as PointerMoveEvent), null);
+  @internal
+  void pointerMove(PointerMoveEvent event) => _routed(
+    event,
+    (e) => viewport.onPointerMove(e as PointerMoveEvent),
+    null,
+  );
 
   /// A press let go.
+  @internal
   void pointerUp(PointerUpEvent event) =>
       _routed(event, (e) => viewport.onPointerUp(e as PointerUpEvent), null);
 
   /// A gesture cut short.
+  @internal
   void pointerCancel(PointerCancelEvent event) => _routed(
     event,
     (e) => viewport.onPointerCancel(e as PointerCancelEvent),
@@ -1910,6 +2078,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   );
 
   /// The wheel.
+  @internal
   void pointerScroll(PointerSignalEvent event) => _routed(
     event,
     (e) => viewport.onPointerScroll(e as PointerSignalEvent),
@@ -1919,6 +2088,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Runs [body] with [local] (canvas pixels) as the pane under it sees
   /// it, that pane's view the editor's: what the right-click menu asks.
+  @internal
   T atPoint<T>(Offset local, T Function(Offset local) body) {
     final split = activeSplit;
     // Already in a pane: a menu opened from a gesture there.
@@ -1927,10 +2097,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     final canvas = viewport.canvasSize;
     viewport.updateCanvasSize(pane.rect.size);
     try {
-      return scope.throughPane(
-        pane,
-        () => body(local - pane.rect.topLeft),
-      );
+      return scope.throughPane(pane, () => body(local - pane.rect.topLeft));
     } finally {
       viewport.updateCanvasSize(canvas);
     }
@@ -2016,8 +2183,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       for (final overlay in scope.viewportOverlays) {
         final forced = collisionView && overlay is ColliderOverlay3D;
         if (!forced &&
-            (!showsGizmo(overlay.gizmoKind) ||
-                hidden.contains(overlay.id))) {
+            (!showsGizmo(overlay.gizmoKind) || hidden.contains(overlay.id))) {
           continue;
         }
         if (!overlay.dimensions.allows(sceneState.editingMode)) continue;
@@ -2064,7 +2230,10 @@ class JustGameEditorPlugin implements EnginePlugin {
       _gizmoPainter.paintHighlight(
         canvas,
         [
-          for (final e in PhysicsBodies.byLayer(engine.world, scope.definitions)[layer])
+          for (final e in PhysicsBodies.byLayer(
+            engine.world,
+            scope.definitions,
+          )[layer])
             if (_isDrawn(e)) e,
         ],
         layers.labelOf(layer),
@@ -2078,7 +2247,9 @@ class JustGameEditorPlugin implements EnginePlugin {
     final collider = ColliderEditSession.of(scope);
     if (flat && isAuthoring.value) collider.paint(canvas, camera);
 
-    if (preview) _paintGamePreview(canvas, size, engine.cameraSystem.mainCamera);
+    if (preview) {
+      _paintGamePreview(canvas, size, engine.cameraSystem.mainCamera);
+    }
 
     final selected = sceneState.selectedEntity.value;
     if (selected == null || !selected.isActive) return;
@@ -2131,19 +2302,23 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// The preview's top-left corner on the canvas. The chrome publishes it on
   /// every layout, so the preview hangs directly below the play controls
   /// wherever they are.
+  @internal
   Offset gamePreviewOrigin = const Offset(16, 56);
 
   /// How much of the canvas's foot the preview must stay clear of — the
   /// settings gear, and while designing the minimap standing on it. The
   /// chrome publishes it with the origin.
+  @internal
   double gamePreviewBottomReserve = 0;
 
   /// How the preview's panel is drawn. The chrome publishes it with the
   /// origin, from the same settings the play toolbar is drawn with, so the
   /// two read as one piece of UI.
+  @internal
   GamePreviewStyle gamePreviewStyle = const GamePreviewStyle();
 
   /// Height of the preview panel's header row: the LIVE chip and camera name.
+  @internal
   static const double gamePreviewHeaderHeight = 22;
 
   /// The whole preview **panel** on a canvas of [canvasSize], with its corner
@@ -2152,6 +2327,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   ///
   /// On a canvas too short for that above [bottomReserve], it is narrower —
   /// the same shape, smaller — rather than run into what is at the foot.
+  @internal
   static Rect gamePreviewRect(
     Size canvasSize, {
     Offset origin = const Offset(16, 56),
@@ -2171,6 +2347,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// The game view inside [panel]: below the header, inset by the padding.
+  @internal
   static Rect gamePreviewViewRect(
     Rect panel, {
     GamePreviewStyle style = const GamePreviewStyle(),
@@ -2193,6 +2370,8 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   void _paintGamePreview(Canvas canvas, Size size, Camera camera) {
     if (!showGamePreview.value || !isAuthoring.value) return;
+    // Under a workspace the level is dimmed and covered: nobody sees it.
+    if (scope.activeWorkspace.value != null) return;
     final brain = scope.cameraBrain;
     final shot = brain?.liveState;
     final live = brain?.liveCamera;
@@ -2230,23 +2409,40 @@ class JustGameEditorPlugin implements EnginePlugin {
       ..save()
       ..clipRRect(viewFrame)
       ..drawRect(viewRect, Paint()..color = const Color(0xFF0E1216))
-      ..translate(viewRect.left, viewRect.top)
-      ..scale(viewRect.width / size.width);
+      ..translate(viewRect.left, viewRect.top);
     camera.apply(shot);
     try {
-      // A 3-D backend's image first, as the game draws it.
+      // A 3-D backend's image first, as the game draws it — in space made
+      // at the panel's own size (it has the canvas's shape), not a second
+      // full-size picture scaled down every frame, as the split panes do.
       final renderers = engine.rendering.sceneRenderers;
       if (renderers.isNotEmpty) {
         final frame = _previewFrame
           ..update(
             camera,
+            viewRect.size,
+            interpolation: engine.rendering.interpolation,
+          );
+        if (frame.isPlanar) {
+          frame.update(
+            camera,
             size,
             interpolation: engine.rendering.interpolation,
           );
+          canvas
+            ..save()
+            ..scale(viewRect.width / size.width);
+        }
         for (final renderer in renderers) {
           if (renderer.enabled) renderer.render(canvas, frame);
         }
+        if (frame.isPlanar) canvas.restore();
       }
+      // Drawn straight into the frame. Recorded into a picture of its own
+      // and replayed, a lit, material-heavy level filled the GPU's memory
+      // (the 2-D materials make fresh images every flush) and Impeller
+      // aborted.
+      canvas.scale(viewRect.width / size.width);
       engine.world.render(canvas, size);
     } finally {
       camera
@@ -2355,6 +2551,9 @@ class JustGameEditorPlugin implements EnginePlugin {
     );
   }
 
+  /// Takes the grid, snapping and gizmo settings the overlay read from the
+  /// preferences; a grid size of 0 or less is taken as 32.
+  @internal
   void applyOverlaySettings({
     required bool showGrid,
     required bool gridSnappingEnabled,
@@ -2378,11 +2577,13 @@ class JustGameEditorPlugin implements EnginePlugin {
   // session's own history to be one undo step.
 
   /// Entities covered by the current selection.
+  @internal
   List<Entity> get selectionEntities => entities.selectionEntities;
 
   /// Puts the viewport on [entity] — what double-clicking a row in the
   /// scene tree does.
   ///
+  @internal
   void focusOn(Entity entity) {
     if (entity.hasComponent<LevelMapComponent>()) {
       designLevelMap(entity);
@@ -2410,13 +2611,12 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// In 3-D: the surface under [canvasPosition] — the nearest drawn
   /// entity's, by its real shape where a pick test knows it, else the
   /// working plane, else the ground — where something placed there goes.
+  @internal
   SurfacePoint surfaceAt(Offset canvasPosition) {
     final view = scope.editorView;
-    final found = RayEntityPicker(tests: () => scope.pickTests).placementAt(
-      view,
-      canvasPosition,
-      engine.world.entities.where(_isDrawn),
-    );
+    final found = RayEntityPicker(
+      tests: () => scope.pickTests,
+    ).placementAt(view, canvasPosition, engine.world.entities.where(_isDrawn));
     if (found.onto != null) return found;
     final plane = workingPlane3D;
     final hit = plane.intersect(view.screenToRay(canvasPosition));
@@ -2425,6 +2625,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// The 3-D designer's working plane: as set, or through the base of the
   /// selection while it follows it.
+  @internal
   WorkingPlane get workingPlane3D {
     final state = scope.designer3D;
     return state.followSelection.value
@@ -2434,6 +2635,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Drops everything selected straight down onto what is under it (or
   /// the working plane), as one undo step. How many moved.
+  @internal
   int dropSelectionToGround() {
     final picker = RayEntityPicker(tests: () => scope.pickTests);
     return entities.dropSelectionToGround(
@@ -2447,6 +2649,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// Copies the selection as [spec] lays them out, about the gizmo's
   /// pivot, as one undo step.
+  @internal
   void arraySelection3D(Array3DSpec spec) => entities.arraySelection3D(
     history,
     spec,
@@ -2457,6 +2660,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// built-in ones and every module's that place in 3-D, whichever kit the
   /// Level Designer has chosen, then each variant of those it applies to
   /// (a Solid of every shape).
+  @internal
   List<PrefabDefinition> get prefabsInSpace {
     final base = [
       for (final module in scope.modules.withBuiltIns)
@@ -2473,6 +2677,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// The points the selected entity lets the author drag, while authoring
   /// with one entity selected: what the modules' [ViewportHandles] offer.
+  @internal
   List<ViewportHandle> get selectionHandles {
     if (!isAuthoring.value || sceneState.hasMultiSelection) return const [];
     final entity = sceneState.selectedEntity.value;
@@ -2480,24 +2685,26 @@ class JustGameEditorPlugin implements EnginePlugin {
     final mode = sceneState.editingMode;
     return [
       for (final provider in scope.viewportHandles)
-        if (provider.dimensions.allows(mode)) ...provider.handlesOf(entity, scope),
+        if (provider.dimensions.allows(mode))
+          ...provider.handlesOf(entity, scope),
     ];
   }
 
   /// Places [prefab] at [at], selected, as one undo step.
+  @internal
   Entity placePrefab(PrefabDefinition prefab, SurfacePoint at) =>
       entities.placePrefab(prefab, at);
 
   /// In 3-D: frames the selection — or, with [all] or nothing selected,
   /// everything drawn.
+  @internal
   void frameInSpace({bool all = false}) {
     final view = scope.editorView;
     if (view is! OrbitFlyEditorView) return;
     final box = Aabb3(), one = Aabb3();
     final picked = all ? const <Entity>[] : selectionEntities;
-    for (final e in picked.isEmpty
-        ? engine.world.entities.where(_isDrawn)
-        : picked) {
+    for (final e
+        in picked.isEmpty ? engine.world.entities.where(_isDrawn) : picked) {
       if (RayEntityPicker.boundsOf(e, one)) box.addBox(one);
     }
     view.focusOn(box);
@@ -2505,6 +2712,7 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   /// In 3-D: looks along an axis ([yaw], [pitch] in radians), turning about
   /// the point the view pivots on.
+  @internal
   void viewAlong({required double yaw, required double pitch}) {
     if (scope.editorView case final OrbitFlyEditorView view) {
       view.viewFrom(yaw: yaw, pitch: pitch);
@@ -2515,6 +2723,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// map selected and painted, the Stamp in hand unless a tile tool already
   /// is, and the view on what is painted — what double-clicking the Level
   /// Map in the scene tree does.
+  @internal
   void designLevelMap(Entity entity) {
     sceneState.selectEntity(entity);
     openLevelDesigner();
@@ -2538,14 +2747,17 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// Deletes everything selected, as one undoable action.
+  @internal
   void deleteSelection() => entities.deleteSelection(history);
 
   /// Duplicates everything selected, offset by one grid cell so the copies
   /// are visible rather than hidden exactly behind the originals.
+  @internal
   void duplicateSelection() =>
       entities.duplicateSelection(history, gridSize: gridSize.value);
 
   /// Repeats the selection [count] times, each copy [step] further along.
+  @internal
   void arraySelection({required int count, required Offset step}) =>
       entities.arraySelection(history, count: count, step: step);
 
@@ -2554,13 +2766,29 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// and sets the backup aside, null opens the file and asks again next
   /// time. Set by the overlay, which has somewhere to ask; without it the
   /// file opens.
+  @internal
   Future<bool?> Function(String sceneName, DateTime when)? askToRecover;
+
+  /// Asks what to do with the unsaved changes to the scene [leaving] before
+  /// [opening] replaces it: save them, discard them, or — null — stay on
+  /// it. Set by the overlay, which has somewhere to ask; without it a scene
+  /// with unsaved changes is never left for another.
+  @internal
+  Future<UnsavedChoice?> Function(String leaving, String opening)?
+  askToLeaveScene;
 
   /// Opens [sceneName] through [sceneIO], closing the Level Designer first:
   /// its undo commands hold entities of the scene being left, and it reopens
   /// cleanly on the new one. A backup with changes never saved is offered
   /// first.
+  ///
+  /// The scene open now is left first, as [leaveScene] does it: unsaved
+  /// changes are asked about, and a play-test of it ends. Nothing opens
+  /// while another open or a save is under way, or when the question is
+  /// cancelled.
   Future<void> openScene(String sceneName) async {
+    if (sceneIO.isBusy) return;
+    if (!await leaveScene(opening: sceneName)) return;
     if (sceneIO.isBusy) return;
     final wasDesignerOpen = isLevelDesignerOpen;
     Map<String, dynamic>? recovered;
@@ -2579,8 +2807,63 @@ class JustGameEditorPlugin implements EnginePlugin {
     final opened = recovered != null
         ? await sceneIO.openFrom(sceneName, recovered, assets: assets)
         : await sceneIO.open(sceneName, assets: assets);
-    if (!opened) return;
+    // Not opened (the file could not be read): the scene that was open
+    // still is, and the designer goes back to it.
+    if (!opened && !sceneState.hasScene) return;
     if (wasDesignerOpen) openLevelDesigner();
+  }
+
+  /// Gets the open scene ready to be replaced by [opening]; whether it may
+  /// be. True at once with no scene open.
+  ///
+  /// Unsaved changes are asked about through [askToLeaveScene] — saved,
+  /// discarded, or kept by staying — and without anyone to ask the scene
+  /// is not left. A save that fails or is refused keeps it open too. Then a
+  /// play-test running in it stops (its snapshot is this scene's: a save
+  /// after the open would write it into the other scene's file), and
+  /// anything showing something other than the scene as authored — a
+  /// timeline preview — puts it back.
+  @internal
+  Future<bool> leaveScene({required String opening}) async {
+    final leaving = sceneState.activeScene.value;
+    if (leaving == null) return true;
+    if (sceneState.isDirty.value) {
+      final ask = askToLeaveScene;
+      if (ask == null) {
+        scope.log.log(
+          'Did not open $opening: ${leaving.name} has unsaved changes. Save '
+          'it, or close it, first.',
+          source: 'editor',
+          category: 'scene',
+          level: DebuggerLogLevel.warning,
+        );
+        return false;
+      }
+      final choice = await ask(leaving.name, opening);
+      // The question took a while: the scene may have gone, or be saving.
+      if (choice == null ||
+          !identical(sceneState.activeScene.value, leaving) ||
+          sceneIO.isBusy) {
+        return false;
+      }
+      if (choice == UnsavedChoice.save) {
+        try {
+          if (!await saveScene()) return false;
+        } catch (error) {
+          scope.log.log(
+            'Did not open $opening: ${leaving.name} could not be saved: '
+            '$error',
+            source: 'editor',
+            category: 'scene',
+            level: DebuggerLogLevel.error,
+          );
+          return false;
+        }
+      }
+    }
+    if (playController.isRunning) playController.stop();
+    scope.restoreAuthoredState();
+    return true;
   }
 
   /// Counts what the scene about to open asks to load, for the loader:
@@ -2635,23 +2918,26 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// saved — if it has unsaved changes. Waits, returning false, while a
   /// timeline preview shows or an open or save is under way. True when
   /// something was written.
+  @internal
   Future<bool> autosave() async {
     if (_autosaving ||
         !sceneState.hasScene ||
         !sceneState.isDirty.value ||
         sceneIO.isBusy ||
-        scope.isAuthoredStateHeld) {
+        scope.isAuthoredStateHeld ||
+        // Mid-gesture the level is half-edited (tiles lifted off their
+        // layer to be moved): the next autosave saves it whole.
+        (designer.value?.hasActiveGesture ?? false)) {
       return false;
     }
     _autosaving = true;
     try {
       final settings = scope.prefs.settings.value;
       if (settings.autosaveMode == AutosaveMode.save) {
-        await saveScene();
-        return true;
+        return await saveScene();
       }
       return await sceneIO.backup(
-        asAuthored: playController.snapshot?.entities,
+        asAuthored: _authoredWhilePlaying,
         editorData: designer.value?.editorData() ?? sceneIO.editorData,
         keep: settings.backupsToKeep,
       );
@@ -2670,18 +2956,18 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   // ── Where the session is left ──────────────────────────────────────────
 
-  static final SettingPref<String> _lastScenePref = SettingPref.text(
-    OverlaySettingsPrefKeys.sessionLastScene,
-    '',
-  );
   static final SettingPref<bool> _designerOpenPref = SettingPref.boolean(
     OverlaySettingsPrefKeys.sessionDesignerOpen,
     false,
   );
 
   void _rememberScene() {
+    // Closed: the map files it was editing go back to what is on disk —
+    // closed without saving, their edits are not this session's any more,
+    // and the next scene's save must not write them.
+    if (!sceneState.hasScene) scope.mapDocs.discardUnsaved();
     final name = sceneState.activeScene.value?.name ?? '';
-    unawaited(scope.prefs.set(_lastScenePref, name));
+    unawaited(scope.prefs.set(RecentScenes.lastScene, name));
     // The Scenes list's Recent, and the start card's Reopen.
     if (name.isNotEmpty) unawaited(RecentScenes.touch(scope.prefs, name));
   }
@@ -2696,12 +2982,13 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// Opens the scene that was open when the editor was last closed — and
   /// the Level Designer, if it was open on it — as the settings ask. Once,
   /// after the settings are loaded, and only with no scene open yet.
+  @internal
   Future<void> reopenLastSession() async {
     if (_reopened) return;
     _reopened = true;
     final settings = scope.prefs.settings.value;
     if (!settings.reopenLastScene || sceneState.hasScene) return;
-    final name = scope.prefs.get(_lastScenePref);
+    final name = scope.prefs.get(RecentScenes.lastScene);
     final designerWasOpen = scope.prefs.get(_designerOpenPref);
     if (name.isEmpty || !scope.scenes.listSceneNames().contains(name)) return;
     await openScene(name);
@@ -2775,6 +3062,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// time from the workspace — a lit level drawn with a 2-D material
   /// window's own lit preview filled the GPU's memory: 3 fps. Often enough
   /// that what is edited live in the scene still shows at its edges.
+  @internal
   static const Duration drawIntervalUnderWorkspace = Duration(
     milliseconds: 250,
   );
@@ -2803,13 +3091,37 @@ class JustGameEditorPlugin implements EnginePlugin {
   ///
   /// Map files edited alongside it are saved too: one save, one unsaved
   /// mark, for the scene and the maps it uses.
-  Future<void> saveScene() async {
-    await scope.mapDocs.saveDirty();
-    await sceneIO.save(
-      asAuthored: playController.snapshot?.entities,
+  ///
+  /// A map file that could not be written does not stop the scene being
+  /// saved; it stays unsaved (and the scene with it), and the save then
+  /// throws a [FileSystemException] naming it, for whoever asked to save to
+  /// say so — closing the scene does not go on as though all were saved.
+  ///
+  /// False when it was not saved because an open or another save was under
+  /// way; an error writing it is thrown.
+  Future<bool> saveScene() async {
+    if (sceneIO.isBusy) return false;
+    final mapsFailed = await scope.mapDocs.saveDirty();
+    final saved = await sceneIO.save(
+      // The snapshot is the level as authored only while a play-test runs.
+      asAuthored: _authoredWhilePlaying,
       editorData: designer.value?.editorData() ?? sceneIO.editorData,
     );
+    if (mapsFailed.isNotEmpty) {
+      // Still not on disk: the unsaved mark stays.
+      sceneState.markDirty();
+      throw FileSystemException(
+        'Could not save ${mapsFailed.keys.join(', ')}: '
+        '${mapsFailed.values.join('; ')}',
+      );
+    }
+    return saved;
   }
+
+  /// What a save writes while a play-test runs: the level as it was when
+  /// Play was pressed. Null outside one, when the world is the level.
+  List<Map<String, dynamic>>? get _authoredWhilePlaying =>
+      playController.isRunning ? playController.snapshot?.entities : null;
 
   // ── Play / Pause / Stop ────────────────────────────────────────────────────
 
@@ -2822,6 +3134,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// point — placed by the game kit that knows its player
   /// (`LevelAids.playFrom`), else whatever carries the `player` tag.
   /// Whether it was placed; nothing when a play-test is on already.
+  @internal
   bool playFrom(Vector3 at) {
     if (!_isInitialized ||
         playController.state.value != EditorPlayState.stopped) {
@@ -2852,6 +3165,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     return false;
   }
 
+  /// Whether the editor's view is 3-D: the open scene is a 3-D one.
+  @internal
   bool get view3D => !scope.editorView.isPlanar;
 
   /// Freezes the play-test; see [PlayController.pause].
@@ -2863,21 +3178,18 @@ class JustGameEditorPlugin implements EnginePlugin {
 
   // ── Visibility ────────────────────────────────────────────────────────────
 
+  /// Opens the editor when it is closed and closes it when it is open, as
+  /// [toggleKey] does.
   void toggleVisibility() => setVisible(!isVisible.value);
 
-  void toggleStatusPanelVisibility() =>
-      setStatusPanelVisible(!isStatusPanelVisible.value);
+  /// Opens or closes the editor, with its status bar. Opening holds the
+  /// game's time at 0 for authoring and takes the keyboard from the game;
+  /// closing stops a play-test, gives the game back the time scale it had
+  /// and gives it the keyboard back.
+  void setVisible(bool visible) => _setVisible(visible);
 
-  void setStatusPanelVisible(bool visible) {
-    final nextVisible = visible;
-    if (isStatusPanelVisible.value == nextVisible) return;
-    if (nextVisible) {
-      _attachDebuggerIfReady();
-    }
-    isStatusPanelVisible.value = nextVisible;
-  }
-
-  void setVisible(bool visible) {
+  void _setVisible(bool visible, {bool syncFocus = true}) {
+    final opening = visible && !isVisible.value;
     final shouldShowStatusPanel = visible && !isStatusPanelVisible.value;
     final shouldHideStatusPanel = !visible && isStatusPanelVisible.value;
     if (isVisible.value == visible &&
@@ -2889,18 +3201,21 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (isVisible.value) {
       isStatusPanelVisible.value = true;
       _attachDebuggerIfReady();
-      if (engine.isInitialized) {
-        _preEditorTimeScale = engine.time.timeScale;
-        engine.time.timeScale = 0.0;
-      }
+      // Only when it really opens: open already (its status panel shown
+      // again), the game's own scale was kept then, and the 0 there now is
+      // the editor's.
+      if (opening) _holdGameTime();
     } else {
       isStatusPanelVisible.value = false;
       // Closing the editor mid-play-test would otherwise leave play-spawned
       // entities and a stale play state behind.
       if (playController.isRunning) stop();
-      if (engine.isInitialized) {
-        engine.time.timeScale = _preEditorTimeScale ?? 1.0;
-      }
+      _detachDebugger();
+      // What the game ran at before the editor stopped it; untouched when
+      // the editor never did (it opened and closed before the engine
+      // started).
+      final kept = _preEditorTimeScale;
+      if (kept != null && engine.isInitialized) engine.time.timeScale = kept;
       _preEditorTimeScale = null;
     }
     if (kDebugMode) {
@@ -2915,7 +3230,63 @@ class JustGameEditorPlugin implements EnginePlugin {
       category: 'visibility',
       mirrorToDebugger: false,
     );
-    _syncFocus();
+    if (syncFocus) _syncFocus();
+  }
+
+  bool _suspended = false;
+
+  /// See [detach].
+  void _suspend() {
+    if (!_isInitialized || _suspended) return;
+    _suspended = true;
+    // No focus to hand anywhere: the widget is gone.
+    _setVisible(false, syncFocus: false);
+    _releaseEngine();
+    try {
+      HardwareKeyboard.instance.removeHandler(_onHardwareKey);
+    } catch (_) {
+      // The keyboard singleton is unavailable if no binding was initialized.
+    }
+    _presence?.stop();
+    _presence = null;
+  }
+
+  /// Put back on an engine after [detach].
+  void _resume() {
+    if (!_suspended) return;
+    _suspended = false;
+    _presence ??= EditorPresence.start();
+    HardwareKeyboard.instance.addHandler(_onHardwareKey);
+  }
+
+  /// Hands back what the editor's per-frame syncs set on the engine, as the
+  /// game has it with no editor: what runs only in a play-test runs, no
+  /// collider outlines, no 3-D aids, no view of the editor's over the
+  /// scene's, the game's own draw rate.
+  void _releaseEngine() {
+    scope.viewOverride = null;
+    if (!engine.isInitialized) return;
+    _syncRuntimeSystems(0);
+    final physics = engine.world.getSystem<PhysicsSystem>();
+    if (physics != null) {
+      physics.drawsOutlines = false;
+      if (physics.outlineFilter == _gizmosShownFor) {
+        physics.outlineFilter = null;
+      }
+    }
+    final graphics = engine.services.maybe<g3.Graphics3D>();
+    if (graphics != null && graphics.isStarted) {
+      final renderer = graphics.sceneRenderer;
+      if (identical(renderer.aids, sceneAids) ||
+          identical(renderer.aids, _playAids)) {
+        renderer.aids = null;
+      }
+    }
+    if (_drawingHeld) {
+      engine.rendering.drawInterval = _gameDrawInterval;
+      _gameDrawInterval = null;
+      _drawingHeld = false;
+    }
   }
 
   void _syncFocus() {
@@ -2928,12 +3299,36 @@ class JustGameEditorPlugin implements EnginePlugin {
     gameFocusScopeNode.requestFocus();
   }
 
+  /// Closes the editor for good: takes off the game's world what the editor
+  /// added to it, gives the engine back its own settings, and disposes the
+  /// editor's state — and [scope], when the plugin made it. For whoever
+  /// made the plugin, after it is off the engine; the plugin is not used
+  /// again.
   void dispose() {
+    // Closed and let go of first, as a detach would: no play-test left
+    // running, the game's time scale back, no key handler, no heartbeat.
+    _suspend();
     _presence?.stop();
     _presence = null;
     for (final stop in _stopFollowing) {
       stop();
     }
+    _stopFollowing.clear();
+    // What _initialize put on the engine that reads the editor's state:
+    // read after this, it would be read from disposed signals.
+    if (engine.isInitialized) {
+      final render = engine.world.getSystem<RenderSystem>();
+      if (render != null && render.shouldRender == _isDrawn) {
+        render.shouldRender = null;
+      }
+      for (final system in _ownSystems) {
+        if (engine.world.systems.contains(system)) {
+          engine.world.removeSystem(system);
+        }
+      }
+    }
+    _ownSystems.clear();
+    _detachDebugger();
     isAuthoring.removeListener(_syncBackdrop);
     if (_gameBackdrop != null && engine.isInitialized) {
       engine.rendering.backgroundColor = _gameBackdrop!;
@@ -2970,15 +3365,20 @@ class JustGameEditorPlugin implements EnginePlugin {
     logService.stopSession();
     playController.dispose();
     debuggerController.dispose();
+    // Before the scope: made late, either may be made now from its state.
+    splitViews.dispose();
+    sceneIO.loading.dispose();
     if (_ownsScope) scope.dispose();
     editorFocusNode.dispose();
     gameFocusScopeNode.dispose();
     isGridVisible.dispose();
+    keepsToLevelMap.dispose();
     isAuthoring.dispose();
     for (final signal in [
       isVisible,
       isStatusPanelVisible,
       showGrid,
+      showGamePreview,
       gridSize,
     ]) {
       signal.dispose();

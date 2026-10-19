@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart';
 import 'package:just_game_engine/graphics_3d.dart';
 
@@ -119,13 +119,23 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
 
   MaterialFile? _parent(String path) => _parents.putIfAbsent(path, () {
     try {
-      return MaterialFile.parse(
-        File('${widget.root}/$path').readAsStringSync(),
-      );
+      return MaterialFile.parse(_fileOf(path).readAsStringSync());
     } on Object {
       return null;
     }
   });
+
+  // The file at [path]: the project's, or a package's asset key.
+  File _fileOf(String path) =>
+      File(PackageAssetPaths.of(widget.root).absolute(path));
+
+  // Why [path] can't be written, or null when it can: a package in pub's
+  // shared cache is every project's.
+  String? _readOnly(String path) =>
+      PackageAssetPaths.of(widget.root).isWritable(path)
+      ? null
+      : "$path is in pub's shared cache, used by every project: it can't be "
+            'changed here.';
 
   // A value being dragged or picked: drawn, not yet an undo step.
   MaterialFile? _live;
@@ -173,6 +183,9 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   double? get compareAt => _compareAt;
   double? _compareAt;
 
+  // The compare line moved: the preview is built again, not the window.
+  final ValueNotifier<int> _compareLine = ValueNotifier(0);
+
   /// Whether Space is held: a plain grey material drawn in its place.
   bool get holdingPlain => _holdingPlain;
   bool _holdingPlain = false;
@@ -184,7 +197,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   late final MapPictures _maps = widget.maps ?? MapPictures(root: widget.root);
   StreamSubscription<String>? _changes;
 
-  File get _file => File('${widget.root}/${widget.path}');
+  File get _file => _fileOf(widget.path);
 
   @override
   void initState() {
@@ -226,8 +239,11 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
     _redraw();
   }
 
-  /// Puts [next] in as the material, one undo step.
+  /// Puts [next] in as the material, one undo step. Nothing is edited until
+  /// the file is read: one that could not be (broken JSON, a newer format)
+  /// is never written over with the defaults shown meanwhile.
   void edit(MaterialFile next) {
+    if (!_loaded) return;
     _live = null;
     if (next == material) {
       _redraw();
@@ -259,6 +275,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
     MaterialFile Function(MaterialFile m) change, {
     bool rebuild = true,
   }) {
+    if (!_loaded) return;
     final live = change(shown);
     if (rebuild) {
       setState(() => _live = live);
@@ -302,12 +319,21 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
     _redraw();
   }
 
-  /// Writes the file; whether it went through.
+  /// Writes the file, whole or not at all; whether it went through. Never
+  /// when the file was not read ([load]): what is shown then is no more
+  /// than defaults.
   Future<bool> save() async {
+    if (!_loaded) return false;
     final current = material;
+    if (_readOnly(widget.path) case final why?) {
+      if (mounted) setState(() => _error = why);
+      return false;
+    }
     try {
-      await _file.writeAsString(current.encode());
-      if (mounted) setState(() => _saved = current);
+      await ProjectFiles.writeString(_file.path, current.encode());
+      _saved = current;
+      // Read already: what went wrong before was a save's.
+      if (mounted) setState(() => _error = null);
       _syncScene();
       widget.workspace.reloadAssets?.call(widget.path);
       return true;
@@ -331,7 +357,11 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   /// through.
   Future<bool> applyToParent({bool confirm = true}) async {
     final m = material;
-    if (!m.isVariant || m.overrides.isEmpty) return false;
+    if (!_loaded || !m.isVariant || m.overrides.isEmpty) return false;
+    if (_readOnly(m.parent) case final why?) {
+      setState(() => _error = why);
+      return false;
+    }
     if (confirm &&
         !await showEditorConfirm(
           context,
@@ -345,14 +375,15 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
         )) {
       return false;
     }
-    final parent = File('${widget.root}/${m.parent}');
+    final parent = _fileOf(m.parent);
     try {
       final theirs = jsonDecode(await parent.readAsString()) as Map;
       final mine = m.toJson()
         ..remove('parent')
         ..remove('formatVersion');
       final next = MaterialFile.fromJson({...theirs, ...mine});
-      await parent.writeAsString(next.encode());
+      // Whole or not at all: every variant of it is drawn from it.
+      await ProjectFiles.writeString(parent.path, next.encode());
     } on Object catch (error) {
       if (mounted) setState(() => _error = error);
       return false;
@@ -360,7 +391,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
     _parents.remove(m.parent);
     _shownFor = null;
     widget.workspace.reloadAssets?.call(m.parent);
-    edit(m.copyWith(overrides: const {}));
+    if (mounted) edit(m.copyWith(overrides: const {}));
     return true;
   }
 
@@ -385,8 +416,10 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   }
 
   // The open scene draws what is edited — a value being dragged too —
-  // until it is saved or put back.
+  // until it is saved or put back. Not once the window went: it put the
+  // file back as it closed.
   void _syncScene() {
+    if (!mounted) return;
     final library = sceneMaterials;
     if (library == null) return;
     final live = _live;
@@ -423,6 +456,8 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   }
 
   Future<void> _redraw() async {
+    // A late call (a frame's callback, a load) after the window went.
+    if (!mounted) return;
     _extensionView.changed();
     _syncScene();
     if (_rendering) {
@@ -435,7 +470,21 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
         _again = false;
         final w = math.max(16, _size.width.round());
         final h = math.max(16, _size.height.round());
-        final renderer = await widget.pictures.renderer();
+        final Renderer3D? renderer;
+        try {
+          renderer = await widget.pictures.renderer();
+        } on Object catch (error) {
+          // The renderer could not start (its shaders, the driver): no
+          // preview, and the chips say why — every redraw would only throw
+          // the same again.
+          if (mounted) {
+            setState(() {
+              _noGpu = true;
+              _drawError = error;
+            });
+          }
+          return;
+        }
         if (renderer == null) {
           if (mounted) setState(() => _noGpu = true);
           return;
@@ -505,9 +554,12 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
     sceneMaterials?.endPreview(widget.path);
     _changes?.cancel();
     if (widget.maps == null) _maps.dispose();
+    // The maps drawn at full size here: the dock keeps its own, smaller.
+    widget.pictures.releaseFullSizeMaps();
     _image?.dispose();
     _plainImage?.dispose();
     _pictures.dispose();
+    _compareLine.dispose();
     _widths.dispose();
     _framing.dispose();
     _resized?.cancel();
@@ -527,7 +579,17 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   /// or stops.
   void setCompare(double? at) {
     final was = _comparing;
-    setState(() => _compareAt = at?.clamp(0.02, 0.98).toDouble());
+    final next = at?.clamp(0.02, 0.98).toDouble();
+    if (next == _compareAt) return;
+    final turned = (next == null) != (_compareAt == null);
+    _compareAt = next;
+    if (turned) {
+      // On or off: the toolbar's button says so.
+      setState(() {});
+    } else {
+      // The line dragged: only the preview follows it.
+      _compareLine.value++;
+    }
     if (_comparing && !was) _redraw();
   }
 
@@ -589,13 +651,16 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   // The panel's width changed: the window is laid out again, not built.
   final ValueNotifier<int> _widths = ValueNotifier(0);
 
-  /// The preview's keys, as its shortcut list says them.
-  static const String shortcuts =
+  /// The preview's keys, as its shortcut list says them: Cmd for Ctrl on
+  /// macOS.
+  static String get shortcuts =>
       'F  face it again      + / −  zoom in, out\n'
       'Wheel  zoom      Drag  turn      Double-click  face it again\n'
       'C  compare      Hold Space  without the material\n'
       'B  background\n'
-      'Ctrl+S  save      Ctrl+Z / Ctrl+Y  undo, redo';
+      '${EditorKeys.withPrimary('S')}  save      '
+      '${EditorKeys.withPrimary('Z')} / ${EditorKeys.withPrimary('Y')}  undo, '
+      'redo';
 
   KeyEventResult _onKey(KeyEvent event) {
     // Space held shows a plain grey material in its place.
@@ -606,10 +671,15 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
       return KeyEventResult.handled;
     }
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    final ctrl = HardwareKeyboard.instance.isControlPressed;
+    // Ctrl is Cmd on macOS.
+    final ctrl = EditorKeys.primaryPressed;
     final shift = HardwareKeyboard.instance.isShiftPressed;
     if (!ctrl) {
       if (WorkspaceKeyScope.isTyping) return KeyEventResult.ignored;
+      // A chord is not a bare key: Alt+C, or Ctrl+C on a Mac, is not C.
+      if (HardwareKeyboard.instance.isAltPressed || EditorKeys.otherPressed) {
+        return KeyEventResult.ignored;
+      }
       switch (event.logicalKey) {
         case LogicalKeyboardKey.keyF:
           fit();
@@ -657,7 +727,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
               title: 'Material',
               file: name,
               dirty: dirty,
-              onSave: save,
+              onSave: _loaded ? save : null,
               onUndo: _at > 0 ? undo : null,
               onRedo: _at < _history.length - 1 ? redo : null,
               tools: [
@@ -972,10 +1042,11 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
         ValueListenableBuilder<int>(
           valueListenable: widget.pictures.revision,
           builder: (context, _, _) {
-            final file = File('${widget.root}/$path');
-            final there = file.existsSync();
+            // One look at the file: whether it is there, and when it changed.
+            final stat = FileStat.statSync(_fileOf(path).path);
+            final there = stat.type != FileSystemEntityType.notFound;
             final image = there
-                ? widget.pictures.peek(path, modified: file.lastModifiedSync())
+                ? widget.pictures.peek(path, modified: stat.modified)
                 : null;
             return _slotDetail(
               picture: image == null
@@ -1220,13 +1291,42 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
     );
   }
 
+  // Until the file is read — or when it could not be — only that, and a
+  // way to read it again: fields over the defaults shown meanwhile would
+  // save those over the file.
+  Widget _unread() => ListView(
+    children: [
+      if (_error == null)
+        _note('Loading…')
+      else ...[
+        _note("Can't be read: $_error", color: EditorTheme.warning),
+        _note(
+          'Nothing is saved over it. Put the file right (it is JSON) and '
+          'read it again.',
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: EditorButton(
+              label: 'Read it again',
+              icon: Icons.refresh,
+              kind: EditorButtonKind.ghost,
+              onPressed: load,
+            ),
+          ),
+        ),
+      ],
+    ],
+  );
+
   Widget _fields() {
+    if (!_loaded) return _unread();
     final m = _live ?? shown;
     final layered = m.kind == MaterialKind.layered;
     final problems = material.validate();
     return ListView(
       children: [
-        if (!_loaded && _error == null) _note('Loading…'),
         if (_error != null) _note('$_error', color: EditorTheme.warning),
         if (material.isVariant) _variant(),
         const SizedBox(height: 6),
@@ -1577,7 +1677,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
       ),
       WorkspaceToolButtons(view: _extensionView),
       const ToolSeparator(),
-      const ShortcutsHint(shortcuts),
+      ShortcutsHint(shortcuts),
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
@@ -1647,7 +1747,6 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
           _resized = Timer(resizeSettle, _redraw);
         }
       }
-      final split = _holdingPlain ? 1.0 : _compareAt;
       return Listener(
         onPointerSignal: (event) {
           if (event is! PointerScrollEvent) return;
@@ -1660,94 +1759,82 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
             _turned();
           },
           onDoubleTap: fit,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: ValueListenableBuilder<int>(
-                  valueListenable: _pictures,
-                  builder: (context, _, _) {
-                    final plain = _plainImage;
-                    return ColoredBox(
-                      color: const Color(0xFF15181D),
-                      child: split == null || plain == null
-                          ? _picture(_image)
-                          : Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                ClipRect(
-                                  clipper: _Side(split, left: true),
-                                  child: _picture(plain),
-                                ),
-                                if (split < 1)
-                                  ClipRect(
-                                    clipper: _Side(split, left: false),
-                                    child: _picture(_image),
-                                  ),
-                              ],
-                            ),
-                    );
-                  },
-                ),
-              ),
-              if (_compareAt case final at? when !_holdingPlain) ...[
-                Positioned(
-                  left: at * size.width - 12,
-                  top: 0,
-                  bottom: 0,
-                  width: 24,
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.resizeColumn,
-                    child: GestureDetector(
-                      onHorizontalDragUpdate: (d) => setCompare(
-                        (at * size.width + d.delta.dx) / size.width,
-                      ),
-                      child: Center(
-                        child: Container(
-                          width: 2,
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 8,
-                  right: size.width * (1 - at) + 10,
-                  child: const PreviewChip('Plain', icon: Icons.chevron_left),
-                ),
-                Positioned(
-                  top: 8,
-                  left: at * size.width + 10,
-                  child: const PreviewChip('With', icon: Icons.chevron_right),
-                ),
-              ],
-              ...workspaceOverlays(_extensionView, size),
-            ],
+          // Built again as the compare line is dragged; the window is not.
+          child: ValueListenableBuilder<int>(
+            valueListenable: _compareLine,
+            builder: (context, _, _) => _previewStack(size),
           ),
         ),
       );
     },
   );
 
-  /// [argb] as `#RRGGBB`, or `#RRGGBBAA` when not opaque.
-  static String hexOf(int argb) {
-    String two(int v) => v.toRadixString(16).padLeft(2, '0').toUpperCase();
-    final a = (argb >> 24) & 0xFF;
-    final r = (argb >> 16) & 0xFF;
-    final g = (argb >> 8) & 0xFF;
-    final b = argb & 0xFF;
-    return '#${two(r)}${two(g)}${two(b)}${a == 0xFF ? '' : two(a)}';
-  }
-
-  /// `#RRGGBB` or `#RRGGBBAA` (the `#` optional) as ARGB; null for
-  /// anything else.
-  static int? argbOfHex(String text) {
-    var t = text.trim();
-    if (t.startsWith('#')) t = t.substring(1);
-    if (t.length != 6 && t.length != 8) return null;
-    final v = int.tryParse(t, radix: 16);
-    if (v == null) return null;
-    return t.length == 6 ? 0xFF000000 | v : ((v & 0xFF) << 24) | (v >> 8);
+  // The preview's pictures, the compare line and what modules lay over it.
+  Widget _previewStack(Size size) {
+    final split = _holdingPlain ? 1.0 : _compareAt;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: ValueListenableBuilder<int>(
+            valueListenable: _pictures,
+            builder: (context, _, _) {
+              final plain = _plainImage;
+              return ColoredBox(
+                color: const Color(0xFF15181D),
+                child: split == null || plain == null
+                    ? _picture(_image)
+                    : Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          ClipRect(
+                            clipper: _Side(split, left: true),
+                            child: _picture(plain),
+                          ),
+                          if (split < 1)
+                            ClipRect(
+                              clipper: _Side(split, left: false),
+                              child: _picture(_image),
+                            ),
+                        ],
+                      ),
+              );
+            },
+          ),
+        ),
+        if (_compareAt case final at? when !_holdingPlain) ...[
+          Positioned(
+            left: at * size.width - 12,
+            top: 0,
+            bottom: 0,
+            width: 24,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.resizeColumn,
+              child: GestureDetector(
+                onHorizontalDragUpdate: (d) =>
+                    setCompare((at * size.width + d.delta.dx) / size.width),
+                child: Center(
+                  child: Container(
+                    width: 2,
+                    color: Colors.white.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 8,
+            right: size.width * (1 - at) + 10,
+            child: const PreviewChip('Plain', icon: Icons.chevron_left),
+          ),
+          Positioned(
+            top: 8,
+            left: at * size.width + 10,
+            child: const PreviewChip('With', icon: Icons.chevron_right),
+          ),
+        ],
+        ...workspaceOverlays(_extensionView, size),
+      ],
+    );
   }
 }
 

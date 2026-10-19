@@ -4,11 +4,18 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_editor_core/host.dart';
 import '../state/play_snapshot.dart';
 
-/// Play/Pause/Stop state for the editor's in-scene play-test.
-enum EditorPlayState { stopped, playing, paused }
+/// Where the editor's play-test of the open scene is.
+enum EditorPlayState {
+  /// No play-test: the scene is being authored, the game's time held at 0.
+  stopped,
 
-/// Creates the entity a [SpawnComponent] stands for, when play starts.
-typedef EntitySpawner = SpawnFunction;
+  /// The game's systems run on the scene, as in the game.
+  playing,
+
+  /// The play-test is frozen where it was; Stop still puts the authored
+  /// scene back.
+  paused,
+}
 
 /// The editor's play-test: runs the real systems on the open scene, then puts
 /// everything back.
@@ -57,6 +64,7 @@ class PlayController {
   int _stepFrames = 0;
   final List<EntityId> _spawned = [];
   PlaySnapshot? _snapshot;
+  EditorHistoryMark? _historyMark;
 
   /// True between [play] and [stop], paused or not.
   bool get isRunning => state.value != EditorPlayState.stopped;
@@ -75,31 +83,62 @@ class PlayController {
     if (!engine.isInitialized) return;
 
     if (state.value == EditorPlayState.stopped) {
-      _elapsed = 0;
-      elapsedSeconds.value = 0;
       // Before anything spawns or moves — and with nothing previewed.
       scope.restoreAuthoredState();
+      final snapshot = PlaySnapshot.capture(
+        engine.world,
+        scope.codec,
+        rootOrder: scope.sceneState.rootOrder(engine.world),
+      );
+      final List<Entity> spawned;
+      try {
+        spawned = SpawnPoints.spawnAll(
+          engine.world,
+          spawners,
+          onMissing: (point, id) => scope.log.log(
+            'Play: nothing spawned at ${point.name ?? 'a spawn point'} — no '
+            'spawner is called "$id".',
+            source: 'editor',
+            category: 'play',
+            level: DebuggerLogLevel.warning,
+            details: spawners.isEmpty
+                ? 'The game registered no spawners with the editor.'
+                : 'Spawners: ${spawners.map((s) => s.id).join(', ')}.',
+          ),
+        );
+      } on Object catch (error, stack) {
+        // A spawner of the game's threw. What the spawners made before it
+        // goes again, and the editor stays as it was: no play-test, no
+        // snapshot (a save keeps writing the level as it stands), and
+        // nothing half-spawned left in the level to be saved with it.
+        final removed = snapshot.removeAddedFrom(engine.world);
+        scope.sceneState.refresh();
+        scope.log.log(
+          'Play did not start: a spawner threw — $error',
+          source: 'editor',
+          category: 'play',
+          level: DebuggerLogLevel.error,
+          details: [
+            if (removed > 0)
+              'The $removed entities the spawners had made were taken away '
+                  'again.',
+            '$stack',
+          ].join('\n'),
+        );
+        return;
+      }
+      _elapsed = 0;
+      elapsedSeconds.value = 0;
       // Each play-test starts the cameras from nothing, as the game does:
       // no memory of the last run, impulse and noise seeds from the start —
       // so a shake or a handheld drift plays the same way every time.
       if (engine.cameraSystem.isInitialized) {
         engine.cameraSystem.brain.reset();
       }
-      _snapshot = PlaySnapshot.capture(engine.world, scope.codec);
-      final spawned = SpawnPoints.spawnAll(
-        engine.world,
-        spawners,
-        onMissing: (point, id) => scope.log.log(
-          'Play: nothing spawned at ${point.name ?? 'a spawn point'} — no '
-          'spawner is called "$id".',
-          source: 'editor',
-          category: 'play',
-          level: DebuggerLogLevel.warning,
-          details: spawners.isEmpty
-              ? 'The game registered no spawners with the editor.'
-              : 'Spawners: ${spawners.map((s) => s.id).join(', ')}.',
-        ),
-      );
+      _snapshot = snapshot;
+      // What is done in the play-test is undone by Stop, not by Ctrl+Z
+      // afterwards: the history goes back to this when it stops.
+      _historyMark = scope.history.mark();
       _spawned.addAll(spawned.map((e) => e.id));
       scope.log.log(
         'Play: spawned ${_spawned.length} entities.',
@@ -118,7 +157,7 @@ class PlayController {
   void pause() {
     if (state.value != EditorPlayState.playing) return;
     state.value = EditorPlayState.paused;
-    engine.time.timeScale = 0.0;
+    if (engine.isInitialized) engine.time.timeScale = 0.0;
   }
 
   /// Play when stopped, Stop otherwise: one key for "try it / back to work".
@@ -169,34 +208,84 @@ class PlayController {
   /// exactly as it was when play started, and returns to authoring.
   void stop() {
     if (state.value == EditorPlayState.stopped) return;
+    if (!engine.isInitialized) {
+      // The engine is gone (an app closing disposes it first): nothing is
+      // left to put back, only the play-test to end.
+      _spawned.clear();
+      _snapshot = null;
+      _endPlayTest();
+      return;
+    }
 
-    for (final id in _spawned) {
-      final entity = engine.world.getEntity(id);
-      if (entity != null) {
-        engine.world.destroyEntity(entity, withChildren: false);
-      }
+    final snapshot = _snapshot;
+    final int spawned;
+    final int restored;
+    try {
+      spawned = _destroySpawned();
+      restored =
+          snapshot?.restoreInto(
+            engine.world,
+            // So an undo step recorded before play still finds an entity
+            // play destroyed and Stop made again.
+            onRecreated: scope.sceneState.entityRebuilt,
+          ) ??
+          0;
+    } on Object catch (error, stack) {
+      // The level could not be put back. Kept as it is — paused, the
+      // snapshot still held — so a save still writes the level as
+      // authored, and Stop can be pressed again.
+      if (state.value == EditorPlayState.playing) pause();
+      scope.log.log(
+        'Stop could not put the level back as it was: $error. The '
+        'play-test is paused; press Stop again, or open the scene again '
+        'without saving.',
+        source: 'editor',
+        category: 'play',
+        level: DebuggerLogLevel.error,
+        details: '$stack',
+      );
+      return;
     }
     scope.log.log(
-      'Stop: destroyed ${_spawned.length} entities.',
+      'Stop: destroyed $spawned entities.',
       source: 'editor',
       category: 'play',
     );
-    _spawned.clear();
-
-    final snapshot = _snapshot;
-    _snapshot = null;
     if (snapshot != null) {
-      final restored = snapshot.restoreInto(engine.world);
       scope.log.log(
         'Stop: restored $restored authored entities.',
         source: 'editor',
         category: 'play',
       );
     }
+    _snapshot = null;
+    _endPlayTest();
+    engine.time.timeScale = 0.0;
+  }
 
+  /// Back to authoring: the history as it was at Play, the state stopped.
+  void _endPlayTest() {
+    final mark = _historyMark;
+    _historyMark = null;
+    if (mark != null) scope.history.restore(mark);
     _stepFrames = 0;
     state.value = EditorPlayState.stopped;
-    engine.time.timeScale = 0.0;
+  }
+
+  /// Destroys what [play] spawned; how many there were.
+  int _destroySpawned() {
+    final count = _spawned.length;
+    final ids = List.of(_spawned);
+    // Cleared first: tried again after a failed Stop, an id may be another
+    // entity's by then.
+    _spawned.clear();
+    for (final id in ids) {
+      final entity = engine.world.getEntity(id);
+      if (entity != null) {
+        engine.world.destroyEntity(entity, withChildren: false);
+      }
+    }
+    return count;
   }
 
   void dispose() {

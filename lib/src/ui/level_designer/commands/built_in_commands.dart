@@ -1,7 +1,9 @@
 import '../../timeline/timeline_session.dart';
+import 'dart:async' show unawaited;
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart' show Offset;
+import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import 'package:just_editor_core/host.dart';
@@ -73,11 +75,7 @@ abstract final class BuiltInCommands {
       'Frame the selection',
       (c) => c.designer!.frameSelection(),
     ),
-    _d2(
-      'designer.frameAll',
-      'Frame everything',
-      (c) => c.designer!.frameAll(),
-    ),
+    _d2('designer.frameAll', 'Frame everything', (c) => c.designer!.frameAll()),
     _d(
       'designer.hide',
       'Hide the selection',
@@ -348,7 +346,12 @@ abstract final class BuiltInCommands {
         id: 'timeline.$id',
         label: label,
         scope: CommandScope.always,
-        isEnabled: (c) => TimelineSession.of(c.scope).asset.value != null,
+        // Only while a Timeline dock shows it: with none open, a key or a
+        // paste would land in a timeline nobody can see.
+        isEnabled: (c) {
+          final session = TimelineSession.of(c.scope);
+          return session.isShown && session.asset.value != null;
+        },
         run: (c) => run(TimelineSession.of(c.scope)),
       ),
     DesignerCommand(
@@ -382,7 +385,33 @@ abstract final class BuiltInCommands {
       id: 'editor.save',
       label: 'Save scene',
       scope: CommandScope.always,
-      run: (c) => c.plugin!.saveScene(),
+      // A save that fails says so, in the log, rather than ending as an
+      // error nothing catches.
+      run: (c) {
+        // Mid-drag the level is half-edited — tiles lifted off their layer
+        // to be moved are on no layer at all — and that is what would be
+        // written.
+        if (_waitsForGesture(c, 'Saving')) return;
+        final plugin = c.plugin!;
+        unawaited(() async {
+          String? problem;
+          try {
+            if (!await plugin.saveScene()) {
+              problem =
+                  'another open or save is under way; try again in a moment';
+            }
+          } catch (error) {
+            problem = '$error';
+          }
+          if (problem == null) return;
+          plugin.logService.log(
+            'Could not save the scene: $problem',
+            source: 'editor',
+            category: 'scene',
+            level: DebuggerLogLevel.error,
+          );
+        }());
+      },
     ),
     DesignerCommand(
       id: 'editor.copy',
@@ -403,19 +432,27 @@ abstract final class BuiltInCommands {
     // Undo belongs to the editor, not to whichever panel is open: the
     // scope owns one stack and these reach it whether or not a designer
     // session exists.
+    // Not in the middle of a designer gesture: it took its "before" when it
+    // began, and would commit that over whatever the undo put back.
     DesignerCommand(
       id: 'editor.undo',
       label: 'Undo',
       scope: CommandScope.editor,
       isEnabled: (c) => c.scope.history.canUndo.value,
-      run: (c) => c.scope.history.undo(),
+      run: (c) {
+        if (_waitsForGesture(c, 'Undo')) return;
+        c.scope.history.undo();
+      },
     ),
     DesignerCommand(
       id: 'editor.redo',
       label: 'Redo',
       scope: CommandScope.editor,
       isEnabled: (c) => c.scope.history.canRedo.value,
-      run: (c) => c.scope.history.redo(),
+      run: (c) {
+        if (_waitsForGesture(c, 'Redo')) return;
+        c.scope.history.redo();
+      },
     ),
     DesignerCommand(
       id: 'editor.duplicate',
@@ -604,6 +641,21 @@ abstract final class BuiltInCommands {
   static jge.Entity? _selectedTop(CommandContext c) {
     final selected = c.scope.sceneState.selectedEntity.value;
     return selected == null ? null : PrefabInstances.topOf(selected);
+  }
+
+  /// Whether a designer gesture is under way — a stroke, a drag, a ruler
+  /// guide being pulled — so [what] waits for it to end, as the status
+  /// bar then says.
+  static bool _waitsForGesture(CommandContext c, String what) {
+    final designer = c.designer;
+    if (designer == null ||
+        !(designer.hasActiveGesture || designer.hasChromeGesture)) {
+      return false;
+    }
+    designer.controller.setStatus(
+      '$what waits for the drag to end: let go of the mouse, or Esc',
+    );
+    return true;
   }
 
   static bool _canPlay(CommandContext c) {

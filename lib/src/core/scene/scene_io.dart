@@ -2,6 +2,7 @@ import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart';
 
 import 'package:just_editor_core/host.dart';
+import '../scope/editor_scope_services.dart';
 import '../state/play_snapshot.dart';
 import 'scene_loading.dart';
 
@@ -44,12 +45,17 @@ class SceneIO {
   /// the designer last reported it. Saved back alongside the entities.
   Map<String, dynamic>? editorData;
 
-  /// The entities a save writes: everything active with a transform.
+  /// The entities a save writes: every live entity the scene holds,
+  /// switched on or off, with a transform or without — not what a system
+  /// generated from other data ([PlaySnapshot.authored]).
   static List<Entity> authored(World world) => PlaySnapshot.authored(world);
 
   /// Opens [sceneName]: destroys what is loaded, loads the scene file if
   /// there is one, re-links parents by name and hands the graph to
-  /// [sceneState]. Returns false if another open or save was in flight.
+  /// [sceneState]. Returns false if another open or save was in flight, or
+  /// the file could not be read: then an error is logged and the scene that
+  /// was open stays open, untouched — an unreadable file never opens as an
+  /// empty scene a save would write over it.
   ///
   /// File creation is deliberately not done here; `CreateSceneOverlay`
   /// writes the file first and then calls this.
@@ -67,28 +73,28 @@ class SceneIO {
     Map<String, dynamic> rawJson, {
     AssetTally Function()? assets,
   }) => _opening(sceneName, assets, () async {
-    await _open(sceneName, raw: rawJson);
+    if (!await _open(sceneName, raw: rawJson)) return false;
     sceneState.markDirty();
     scope.log.log(
       'Recovered unsaved changes to $sceneName from a backup.',
       source: 'editor',
       category: 'scene',
     );
+    return true;
   });
 
   Future<bool> _opening(
     String sceneName,
     AssetTally Function()? assets,
-    Future<void> Function() open,
+    Future<bool> Function() open,
   ) async {
     if (_busy) return false;
     _busy = true;
     loading.begin(sceneName);
     var opened = false;
     try {
-      await open();
-      opened = true;
-      return true;
+      opened = await open();
+      return opened;
     } finally {
       _busy = false;
       // Failed, or nothing to count: the loader goes with the open.
@@ -162,9 +168,35 @@ class SceneIO {
     }
   }
 
-  Future<void> _open(String sceneName, {Map<String, dynamic>? raw}) async {
-    _lastBackup = null;
+  /// Opens [sceneName] (from [raw] when given). False when it could not:
+  /// then an error is logged, and — when the file itself could not be read
+  /// — the scene that was open is left as it was.
+  Future<bool> _open(String sceneName, {Map<String, dynamic>? raw}) async {
     final clock = Stopwatch()..start();
+    loading.report(
+      SceneLoadStage.read,
+      detail: raw == null ? null : 'From a backup of unsaved changes',
+    );
+    // Read, and brought to the current format, before anything is
+    // destroyed: a file that cannot be read must not open as an empty
+    // scene, which the next save (or autosave) would write over it.
+    Map<String, dynamic>? rawJson;
+    try {
+      rawJson = raw ?? await scope.scenes.loadRawSidecar(sceneName);
+      rawJson = await _migrated(sceneName, rawJson, clock);
+    } on Object catch (error, stack) {
+      scope.log.log(
+        'Could not open scene $sceneName: $error. Nothing was changed; fix '
+        'the file (or open a backup) and open it again.',
+        source: 'editor',
+        category: 'scene',
+        level: DebuggerLogLevel.error,
+        details: '$stack',
+      );
+      return false;
+    }
+
+    _lastBackup = null;
     // Destroy any entities left over from a previously open scene.
     //
     // Everything alive, which is more than the things with a transform (a
@@ -174,78 +206,185 @@ class SceneIO {
     for (final e in world.entities.where((e) => e.isAlive).toList()) {
       world.destroyEntity(e);
     }
+    _forgetSceneLeft();
+
+    final made = <Entity>[];
+    try {
+      await _build(sceneName, rawJson, made, clock);
+      return true;
+    } on Object catch (error, stack) {
+      // The scene being left is gone already, and this one is half made:
+      // nothing is open, so nothing can be saved over either file.
+      for (final e in made.reversed) {
+        if (e.isAlive) world.destroyEntity(e);
+      }
+      sceneState.closeScene();
+      scope.log.log(
+        'Could not open scene $sceneName: $error. The file was not changed.',
+        source: 'editor',
+        category: 'scene',
+        level: DebuggerLogLevel.error,
+        details: '$stack',
+      );
+      return false;
+    }
+  }
+
+  /// What the editor holds about the scene being left, by entity id — ids
+  /// are handed out again in the next one — let go of: its history, what
+  /// is hidden, locked and pinned, prefab mode, and the map files it edited
+  /// but did not save.
+  void _forgetSceneLeft() {
     // Every step in the history is an edit of the scene being left: undoing
     // one here would do nothing at best, and at worst write a file that
     // scene uses. A new scene starts a new history, as in any editor.
     scope.history.clear();
+    // Hidden, locked and pinned are sets of ids: kept, they would hide and
+    // lock whatever in this scene got those ids.
+    scope.view
+      ..showAll()
+      ..unlockAll()
+      ..unpin();
+    // Prefab mode on an instance of the scene being left: dropped, nothing
+    // applied — an id of this scene is another entity.
+    scope.prefabInstances.forgetEditing();
+    // Map files edited and not saved: their edits live in the engine's
+    // shared map cache, where this scene (or its save) would find them.
+    scope.mapDocs.discardUnsaved();
+  }
 
+  /// [rawJson] brought to the current scene format, in memory: the file
+  /// itself changes only when the author saves.
+  Future<Map<String, dynamic>?> _migrated(
+    String sceneName,
+    Map<String, dynamic>? rawJson,
+    Stopwatch clock,
+  ) async {
+    if (rawJson == null ||
+        SceneFormat.versionOf(rawJson) >= SceneFormat.current) {
+      return rawJson;
+    }
+    final from = SceneFormat.versionOf(rawJson);
     loading.report(
       SceneLoadStage.read,
-      detail: raw == null ? null : 'From a backup of unsaved changes',
+      detail: 'Upgrading from format v$from to v${SceneFormat.current}',
     );
-    var rawJson = raw ?? await scope.scenes.loadRawSidecar(sceneName);
-    // An older file is brought to the current format in memory; the file
-    // itself changes only when the author saves.
-    if (rawJson != null &&
-        SceneFormat.versionOf(rawJson) < SceneFormat.current) {
-      final from = SceneFormat.versionOf(rawJson);
-      loading.report(
-        SceneLoadStage.read,
-        detail: 'Upgrading from format v$from to v${SceneFormat.current}',
-      );
-      await _breathe(clock);
-      // With the packages' rules, as the game migrates it.
-      final migration = SceneFormat.migrateWithReport(
-        rawJson,
-        hooks: scope.context.migrations,
-      );
-      rawJson = migration.scene;
+    await _breathe(clock);
+    // With the packages' rules, as the game migrates it.
+    final migration = SceneFormat.migrateWithReport(
+      rawJson,
+      hooks: scope.context.migrations,
+    );
+    scope.log.log(
+      'Scene $sceneName is format v$from; migrated to v${SceneFormat.current} '
+      'in memory. Save to persist.',
+      source: 'editor',
+      category: 'scene',
+    );
+    for (final note in migration.notes) {
       scope.log.log(
-        'Scene $sceneName is format v$from; migrated to v${SceneFormat.current} '
-        'in memory. Save to persist.',
+        'Scene $sceneName: ${note.message}',
         source: 'editor',
         category: 'scene',
+        level: DebuggerLogLevel.warning,
       );
-      for (final note in migration.notes) {
-        scope.log.log(
-          'Scene $sceneName: ${note.message}',
-          source: 'editor',
-          category: 'scene',
-          level: DebuggerLogLevel.warning,
-        );
-      }
-      if (migration.needsAtlas.isNotEmpty) {
-        scope.log.log(
-          'Scene $sceneName: ${migration.needsAtlas.join(', ')} animated a '
-          'sprite sheet with no atlas; export one for each before it '
-          'animates again.',
-          source: 'editor',
-          category: 'scene',
-          level: DebuggerLogLevel.warning,
-        );
-      }
     }
+    if (migration.needsAtlas.isNotEmpty) {
+      scope.log.log(
+        'Scene $sceneName: ${migration.needsAtlas.join(', ')} animated a '
+        'sprite sheet with no atlas; export one for each before it '
+        'animates again.',
+        source: 'editor',
+        category: 'scene',
+        level: DebuggerLogLevel.warning,
+      );
+    }
+    return migration.scene;
+  }
 
+  /// The scene's entries, each one a scene can make: a hand-edited or
+  /// tool-written entry with a name that is not text, or components that
+  /// are not a list, is mended — and said — rather than stopping the open.
+  List<Map<String, dynamic>> _entries(String sceneName, Object? entities) {
+    if (entities == null) return const [];
+    if (entities is! List) {
+      _warn(sceneName, '"entities" is not a list; the scene opens empty.');
+      return const [];
+    }
+    final out = <Map<String, dynamic>>[];
+    for (var i = 0; i < entities.length; i++) {
+      final e = entities[i];
+      if (e is! Map) {
+        _warn(sceneName, 'entry ${i + 1} is not an entity; left out.');
+        continue;
+      }
+      final entry = Map<String, dynamic>.of(e.cast<String, dynamic>());
+      final name = entry['name'];
+      if (name != null && name is! String) {
+        _warn(sceneName, 'entry ${i + 1} has a name that is not text: $name.');
+        entry['name'] = '$name';
+      }
+      final components = entry['components'];
+      if (components != null && components is! List) {
+        _warn(
+          sceneName,
+          '"${entry['name'] ?? 'entry ${i + 1}'}" has components that are '
+          'not a list; it opens with none.',
+        );
+        entry['components'] = const <Object?>[];
+      }
+      out.add(entry);
+    }
+    return out;
+  }
+
+  void _warn(String sceneName, String message) => scope.log.log(
+    'Scene $sceneName: $message',
+    source: 'editor',
+    category: 'scene',
+    level: DebuggerLogLevel.warning,
+  );
+
+  /// Makes the scene [rawJson] holds (an empty one named [sceneName] when
+  /// null) in the world — what it makes in [made], in the file's order —
+  /// and hands it to [sceneState].
+  Future<void> _build(
+    String sceneName,
+    Map<String, dynamic>? rawJson,
+    List<Entity> made,
+    Stopwatch clock,
+  ) async {
     // History, guides and hidden entities all refer to the scene being left.
     final editor = rawJson?['editor'];
     editorData = editor is Map ? editor.cast<String, dynamic>() : null;
 
-    final EditorScene scene = rawJson != null
-        ? (EditorScene.fromJson(rawJson))
-        : EditorScene(name: sceneName);
+    // Named after its file, whatever its header says: a save writes the
+    // file of the scene's name, and a file copied by hand (its old name
+    // inside) would otherwise be saved over the one it was copied from.
+    final named = rawJson?['name'];
+    if (named != null && named != sceneName) {
+      _warn(
+        sceneName,
+        'the file names itself "$named"; it is opened, and saved, as '
+        '$sceneName.',
+      );
+    }
+    final scene = EditorScene(
+      name: sceneName,
+      mode: SceneMode.fromId(rawJson?['mode']),
+    );
     // What this open makes, in the file's order. Frames go by while a big
     // scene is built, and a system may make entities of its own in them:
     // those are neither linked by name nor taken for the scene's roots.
-    final made = <Entity>[];
     if (rawJson != null) {
       // The prefabs its instances are made from, read first; each instance
       // then becomes the entities it makes, as the game makes them.
       final library = PrefabLibrary.of(scope.context);
       await library.loadScene(rawJson);
-      final entityList = PrefabExpander.expandScene([
-        for (final e in rawJson['entities'] as List<dynamic>? ?? const [])
-          if (e is Map) e.cast<String, dynamic>(),
-      ], library.loaded);
+      final entityList = PrefabExpander.expandScene(
+        _entries(sceneName, rawJson['entities']),
+        library.loaded,
+      );
       for (final entry in entityList) {
         if (entry['prefabRef'] case {'missing': final String path}) {
           scope.log.log(
@@ -263,11 +402,13 @@ class SceneIO {
       loading.report(SceneLoadStage.build, total: entityList.length);
       for (var i = 0; i < entityList.length; i++) {
         final entityData = entityList[i];
-        final entityName = entityData['name'] as String?;
+        final name = entityData['name'];
+        final entityName = name is String ? name : null;
         // Anything no definition can read is kept as it was, so a save
         // cannot quietly delete it.
+        final listed = entityData['components'];
         final components = scope.codec.decodeAll(
-          entityData['components'] as List<dynamic>? ?? const [],
+          listed is List ? listed : const [],
         );
         // An instance whose prefab is missing has none, and stays.
         if (components.isNotEmpty || entityData['prefabRef'] != null) {
@@ -336,9 +477,13 @@ class SceneIO {
         final ref = entityList[i]['prefabRef'];
         final entity = madeAt[i];
         if (ref is! Map || entity == null) continue;
-        final top = madeAt[ref['instance'] as int];
+        final instance = ref['instance'];
+        final path = ref['path'];
+        if (instance is! int || path is! String) continue;
+        if (instance < 0 || instance >= madeAt.length) continue;
+        final top = madeAt[instance];
         if (top == null) continue;
-        entity.addComponent(PrefabLink(instance: top.id, path: ref['path'] as String));
+        entity.addComponent(PrefabLink(instance: top.id, path: path));
         if (ref['block'] case final Map block) {
           entity.addComponent(
             PrefabInstanceComponent(
@@ -354,7 +499,9 @@ class SceneIO {
         if (ref is! Map || ref['instance'] != i || top == null) continue;
         if (ref['home'] case final Map home) {
           final at = scope.codec.decode(home.cast<String, dynamic>());
-          if (at is TransformComponent) SceneLoader.placeFromHome(world, top, at);
+          if (at is TransformComponent) {
+            SceneLoader.placeFromHome(world, top, at);
+          }
         }
       }
     }
@@ -372,13 +519,14 @@ class SceneIO {
     world.transformHierarchy.propagate();
 
     // The file's order is the record of what order the roots are in: the
-    // loader creates them in the order they are written.
+    // loader creates them in the order they are written. Switched off or
+    // not — being off is not being gone, and leaving those out moved them
+    // to the end of the file on the next save.
     sceneState.openScene(
       scene,
       rootOrder: [
         for (final entity in made)
           if (entity.isAlive &&
-              entity.isActive &&
               entity.getComponent<ParentComponent>()?.parentId == null)
             entity.id,
       ],

@@ -35,6 +35,8 @@ import 'built_in_tile_contributions.dart';
 /// replaces any of it by reusing an id. Its Level Designer contributions are
 /// live whichever designer is chosen.
 class BuiltInEditorModule extends EditorModule {
+  /// The editor's tools for [scope]; a scope makes it from
+  /// `builtIns: [BuiltInEditorModule.new]`.
   BuiltInEditorModule(this.scope);
 
   /// The scope it belongs to.
@@ -171,11 +173,15 @@ class BuiltInEditorModule extends EditorModule {
   @override
   List<InspectorSection> get inspectorSections => [PrefabInspector.section];
 
-  /// The key button after a row, while a timeline is open that could
-  /// animate its fields on this entity.
+  /// The key button after a row, while a Timeline dock shows a timeline
+  /// that could animate its fields on this entity — and not during a
+  /// play-test, whose values are the game's, not keys.
   static Widget? _timelineKey(FieldAccessoryContext c) {
     final session = TimelineSession.of(c.scope);
-    if (session.asset.value == null || session.bindingFor(c.entity) == null) {
+    if (!session.isShown ||
+        !session.isAuthoring() ||
+        session.asset.value == null ||
+        session.bindingFor(c.entity) == null) {
       return null;
     }
     final keyable = [
@@ -195,8 +201,10 @@ class BuiltInEditorModule extends EditorModule {
   }
 
   /// An edit through the inspector, recorded while a timeline records.
-  static void _recordEdit(EditorScope scope) =>
-      TimelineSession.of(scope).captureEdits();
+  static void _recordEdit(EditorScope scope) {
+    final session = TimelineSession.of(scope);
+    if (session.isShown) session.captureEdits();
+  }
 
   @override
   void onRegister(EditorModuleContext context) {

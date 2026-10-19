@@ -5,6 +5,7 @@ import 'package:just_editor_core/host.dart';
 import '../../core/tags/tag_edits.dart';
 import '../../extension/built_in_tag_contributions.dart';
 import '../overlay/docks/shell/built_in_docks.dart';
+import '../timeline/timeline_renames.dart';
 import 'tag_field_editors.dart';
 import '../../core/scope/editor_scope_services.dart';
 
@@ -60,7 +61,8 @@ class _EntityHeaderState extends State<EntityHeader> {
   );
 
   void _commitRename(String name) {
-    if (scope.entities.renameEntity(entity, name)) {
+    if (_renameWithTimelines(name) ||
+        scope.entities.renameEntity(entity, name)) {
       setState(() {
         _renaming = false;
         _renameError = null;
@@ -73,6 +75,31 @@ class _EntityHeaderState extends State<EntityHeader> {
           ? 'It needs a name'
           : 'Something else is already called that',
     );
+  }
+
+  /// The rename and what follows it — inline timelines' tracks bound to the
+  /// old name, which would otherwise come loose — as one undo step. False
+  /// when there is nothing to follow (the plain rename does it) or the name
+  /// is not free.
+  bool _renameWithTimelines(String name) {
+    final from = entity.name ?? '';
+    final to = name.trim();
+    if (to == from) return false;
+    final rebind = TimelineRenames.commandFor(scope, from, to);
+    if (rebind == null ||
+        !RenameCommand.isAvailable(to, entity, world: scope.world)) {
+      return false;
+    }
+    final rename = RenameCommand(
+      sceneState: widget.sceneState,
+      entity: entity,
+      name: to,
+    );
+    scope.history.push(
+      CompositeCommand(label: rename.label, commands: [rename, rebind]),
+    );
+    scope.entities.onChanged?.call();
+    return true;
   }
 
   @override

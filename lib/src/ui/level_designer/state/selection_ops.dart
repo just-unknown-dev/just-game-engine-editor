@@ -18,7 +18,12 @@ class SelectionOps {
     required this.sceneState,
     required this.history,
     required String Function(String prefix) uniqueName,
-  }) : _uniqueName = uniqueName;
+    List<jge.Entity> Function(Iterable<jge.Entity> entities)? deletable,
+  }) : _uniqueName = uniqueName,
+       _deletable = deletable;
+
+  // What of a set may go: what no module protects ([EditorScope.deletable]).
+  final List<jge.Entity> Function(Iterable<jge.Entity> entities)? _deletable;
 
   /// World the entities live in.
   final jge.World world;
@@ -31,10 +36,37 @@ class SelectionOps {
 
   final String Function(String prefix) _uniqueName;
 
-  /// Combined bounds of [entities]; a sizeless marker counts as a point.
   /// Encodes and decodes components; the scope's codec.
   final SceneCodec codec;
 
+  /// The entities the selection in [sceneState] covers that the designer's
+  /// tools move, turn and line up: the multi-selection when there is one,
+  /// otherwise the primary selection — each that is still there (switched
+  /// off or not: `isActive` is the saved Enabled flag, not whether it
+  /// exists) and has a [jge.TransformComponent] to move (a piece of
+  /// interface has none, and is moved in its own editor).
+  ///
+  /// One rule for the session, its tools and its overlays: a switched-off
+  /// entity used to drop out of a group nudge or align while one alone was
+  /// included, and one with no transform reached code that needs one.
+  static List<jge.Entity> selectedIn(
+    EditorSceneState sceneState,
+    jge.World world,
+  ) {
+    bool movable(jge.Entity e) =>
+        e.isAlive && e.getComponent<jge.TransformComponent>() != null;
+    final ids = sceneState.multiSelectedIds.value;
+    if (ids.isNotEmpty) {
+      return [
+        for (final id in ids)
+          if (world.getEntity(id) case final e? when movable(e)) e,
+      ];
+    }
+    final selected = sceneState.selectedEntity.value;
+    return selected != null && movable(selected) ? [selected] : <jge.Entity>[];
+  }
+
+  /// Combined bounds of [entities]; a sizeless marker counts as a point.
   static Rect? boundsOf(List<jge.Entity> entities) {
     Rect? union;
     for (final entity in entities) {
@@ -133,7 +165,6 @@ class SelectionOps {
       final t = e.getComponent<jge.TransformComponent>();
       if (t == null) continue;
       change(t);
-      sceneState.syncEntityNode(e);
     }
     final after = all.map(TransformSnapshot.of).toList(growable: false);
     var changed = false;
@@ -229,9 +260,16 @@ class SelectionOps {
   /// Replaces each of [entities] with [prefab], built at the same place and
   /// size, on the same layer, under the same parent. One undo step for the
   /// whole swap.
+  ///
+  /// Only what [prefab] builds a replacement for goes: an instance of a
+  /// prefab file is placed, not built ([PrefabDefinition.instanceOf]), so
+  /// nothing is replaced by one — the caller says so — and an entity with
+  /// no transform, or one the prefab builds nothing for, stays as it is.
   void replaceWith(List<jge.Entity> entities, PrefabDefinition prefab) {
-    if (entities.isEmpty) return;
+    entities = _deletable?.call(entities) ?? entities;
+    if (entities.isEmpty || prefab.instanceOf != null) return;
     final specs = <EntitySpec>[];
+    final replaced = <jge.Entity>[];
     for (final e in entities) {
       final t = e.getComponent<jge.TransformComponent>();
       if (t == null) continue;
@@ -239,7 +277,9 @@ class SelectionOps {
       final size = local == null
           ? prefab.defaultSize
           : Size(local.width * t.scale.x.abs(), local.height * t.scale.y.abs());
-      final built = prefab.build(Offset(t.position.x, t.position.y), size);
+      // A copy: what a prefab returns may be a list it keeps, or a const.
+      final built = [...prefab.build(Offset(t.position.x, t.position.y), size)];
+      if (built.isEmpty) continue;
       final oldLayer = e.getComponent<jge.LayerComponent>();
       if (oldLayer?.mapLayer != null &&
           !built.any((c) => c is jge.LayerComponent)) {
@@ -256,6 +296,7 @@ class SelectionOps {
         }
       }
       final was = EntitySpec.of(e, codec, world: world);
+      replaced.add(e);
       specs.add(
         EntitySpec(
           name: _uniqueName(prefab.namePrefix ?? prefab.id),
@@ -265,6 +306,8 @@ class SelectionOps {
                 ?codec.encode(c),
           ],
           codec: codec,
+          // By id first: names need not be unique.
+          parentId: was.parentId,
           parentName: was.parentName,
           siblingIndex: was.siblingIndex,
         ),
@@ -273,13 +316,13 @@ class SelectionOps {
     if (specs.isEmpty) return;
     history.push(
       CompositeCommand(
-        label: 'Replace ${_describe(entities)} with ${prefab.name}',
+        label: 'Replace ${_describe(replaced)} with ${prefab.name}',
         commands: [
           DeleteEntitiesCommand(
             label: 'Delete',
             world: world,
             sceneState: sceneState,
-            entities: entities,
+            entities: replaced,
             codec: codec,
           ),
           CreateEntitiesCommand(
@@ -317,7 +360,6 @@ class SelectionOps {
         .toList(growable: false);
     for (final e in entities) {
       change(e);
-      sceneState.syncEntityNode(e);
     }
     final command = EntityStateCommand(
       label: label,

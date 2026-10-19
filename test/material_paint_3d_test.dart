@@ -11,6 +11,9 @@ import 'package:just_game_engine/graphics_3d.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/panels/materials_3d_panel.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/tools/material_paint_3d_tool.dart';
 
 const _stone = 'assets/materials/stone.material.json';
 const _wood = 'assets/materials/wood.material.json';

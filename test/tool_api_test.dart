@@ -11,6 +11,8 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/input/viewport_input.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/tool_palette.dart';
 
 class _Keys {
   bool shift = false;

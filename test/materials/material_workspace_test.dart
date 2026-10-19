@@ -14,6 +14,8 @@ import 'package:just_game_engine/graphics_3d.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/materials/materials.dart';
 
+import '../support/real_io.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory dir;
@@ -342,11 +344,12 @@ void main() {
     final maps = MapPictures(root: dir.path);
     addTearDown(maps.dispose);
     // Read for real (a widget test's clock stands still).
-    await tester.runAsync(() async {
-      for (var i = 0; i < 100 && maps.peek('brick.png') == null; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
-    });
+    await tester.runAsync(
+      () => waitUntil(
+        () => maps.peek('brick.png') != null,
+        what: 'the picture to be read',
+      ),
+    );
     await open(tester, 'a.material.json', maps: maps);
     expect(find.text('40 × 20'), findsOneWidget);
     expect(maps.peek('brick.png')!.image.width, 40, reason: 'small already');
@@ -364,12 +367,12 @@ void main() {
     final maps = MapPictures(root: dir.path);
     addTearDown(maps.dispose);
     await open(tester, 'a.material.json', maps: maps);
-    await tester.runAsync(() async {
-      for (var i = 0; i < 50 && !maps.failed('gone.png'); i++) {
-        maps.peek('gone.png');
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
-    });
+    // The window asked for it as it was built, on the fake clock: both
+    // clocks run until the read has failed.
+    await pumpUntil(tester, () {
+      maps.peek('gone.png');
+      return maps.failed('gone.png');
+    }, what: 'the missing picture to be found missing');
     await tester.pump();
     expect(find.text("Can't be read"), findsOneWidget);
     expect(tester.takeException(), isNull);

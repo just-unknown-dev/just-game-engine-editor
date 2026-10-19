@@ -11,6 +11,11 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/extra/extra_docks.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/tags/tag_edits.dart';
+import 'package:just_game_engine_editor/src/core/tags/tag_refactor.dart';
+import 'package:just_game_engine_editor/src/core/validation/built_in_validators.dart';
+import 'package:just_game_engine_editor/src/ui/inspector/entity_header.dart';
+import 'package:just_game_engine_editor/src/ui/inspector/tag_field_editors.dart';
 
 void main() {
   late Directory root;

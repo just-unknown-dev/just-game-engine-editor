@@ -102,9 +102,24 @@ class _TimelineRulerState extends State<TimelineRuler> {
   int? _marker;
   double? _rangeFrom;
 
+  /// The timeline as it was when a marker was taken hold of: every frame of
+  /// the drag is measured from it, and the drag is one undo step.
+  jge.TimelineAsset? _markerDrag;
+
+  /// Where the marker being dragged is in [_markerDrag].
+  int _markerIndex = -1;
+
   /// An end of the play range being dragged: 0 its start, 1 its end.
   int? _grip;
   bool _hoveringGrip = false;
+
+  /// The other end of the play range, where it was when the drag began:
+  /// it stays there, however far past it the dragged end goes.
+  double _gripFixed = 0;
+
+  /// The player as the play-range drag found it: the drag is one step of
+  /// the editor's undo.
+  ComponentEdit? _gripEdit;
 
   /// The timeline as it was when its end was taken hold of.
   jge.TimelineAsset? _endDrag;
@@ -146,11 +161,8 @@ class _TimelineRulerState extends State<TimelineRuler> {
       (_xOf(s.duration) - local.dx).abs() <= TimelineMetrics.gripWidth;
 
   void _dragGrip(Offset local) {
-    final range = s.playRange;
-    final grip = _grip;
-    if (range == null || grip == null) return;
-    final at = s.snapTime(_timeAt(local.dx));
-    s.setPlayRange(grip == 0 ? at : range.$1, grip == 0 ? range.$2 : at);
+    if (_grip == null) return;
+    s.dragPlayRange(s.snapTime(_timeAt(local.dx)), _gripFixed);
   }
 
   void _scrub(Offset local) => s
@@ -171,14 +183,24 @@ class _TimelineRulerState extends State<TimelineRuler> {
         // An end of the play range beats a marker: it is the thing most
         // often reached for, and it is drawn over the whole height.
         _grip = _gripAt(local);
-        if (_grip != null) return;
+        if (_grip case final grip?) {
+          final range = s.playRange!;
+          _gripFixed = grip == 0 ? range.$2 : range.$1;
+          _gripEdit = s.beginPlayRangeDrag();
+          return;
+        }
         // The end of the timeline: drag it to make it longer or shorter.
         if (_onEnd(local)) {
           _endDrag = s.beginDrag();
           return;
         }
         _marker = _markerAt(local);
-        if (_marker != null) return;
+        if (_marker case final marker?) {
+          _markerDrag = s.beginDrag(label: 'Marker');
+          _markerIndex = marker;
+          if (_markerDrag == null) _marker = null;
+          return;
+        }
         if (HardwareKeyboard.instance.isShiftPressed) {
           _rangeFrom = _timeAt(local.dx);
           return;
@@ -197,15 +219,13 @@ class _TimelineRulerState extends State<TimelineRuler> {
           return;
         }
         if (marker != null) {
+          final start = _markerDrag;
           final time = s.snapTime(_timeAt(local.dx));
-          if (time != s.asset.value!.markers[marker].time) {
-            final name = s.asset.value!.markers[marker].name;
-            s.updateMarker(marker, time: time);
-            // Markers sort by time: keep hold of the one being dragged.
-            _marker = s.asset.value!.markers.indexWhere(
-              (m) => m.name == name && m.time == time,
-            );
-            if (_marker! < 0) _marker = null;
+          if (start != null && time != s.asset.value!.markers[marker].time) {
+            // Measured from the drag's start, where the marker keeps its
+            // place; where it sorts to now is what is drawn lit.
+            final now = s.dragMarker(start, _markerIndex, time);
+            _marker = now < 0 ? null : now;
           }
         } else if (from != null) {
           s.setWorkRange(from, _timeAt(local.dx));
@@ -216,7 +236,15 @@ class _TimelineRulerState extends State<TimelineRuler> {
       onPointerUp: (_) {
         _marker = null;
         _rangeFrom = null;
+        if (_grip != null) {
+          s.endPlayRangeDrag(_gripEdit);
+          _gripEdit = null;
+        }
         _grip = null;
+        if (_markerDrag case final start?) {
+          s.endDrag(start);
+          _markerDrag = null;
+        }
         if (_endDrag case final start?) {
           s.endDrag(start);
           _endDrag = null;
@@ -232,7 +260,7 @@ class _TimelineRulerState extends State<TimelineRuler> {
         final dy = e.scrollDelta.dy;
         if (dy == 0) return;
         // The ruler is all one axis, so a plain wheel scrolls it sideways.
-        HardwareKeyboard.instance.isControlPressed
+        EditorKeys.primaryPressed
             ? s.zoomAround(
                 dy < 0 ? 1.15 : 1 / 1.15,
                 e.localPosition.dx - TimelineMetrics.leftInset,
@@ -312,14 +340,13 @@ class _RulerPainter extends CustomPainter {
         tick,
       );
       if (!isMajor) continue;
-      final label = TextPainter(
-        text: TextSpan(
-          text: frames ? '$f' : (f / fps).toStringAsFixed(f % fps == 0 ? 0 : 2),
-          style: TextStyle(color: EditorTheme.textMuted, fontSize: 10),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      label.paint(canvas, Offset(x + 3, 1));
+      _text(
+        canvas,
+        frames ? '$f' : (f / fps).toStringAsFixed(f % fps == 0 ? 0 : 2),
+        Offset(x + 3, 1),
+        EditorTheme.textMuted,
+        fontSize: 10,
+      );
     }
 
     // Past the end is not the timeline — and the end itself is a handle.
@@ -411,14 +438,7 @@ class _RulerPainter extends CustomPainter {
           ..close(),
         paint,
       );
-      final label = TextPainter(
-        text: TextSpan(
-          text: m.name,
-          style: TextStyle(color: EditorTheme.warning, fontSize: 9),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      label.paint(canvas, Offset(x + 6, 0));
+      _text(canvas, m.name, Offset(x + 6, 0), EditorTheme.warning);
     }
 
     final px = (playhead - scroll) * pps + inset;
@@ -434,16 +454,24 @@ class _RulerPainter extends CustomPainter {
     }
   }
 
-  void _text(Canvas canvas, String text, Offset at, Color color) {
+  // Laid out, drawn and let go: a TextPainter holds a native paragraph.
+  void _text(
+    Canvas canvas,
+    String text,
+    Offset at,
+    Color color, {
+    double fontSize = 9,
+  }) {
     TextPainter(
         text: TextSpan(
           text: text,
-          style: TextStyle(color: color, fontSize: 9),
+          style: TextStyle(color: color, fontSize: fontSize),
         ),
         textDirection: TextDirection.ltr,
       )
       ..layout()
-      ..paint(canvas, at);
+      ..paint(canvas, at)
+      ..dispose();
   }
 
   @override
@@ -636,7 +664,8 @@ class DopeSheetState extends State<DopeSheet> {
     if (row is TimelineTrackRow) s.selectedTrack.value = row.index;
 
     final keys = HardwareKeyboard.instance;
-    final additive = keys.isShiftPressed || keys.isControlPressed;
+    // Cmd on macOS, where Ctrl+click is the context click.
+    final additive = keys.isShiftPressed || EditorKeys.primaryPressed;
 
     // The timeline's end, when no key sits on it. A key there wins: the
     // ruler carries the same handle, with nothing to compete with it.
@@ -797,8 +826,8 @@ class DopeSheetState extends State<DopeSheet> {
     final dy = e.scrollDelta.dy;
     if (dy == 0) return;
     final keys = HardwareKeyboard.instance;
-    if (keys.isControlPressed) {
-      s.zoomAround(dy < 0 ? 1.15 : 1 / 1.15, timeAtPixels(e.localPosition.dx));
+    if (EditorKeys.primaryPressed) {
+      s.zoomAround(dy < 0 ? 1.15 : 1 / 1.15, anchorPixels(e.localPosition.dx));
     } else if (keys.isShiftPressed) {
       s.scrollByPixels(dy);
     } else {
@@ -813,8 +842,9 @@ class DopeSheetState extends State<DopeSheet> {
     p.jumpTo((p.pixels + pixels).clamp(0.0, p.maxScrollExtent));
   }
 
-  /// [x] in local pixels as an offset from the sheet's left edge.
-  static double timeAtPixels(double x) => x - TimelineMetrics.leftInset;
+  /// [x] in local pixels as an offset from the sheet's left edge: the
+  /// pixel a zoom keeps in place.
+  static double anchorPixels(double x) => x - TimelineMetrics.leftInset;
 
   @override
   Widget build(BuildContext context) {
@@ -966,6 +996,12 @@ class _SheetPainter extends CustomPainter {
     final color = track.muted ? base.withValues(alpha: 0.35) : base;
     bool selected(int i) => selection.contains(TimelineItemRef(index, i));
 
+    // Only what is in view is drawn: a long track is laid out a screen at
+    // a time, not whole every frame.
+    const margin = TimelineMetrics.keySize;
+    bool visible(double from, double to) =>
+        x(to) >= -margin && x(from) <= size.width + margin;
+
     if (track is jge.PropertyTrack) {
       final keys = track.curve.keys;
       if (keys.length > 1) {
@@ -978,6 +1014,7 @@ class _SheetPainter extends CustomPainter {
         );
       }
       for (var i = 0; i < keys.length; i++) {
+        if (!visible(keys[i].time, keys[i].time)) continue;
         _diamond(
           canvas,
           Offset(x(keys[i].time), cy),
@@ -989,6 +1026,8 @@ class _SheetPainter extends CustomPainter {
     } else if (track is jge.EventTrack) {
       for (var i = 0; i < track.events.length; i++) {
         final e = track.events[i];
+        // Its label reaches to the right of it.
+        if (x(e.time) > size.width + margin || x(e.time) + 130 < 0) continue;
         final at = Offset(x(e.time), cy);
         canvas.drawPath(
           Path()
@@ -1010,6 +1049,11 @@ class _SheetPainter extends CustomPainter {
     } else if (track is jge.BlockTrack) {
       for (var i = 0; i < track.blocks.length; i++) {
         final b = track.blocks[i];
+        if (track.isInstant
+            ? x(b.start) > size.width + margin || x(b.start) + 150 < 0
+            : !visible(b.start, b.end)) {
+          continue;
+        }
         if (track.isInstant) {
           _diamond(canvas, Offset(x(b.start), cy), color, selected(i));
           _label(
@@ -1091,7 +1135,9 @@ class _SheetPainter extends CustomPainter {
       maxLines: 1,
       ellipsis: '…',
     )..layout(maxWidth: maxWidth);
-    painter.paint(canvas, at);
+    painter
+      ..paint(canvas, at)
+      ..dispose();
   }
 
   @override

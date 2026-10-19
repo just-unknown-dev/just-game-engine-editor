@@ -1,7 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:just_editor_core/io.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_tiled/just_tiled.dart' as tiled;
 
@@ -10,6 +11,9 @@ import 'package:just_editor_core/host.dart';
 /// Reading and writing the project's files, relative to its folder — a
 /// seam, so tests need no disk.
 class TiledFiles {
+  /// Files under [root], read and written on disk; a test passes [read],
+  /// [write], [writeBytes] and [exists] to keep them in memory instead.
+  /// Each path is relative to [root], `/`-separated.
   TiledFiles({
     required this.root,
     Future<String> Function(String path)? read,
@@ -32,9 +36,11 @@ class TiledFiles {
   /// [path]'s file: a package's own folder for `packages/<name>/…`.
   File _file(String path) => PackageAssetPaths.of(root).file(path);
 
+  /// The text of the file at [path].
   Future<String> read(String path) =>
       _read?.call(path) ?? _file(path).readAsString();
 
+  /// Writes [text] to [path], making its folder when it is missing.
   Future<void> write(String path, String text) async {
     final w = _write;
     if (w != null) return w(path, text);
@@ -52,8 +58,8 @@ class TiledFiles {
     await file.writeAsBytes(bytes);
   }
 
-  bool exists(String path) =>
-      _exists?.call(path) ?? _file(path).existsSync();
+  /// Whether there is a file at [path].
+  bool exists(String path) => _exists?.call(path) ?? _file(path).existsSync();
 }
 
 class _Provider implements tiled.TsxProvider {
@@ -72,6 +78,8 @@ class _Provider implements tiled.TsxProvider {
 
 /// A Tiled map read and converted, before anything is written.
 class TiledImportPlan {
+  /// What [TiledImporter.read] found. Nothing is written until the plan is
+  /// given to [TiledImporter.writeMap] or [TiledImporter.writeTilesets].
   TiledImportPlan({
     required this.source,
     required this.result,
@@ -97,6 +105,7 @@ class TiledImportPlan {
   /// What did not come across, and what was kept rather than overwritten.
   final List<String> warnings;
 
+  /// The level map the Tiled map became ([result]'s).
   LevelMapData get map => result.map;
 
   /// The file's name without its folder or ending: what things are named
@@ -130,19 +139,30 @@ String _safe(String name) {
 ///
 /// Tilesets become `.tileset.json` files in [tilesetFolder], named after
 /// their TSX (or the map and their name, for one kept inside the map). One
-/// already there is used as it is, not overwritten — it may have been
-/// edited since.
+/// already there that was cut from the same picture is used as it is, not
+/// overwritten — it may have been edited since; one of another picture
+/// (another folder's `terrain.tsx`) is left alone, and this one is named
+/// `terrain_2`.
 class TiledImporter {
+  /// An importer that reads and writes through [files], and writes the
+  /// tilesets it makes to [tilesetFolder].
   TiledImporter(this.files, {this.tilesetFolder = 'assets/tilesets'});
 
+  /// Where the Tiled files are read from and the project's written to.
   final TiledFiles files;
+
+  /// The project folder new `.tileset.json` files go in, relative to the
+  /// project: `assets/tilesets` unless given another.
   final String tilesetFolder;
 
+  /// Whether [path] is a Tiled map: a `.tmx` or `.tmj` file, in any case.
   static bool isTiledMap(String path) {
     final p = path.toLowerCase();
     return p.endsWith('.tmx') || p.endsWith('.tmj');
   }
 
+  /// Whether [path] is a Tiled tileset: a `.tsx` or `.tsj` file, in any
+  /// case.
   static bool isTiledTileset(String path) {
     final p = path.toLowerCase();
     return p.endsWith('.tsx') || p.endsWith('.tsj');
@@ -183,14 +203,38 @@ class TiledImporter {
     final warnings = [...result.warnings];
     final paths = [...result.map.tilesets];
     final fresh = <String, TilesetData>{};
+    // The names the conversion gave, each slot's own.
+    final claimed = {...paths.whereType<String>()};
     for (var i = 0; i < paths.length; i++) {
       final p = paths[i];
       final ts = result.tilesets[i];
       if (p == null || ts == null) continue;
-      if (files.exists(p)) {
-        warnings.add('Used $p as it is: it is already in the project');
-      } else {
-        fresh[p] = ts;
+      var candidate = p;
+      var n = 2;
+      while (true) {
+        if (!files.exists(candidate)) {
+          fresh[candidate] = ts;
+          break;
+        }
+        if (await _sameTileset(candidate, ts)) {
+          warnings.add(
+            'Used $candidate as it is: it is already in the project',
+          );
+          break;
+        }
+        // Another tileset of the same name: this one beside it.
+        do {
+          candidate = _numbered(p, n++);
+        } while (claimed.contains(candidate));
+      }
+      if (candidate != p) {
+        claimed.add(candidate);
+        paths[i] = candidate;
+        result.map.tilesets[i] = candidate;
+        warnings.add(
+          'Saved the tileset as $candidate: $p in the project is another '
+          'tileset',
+        );
       }
     }
     if (result.images.isNotEmpty) {
@@ -207,6 +251,27 @@ class TiledImporter {
       newTilesets: fresh,
       warnings: warnings,
     );
+  }
+
+  /// Whether the project's tileset at [path] is [ts] as converted: cut
+  /// from the same picture. False when it cannot be read.
+  Future<bool> _sameTileset(String path, TilesetData ts) async {
+    try {
+      final json = jsonDecode(await files.read(path));
+      if (json is! Map<String, dynamic>) return false;
+      return TilesetData.fromJson(json).image == ts.image;
+    } on Object {
+      return false;
+    }
+  }
+
+  /// [path] (`…/name.tileset.json`) as `…/name_[n].tileset.json`.
+  static String _numbered(String path, int n) {
+    const ending = '.tileset.json';
+    final stem = path.endsWith(ending)
+        ? path.substring(0, path.length - ending.length)
+        : path;
+    return '${stem}_$n$ending';
   }
 
   /// Writes the tilesets [plan] needs that the project does not have.
@@ -326,14 +391,20 @@ class TiledImporter {
       final prefab = _prefabFor(prefabs, info.className);
       if (prefab != null) {
         final size = info.size.isEmpty ? prefab.defaultSize : info.size;
-        out.add(spec(name, prefab.build(info.center, size), mapLayer: layer));
+        final built = prefab.build(info.center, size);
+        // Turned as the object was: a prefab builds upright.
+        if (info.rotation != 0) {
+          built.whereType<TransformComponent>().firstOrNull?.angle =
+              info.rotation * math.pi / 180;
+        }
+        out.add(spec(name, built, mapLayer: layer));
         continue;
       }
       out.add(
         spec(name, [
           TransformComponent(
             position: Vector3(info.center.dx, info.center.dy, 0),
-            angle: info.rotation * 3.141592653589793 / 180,
+            angle: info.rotation * math.pi / 180,
           ),
         ], mapLayer: layer),
       );
@@ -364,14 +435,22 @@ class TiledImporter {
     final o = record.object;
     final size = Size(o.width, o.height);
     final topLeft = origin + record.position;
-    // A tile object hangs from its bottom-left corner, as in Tiled.
+    // Tiled turns an object about its corner — the top-left, or the
+    // bottom-left a tile object hangs from — so its middle is that corner
+    // plus half its size, turned with it.
+    final half = o.gid != null
+        ? Offset(o.width / 2, -o.height / 2)
+        : Offset(o.width / 2, o.height / 2);
+    final turn = o.rotation * math.pi / 180;
+    final c = math.cos(turn), s = math.sin(turn);
     final center = o.isPoint
         ? topLeft
-        : o.gid != null
-        ? topLeft + Offset(o.width / 2, -o.height / 2)
-        : topLeft + Offset(o.width / 2, o.height / 2);
+        : topLeft +
+              Offset(half.dx * c - half.dy * s, half.dx * s + half.dy * c);
+    // A shape's points, which Tiled keeps from the corner, from the middle
+    // instead — before the turn, which the entity carries.
     List<Offset>? around(List<Offset>? points) =>
-        points == null ? null : [for (final p in points) topLeft + p - center];
+        points == null ? null : [for (final p in points) p - half];
     final props = TiledInterop.importProperties(o.properties);
     return TiledObjectInfo(
       id: o.id,

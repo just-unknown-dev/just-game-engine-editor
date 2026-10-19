@@ -44,11 +44,11 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behaviour may be reported to the project maintainers.
+Instances of abusive, harassing, or otherwise unacceptable behaviour may be reported to the project maintainers, privately. This applies to `just_game_engine_editor` and `just_editor_core` alike.
 
-You can report concerns through one of the following channels:
-- Open a private report to maintainers through repository contact options.
-- If needed, open a public issue in [the repository issue tracker](https://github.com/just-unknown-dev/just-game-engine-editor/issues) with minimal details and request private follow-up.
+- **Privately to the maintainers**: write to the maintainers of the [just-unknown-dev](https://github.com/just-unknown-dev) organisation on GitHub, through the contact its profile lists. Say what happened, where (links to the issue, pull request or comment), and when.
+- **Through GitHub**: use *Report content* on the comment, issue or pull request concerned. It reaches GitHub's own moderators, and GitHub can act on an account.
+- If neither reaches anyone, open an issue in [the repository issue tracker](https://github.com/just-unknown-dev/just-game-engine-editor/issues) that asks a maintainer to contact you, and leave every detail out of it.
 
 All complaints will be reviewed and investigated promptly and fairly.
 

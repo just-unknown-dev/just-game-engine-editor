@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
+import 'support/real_io.dart';
+
 /// Keeps the sounds asked for, and plays nothing.
 class _Audio extends AudioEngine {
   final Set<String> live = {};
@@ -64,14 +66,17 @@ void main() {
     await engine.initialize();
     final plugin = JustGameEditorPlugin(engine: engine);
     addTearDown(plugin.dispose);
-    await plugin.onInitialize();
+    await plugin.attach(plugin.engine);
     plugin.sceneState.openScene(EditorScene(name: 'level'));
-    final source = AudioSourceComponent(clipPath: 'assets/audio/wind.wav', loop: true);
+    final source = AudioSourceComponent(
+      clipPath: 'assets/audio/wind.wav',
+      loop: true,
+    );
     engine.world.createEntityWithComponents([TransformComponent(), source]);
     final system = engine.world.systems.whereType<AudioSystem>().single;
 
     plugin.setVisible(true);
-    plugin.onUpdate(1 / 60);
+    plugin.update(1 / 60);
     engine.world.update(0);
     await pumpEventQueue();
     expect(system.isActive, isFalse);
@@ -79,15 +84,19 @@ void main() {
     expect(source.playOnAdd, isTrue, reason: 'the scene is left as it is');
 
     plugin.playController.play();
-    plugin.onUpdate(1 / 60);
+    plugin.update(1 / 60);
     expect(system.isActive, isTrue);
     engine.world.update(1 / 60);
     await pumpEventQueue();
     expect(audio.live, hasLength(1));
 
     plugin.playController.stop();
-    plugin.onUpdate(1 / 60);
+    plugin.update(1 / 60);
     expect(system.isActive, isFalse);
-    expect(audio.live, isEmpty, reason: 'what the play-test played stops with it');
-  });
+    expect(
+      audio.live,
+      isEmpty,
+      reason: 'what the play-test played stops with it',
+    );
+  }, timeout: bootTimeout);
 }

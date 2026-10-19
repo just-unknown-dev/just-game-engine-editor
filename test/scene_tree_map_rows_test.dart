@@ -12,6 +12,10 @@ import 'package:just_game_engine_editor/src/ui/scene_tree/map_item_row.dart';
 import 'package:just_tiled/just_tiled.dart' as tiled;
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/entity/entity_ops.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/scene_tree/scene_tree_controller.dart';
+import 'package:just_game_engine_editor/src/ui/scene_tree/scene_tree_panel.dart';
 
 void main() {
   late EditorScope scope;

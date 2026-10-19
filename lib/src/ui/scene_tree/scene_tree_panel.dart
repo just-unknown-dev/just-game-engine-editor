@@ -66,14 +66,14 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   final FocusNode _keys = FocusNode(debugLabel: 'sceneTree');
   final TextEditingController _search = TextEditingController();
 
-  /// The row a drag is over, and where on it. Only meaningful while
-  /// [_dragging]: a drag let go of outside the list leaves no `onLeave`
-  /// behind it, and the line it drew used to stay on screen afterwards,
-  /// where it read as an underline on a perfectly ordinary row.
   /// Whether the tree has the keyboard, so the selected row can say the
   /// arrows are about to act on it.
   bool _hasKeys = false;
 
+  /// The row a drag is over, and where on it. Only meaningful while a
+  /// drag is over the list: a drag let go of outside the list leaves no
+  /// `onLeave` behind it, and the line it drew used to stay on screen
+  /// afterwards, where it read as an underline on a perfectly ordinary row.
   jge.EntityId? _dragOver;
   DropZone _dropZone = DropZone.onto;
 
@@ -104,11 +104,21 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     super.initState();
     // The tree follows the selection, wherever it was made.
     _sceneState.selectedEntity.addListener(_onSelectionChanged);
+    _sceneState.revision.addListener(_onRevision);
+    // What the first build shows, so the first move is not taken for a
+    // change of shape.
+    _shapeSeen = _shapeOf();
   }
 
   @override
   void dispose() {
     _sceneState.selectedEntity.removeListener(_onSelectionChanged);
+    _sceneState.revision.removeListener(_onRevision);
+    _chipsCooling?.cancel();
+    _problemsLater?.cancel();
+    _rowsLater?.cancel();
+    _chipsTick.dispose();
+    _rowsTick.dispose();
     _hoverExpand?.cancel();
     _cancelPendingRename();
     if (widget.controller == null) _tree.dispose();
@@ -160,6 +170,111 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     position.jumpTo(to.clamp(0.0, position.maxScrollExtent));
   }
 
+  // ── Keeping the filter chips current, cheaply ────────────────────────
+
+  /// Bumped when the chips should be gathered again. Gathering walks every
+  /// component in the scene, and a gizmo drag bumps the scene's revision
+  /// on every move: so the first change after a still moment is answered
+  /// at once, and the rest at most every [_chipsEvery] while they keep
+  /// coming.
+  final Signal<int> _chipsTick = Signal(0, debugLabel: 'treeChips');
+
+  /// Running while the chips were gathered less than [_chipsEvery] ago.
+  Timer? _chipsCooling;
+
+  /// Whether the scene changed while [_chipsCooling] ran.
+  bool _chipsOwed = false;
+
+  /// How many problems the scene has, for the Problems chip; null to count
+  /// again. Counting runs every check there is, so it waits until the
+  /// scene has been still for [_problemsQuiet].
+  int? _problemCount;
+  EditorScene? _problemsScene;
+  Timer? _problemsLater;
+
+  static const Duration _chipsEvery = Duration(milliseconds: 500);
+  // A little longer than the problem scan waits between scans of a scene
+  // being edited, so what is read once it is still is a fresh scan.
+  static Duration get _problemsQuiet =>
+      ProblemScan.editEvery + const Duration(milliseconds: 100);
+
+  // ── Building the rows only when what they show changed ────────────────
+
+  /// Bumped when the rows should be built again: at once when what they
+  /// show changes — which entities there are, their names, nesting, Enabled
+  /// flags, kinds, layers and tags, the roots' order — and once more when
+  /// the scene has been still for [_problemsQuiet], for what a row shows
+  /// from the values (a problem's mark). A gizmo drag bumps the scene's
+  /// revision on every move and changes none of that, so the rows are not
+  /// built again while it lasts.
+  final Signal<int> _rowsTick = Signal(0, debugLabel: 'treeRows');
+  int? _shapeSeen;
+  Timer? _rowsLater;
+
+  /// What the rows show of the scene, as one number: cheap next to
+  /// building them.
+  int _shapeOf() {
+    var shape = Object.hashAll(_sceneState.rootOrder(_world));
+    for (final e in _world.entities) {
+      if (!e.isAlive) continue;
+      final layer = e.getComponent<jge.LayerComponent>();
+      shape = Object.hash(
+        shape,
+        e.id,
+        e.name,
+        e.isActive,
+        e.getComponent<jge.ParentComponent>()?.parentId,
+        Object.hashAll(
+          e.getComponent<jge.ChildrenComponent>()?.childIds ?? const [],
+        ),
+        Object.hashAll([for (final c in e.components) c.runtimeType]),
+        layer?.layerId,
+        layer?.layer,
+        Object.hashAllUnordered(e.tags),
+      );
+    }
+    return shape;
+  }
+
+  void _followRows() {
+    final shape = _shapeOf();
+    if (shape != _shapeSeen) {
+      _shapeSeen = shape;
+      _rowsTick.value = _rowsTick.value + 1;
+    }
+    _rowsLater?.cancel();
+    _rowsLater = Timer(_problemsQuiet, () {
+      _rowsLater = null;
+      if (mounted) _rowsTick.value = _rowsTick.value + 1;
+    });
+  }
+
+  void _onRevision() {
+    _followRows();
+    _problemsLater?.cancel();
+    _problemsLater = Timer(_problemsQuiet, () {
+      _problemsLater = null;
+      if (!mounted) return;
+      _problemCount = null;
+      _gatherChips();
+    });
+    if (_chipsCooling != null) {
+      _chipsOwed = true;
+      return;
+    }
+    _gatherChips();
+  }
+
+  void _gatherChips() {
+    _chipsOwed = false;
+    _chipsTick.value = _chipsTick.value + 1;
+    _chipsCooling?.cancel();
+    _chipsCooling = Timer(_chipsEvery, () {
+      _chipsCooling = null;
+      if (mounted && _chipsOwed) _gatherChips();
+    });
+  }
+
   void _onSelectionChanged() {
     final selected = _sceneState.selectedEntity.value;
     if (selected == null) return;
@@ -184,11 +299,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         // what this scene can be filtered *on*, so they follow both the
         // filter and the scene.
         SignalConsumer(
-          signals: [
-            _tree.filter,
-            _sceneState.revision,
-            _sceneState.activeScene,
-          ],
+          signals: [_tree.filter, _chipsTick, _sceneState.activeScene],
           builder: (context, _) => _filterChips(_tree.filter.value),
         ),
         Expanded(
@@ -197,7 +308,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
               _sceneState.activeScene,
               _sceneState.selectedEntity,
               _sceneState.multiSelectedIds,
-              _sceneState.revision,
+              _rowsTick,
               _sceneState.selectable,
               widget.scope.view.pinned,
               widget.scope.mapDocs.revision,
@@ -238,6 +349,22 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
           : const {},
     );
     _tree.rows = tree;
+
+    // What is on each layer of a map, counted once for all its layer rows.
+    final onLayers = <jge.EntityId, Map<int, int>>{};
+    Map<int, int> countsOn(jge.Entity map) => onLayers.putIfAbsent(map.id, () {
+      final counts = <int, int>{};
+      for (final id
+          in map.getComponent<jge.ChildrenComponent>()?.childIds ??
+              const <jge.EntityId>[]) {
+        final layer = _world
+            .getEntity(id)
+            ?.getComponent<jge.LayerComponent>()
+            ?.mapLayer;
+        if (layer != null) counts[layer] = (counts[layer] ?? 0) + 1;
+      }
+      return counts;
+    });
 
     // A reveal asked for a row to be brought into view; the list now knows
     // where that row is.
@@ -299,13 +426,16 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
             _tree.pickedLayer.value = null;
             _sceneState.clearSelection();
           },
-          child: _rowList(tree),
+          child: _rowList(tree, countsOn),
         ),
       ),
     );
   }
 
-  Widget _rowList(SceneTree tree) {
+  Widget _rowList(
+    SceneTree tree,
+    Map<int, int> Function(jge.Entity map) countsOn,
+  ) {
     return DragTarget<List<jge.Entity>>(
       // Dropped past the last row: out of everything, to the top level —
       // but not while the Level Designer keeps to its Level Map: the top
@@ -326,7 +456,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
                 padding: EdgeInsets.zero,
                 itemCount: tree.length,
                 itemExtent: kSceneTreeRowTileHeight,
-                itemBuilder: (context, index) => _row(tree, index),
+                itemBuilder: (context, index) => _row(tree, index, countsOn),
               ),
             ),
           ),
@@ -362,12 +492,17 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     );
   }
 
-  Widget _row(SceneTree tree, int index) {
+  Widget _row(
+    SceneTree tree,
+    int index,
+    Map<int, int> Function(jge.Entity map) countsOn,
+  ) {
     final row = tree.rows[index];
     if (row.isMapItem) {
       return MapItemRow(
         key: ValueKey(('mapItem', row.id, row.item)),
         row: row,
+        memberCount: countsOn(row.entity)[row.item!.layerId] ?? 0,
         scope: widget.scope,
         controller: _tree,
         onClaim: () => _rowTookIt = true,
@@ -616,8 +751,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     // the viewport, is selected without having been clicked, so it takes
     // a click of its own first.
     final plain =
-        !HardwareKeyboard.instance.isControlPressed &&
-        !HardwareKeyboard.instance.isShiftPressed;
+        !EditorKeys.primaryPressed && !HardwareKeyboard.instance.isShiftPressed;
     if (wasSelected && plain) {
       _cancelPendingRename();
       _renameAfterDoubleClick = Timer(_doubleClick, () {
@@ -629,7 +763,8 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     _select(
       entity,
       tree,
-      control: HardwareKeyboard.instance.isControlPressed,
+      // Cmd+click on a Mac, where Ctrl+click is the context click.
+      control: EditorKeys.primaryPressed,
       shift: HardwareKeyboard.instance.isShiftPressed,
     );
   }
@@ -826,19 +961,27 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   Widget _filterChips(TreeFilter filter) {
     // Only what this scene can answer: a Tag chip over a scene with no
     // tags opens an empty menu and takes a row up saying nothing.
+    final types = _componentTypes();
     final tags = _tags();
     final layers = _layers();
-    final problemCount = ProblemScan.of(widget.scope).problems.length;
+    final scene = _sceneState.activeScene.value;
+    if (!identical(scene, _problemsScene)) {
+      _problemsScene = scene;
+      _problemCount = null;
+    }
+    final problemCount = _problemCount ??= ProblemScan.of(
+      widget.scope,
+    ).problems.length;
     final chips = <Widget>[
       _FilterChip(
         label: filter.componentType.isEmpty
             ? 'Component'
             : filter.componentType,
         on: filter.componentType.isNotEmpty,
-        count: filter.componentType.isEmpty ? _componentTypes().length : null,
+        count: filter.componentType.isEmpty ? types.length : null,
         onPressed: (at) => _pickFilter(
           at,
-          _componentTypes(),
+          types,
           'Any component',
           (value) => _tree.filter.value = filter.copyWith(componentType: value),
         ),
@@ -983,13 +1126,17 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
   /// tree has the focus: the editor hears every key first, so Ctrl+D would
   /// otherwise duplicate twice, F2 open the docks as well as rename, and the
   /// arrows nudge the selection in the level as well as walk the tree.
-  /// Ctrl+S and the rest still reach the editor.
+  /// Ctrl+S and the rest still reach the editor. Ctrl is Cmd on macOS,
+  /// where Backspace deletes as Delete does.
   static bool _claims(KeyEvent event) {
-    if (HardwareKeyboard.instance.isControlPressed) {
+    if (EditorKeys.primaryPressed) {
       return event.logicalKey == LogicalKeyboardKey.keyD ||
           event.logicalKey == LogicalKeyboardKey.keyG;
     }
-    if (_treeKeys.contains(event.logicalKey)) return true;
+    if (_treeKeys.contains(event.logicalKey) ||
+        EditorKeys.isDeleteKey(event.logicalKey)) {
+      return true;
+    }
     // A letter jumps to the next row starting with it.
     final character = event.character;
     return character != null &&
@@ -1008,7 +1155,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
     final selected = _sceneState.selectedEntity.value;
     final index = selected == null ? -1 : tree.indexOf(selected.id);
     final alt = HardwareKeyboard.instance.isAltPressed;
-    final control = HardwareKeyboard.instance.isControlPressed;
+    final control = EditorKeys.primaryPressed;
 
     void moveTo(int at) {
       if (at < 0 || at >= tree.length) return;
@@ -1077,7 +1224,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
       case LogicalKeyboardKey.enter:
         if (selected != null) _startRename(selected);
         return KeyEventResult.handled;
-      case LogicalKeyboardKey.delete:
+      case _ when EditorKeys.isDeleteKey(key):
         widget.entities.deleteSelection(widget.scope.history);
         return KeyEventResult.handled;
       case LogicalKeyboardKey.escape:
@@ -1091,7 +1238,11 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         return KeyEventResult.handled;
       case LogicalKeyboardKey.keyG when control:
         if (HardwareKeyboard.instance.isShiftPressed) {
-          if (selected != null) widget.entities.ungroup(selected);
+          // Only a group comes apart: an entity of its own that happens to
+          // hold others (a player and its weapon) is not one.
+          if (selected != null && widget.entities.isGroup(selected)) {
+            widget.entities.ungroup(selected);
+          }
         } else {
           widget.entities.groupSelection();
         }
@@ -1141,7 +1292,7 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
           flex: 0,
           child: SignalConsumer(
             signals: [
-              _sceneState.revision,
+              _rowsTick,
               _sceneState.multiSelectedIds,
               _sceneState.activeScene,
               _tree.filter,
@@ -1262,7 +1413,8 @@ class _SceneTreePanelState extends State<SceneTreePanel> {
         'ungroup',
         'Ungroup',
         icon: Icons.folder_off_outlined,
-        enabled: hasChildren,
+        // A group only: ungrouping destroys the entity that holds them.
+        enabled: widget.entities.isGroup(entity),
       ),
       editorMenuDivider(),
       editorMenuItem(

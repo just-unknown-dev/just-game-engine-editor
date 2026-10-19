@@ -3,6 +3,7 @@ import 'package:just_debugger/just_debugger.dart';
 import 'package:just_signals/just_signals.dart';
 
 import '../../../../core/plugin/editor_plugin.dart';
+import '../../../../debugger/engine_debugger.dart';
 import '../../../../core/scope/editor_scope_services.dart';
 import 'package:just_editor_core/host.dart';
 import '../assets/assets_browser.dart';
@@ -37,6 +38,7 @@ abstract final class BuiltInDocks {
 
   static final Expando<List<DockDefinition>> _cache = Expando('builtInDocks');
   static final Expando<FrameCapture> _captures = Expando('frameCapture');
+  static final Expando<_LogCounts> _logCounts = Expando('logCounts');
   static final Expando<ValueNotifier<EditorHistory?>> _histories = Expando(
     'designerHistory',
   );
@@ -56,20 +58,46 @@ abstract final class BuiltInDocks {
     JustGameEditorPlugin plugin,
   ) => _histories[plugin] ??= ValueNotifier<EditorHistory?>(plugin.history);
 
-  /// The profiler's frames: one capture per editor, fed from the debugger
-  /// all the while — a spike is worth having even if the Profiler was shut.
-  static FrameCapture frameCaptureOf(JustGameEditorPlugin plugin) {
-    final existing = _captures[plugin];
-    if (existing != null) return existing;
-    final capture = FrameCapture();
-    final debugger = plugin.debuggerController;
-    debugger.addListener(
-      () => capture.add(
-        debugger.performance,
-        entities: debugger.snapshot.entityCount,
-      ),
+  /// The profiler's frames: one capture per editor, fed every frame by
+  /// [captureFrame] all the while — a spike is worth having even if the
+  /// Profiler was shut.
+  static FrameCapture frameCaptureOf(JustGameEditorPlugin plugin) =>
+      _captures[plugin] ??= FrameCapture();
+
+  /// Gives [plugin]'s capture, once there is one, the frame just run: every
+  /// frame, not the debugger's few samples a second, which caught a single
+  /// spike about one time in fifteen. The plugin calls this each update.
+  static void captureFrame(JustGameEditorPlugin plugin) {
+    final capture = _captures[plugin];
+    if (capture == null || capture.paused || !plugin.engine.isInitialized) {
+      return;
+    }
+    capture.add(
+      plugin.engine.framePerformance(),
+      entities: plugin.debuggerController.snapshot.entityCount,
     );
-    return _captures[plugin] = capture;
+  }
+
+  /// The errors and warnings logged in this session — not the earlier
+  /// sessions' lines the log loads back, which said nothing about now —
+  /// counted once per change of the log, for the status bar and the
+  /// Console's tab.
+  static ({int errors, int warnings}) sessionLogCounts(
+    JustGameEditorPlugin plugin,
+  ) {
+    final entries = plugin.logService.entries.value;
+    final known = _logCounts[plugin];
+    if (known != null && identical(known.of, entries)) return known.counts;
+    final since = plugin.sessionStartedAt;
+    var errors = 0, warnings = 0;
+    for (final e in entries) {
+      if (e.timestamp.isBefore(since)) continue;
+      if (e.level == DebuggerLogLevel.error) errors++;
+      if (e.level == DebuggerLogLevel.warning) warnings++;
+    }
+    final counts = (errors: errors, warnings: warnings);
+    _logCounts[plugin] = _LogCounts(entries, counts);
+    return counts;
   }
 
   /// The project's asset index: one per editor, shared by the Assets dock
@@ -126,10 +154,27 @@ abstract final class BuiltInDocks {
       modifiers: const ModifierKeys(),
       gridSize: plugin.gridSize.value,
     );
+    // A Level Designer command works on the designer's session, and on the
+    // level as authored — as its key does.
+    if (found.scope == CommandScope.designer &&
+        (context.session == null || !plugin.isAuthoring.value)) {
+      return '"${found.label}" works in the Level Designer, while editing: '
+          '${context.session == null ? 'open it first' : 'stop the play-test first'}.';
+    }
     if (!found.enabledIn(context)) {
       return '"${found.label}" is not available right now.';
     }
-    found.run(context);
+    try {
+      found.run(context);
+    } catch (error) {
+      plugin.scope.log.log(
+        'The command "${found.label}" failed: $error',
+        source: 'console',
+        category: 'commands',
+        level: DebuggerLogLevel.error,
+      );
+      return '"${found.label}" failed: $error';
+    }
     return 'Ran "${found.label}".';
   }
 
@@ -143,14 +188,6 @@ abstract final class BuiltInDocks {
           builder: (context, settings, _) => build(settings),
         );
 
-    int count(DebuggerLogLevel level) {
-      var n = 0;
-      for (final e in plugin.logService.entries.value) {
-        if (e.level == level) n++;
-      }
-      return n;
-    }
-
     return [
       DockDefinition(
         id: console,
@@ -159,9 +196,8 @@ abstract final class BuiltInDocks {
         order: 10,
         keepAlive: true,
         tabBadge: (_) {
-          final errors = count(DebuggerLogLevel.error);
+          final (:errors, :warnings) = sessionLogCounts(plugin);
           if (errors > 0) return DockBadge('$errors', DockSeverity.error);
-          final warnings = count(DebuggerLogLevel.warning);
           return warnings > 0
               ? DockBadge('$warnings', DockSeverity.warning)
               : null;
@@ -188,6 +224,7 @@ abstract final class BuiltInDocks {
           dock: dock,
           index: assetIndexOf(plugin),
           onOpenScene: plugin.openScene,
+          sceneManager: plugin.sceneManager,
         ),
       ),
       DockDefinition(
@@ -293,4 +330,12 @@ abstract final class BuiltInDocks {
       ),
     ];
   }
+}
+
+/// The counts [BuiltInDocks.sessionLogCounts] made, and of which log.
+class _LogCounts {
+  const _LogCounts(this.of, this.counts);
+
+  final List<Object?> of;
+  final ({int errors, int warnings}) counts;
 }

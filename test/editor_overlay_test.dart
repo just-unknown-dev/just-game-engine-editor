@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart';
 
 void main() {
   testWidgets('overlay hidden by default and visible after F1', (tester) async {
@@ -57,7 +58,7 @@ void main() {
       return;
     }
 
-    plugin.toggleStatusPanelVisibility();
+    plugin.isStatusPanelVisible.value = !plugin.isStatusPanelVisible.value;
     await tester.pumpAndSettle();
     expect(find.text('Status Panel'), findsNothing);
 
@@ -84,7 +85,7 @@ void main() {
     addTearDown(engine.dispose);
     await tester.runAsync(engine.initialize);
     final plugin = JustGameEditorPlugin(engine: engine);
-    await tester.runAsync(plugin.onInitialize);
+    await tester.runAsync(() => plugin.attach(plugin.engine));
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -111,7 +112,7 @@ void main() {
     expect(plugin.gamePreviewOrigin.dx, lessThan(play.dx));
     // …in the toolbar's own frame: its border colour and its corners.
     final ui = plugin.scope.prefs.settings.value;
-    expect(plugin.gamePreviewStyle.borderColor, ui.themeColor);
+    expect(plugin.gamePreviewStyle.borderColor, ui.accent);
     expect(plugin.gamePreviewStyle.cornerRadius, ui.cornerRadius + 6);
 
     await tester.pumpWidget(const SizedBox());

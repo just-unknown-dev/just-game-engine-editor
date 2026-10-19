@@ -26,8 +26,8 @@ void main() {
     addTearDown(scope.dispose);
     const path = 'assets/materials/stone.material.json';
     expect(module.materialKind.matches(path), isTrue);
-    expect(AssetKind.of(path).id, 'material');
-    expect(AssetKinds.active.filters.map((k) => k.id), contains('material'));
+    expect(scope.assetKinds.of(path).id, 'material');
+    expect(scope.assetKinds.filters.map((k) => k.id), contains('material'));
     final workspace = module.workspaces.firstWhere(
       (w) => w.id == BuiltInMaterialsModule.workspaceId,
     );
@@ -49,14 +49,6 @@ void main() {
       File('${dir.path}/$first').readAsStringSync(),
     );
     expect(made.validate(), isEmpty);
-  });
-
-  test('colours read and written as hex', () {
-    expect(MaterialWorkspaceState.hexOf(0xFFFF8000), '#FF8000');
-    expect(MaterialWorkspaceState.hexOf(0x80FF8000), '#FF800080');
-    expect(MaterialWorkspaceState.argbOfHex('#ff8000'), 0xFFFF8000);
-    expect(MaterialWorkspaceState.argbOfHex('FF800080'), 0x80FF8000);
-    expect(MaterialWorkspaceState.argbOfHex('nope'), isNull);
   });
 
   test(

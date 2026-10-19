@@ -11,6 +11,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine/graphics_3d.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
+import 'package:just_editor_core/host.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/panels/view_3d_panel.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/split/split_views.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -46,6 +49,17 @@ void main() {
       }
       expect(split.panes[0].view.pitch, lessThan(-1.5), reason: 'the top looks down');
     });
+
+    test('a flat pane sized after the split shows what perspective would at its height', () {
+      // Split before the panes had a size, their zoom was worked out for a
+      // view one pixel high: the level shrank to a dot under the gizmo.
+      split.toggle();
+      split.layout(const Size(402, 302));
+      final top = split.panes.first;
+      top.view.viewportSize = top.rect.size;
+      expect(top.view.camera.zoom, closeTo(top.view.zoom, 1e-9));
+      expect(top.view.camera.zoom, greaterThan(5), reason: 'pixels a metre at 15 m, 150 high');
+    });
   });
 
   test('a pane stands in for the editor\'s view while it is drawn or handled', () {
@@ -76,7 +90,7 @@ void main() {
       engine = Engine(config: EngineConfig(graphics3D: graphics));
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
-      await plugin.onInitialize();
+      await plugin.attach(plugin.engine);
       plugin
         ..setVisible(true)
         ..viewport.updateCanvasSize(const Size(402, 302));
@@ -110,11 +124,11 @@ void main() {
 
     test('the game\'s own picture is not drawn under the panes', () {
       plugin.toggleSplitViews();
-      plugin.onUpdate(1 / 60);
+      plugin.update(1 / 60);
       expect(plugin.sceneAids.skippedViews, contains(engine.rendering.view));
       expect(identical(plugin.scope.editorView, plugin.splitViews.panes.last.view), isTrue, reason: 'keys go to the pane in use');
       plugin.toggleSplitViews();
-      plugin.onUpdate(1 / 60);
+      plugin.update(1 / 60);
       expect(plugin.sceneAids.skippedViews, isEmpty);
       expect(plugin.scope.viewOverride, isNull);
     });
@@ -122,7 +136,7 @@ void main() {
     test('each pane is drawn in its quarter', () {
       plugin.toggleSplitViews();
       final recorder = ui.PictureRecorder();
-      plugin.onRender(Canvas(recorder), const Size(402, 302));
+      plugin.renderOverlay(Canvas(recorder), const Size(402, 302));
       recorder.endRecording().dispose();
       expect(plugin.splitViews.panes.last.rect, const Rect.fromLTWH(202, 152, 200, 150));
     });

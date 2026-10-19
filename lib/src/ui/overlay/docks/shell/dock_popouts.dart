@@ -71,7 +71,13 @@ class _DockPopoutsState extends State<DockPopouts> {
     // Where it was left last time, if it was moved or sized.
     final memory = controller.memoryOf(dock.id);
     final kept = memory.read<Map<Object?, Object?>>('window');
-    double? keptValue(String key) => (kept?[key] as num?)?.toDouble();
+    // A hand-edited or damaged value is no value: not an error over the
+    // whole editor.
+    double? keptValue(String key) {
+      final value = kept?[key];
+      return value is num && value.isFinite ? value.toDouble() : null;
+    }
+
     if (kept != null && !_positions.containsKey(dock.id)) {
       final x = keptValue('x'), y = keptValue('y');
       if (x != null && y != null) _positions[dock.id] = Offset(x, y);

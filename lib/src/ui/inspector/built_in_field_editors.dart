@@ -41,11 +41,15 @@ abstract final class BuiltInFieldEditors {
     ...PhysicsFieldEditors.all,
   };
 
-  static Widget _edgeInsets(FieldEditorContext c) => EdgeInsetsEditorRow(
-    label: c.label,
-    insets: c.value is EdgeInsets ? c.value! as EdgeInsets : EdgeInsets.zero,
-    onChanged: c.onChanged,
-  );
+  static Widget _edgeInsets(FieldEditorContext c) => c.readOnly
+      ? _readonly(c)
+      : EdgeInsetsEditorRow(
+          label: c.label,
+          insets: c.value is EdgeInsets
+              ? c.value! as EdgeInsets
+              : EdgeInsets.zero,
+          onChanged: c.onChanged,
+        );
 
   static Widget _readonly(FieldEditorContext c) =>
       ReadonlyRow(label: c.label, value: '${c.value}');
@@ -98,8 +102,10 @@ abstract final class BuiltInFieldEditors {
       label: c.label,
       initialValue: isInt ? shown.round().toString() : shown.toString(),
       onSubmitted: (text) {
+        // `NaN` and `Infinity` parse, but are no value a scene can save —
+        // and an integer field cannot round them.
         final parsed = double.tryParse(text.trim());
-        if (parsed != null) c.onChanged(toValue(parsed));
+        if (parsed != null && parsed.isFinite) c.onChanged(toValue(parsed));
       },
     );
   }
@@ -338,6 +344,14 @@ abstract final class BuiltInFieldEditors {
   /// with a way to put it back where it is set.
   static Widget _color(FieldEditorContext c) {
     final set = c.value is Color;
+    if (c.readOnly) {
+      return ReadonlyRow(
+        label: c.label,
+        value: set
+            ? '#${(c.value! as Color).toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}'
+            : 'not set',
+      );
+    }
     // What the component draws when this is left unset, if anything does —
     // a module's to say (a theme's panel colour), not the inspector's.
     final inherited = c.editors.inheritedColor(c.component, c.field.name);
@@ -357,14 +371,16 @@ abstract final class BuiltInFieldEditors {
     );
   }
 
-  static Widget _shapePaintStyle(FieldEditorContext c) => ColorEditorRow(
-    label: c.label,
-    paintStyle: c.value is jge.ShapePaintStyle
-        ? c.value as jge.ShapePaintStyle
-        : const jge.ShapePaintStyle(),
-    supportsGradient: true,
-    onChanged: c.onChanged,
-    onPreview: c.preview?.show,
-    onPreviewEnd: c.preview?.restore,
-  );
+  static Widget _shapePaintStyle(FieldEditorContext c) => c.readOnly
+      ? _readonly(c)
+      : ColorEditorRow(
+          label: c.label,
+          paintStyle: c.value is jge.ShapePaintStyle
+              ? c.value as jge.ShapePaintStyle
+              : const jge.ShapePaintStyle(),
+          supportsGradient: true,
+          onChanged: c.onChanged,
+          onPreview: c.preview?.show,
+          onPreviewEnd: c.preview?.restore,
+        );
 }

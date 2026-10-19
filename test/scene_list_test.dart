@@ -14,11 +14,36 @@ import 'package:just_game_engine_editor/src/core/prefs/recent_scenes.dart';
 import 'package:just_game_engine_editor/src/ui/panels/scene_row.dart';
 
 import 'support/memory_settings_store.dart';
+import 'support/real_io.dart';
+import 'package:just_game_engine_editor/src/core/serialization/scene_manager.dart';
+import 'package:just_game_engine_editor/src/ui/dialogs/create_scene_overlay.dart';
+import 'package:just_game_engine_editor/src/ui/panels/scene_picker_panel.dart';
+
+/// Counts the play-order writes it is asked for, and those still under way:
+/// the list is done with an action that rewrites `scenes.json` once none
+/// is (it shows the new order straight away, and reads it back after).
+class _TrackedManager extends SceneManager {
+  _TrackedManager({required super.store, super.protectedSceneNames});
+
+  int writes = 0;
+  int writing = 0;
+
+  @override
+  Future<void> setPlayOrder(List<String> names) async {
+    writes++;
+    writing++;
+    try {
+      await super.setPlayOrder(names);
+    } finally {
+      writing--;
+    }
+  }
+}
 
 void main() {
   late Directory root;
   late SceneStore store;
-  late SceneManager manager;
+  late _TrackedManager manager;
   late EditorPrefs prefs;
 
   setUp(() async {
@@ -30,15 +55,19 @@ void main() {
     for (final name in ['level_01', 'level_02', 'level_03']) {
       await store.writeInitialFiles(name);
     }
-    manager = SceneManager(store: store, protectedSceneNames: {'level_03'});
+    manager = _TrackedManager(store: store, protectedSceneNames: {'level_03'});
     prefs = EditorPrefs(store: MemorySettingsStore());
   });
-  tearDown(() {
-    if (root.existsSync()) root.deleteSync(recursive: true);
-  });
+  tearDown(() => deleteWhenFree(root));
 
+  // A file just written can be held for a moment by something else on
+  // Windows (a virus scanner): read again shortly rather than fail.
   List<String> manifest() =>
-      ((jsonDecode(File('${root.path}/scenes.json').readAsStringSync())
+      ((jsonDecode(
+                    readWhenFree(
+                      () => File('${root.path}/scenes.json').readAsStringSync(),
+                    ),
+                  )
                   as Map)['scenes']
               as List)
           .cast<String>();
@@ -164,19 +193,20 @@ void main() {
   group('the panel', () {
     Future<void> settle(WidgetTester tester) => tester.pumpAndSettle();
 
-    /// Does [action], then gives the files it writes real time to be
-    /// written — a step of the write per pump — and lets the list catch up.
+    /// Does [action], then waits until the play order it writes is
+    /// written — real file writes, a step of them per pump — and the list
+    /// has read it back.
     Future<void> writing(
       WidgetTester tester,
       Future<void> Function() action,
     ) async {
+      final before = manager.writes;
       await action();
-      for (var i = 0; i < 12; i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 15)),
-        );
-        await tester.pump();
-      }
+      await pumpUntil(
+        tester,
+        () => manager.writes > before && manager.writing == 0,
+        what: 'the play order to be written',
+      );
       await tester.pumpAndSettle();
     }
 
@@ -362,10 +392,14 @@ void main() {
         tester.widget<TextField>(find.byType(TextField).last).controller!.text,
         'level_04',
       );
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Create scene'));
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-      });
+      await tester.tap(find.text('Create scene'));
+      // Real file writes (each written beside its file, flushed and moved
+      // over it), and then the new scene is opened.
+      await pumpUntil(
+        tester,
+        () => opened.isNotEmpty,
+        what: 'the new scene to be made and opened',
+      );
       await tester.pumpAndSettle();
       expect(opened, ['level_04']);
       expect(manifest().last, 'level_04');

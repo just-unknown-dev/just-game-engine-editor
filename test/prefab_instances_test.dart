@@ -12,6 +12,8 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/core/state/play_snapshot.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/prefabs/prefab_instances.dart';
+import 'package:just_game_engine_editor/src/core/scene/scene_io.dart';
 
 Map<String, dynamic> _transform(double x, double y) => {
   'type': 'TransformComponent',

@@ -10,12 +10,21 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/level_map/tile_edit_state.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/level_layers_panel.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/tools/tiles/tile_brush_tools.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/tools/tiles/tile_tool_base.dart';
 
 class _Keys {
   bool shift = false;
   bool control = false;
   bool alt = false;
-  ModifierKeys read() => ModifierKeys(shift: shift, control: control, alt: alt);
+
+  /// Ctrl on a Mac, the Windows key elsewhere: the one nothing is bound to.
+  bool other = false;
+  ModifierKeys read() =>
+      ModifierKeys(shift: shift, control: control, alt: alt, other: other);
 }
 
 final int a = TileCell.make(0, 1);
@@ -273,6 +282,13 @@ void main() {
       // Ctrl+Z is still undo, not a turn.
       keys.control = true;
       expect(key(LogicalKeyboardKey.keyZ), isFalse);
+      // And a Mac's Ctrl+Z (Cmd is its shortcut key) is neither.
+      keys
+        ..control = false
+        ..other = true;
+      expect(key(LogicalKeyboardKey.keyZ), isFalse);
+      expect(key(LogicalKeyboardKey.keyX), isFalse);
+      expect(tiles().stamp.value, same(turned), reason: 'the brush as it was');
     });
 
     test('random mode paints one of the brush\'s tiles per cell', () {
@@ -744,5 +760,12 @@ void main() {
         });
       });
     }
+  });
+
+  test('choosing a layer paints it and places at its depth (LD-32)', () {
+    final chosen = data.layers.first;
+    tiles().selectLayer(chosen, controller: session.controller);
+    expect(tiles().layerId.value, chosen.id);
+    expect(session.controller.activeLayerId.value, chosen.sortLayerId);
   });
 }

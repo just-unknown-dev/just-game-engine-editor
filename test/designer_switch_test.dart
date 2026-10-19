@@ -8,6 +8,9 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_editor_core/host.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/level_designer_workspace.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/designer_switch.dart';
 
 class _GenreModule extends EditorModule {
   @override
@@ -244,7 +247,6 @@ void main() {
               child: LevelDesignerWorkspace(
                 session: session,
                 gridSize: 32,
-                onGridSizeChanged: (_) {},
                 onClose: () {},
               ),
             ),

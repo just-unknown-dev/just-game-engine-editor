@@ -2,6 +2,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 
 import 'package:just_editor_core/host.dart';
 import 'level_map_documents.dart';
+import 'tile_edit_state.dart';
 import 'tile_commands.dart';
 import 'tiles_to_entity.dart';
 import '../scope/editor_scope_services.dart';
@@ -106,9 +107,15 @@ abstract final class TileSelectionOps {
       say('The selection holds no tiles');
       return false;
     }
-    scope.tiles.clipboard = stamp;
+    scope.tiles.setClipboard(
+      stamp,
+      tilesets: TileEditState.tilesetsOf(a.target.data),
+    );
     final n = stamp.cells.length;
-    say('Copied $n tile${n == 1 ? '' : 's'}: Ctrl+V to paint them');
+    say(
+      'Copied $n tile${n == 1 ? '' : 's'}: '
+      '${EditorKeys.withPrimary('V')} to paint them',
+    );
     return true;
   }
 

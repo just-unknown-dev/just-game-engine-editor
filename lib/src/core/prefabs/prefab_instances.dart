@@ -1,5 +1,4 @@
-import 'dart:io';
-
+import 'package:just_editor_core/io.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import 'package:just_editor_core/host.dart';
@@ -45,7 +44,9 @@ final class PrefabInstances {
     final link = entity.getComponent<PrefabLink>();
     if (link == null) return null;
     final top = entity.world?.getEntity(link.instance);
-    return top != null && top.hasComponent<PrefabInstanceComponent>() ? top : null;
+    return top != null && top.hasComponent<PrefabInstanceComponent>()
+        ? top
+        : null;
   }
 
   /// Every instance's top in the scene.
@@ -58,14 +59,18 @@ final class PrefabInstances {
   Map<String, Entity> membersOf(Entity top) => {
     for (final e in world.entities)
       if (e.isAlive)
-        if (e.getComponent<PrefabLink>() case final link? when link.instance == top.id) link.path: e,
+        if (e.getComponent<PrefabLink>() case final link?
+            when link.instance == top.id)
+          link.path: e,
   };
 
   /// [entity] and everything under it, parents first.
   List<Entity> subtreeOf(Entity entity) {
     final out = <Entity>[entity];
     for (var i = 0; i < out.length; i++) {
-      for (final id in out[i].getComponent<ChildrenComponent>()?.childIds ?? const <EntityId>[]) {
+      for (final id
+          in out[i].getComponent<ChildrenComponent>()?.childIds ??
+              const <EntityId>[]) {
         final child = world.getEntity(id);
         if (child != null && child.isAlive) out.add(child);
       }
@@ -76,10 +81,14 @@ final class PrefabInstances {
   /// What [top]'s instance changes now — against its prefab, as a save
   /// would write it — and the entries of the scene's own entities inside
   /// it (world placed, under it by `parentTarget`).
-  ({PrefabInstance block, List<Map<String, dynamic>> inside}) changesOf(Entity top) {
+  ({PrefabInstance block, List<Map<String, dynamic>> inside}) changesOf(
+    Entity top,
+  ) {
     final instance = top.getComponent<PrefabInstanceComponent>()!;
     if (instance.missing) return (block: instance.block, inside: const []);
-    final collapsed = scope.codec.collapseMarked(scope.codec.encodeForSave(subtreeOf(top)));
+    final collapsed = scope.codec.collapseMarked(
+      scope.codec.encodeForSave(subtreeOf(top)),
+    );
     final block = collapsed.first['prefab'];
     return (
       block: block is Map ? PrefabInstance.fromJson(block) : instance.block,
@@ -90,7 +99,10 @@ final class PrefabInstances {
   /// The overrides of [top]'s instance that are not where it was placed:
   /// its top's position, turn and size are where the instance stands, not
   /// changes to the prefab.
-  static List<PrefabOverride> changesBeyondPlacement(PrefabInstance block, String topPath) => [
+  static List<PrefabOverride> changesBeyondPlacement(
+    PrefabInstance block,
+    String topPath,
+  ) => [
     for (final o in block.overrides)
       if (!(o.target == topPath && o.component == 'TransformComponent')) o,
   ];
@@ -98,9 +110,10 @@ final class PrefabInstances {
   /// [top]'s transform where its prefab has it, decoded; null when the
   /// prefab has not been read or has none.
   TransformComponent? homeOf(String path) {
-    final saved = PrefabExpander.expand(PrefabInstance(path: path), library.loaded)
-        ?.first
-        .componentOf('TransformComponent');
+    final saved = PrefabExpander.expand(
+      PrefabInstance(path: path),
+      library.loaded,
+    )?.first.componentOf('TransformComponent');
     final home = saved == null ? null : scope.codec.decode(saved);
     return home is TransformComponent ? home : null;
   }
@@ -115,9 +128,14 @@ final class PrefabInstances {
     final made = List<Entity?>.filled(expanded.length, null);
     for (var i = 0; i < expanded.length; i++) {
       final entry = expanded[i];
-      final components = scope.codec.decodeAll(entry['components'] as List? ?? const []);
+      final components = scope.codec.decodeAll(
+        entry['components'] as List? ?? const [],
+      );
       if (components.isEmpty && entry['prefabRef'] == null) continue;
-      final e = world.createEntityWithComponents(components, name: entry['name'] as String?);
+      final e = world.createEntityWithComponents(
+        components,
+        name: entry['name'] as String?,
+      );
       if (entry['enabled'] == false) e.isActive = false;
       sceneState.registerEntity(e);
       made[i] = e;
@@ -140,10 +158,15 @@ final class PrefabInstances {
       if (ref is! Map || entity == null) continue;
       final top = made[ref['instance'] as int];
       if (top == null) continue;
-      entity.addComponent(PrefabLink(instance: top.id, path: ref['path'] as String));
+      entity.addComponent(
+        PrefabLink(instance: top.id, path: ref['path'] as String),
+      );
       if (ref['block'] case final Map block) {
         entity.addComponent(
-          PrefabInstanceComponent(block: PrefabInstance.fromJson(block), missing: ref['missing'] != null),
+          PrefabInstanceComponent(
+            block: PrefabInstance.fromJson(block),
+            missing: ref['missing'] != null,
+          ),
         );
       }
     }
@@ -158,7 +181,8 @@ final class PrefabInstances {
     }
     final out = [for (final e in made) ?e];
     for (final e in out) {
-      if (e.getComponent<ParentComponent>()?.parentId == null || e.getComponent<ParentComponent>()?.parentId == under?.id) {
+      if (e.getComponent<ParentComponent>()?.parentId == null ||
+          e.getComponent<ParentComponent>()?.parentId == under?.id) {
         world.transformHierarchy.propagateFrom(e);
       }
     }
@@ -188,23 +212,36 @@ final class PrefabInstances {
     final home = homeOf(path);
     final overrides = <Map<String, dynamic>>[];
     if (home != null && (at != null || turn != null || size != 1)) {
-      final placed = TransformComponent(position: Vector3.copy(at ?? home.position), scale: Vector3.copy(home.scale));
+      final placed = TransformComponent(
+        position: Vector3.copy(at ?? home.position),
+        scale: Vector3.copy(home.scale),
+      );
       final own = Quaternion.identity();
       home.rotationInto(own);
-      placed.setRotation(turn == null ? own : (Quaternion.copy(turn)..multiply(own)));
+      placed.setRotation(
+        turn == null ? own : (Quaternion.copy(turn)..multiply(own)),
+      );
       placed.scale.scale(size);
       final before = scope.codec.encode(home)?['fields'] as Map? ?? const {};
       final after = scope.codec.encode(placed)?['fields'] as Map? ?? const {};
       final topId = library.loaded(path)?.root.id ?? '';
       for (final key in const ['position', 'rotation', 'scale']) {
         if (after[key] != null && '${after[key]}' != '${before[key]}') {
-          overrides.add({'target': topId, 'component': 'TransformComponent', 'field': key, 'value': after[key]});
+          overrides.add({
+            'target': topId,
+            'component': 'TransformComponent',
+            'field': key,
+            'value': after[key],
+          });
         }
       }
     }
     return {
       'name': name,
-      'prefab': {'path': path, if (overrides.isNotEmpty) 'overrides': overrides},
+      'prefab': {
+        'path': path,
+        if (overrides.isNotEmpty) 'overrides': overrides,
+      },
     };
   }
 
@@ -219,14 +256,22 @@ final class PrefabInstances {
   }) {
     final file = library.loaded(path);
     if (file == null) return null;
-    final entry = entryFor(path, name: scope.entities.uniqueName(file.name), at: at, turn: turn, size: size);
+    final entry = entryFor(
+      path,
+      name: scope.entities.uniqueName(file.name),
+      at: at,
+      turn: turn,
+      size: size,
+    );
     var made = <Entity>[];
     final underId = under?.id;
     scope.history.push(
       CallbackCommand(
         label: 'Place ${file.name}',
         onRedo: () {
-          made = build([entry], under: underId == null ? null : world.getEntity(underId));
+          made = build([
+            entry,
+          ], under: underId == null ? null : world.getEntity(underId));
           if (made.isNotEmpty) sceneState.selectEntity(made.first);
         },
         onUndo: () => _remove(made),
@@ -266,7 +311,9 @@ final class PrefabInstances {
     }
     final members = membersOf(top)..removeWhere((_, e) => identical(e, top));
     final byPath = <String, Entity>{};
-    final placement = scope.codec.encode(top.getComponent<TransformComponent>() ?? TransformComponent());
+    final placement = scope.codec.encode(
+      top.getComponent<TransformComponent>() ?? TransformComponent(),
+    );
     for (final node in nodes) {
       final isTop = node.parent == null;
       // The top keeps where it stands.
@@ -278,18 +325,28 @@ final class PrefabInstances {
           : node.components;
       var e = isTop ? top : members.remove(node.path);
       if (e == null) {
-        e = world.createEntityWithComponents(scope.codec.decodeAll(json), name: node.name)
-          ..addComponent(PrefabLink(instance: top.id, path: node.path));
+        e = world.createEntityWithComponents(
+          scope.codec.decodeAll(json),
+          name: node.name,
+        )..addComponent(PrefabLink(instance: top.id, path: node.path));
         sceneState.registerEntity(e);
       } else {
-        EntitySpec(name: isTop ? top.name : node.name, componentsJson: json, codec: scope.codec).applyTo(e);
+        EntitySpec(
+          name: isTop ? top.name : node.name,
+          componentsJson: json,
+          codec: scope.codec,
+        ).applyTo(e);
       }
       if (isTop) {
-        e.getComponent<PrefabLink>() ?? e.addComponent(PrefabLink(instance: top.id, path: node.path));
+        e.getComponent<PrefabLink>() ??
+            e.addComponent(PrefabLink(instance: top.id, path: node.path));
       } else {
         e.isActive = node.enabled;
         final parent = byPath[node.parent];
-        if (parent != null && e.getComponent<ParentComponent>()?.parentId != parent.id) _link(e, parent);
+        if (parent != null &&
+            e.getComponent<ParentComponent>()?.parentId != parent.id) {
+          _link(e, parent);
+        }
         e.getComponent<ParentComponent>()?.needsLocal = true;
       }
       byPath[node.path] = e;
@@ -316,22 +373,62 @@ final class PrefabInstances {
   }
 
   /// After the prefab at [path] changed on disk: reads it again and makes
-  /// every instance again, each keeping what it changes ([blocks] when
-  /// given for one).
-  Future<void> refresh(String path, {Map<Entity, PrefabInstance> blocks = const {}}) async {
+  /// every instance that uses it — itself, or a prefab nested in it —
+  /// again, each keeping what it changes ([blocks] when given for one).
+  /// Instances of other prefabs are left as they are.
+  ///
+  /// The new file is read before the old one is let go of: one that cannot
+  /// be read (caught half-written, say) leaves the instances, and what they
+  /// change, as they were.
+  Future<void> refresh(
+    String path, {
+    Map<Entity, PrefabInstance> blocks = const {},
+  }) async {
+    try {
+      // Read once to see it parses; the library reads it again below.
+      await scope.context.prefabs(path);
+    } on Object catch (error) {
+      scope.log.log(
+        'Could not read the prefab $path: $error — its instances are kept '
+        'as they were.',
+        source: 'editor',
+        category: 'prefab',
+      );
+      return;
+    }
     final before = <Entity, PrefabInstance>{
-      for (final top in tops()) top: blocks[top] ?? changesOf(top).block,
+      for (final top in tops())
+        if (_uses(top.getComponent<PrefabInstanceComponent>()!.path, path))
+          top: blocks[top] ?? changesOf(top).block,
     };
     library.reload(path);
     try {
       await library.load(path);
     } on Object catch (error) {
-      scope.log.log('Could not read the prefab $path: $error', source: 'editor', category: 'prefab');
+      scope.log.log(
+        'Could not read the prefab $path: $error',
+        source: 'editor',
+        category: 'prefab',
+      );
       return;
     }
     for (final MapEntry(key: top, value: block) in before.entries) {
       if (top.isAlive) rebuild(top, block);
     }
+  }
+
+  /// Whether an instance of the prefab at [prefab] is made from [path]:
+  /// it is that prefab, or one nested in it (at any depth) is.
+  bool _uses(String prefab, String path, [Set<String>? seen]) {
+    if (prefab == path) return true;
+    final visited = seen ?? <String>{};
+    if (!visited.add(prefab)) return false;
+    final file = library.loaded(prefab);
+    if (file == null) return false;
+    for (final nested in PrefabExpander.pathsInPrefab(file)) {
+      if (_uses(nested, path, visited)) return true;
+    }
+    return false;
   }
 
   // ── Revert and Apply ────────────────────────────────────────────────────
@@ -367,7 +464,10 @@ final class PrefabInstances {
       path: before.path,
       overrides: [
         for (final o in before.overrides)
-          if (!(o.target == target && o.component == component && o.field == field)) o,
+          if (!(o.target == target &&
+              o.component == component &&
+              o.field == field))
+            o,
       ],
       removed: before.removed,
       addedComponents: before.addedComponents,
@@ -410,17 +510,31 @@ final class PrefabInstances {
             path: block.path,
             overrides: [
               for (final o in block.overrides)
-                if (o.target == only.$1 && o.component == only.$2 && o.field == only.$3) o,
+                if (o.target == only.$1 &&
+                    o.component == only.$2 &&
+                    o.field == only.$3)
+                  o,
             ],
           );
     // The scene's own entities inside it, in the prefab's space.
     final joining = only == null ? _insideEntities(top) : const <Entity>[];
-    final added = joining.isEmpty ? const <PrefabEntity>[] : _asPrefabEntities(top, joining, file);
-    final next = PrefabApply.apply(file, changes, added: added, resolve: library.loaded);
+    final added = joining.isEmpty
+        ? const <PrefabEntity>[]
+        : _asPrefabEntities(top, joining, file);
+    final next = PrefabApply.apply(
+      file,
+      changes,
+      added: added,
+      resolve: library.loaded,
+    );
     try {
-      await File('$root/${instance.path}').writeAsString(next.encode());
-    } on FileSystemException catch (error) {
-      scope.log.log('Could not write ${instance.path}: $error', source: 'editor', category: 'prefab');
+      await _writePrefab(instance.path, next.encode());
+    } on Object catch (error) {
+      scope.log.log(
+        'Could not write ${instance.path}: $error',
+        source: 'editor',
+        category: 'prefab',
+      );
       return false;
     }
     // What joined the prefab comes back as part of every instance.
@@ -436,12 +550,48 @@ final class PrefabInstances {
     return true;
   }
 
+  /// Where the version of a prefab file that Apply replaces is kept: in
+  /// the project, never under `assets/`, which ships.
+  static const String backupFolder = '.editor_backups/prefabs';
+
+  /// Writes [text] as the prefab file [path] — whole or not at all, the
+  /// version it replaces kept in [backupFolder] first. A path read out of a
+  /// scene that leaves the project, or a package that cannot be written,
+  /// is refused.
+  Future<void> _writePrefab(String path, String text) async {
+    final paths = PackageAssetPaths.of(root);
+    if (!ProjectFiles.isContained(path) || !paths.isWritable(path)) {
+      throw FileSystemException(
+        'Not a prefab file this project can write',
+        path,
+      );
+    }
+    final file = paths.file(path);
+    if (await file.exists()) {
+      final t = DateTime.now();
+      String two(int v) => v.toString().padLeft(2, '0');
+      final stamp =
+          '${t.year}${two(t.month)}${two(t.day)}-'
+          '${two(t.hour)}${two(t.minute)}${two(t.second)}-'
+          '${t.millisecond.toString().padLeft(3, '0')}';
+      final name = path.substring(path.lastIndexOf('/') + 1);
+      await ProjectFiles.writeBytes(
+        '$root/$backupFolder/$stamp-$name',
+        await file.readAsBytes(),
+      );
+    }
+    await ProjectFiles.writeString(file.path, text);
+  }
+
   // The scene's own entities under entities of [top]'s instance — those
   // directly under one the prefab makes at its top level, and theirs.
   List<Entity> _insideEntities(Entity top) {
     final out = <Entity>[];
     for (final e in subtreeOf(top)) {
-      if (e.hasComponent<PrefabLink>() || e.hasComponent<PrefabInstanceComponent>()) continue;
+      if (e.hasComponent<PrefabLink>() ||
+          e.hasComponent<PrefabInstanceComponent>()) {
+        continue;
+      }
       out.add(e);
     }
     return out;
@@ -449,7 +599,11 @@ final class PrefabInstances {
 
   // [entities] — the scene's own, inside [top]'s instance — as entities of
   // [file], placed in its space: as though [top] stood where [file] has it.
-  List<PrefabEntity> _asPrefabEntities(Entity top, List<Entity> entities, PrefabFile file) {
+  List<PrefabEntity> _asPrefabEntities(
+    Entity top,
+    List<Entity> entities,
+    PrefabFile file,
+  ) {
     final home = homeOf(top.getComponent<PrefabInstanceComponent>()!.path);
     final t = top.getComponent<TransformComponent>();
     TransformSnapshot? was;
@@ -481,7 +635,9 @@ final class PrefabInstances {
       final parentId = e.getComponent<ParentComponent>()?.parentId;
       final parent = parentId == null ? null : world.getEntity(parentId);
       final link = parent?.getComponent<PrefabLink>();
-      final String? parentPrefabId = ids[parentId] ?? (link != null && link.instance == top.id ? link.path : null);
+      final String? parentPrefabId =
+          ids[parentId] ??
+          (link != null && link.instance == top.id ? link.path : null);
       // Under an entity of a nested prefab: that cannot be one of this
       // file's; it stays in the scene.
       if (parentPrefabId == null || parentPrefabId.contains('/')) continue;
@@ -493,7 +649,8 @@ final class PrefabInstances {
           enabled: e.isActive,
           components: [
             for (final c in records[i]['components'] as List)
-              if (!PrefabCollapse.links.contains((c as Map)['type'])) c.cast<String, dynamic>(),
+              if (!PrefabCollapse.links.contains((c as Map)['type']))
+                c.cast<String, dynamic>(),
           ],
         ),
       );
@@ -510,6 +667,10 @@ final class PrefabInstances {
 
   Set<EntityId>? _hiddenBefore;
 
+  /// The instance's top being edited, by identity: its id may be another
+  /// entity's once it is gone.
+  Entity? _editingTop;
+
   /// Edits [top]'s instance as its prefab: the rest of the scene hidden,
   /// the instance selected.
   void edit(Entity top) {
@@ -517,6 +678,7 @@ final class PrefabInstances {
     if (editing.value != null) leave();
     _hiddenBefore = {...scope.view.hidden.value};
     scope.view.isolate(world, [top.id]);
+    _editingTop = top;
     editing.value = top.id;
     sceneState.selectEntity(top);
   }
@@ -525,15 +687,25 @@ final class PrefabInstances {
   /// into its prefab first — and shows the scene again. Whether the apply
   /// (when asked for) went through.
   Future<bool> leave({bool apply = false}) async {
-    final id = editing.value;
-    if (id == null) return true;
-    final top = world.getEntity(id);
+    if (editing.value == null) return true;
+    final top = _editingTop;
     var applied = true;
-    if (apply && top != null && top.isAlive) applied = await this.apply(top);
+    if (apply) {
+      // Gone, or its id now another entity's: nothing of it to apply.
+      applied = top != null && top.isAlive && await this.apply(top);
+    }
     scope.view.hidden.value = _hiddenBefore ?? <EntityId>{};
-    _hiddenBefore = null;
-    editing.value = null;
+    forgetEditing();
     return applied;
+  }
+
+  /// Drops prefab mode as it is: nothing applied, and nothing it hid shown
+  /// again by id. For a scene being left — its ids are another scene's in
+  /// the next.
+  void forgetEditing() {
+    _hiddenBefore = null;
+    _editingTop = null;
+    if (editing.value != null) editing.value = null;
   }
 
   /// Lets go of its signals.
@@ -557,14 +729,19 @@ final class PrefabInstances {
           for (final e in links.keys) {
             e.removeComponent<PrefabLink>();
           }
-          sceneState.refresh();
+          // What a save writes changed: the instance is plain entities.
+          sceneState
+            ..markDirty()
+            ..refresh();
         },
         onUndo: () {
           top.addComponent(instance);
           for (final MapEntry(key: e, value: link) in links.entries) {
             if (e.isAlive) e.addComponent(link);
           }
-          sceneState.refresh();
+          sceneState
+            ..markDirty()
+            ..refresh();
         },
       ),
     );
@@ -577,9 +754,13 @@ final class PrefabInstances {
   Future<String?> makePrefab(Entity entity) async {
     if (topOf(entity) != null) return null;
     final ordered = subtreeOf(entity);
-    final entries = scope.codec.collapseMarked(scope.codec.encodeForSave(ordered));
+    final entries = scope.codec.collapseMarked(
+      scope.codec.encodeForSave(ordered),
+    );
     final parents = SceneLoader.parentIndices(entries);
-    final rootPosition = Vector3.copy(entity.getComponent<TransformComponent>()?.position ?? Vector3.zero());
+    final rootPosition = Vector3.copy(
+      entity.getComponent<TransformComponent>()?.position ?? Vector3.zero(),
+    );
     final ids = <String>[];
     final taken = <String>{};
     for (var i = 0; i < entries.length; i++) {
@@ -622,13 +803,14 @@ final class PrefabInstances {
     final name = entity.name ?? 'Prefab';
     final path = await _freePath(name);
     final file = PrefabFile(name: name, entities: entities);
-    final out = File('$root/$path');
-    await out.parent.create(recursive: true);
-    await out.writeAsString(file.encode());
+    // A free path ([_freePath]): nothing is replaced, so nothing to keep.
+    await ProjectFiles.writeString('$root/$path', file.encode());
     await library.load(path);
 
     // An instance where they were.
-    final specs = [for (final e in ordered) EntitySpec.of(e, scope.codec, world: world)];
+    final specs = [
+      for (final e in ordered) EntitySpec.of(e, scope.codec, world: world),
+    ];
     final parentId = entity.getComponent<ParentComponent>()?.parentId;
     final entry = entryFor(path, name: name, at: rootPosition);
     var originals = ordered;
@@ -638,7 +820,9 @@ final class PrefabInstances {
         label: 'Make prefab $name',
         onRedo: () {
           _remove(originals);
-          made = build([entry], under: parentId == null ? null : world.getEntity(parentId));
+          made = build([
+            entry,
+          ], under: parentId == null ? null : world.getEntity(parentId));
           if (made.isNotEmpty) sceneState.selectEntity(made.first);
         },
         onUndo: () {
@@ -665,7 +849,12 @@ final class PrefabInstances {
     if (file == null || home == null) return block;
     final topId = file.root.id;
     final overrides = [...block.overrides];
-    final at = overrides.indexWhere((o) => o.target == topId && o.component == 'TransformComponent' && o.field == 'position');
+    final at = overrides.indexWhere(
+      (o) =>
+          o.target == topId &&
+          o.component == 'TransformComponent' &&
+          o.field == 'position',
+    );
     final p = at < 0
         ? home.position
         : Vector3(
@@ -695,7 +884,10 @@ final class PrefabInstances {
     );
   }
 
-  static Map<String, dynamic> _shiftedComponent(Map<String, dynamic> c, Vector3 by) {
+  static Map<String, dynamic> _shiftedComponent(
+    Map<String, dynamic> c,
+    Vector3 by,
+  ) {
     if (c['type'] != 'TransformComponent') return c;
     final fields = c['fields'];
     final position = fields is Map ? fields['position'] : null;

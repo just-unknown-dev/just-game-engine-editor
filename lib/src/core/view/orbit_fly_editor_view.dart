@@ -109,7 +109,11 @@ class OrbitFlyEditorView implements CameraSyncingView {
   /// Where the camera is.
   jge.Vector3 get eye {
     final f = forward;
-    return jge.Vector3(pivot.x - f.x * distance, pivot.y - f.y * distance, pivot.z - f.z * distance);
+    return jge.Vector3(
+      pivot.x - f.x * distance,
+      pivot.y - f.y * distance,
+      pivot.z - f.z * distance,
+    );
   }
 
   /// Puts the camera where the orbit says. Called after every change; call
@@ -125,7 +129,11 @@ class OrbitFlyEditorView implements CameraSyncingView {
           // As far behind as ahead: an elevation shows what is behind its
           // pivot too.
           ? jge.CameraLens.orthographic(near: -far, far: far)
-          : jge.CameraLens.perspective(fieldOfView: fieldOfView, near: near, far: far)
+          : jge.CameraLens.perspective(
+              fieldOfView: fieldOfView,
+              near: near,
+              far: far,
+            )
       ..pitch = pitch
       ..yaw = yaw
       ..rotation = 0
@@ -146,7 +154,11 @@ class OrbitFlyEditorView implements CameraSyncingView {
   /// Slides the pivot across the view, so what was under the pointer
   /// stays under it.
   void pan(Offset screenDelta) {
-    final metresPerPixel = 2 * distance * math.tan(fieldOfView / 2) / math.max(1, viewportSize.height);
+    final metresPerPixel =
+        2 *
+        distance *
+        math.tan(fieldOfView / 2) /
+        math.max(1, viewportSize.height);
     final r = right, u = up;
     pivot
       ..x += (-screenDelta.dx * r.x + screenDelta.dy * u.x) * metresPerPixel
@@ -168,7 +180,11 @@ class OrbitFlyEditorView implements CameraSyncingView {
     yaw += screenDelta.dx * 0.004;
     pitch = (pitch - screenDelta.dy * 0.004).clamp(-_pitchLimit, _pitchLimit);
     final f = forward;
-    pivot.setValues(at.x + f.x * distance, at.y + f.y * distance, at.z + f.z * distance);
+    pivot.setValues(
+      at.x + f.x * distance,
+      at.y + f.y * distance,
+      at.z + f.z * distance,
+    );
     sync();
   }
 
@@ -203,7 +219,14 @@ class OrbitFlyEditorView implements CameraSyncingView {
   @override
   Size get viewportSize => camera.viewportSize;
   @override
-  set viewportSize(Size size) => camera.viewportSize = size;
+  set viewportSize(Size size) {
+    if (size == camera.viewportSize) return;
+    camera.viewportSize = size;
+    // Orthographic, the zoom is worked out from the height: a view synced
+    // before it had a size (a split pane, made at none) would otherwise
+    // stay hundreds of times too far out.
+    if (_orthographic) camera.zoom = zoom;
+  }
 
   @override
   Offset get position => Offset(pivot.x, pivot.y);
@@ -220,13 +243,19 @@ class OrbitFlyEditorView implements CameraSyncingView {
 
   /// Pixels per metre at the pivot.
   @override
-  double get zoom => math.max(1, viewportSize.height) / (2 * distance * math.tan(fieldOfView / 2));
+  double get zoom =>
+      math.max(1, viewportSize.height) /
+      (2 * distance * math.tan(fieldOfView / 2));
 
   @override
-  double get minZoom => math.max(1, viewportSize.height) / (2 * maxDistance * math.tan(fieldOfView / 2));
+  double get minZoom =>
+      math.max(1, viewportSize.height) /
+      (2 * maxDistance * math.tan(fieldOfView / 2));
 
   @override
-  double get maxZoom => math.max(1, viewportSize.height) / (2 * minDistance * math.tan(fieldOfView / 2));
+  double get maxZoom =>
+      math.max(1, viewportSize.height) /
+      (2 * minDistance * math.tan(fieldOfView / 2));
 
   @override
   bool get isPlanar => false;
@@ -238,7 +267,8 @@ class OrbitFlyEditorView implements CameraSyncingView {
   Offset worldToScreen(Offset world) => camera.worldToScreen(world);
 
   @override
-  jge.Ray3 screenToRay(Offset screen, [jge.Ray3? out]) => camera.screenToWorldRay(screen, out);
+  jge.Ray3 screenToRay(Offset screen, [jge.Ray3? out]) =>
+      camera.screenToWorldRay(screen, out);
 
   /// Where [screen] meets the ground (y = 0, up is -Y); looking above the
   /// horizon, the point at the pivot's distance along the ray.
@@ -248,11 +278,17 @@ class OrbitFlyEditorView implements CameraSyncingView {
     final d = ray.direction;
     if (d.y.abs() > 1e-9) {
       final t = -ray.origin.y / d.y;
-      if (t > 0) return jge.Vector3(ray.origin.x + d.x * t, 0, ray.origin.z + d.z * t);
+      if (t > 0) {
+        return jge.Vector3(ray.origin.x + d.x * t, 0, ray.origin.z + d.z * t);
+      }
     }
     final length = d.length;
     final t = length > 0 ? distance / length : 0.0;
-    return jge.Vector3(ray.origin.x + d.x * t, ray.origin.y + d.y * t, ray.origin.z + d.z * t);
+    return jge.Vector3(
+      ray.origin.x + d.x * t,
+      ray.origin.y + d.y * t,
+      ray.origin.z + d.z * t,
+    );
   }
 
   @override
@@ -263,7 +299,8 @@ class OrbitFlyEditorView implements CameraSyncingView {
   }
 
   @override
-  void applyTransform(Canvas canvas, Size size) => camera.applyTransform(canvas, size);
+  void applyTransform(Canvas canvas, Size size) =>
+      camera.applyTransform(canvas, size);
 
   @override
   Rect get visibleWorldRect => camera.getVisibleBounds();
@@ -274,7 +311,9 @@ class OrbitFlyEditorView implements CameraSyncingView {
   @override
   void setZoom(double zoom) {
     if (zoom <= 0) return;
-    distance = math.max(1, viewportSize.height) / (2 * zoom * math.tan(fieldOfView / 2));
+    distance =
+        math.max(1, viewportSize.height) /
+        (2 * zoom * math.tan(fieldOfView / 2));
     sync();
   }
 

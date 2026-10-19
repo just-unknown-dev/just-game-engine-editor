@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/level_designer_workspace.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/designer_status_bar.dart';
 
 class _RouteState {
   int edits = 0;
@@ -199,7 +201,6 @@ void main() {
                   session: session,
                   gridSize: 32,
                   onClose: () {},
-                  onGridSizeChanged: (_) {},
                 ),
               ),
               DesignerStatusBar(

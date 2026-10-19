@@ -13,6 +13,9 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/validation/physics_checks.dart';
+import 'package:just_game_engine_editor/src/ui/inspector/physics/collider_edit_session.dart';
+import 'package:just_game_engine_editor/src/ui/inspector/physics/physics_body_extras.dart';
 
 void main() {
   late Directory root;

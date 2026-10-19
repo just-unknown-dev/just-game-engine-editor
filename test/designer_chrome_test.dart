@@ -7,6 +7,8 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/overlays/minimap_overlay.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/tool_palette.dart';
 
 void main() {
   late World world;

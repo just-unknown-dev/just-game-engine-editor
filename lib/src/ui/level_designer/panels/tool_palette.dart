@@ -186,31 +186,42 @@ class _UndoButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final history = session.history;
+    final commands = session.scope.commands;
+    final undoKey = commands.shortcutOf('editor.undo');
+    final redoKey = commands.shortcutOf('editor.redo');
+    // The labels as well: paint, then move, and undo stays possible while
+    // what it would undo changes.
     return SignalBuilder2<bool, bool>(
-      signal1: session.history.canUndo,
-      signal2: session.history.canRedo,
-      builder: (context, canUndo, canRedo, _) => Column(
-        children: [
-          ToolStripButton(
-            icon: Icons.undo,
-            tooltip: session.history.nextUndoLabel.value == null
-                ? 'Nothing to undo'
-                : 'Undo ${session.history.nextUndoLabel.value}  (Ctrl+Z)',
-            isActive: false,
-            enabled: canUndo,
-            onTap: session.history.undo,
+      signal1: history.canUndo,
+      signal2: history.canRedo,
+      builder: (context, canUndo, canRedo, _) =>
+          SignalBuilder2<String?, String?>(
+            signal1: history.nextUndoLabel,
+            signal2: history.nextRedoLabel,
+            builder: (context, undoLabel, redoLabel, _) => Column(
+              children: [
+                ToolStripButton(
+                  icon: Icons.undo,
+                  tooltip: undoLabel == null
+                      ? 'Nothing to undo'
+                      : tooltipWithShortcut('Undo $undoLabel', undoKey),
+                  isActive: false,
+                  enabled: canUndo,
+                  onTap: history.undo,
+                ),
+                ToolStripButton(
+                  icon: Icons.redo,
+                  tooltip: redoLabel == null
+                      ? 'Nothing to redo'
+                      : tooltipWithShortcut('Redo $redoLabel', redoKey),
+                  isActive: false,
+                  enabled: canRedo,
+                  onTap: history.redo,
+                ),
+              ],
+            ),
           ),
-          ToolStripButton(
-            icon: Icons.redo,
-            tooltip: session.history.nextRedoLabel.value == null
-                ? 'Nothing to redo'
-                : 'Redo ${session.history.nextRedoLabel.value}  (Ctrl+Y)',
-            isActive: false,
-            enabled: canRedo,
-            onTap: session.history.redo,
-          ),
-        ],
-      ),
     );
   }
 }

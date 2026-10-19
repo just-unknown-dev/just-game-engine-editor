@@ -27,6 +27,7 @@ class Groups3DPanel extends StatelessWidget {
         builder: (context, selected, _) {
           final groups = _groups();
           final ops = scope.entities;
+          final groupKey = scope.commands.shortcutOf('editor.group');
           return Padding(
             padding: const EdgeInsets.fromLTRB(6, 2, 6, 8),
             child: Column(
@@ -37,8 +38,13 @@ class Groups3DPanel extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.all(6),
                     child: Text(
-                      'No groups yet: select things and press Ctrl+G',
-                      style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
+                      groupKey == null
+                          ? 'No groups yet: select things and group them'
+                          : 'No groups yet: select things and press $groupKey',
+                      style: TextStyle(
+                        color: EditorTheme.textMuted,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                 for (final (group, depth) in groups)
@@ -55,7 +61,9 @@ class Groups3DPanel extends StatelessWidget {
                       child: EditorButton(
                         label: 'Group',
                         icon: Icons.folder_outlined,
-                        onPressed: state.hasAnySelection ? ops.groupSelection : null,
+                        onPressed: state.hasAnySelection
+                            ? ops.groupSelection
+                            : null,
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -87,7 +95,9 @@ class Groups3DPanel extends StatelessWidget {
     void visit(jge.Entity e, int depth) {
       final group = ops.isGroup(e);
       if (group) out.add((e, depth));
-      for (final id in e.getComponent<jge.ChildrenComponent>()?.childIds ?? const <jge.EntityId>[]) {
+      for (final id
+          in e.getComponent<jge.ChildrenComponent>()?.childIds ??
+              const <jge.EntityId>[]) {
         final child = world.getEntity(id);
         if (child != null) visit(child, group ? depth + 1 : depth);
       }
@@ -119,7 +129,8 @@ class _GroupRow extends StatelessWidget {
     final view = scope.view;
     final hidden = view.isHidden(group.id);
     final locked = view.isLocked(group.id);
-    final children = group.getComponent<jge.ChildrenComponent>()?.childIds ?? const [];
+    final children =
+        group.getComponent<jge.ChildrenComponent>()?.childIds ?? const [];
     final muted = EditorTheme.textMuted;
     return Material(
       color: selected ? EditorTheme.selectionBg : Colors.transparent,
@@ -130,7 +141,9 @@ class _GroupRow extends StatelessWidget {
           child: Row(
             children: [
               EditorIconButton(
-                icon: hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                icon: hidden
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
                 tooltip: hidden ? 'Show it' : 'Hide it',
                 size: 22,
                 iconSize: 14,
@@ -138,7 +151,9 @@ class _GroupRow extends StatelessWidget {
               ),
               EditorIconButton(
                 icon: locked ? Icons.lock_outline : Icons.lock_open_outlined,
-                tooltip: locked ? 'Unlock it' : 'Lock it: not picked in the view',
+                tooltip: locked
+                    ? 'Unlock it'
+                    : 'Lock it: not picked in the view',
                 size: 22,
                 iconSize: 14,
                 onTap: () => view.toggleLocked(group.id),
@@ -160,7 +175,10 @@ class _GroupRow extends StatelessWidget {
                   ),
                 ),
               ),
-              Text('${children.length}', style: TextStyle(color: muted, fontSize: 10)),
+              Text(
+                '${children.length}',
+                style: TextStyle(color: muted, fontSize: 10),
+              ),
               EditorIconButton(
                 icon: Icons.select_all,
                 tooltip: 'Select what it holds',
@@ -175,18 +193,11 @@ class _GroupRow extends StatelessWidget {
     );
   }
 
+  /// Selects everything [ids] names — and only that: the group itself,
+  /// or whatever was selected before, is let go.
   void _selectContents(List<jge.EntityId> ids) {
-    final state = scope.sceneState;
-    final inside = [
-      for (final id in ids) ?scope.world.getEntity(id),
-    ];
+    final inside = [for (final id in ids) ?scope.world.getEntity(id)];
     if (inside.isEmpty) return;
-    state.clearMultiSelection();
-    if (inside.length > 1) {
-      for (final e in inside) {
-        state.toggleMultiSelect(e);
-      }
-    }
-    state.selectEntity(inside.first);
+    scope.sceneState.selectRange(inside, anchor: inside.first);
   }
 }

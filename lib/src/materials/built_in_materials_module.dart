@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
+import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart';
 import 'package:just_game_engine/graphics_3d.dart';
 import 'package:just_game_engine/just_game_engine.dart';
@@ -16,6 +16,7 @@ import 'model_materials.dart';
 import 'normal_maps.dart';
 import 'texture_sets.dart';
 import 'material_2d_pictures.dart';
+import 'material_2d_users.dart';
 import 'material_2d_workspace.dart';
 import 'material_pictures.dart';
 import 'material_workspace.dart';
@@ -60,16 +61,19 @@ class BuiltInMaterialsModule extends EditorModule {
   String get _root => (root ?? Directory.current.path).replaceAll(r'\', '/');
 
   /// The pictures of 3-D materials the Assets dock and the workspace show.
+  @internal
   MaterialPictures get pictures => _pictures ??= MaterialPictures(
     root: _root,
     cacheFolder: '$_root/.dart_tool/just_game_engine_editor/material_pictures',
   );
 
   /// The pictures of 2-D materials the Assets dock shows.
+  @internal
   Material2DPictures get pictures2D =>
       _pictures2D ??= Material2DPictures(root: _root);
 
   /// The pictures of the images materials' maps name.
+  @internal
   late final MapPictures maps = MapPictures(root: _root);
 
   final StreamController<String> _changes = StreamController.broadcast();
@@ -98,9 +102,12 @@ class BuiltInMaterialsModule extends EditorModule {
   /// The Extract materials action's id (on a model).
   static const String extractId = 'materials.extract';
 
-  /// The Generate normal map actions' ids: for a sprite, for a texture
-  /// that repeats.
+  /// The id of the Assets dock's Generate normal map action for a sprite
+  /// (rounded at its clear edges).
   static const String spriteNormalId = 'materials.normalSprite';
+
+  /// The id of the Generate normal map action for a texture that repeats
+  /// (its edges meet).
   static const String tilingNormalId = 'materials.normalTiling';
 
   /// What a 3-D material is drawn in, in the Assets dock.
@@ -138,6 +145,13 @@ class BuiltInMaterialsModule extends EditorModule {
     final lower = path.toLowerCase();
     return lower.endsWith('.glb') || lower.endsWith('.gltf');
   }
+
+  // Whether the actions that write files may run on [path]: not on a
+  // package's assets (`packages/<name>/…`), which are the package's — in
+  // pub's shared cache, or an Asset Store item — as the Assets dock leaves
+  // them alone for Rename and Delete.
+  static bool _ownFile(String path) =>
+      path != 'packages' && !path.startsWith('packages/');
 
   @override
   List<WorkspaceDefinition> get workspaces => [
@@ -182,14 +196,16 @@ class BuiltInMaterialsModule extends EditorModule {
       id: newMaterialId,
       label: 'New material',
       icon: Icons.texture,
-      appliesTo: (path, {required isDirectory}) => isDirectory,
+      appliesTo: (path, {required isDirectory}) =>
+          isDirectory && _ownFile(path),
       run: (scope, path) => _made(scope, newMaterial(path)),
     ),
     AssetAction(
       id: newMaterial2DId,
       label: 'New 2D material',
       icon: Icons.auto_awesome,
-      appliesTo: (path, {required isDirectory}) => isDirectory,
+      appliesTo: (path, {required isDirectory}) =>
+          isDirectory && _ownFile(path),
       run: (scope, path) =>
           _made(scope, newMaterial2D(path, kind: Material2DKind.sprite)),
     ),
@@ -197,7 +213,8 @@ class BuiltInMaterialsModule extends EditorModule {
       id: newScreenMaterialId,
       label: 'New screen material',
       icon: Icons.filter_frames_outlined,
-      appliesTo: (path, {required isDirectory}) => isDirectory,
+      appliesTo: (path, {required isDirectory}) =>
+          isDirectory && _ownFile(path),
       run: (scope, path) =>
           _made(scope, newMaterial2D(path, kind: Material2DKind.screen)),
     ),
@@ -207,6 +224,7 @@ class BuiltInMaterialsModule extends EditorModule {
       icon: Icons.call_split,
       appliesTo: (path, {required isDirectory}) =>
           !isDirectory &&
+          _ownFile(path) &&
           (MaterialFile.isMaterialPath(path) ||
               Material2DFile.isMaterial2DPath(path)),
       run: (scope, path) => _made(scope, newVariant(path)),
@@ -215,7 +233,8 @@ class BuiltInMaterialsModule extends EditorModule {
       id: textureSetsId,
       label: 'Make materials from texture sets',
       icon: Icons.layers_outlined,
-      appliesTo: (path, {required isDirectory}) => isDirectory,
+      appliesTo: (path, {required isDirectory}) =>
+          isDirectory && _ownFile(path),
       run: importTextureSets,
     ),
     AssetAction(
@@ -223,7 +242,7 @@ class BuiltInMaterialsModule extends EditorModule {
       label: 'Extract materials',
       icon: Icons.texture,
       appliesTo: (path, {required isDirectory}) =>
-          !isDirectory && _isModel(path),
+          !isDirectory && _ownFile(path) && _isModel(path),
       run: extractMaterials,
     ),
     AssetAction(
@@ -231,7 +250,7 @@ class BuiltInMaterialsModule extends EditorModule {
       label: 'Generate normal map (sprite)',
       icon: Icons.auto_fix_high,
       appliesTo: (path, {required isDirectory}) =>
-          !isDirectory && _isImage(path),
+          !isDirectory && _ownFile(path) && _isImage(path),
       run: (scope, path) =>
           generateNormalMap(scope, path, const NormalMapOptions.sprite()),
     ),
@@ -240,7 +259,7 @@ class BuiltInMaterialsModule extends EditorModule {
       label: 'Generate normal map (tiling)',
       icon: Icons.auto_fix_high,
       appliesTo: (path, {required isDirectory}) =>
-          !isDirectory && _isImage(path),
+          !isDirectory && _ownFile(path) && _isImage(path),
       run: (scope, path) =>
           generateNormalMap(scope, path, const NormalMapOptions.tiling()),
     ),
@@ -250,6 +269,7 @@ class BuiltInMaterialsModule extends EditorModule {
   /// alike (`brick_albedo.png`, `brick_normal.png`) — packing roughness,
   /// metal and occlusion into one map and turning DirectX normal maps
   /// over, and opens the first. Gives the materials made.
+  @internal
   Future<List<String>> importTextureSets(
     EditorScope scope,
     String folder,
@@ -285,6 +305,7 @@ class BuiltInMaterialsModule extends EditorModule {
 
   /// Writes the materials of the model at [path] as material files beside
   /// it, and opens the first. Gives the files made.
+  @internal
   Future<List<String>> extractMaterials(EditorScope scope, String path) async {
     try {
       final made = await ModelMaterials.extract(_root, path);
@@ -307,6 +328,7 @@ class BuiltInMaterialsModule extends EditorModule {
 
   /// Makes the normal map of the image at [path] beside it, as [options]
   /// say. Gives its path, or null when it could not be made.
+  @internal
   Future<String?> generateNormalMap(
     EditorScope scope,
     String path,
@@ -324,7 +346,14 @@ class BuiltInMaterialsModule extends EditorModule {
   }
 
   Future<void> _made(EditorScope scope, Future<String> making) async {
-    final made = await making;
+    final String made;
+    try {
+      made = await making;
+    } on Object catch (error) {
+      // A folder that can't be written, a full disk: said, not thrown.
+      _log('Could not make it: $error', warn: true);
+      return;
+    }
     scope
       ..reloadAssets([made])
       ..openInWorkspace(made);
@@ -333,6 +362,7 @@ class BuiltInMaterialsModule extends EditorModule {
 
   /// The 3-D material kind: `.material.json`, pictured on a ball, dropped
   /// on a shape or model to draw it with.
+  @internal
   late final AssetKind materialKind = AssetKind(
     'material',
     'Materials',
@@ -352,6 +382,7 @@ class BuiltInMaterialsModule extends EditorModule {
 
   /// The 2-D material kind: `.material2d.json`, pictured as the game draws
   /// it.
+  @internal
   late final AssetKind material2DKind = AssetKind(
     'material2D',
     '2D materials',
@@ -374,14 +405,15 @@ class BuiltInMaterialsModule extends EditorModule {
 
   @override
   Map<String, FieldEditorBuilder> get fieldEditors =>
-      MaterialOverrideEditors.all;
+      MaterialOverrideEditors.forRoot(_root);
 
   /// The kind of the 2-D material at [path], its parents followed; null
   /// when it can't be read.
+  @internal
   Material2DKind? kindOf2D(String path) {
     try {
       return MaterialChain.resolve2D(path, (p) {
-        final f = File('$_root/$p');
+        final f = File(PackageAssetPaths.of(_root).absolute(p));
         return f.existsSync()
             ? Material2DFile.parse(f.readAsStringSync())
             : null;
@@ -394,6 +426,7 @@ class BuiltInMaterialsModule extends EditorModule {
   /// In a 2-D scene: a sprite material drawn on the sprite or shape it
   /// landed on; a screen material put on the scene's screen material (or
   /// a new one made for it). One undo step; nothing else is made.
+  @internal
   Entity? dropMaterial2D(AssetDrop drop) {
     if (drop.surface != null) return null; // A 3-D scene.
     final scope = drop.scope;
@@ -464,6 +497,7 @@ class BuiltInMaterialsModule extends EditorModule {
 
   /// Draws what [drop] landed on with the material it carries, as one
   /// undo step; makes nothing.
+  @internal
   static Entity? dropMaterial(AssetDrop drop) {
     final onto = drop.surface?.onto;
     if (onto == null) return null;
@@ -477,6 +511,7 @@ class BuiltInMaterialsModule extends EditorModule {
 
   /// Makes a new material in [folder] (project-relative) — `material`,
   /// or `material_2` and on when that is taken — and gives its path.
+  @internal
   Future<String> newMaterial(String folder) => _newFile(
     folder,
     'material',
@@ -487,6 +522,7 @@ class BuiltInMaterialsModule extends EditorModule {
   /// Makes a new 2-D material of [kind] in [folder] — `material` (or
   /// `screen` for a screen material), `_2` and on when that is taken —
   /// and gives its path.
+  @internal
   Future<String> newMaterial2D(
     String folder, {
     Material2DKind kind = Material2DKind.sprite,
@@ -500,6 +536,7 @@ class BuiltInMaterialsModule extends EditorModule {
   /// Makes a variant of the material at [path] (3-D or 2-D) beside it —
   /// `<name>_variant`, then `_variant_2` and on — taking everything from
   /// it until it is given values of its own, and gives its path.
+  @internal
   Future<String> newVariant(String path) {
     final slash = path.lastIndexOf('/');
     final dir = slash < 0 ? '' : path.substring(0, slash);
@@ -533,9 +570,8 @@ class BuiltInMaterialsModule extends EditorModule {
       n++;
     }
     final path = pathOf(n);
-    final file = File('$_root/$path');
-    await file.parent.create(recursive: true);
-    await file.writeAsString(text);
+    // Whole or not at all, its folder made when missing.
+    await ProjectFiles.writeString('$_root/$path', text);
     return path;
   }
 
@@ -546,6 +582,8 @@ class BuiltInMaterialsModule extends EditorModule {
     _pictures?.forget(path);
     _pictures2D?.forget(path);
     maps.forget(path);
+    // A scene or prefab: what is drawn with a 2-D material, read again.
+    if (path.endsWith('.json')) Material2DUsers.forget(_root, path);
     _changes.add(path);
   }
 

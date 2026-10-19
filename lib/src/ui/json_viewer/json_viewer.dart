@@ -2,11 +2,11 @@
 library;
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_editor_core/host.dart';
+import 'package:just_editor_core/io.dart';
 
 import '../../core/scope/editor_scope_services.dart';
 
@@ -52,6 +52,13 @@ class JsonViewerState extends State<JsonViewer> {
   bool _loaded = false;
   String _query = '';
   List<(int line, int at)> _matches = const [];
+
+  /// Where each match in [_matches] ends in its line.
+  List<int> _ends = const [];
+
+  /// Which of [_matches] are on each line, by line: a line drawn looks at
+  /// its own and no others.
+  Map<int, List<int>> _byLine = const {};
   int _current = 0;
   final ScrollController _scroll = ScrollController();
   final FocusNode _searchFocus = FocusNode(debugLabel: 'json search');
@@ -117,22 +124,30 @@ class JsonViewerState extends State<JsonViewer> {
   }
 
   /// Finds [query] (ignoring case) in the lines, and shows the first.
+  ///
+  /// Matched in the lines as they are, not in lower-cased copies, whose
+  /// length can differ (`İ` lower-cases to two characters): where a match
+  /// starts and ends is where it is in the line drawn.
   void search(String query) {
-    final q = query.toLowerCase();
     final found = <(int, int)>[];
-    if (q.isNotEmpty) {
+    final ends = <int>[];
+    final byLine = <int, List<int>>{};
+    if (query.isNotEmpty) {
+      final pattern = RegExp(RegExp.escape(query), caseSensitive: false);
       for (var i = 0; i < _lines.length; i++) {
-        final line = _lines[i].toLowerCase();
-        var at = line.indexOf(q);
-        while (at >= 0) {
-          found.add((i, at));
-          at = line.indexOf(q, at + q.length);
+        for (final match in pattern.allMatches(_lines[i])) {
+          if (match.end == match.start) continue;
+          (byLine[i] ??= []).add(found.length);
+          found.add((i, match.start));
+          ends.add(match.end);
         }
       }
     }
     setState(() {
       _query = query;
       _matches = found;
+      _ends = ends;
+      _byLine = byLine;
       _current = 0;
     });
     _reveal();
@@ -165,7 +180,7 @@ class JsonViewerState extends State<JsonViewer> {
 
   KeyEventResult _onKey(KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    if (HardwareKeyboard.instance.isControlPressed &&
+    if (EditorKeys.primaryPressed &&
         event.logicalKey == LogicalKeyboardKey.keyF) {
       _searchFocus.requestFocus();
       return KeyEventResult.handled;
@@ -183,7 +198,7 @@ class JsonViewerState extends State<JsonViewer> {
   @override
   Widget build(BuildContext context) {
     final name = widget.path.substring(widget.path.lastIndexOf('/') + 1);
-    final kind = AssetKind.of(widget.path);
+    final kind = widget.workspace.scope.assetKinds.of(widget.path);
     return WorkspaceKeyScope(
       onKey: _onKey,
       child: ColoredBox(
@@ -248,7 +263,7 @@ class JsonViewerState extends State<JsonViewer> {
         ),
         const SizedBox(width: 12),
         EditorSearchField(
-          hint: 'Find (Ctrl+F)',
+          hint: 'Find (${EditorKeys.withPrimary('F')})',
           width: 220,
           focusNode: _searchFocus,
           onChanged: search,
@@ -291,8 +306,6 @@ class JsonViewerState extends State<JsonViewer> {
       );
     }
     final digits = '${_lines.length}'.length;
-    final shown = _matches.isEmpty ? null : _matches[_current];
-    final q = _query.length;
     return ColoredBox(
       color: const Color(0xFF15181D),
       child: SelectionArea(
@@ -305,26 +318,25 @@ class JsonViewerState extends State<JsonViewer> {
             final line = _lines[i];
             final spans = <TextSpan>[];
             var from = 0;
-            if (q > 0) {
-              for (final (l, at) in _matches) {
-                if (l != i) continue;
-                if (at > from) {
-                  spans.add(TextSpan(text: line.substring(from, at)));
-                }
-                final isShown = shown == (l, at);
-                spans.add(
-                  TextSpan(
-                    text: line.substring(at, at + q),
-                    style: TextStyle(
-                      backgroundColor: isShown
-                          ? EditorTheme.accent
-                          : EditorTheme.accent.withValues(alpha: 0.35),
-                      color: isShown ? Colors.white : null,
-                    ),
-                  ),
-                );
-                from = at + q;
+            for (final m in _byLine[i] ?? const <int>[]) {
+              final at = _matches[m].$2, end = _ends[m];
+              if (at < from || end > line.length) continue;
+              if (at > from) {
+                spans.add(TextSpan(text: line.substring(from, at)));
               }
+              final isShown = m == _current;
+              spans.add(
+                TextSpan(
+                  text: line.substring(at, end),
+                  style: TextStyle(
+                    backgroundColor: isShown
+                        ? EditorTheme.accent
+                        : EditorTheme.accent.withValues(alpha: 0.35),
+                    color: isShown ? Colors.white : null,
+                  ),
+                ),
+              );
+              from = end;
             }
             if (from < line.length) {
               spans.add(TextSpan(text: line.substring(from)));

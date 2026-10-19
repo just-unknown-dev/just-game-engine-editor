@@ -3,6 +3,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import 'package:just_editor_core/host.dart';
 import '../../overlay/transform_gizmo.dart';
+import '../state/selection_ops.dart';
 import 'built_in_overlays.dart';
 
 /// The selection's gizmo, as the Move, Scale and Rotate toolbar says:
@@ -114,19 +115,8 @@ class SelectionHandlesOverlay extends DesignerOverlay {
     }
   }
 
-  static List<jge.Entity> _selection(OverlayPaintContext context) {
-    final state = context.controller.sceneState;
-    final ids = state.multiSelectedIds.value;
-    if (ids.isNotEmpty) {
-      return ids
-          .map(context.world.getEntity)
-          .whereType<jge.Entity>()
-          .where((e) => e.isActive)
-          .toList();
-    }
-    final selected = state.selectedEntity.value;
-    return selected == null ? const [] : [selected];
-  }
+  static List<jge.Entity> _selection(OverlayPaintContext context) =>
+      SelectionOps.selectedIn(context.controller.sceneState, context.world);
 
   static Rect? _bounds(List<jge.Entity> entities) {
     Rect? union;

@@ -7,7 +7,7 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 void main() {
   // play() is gated on both the engine and the plugin being initialised, and
-  // onInitialize registers a hardware-keyboard handler — so this needs a
+  // attach registers a hardware-keyboard handler — so this needs a
   // binding even though none of these are widget tests.
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -19,7 +19,7 @@ void main() {
     await engine.initialize();
 
     plugin = JustGameEditorPlugin(engine: engine);
-    await plugin.onInitialize();
+    await plugin.attach(plugin.engine);
     plugin
       ..setVisible(true)
       ..applyOverlaySettings(

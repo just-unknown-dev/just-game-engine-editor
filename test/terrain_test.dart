@@ -13,6 +13,13 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/level_map/tile_edit_state.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/tileset_palette_panel.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/tools/tiles/tile_tool_base.dart';
+import 'package:just_game_engine_editor/src/ui/tileset/tileset_session.dart';
+import 'package:just_game_engine_editor/src/ui/tileset/tileset_workspace.dart';
+import 'package:just_game_engine_editor/src/ui/tileset/wang_set_editor.dart';
 
 const _path = 'assets/tilesets/terrain.tileset.json';
 

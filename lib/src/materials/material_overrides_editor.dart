@@ -1,6 +1,5 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
+import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart';
 import 'package:just_game_engine/graphics_3d.dart';
 import 'package:just_game_engine/just_game_engine.dart';
@@ -9,12 +8,16 @@ import 'package:just_game_engine/just_game_engine.dart';
 /// `Material2D.overrides`, `ScreenMaterial.overrides`,
 /// `MaterialOverrides3D.values` — in place of the editor's JSON one.
 abstract final class MaterialOverrideEditors {
-  /// By field type id.
-  static Map<String, FieldEditorBuilder> get all => {
+  /// By field type id, for the project in the working directory.
+  static Map<String, FieldEditorBuilder> get all => forRoot(null);
+
+  /// By field type id, for the project at [root] (the working directory
+  /// when null).
+  static Map<String, FieldEditorBuilder> forRoot(String? root) => {
     MaterialOverridesFieldType.material2D.id: (c) =>
-        MaterialOverridesEditor(context: c, flat: true),
+        MaterialOverridesEditor(context: c, flat: true, root: root),
     MaterialOverridesFieldType.material3D.id: (c) =>
-        MaterialOverridesEditor(context: c, flat: false),
+        MaterialOverridesEditor(context: c, flat: false, root: root),
   };
 }
 
@@ -29,6 +32,7 @@ class MaterialOverridesEditor extends StatelessWidget {
     super.key,
     required this.context,
     required this.flat,
+    this.root,
   });
 
   /// The field being edited.
@@ -37,6 +41,10 @@ class MaterialOverridesEditor extends StatelessWidget {
   /// Whether the values are a 2-D material's (otherwise a 3-D one's).
   final bool flat;
 
+  /// The project folder material paths are under; the working directory
+  /// when null.
+  final String? root;
+
   /// The values, by key.
   Map<String, Object> get values => {
     for (final MapEntry(:key, :value)
@@ -44,7 +52,27 @@ class MaterialOverridesEditor extends StatelessWidget {
       if (key is String && value != null) key: value as Object,
   };
 
-  static String get _root => Directory.current.path.replaceAll(r'\', '/');
+  String get _root => (root ?? Directory.current.path).replaceAll(r'\', '/');
+
+  // Each material file read, by its absolute path, with when it changed
+  // and how big it was: the inspector is built again on every selection
+  // and edit, and asks for the material each time.
+  static final Map<String, (String, Object?)> _read = {};
+
+  // The material file at [path] (a project path or a package's asset key)
+  // parsed by [parse]; null when it is not there. Read again only once it
+  // changed.
+  T? _file<T extends Object>(String path, T Function(String text) parse) {
+    final absolute = PackageAssetPaths.of(_root).absolute(path);
+    final stat = FileStat.statSync(absolute);
+    if (stat.type == FileSystemEntityType.notFound) return null;
+    final stamp = '${stat.modified.microsecondsSinceEpoch}:${stat.size}:$T';
+    final known = _read[absolute];
+    if (known != null && known.$1 == stamp) return known.$2 as T?;
+    final file = parse(File(absolute).readAsStringSync());
+    _read[absolute] = (stamp, file);
+    return file;
+  }
 
   // ── 2-D ─────────────────────────────────────────────────────────────
 
@@ -60,12 +88,10 @@ class MaterialOverridesEditor extends StatelessWidget {
     final path = _path2D;
     if (path.isEmpty) return null;
     try {
-      return MaterialChain.resolve2D(path, (p) {
-        final f = File('$_root/$p');
-        return f.existsSync()
-            ? Material2DFile.parse(f.readAsStringSync())
-            : null;
-      }).value;
+      return MaterialChain.resolve2D(
+        path,
+        (p) => _file(p, Material2DFile.parse),
+      ).value;
     } on Object {
       return null;
     }
@@ -95,10 +121,10 @@ class MaterialOverridesEditor extends StatelessWidget {
     final path = owner == null ? '' : MaterialSlots.materialOf(owner).trim();
     if (path.isEmpty) return null;
     try {
-      return MaterialChain.resolve3D(path, (p) {
-        final f = File('$_root/$p');
-        return f.existsSync() ? MaterialFile.parse(f.readAsStringSync()) : null;
-      }).value;
+      return MaterialChain.resolve3D(
+        path,
+        (p) => _file(p, MaterialFile.parse),
+      ).value;
     } on Object {
       return null;
     }

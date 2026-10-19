@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show internal;
 import 'package:flutter/material.dart' show IconData;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
@@ -67,13 +68,14 @@ class GizmoHitResult {
   bool get isNone => handle == GizmoHandle.none;
 }
 
-/// Paints editor gizmos (translate arrows, rotation arc, scale handles,
-/// selection outline) onto the game canvas.
+/// Paints the editor's gizmos — move arrows, the turning ring, scale
+/// handles, the selection outline — over the game, in screen space: each
+/// world position goes through the editor's view (`EditorView.worldToScreen`)
+/// before it is drawn.
 ///
-/// All drawing is done in **screen space** — call [worldToScreen] on world
-/// positions before passing them.  The canvas received by
-/// [JustGameEditorPlugin.onRender] is in screen space (parallax / background
-/// layer, before the camera transform).
+/// The editor draws with it itself. What a module reads from it is
+/// [sizeOf]: the size the gizmo frames a component at, which the marquee
+/// selection uses too.
 class GizmoPainter {
   /// The unscaled size the gizmo draws [component] at, or null. Through the
   /// extent on its definition first, so it is the marquee's answer too.
@@ -94,20 +96,6 @@ class GizmoPainter {
 
   final Paint _paint = Paint()..isAntiAlias = true;
 
-  /// The square grid. The plugin draws whichever topology the scope has;
-  /// this stays for callers that only ever wanted squares.
-  void paintInfiniteGrid(
-    Canvas canvas,
-    EditorView camera,
-    Size canvasSize, {
-    required double gridSize,
-  }) => const SquareGrid().paintGrid(
-    canvas,
-    camera,
-    canvasSize,
-    cellSize: gridSize,
-  );
-
   /// Paints [mode]'s gizmo for [entity] using [camera] to convert
   /// positions: all of them in one, arrows to move it, handles to scale it,
   /// or a ring to turn it — as the toolbar says. [allows] is what [entity]
@@ -115,6 +103,7 @@ class GizmoPainter {
   /// a gizmo the editor's switch hides; the handles stay.
   ///
   /// [canvasSize] is the full viewport size.
+  @internal
   void paintGizmos(
     Canvas canvas,
     Entity entity,
@@ -168,6 +157,7 @@ class GizmoPainter {
 
   /// The outline round [entity] alone, with no handles: a selection none
   /// can move, or one looked at in a play-test.
+  @internal
   void paintSelectionOutline(
     Canvas canvas,
     Entity entity,
@@ -184,6 +174,7 @@ class GizmoPainter {
   /// Draws [marker]'s icon at each of [entities], regardless of selection,
   /// so they can be found at a glance while editing. In 3-D at their place
   /// in space; nothing for one behind the viewer.
+  @internal
   void paintMarkers(
     Canvas canvas,
     EditorMarker marker,
@@ -200,30 +191,23 @@ class GizmoPainter {
           ? camera.worldToScreen(transform.position.toOffset())
           : camera.projectToScreen(transform.position);
       if (at == null) continue;
-      _paintMarkerIcon(canvas, at, marker.icon, marker.color, marker.label?.call(entity));
+      _paintMarkerIcon(
+        canvas,
+        at,
+        marker.icon,
+        marker.color,
+        marker.label?.call(entity),
+      );
     }
   }
 
-  /// Draws a small camera icon at every camera entity's position, regardless
-  /// of selection, so it's discoverable at a glance while editing.
-  void paintCameraMarkers(
+  void _paintMarkerIcon(
     Canvas canvas,
-    List<Entity> cameraEntities,
-    EditorView camera,
-    Size canvasSize,
-  ) => paintMarkers(canvas, EditorMarker.cameras, cameraEntities, camera, canvasSize);
-
-  /// Draws a small icon + tag label at every spawn point entity's position,
-  /// regardless of selection, so spawn points (player, zombie, ...) are
-  /// discoverable at a glance while editing.
-  void paintSpawnMarkers(
-    Canvas canvas,
-    List<Entity> spawnPoints,
-    EditorView camera,
-    Size canvasSize,
-  ) => paintMarkers(canvas, EditorMarker.spawnPoints, spawnPoints, camera, canvasSize);
-
-  void _paintMarkerIcon(Canvas canvas, Offset center, IconData iconData, Color accent, String? label) {
+    Offset center,
+    IconData iconData,
+    Color accent,
+    String? label,
+  ) {
     _paint
       ..style = PaintingStyle.fill
       ..color = accent.withValues(alpha: 0.18);
@@ -241,10 +225,13 @@ class GizmoPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    iconPainter.paint(
-      canvas,
-      center - Offset(iconPainter.width / 2, iconPainter.height / 2),
-    );
+    iconPainter
+      ..paint(
+        canvas,
+        center - Offset(iconPainter.width / 2, iconPainter.height / 2),
+      )
+      // Made for this frame: its text layout goes with it.
+      ..dispose();
     if (label == null || label.isEmpty) return;
 
     final labelPainter = TextPainter(
@@ -258,14 +245,17 @@ class GizmoPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    labelPainter.paint(
-      canvas,
-      Offset(center.dx - labelPainter.width / 2, center.dy + 18),
-    );
+    labelPainter
+      ..paint(
+        canvas,
+        Offset(center.dx - labelPainter.width / 2, center.dy + 18),
+      )
+      ..dispose();
   }
 
   /// Rings every one of [entities] in [color] and labels it `#tag` — what
   /// a tag being pointed at means in the level.
+  @internal
   void paintTagHighlight(
     Canvas canvas,
     List<Entity> entities,
@@ -277,6 +267,7 @@ class GizmoPainter {
 
   /// Rings every one of [entities] in [color] and labels it [text] — what a
   /// tag or a collision layer being pointed at means in the level.
+  @internal
   void paintHighlight(
     Canvas canvas,
     List<Entity> entities,
@@ -331,6 +322,7 @@ class GizmoPainter {
       canvas.drawRRect(shape, _paint);
       label.paint(canvas, Offset(box.left, box.top - label.height - 2));
     }
+    label.dispose();
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
@@ -462,7 +454,11 @@ Size? _sizeFromComponent(
     return _sizeFromRenderable(component.renderable);
   }
 
-  return _sizeFromDynamic(component);
+  // Anything else has no size: a transform, a tag, a script. It is not
+  // probed for a `size` or a `width` — each probe of a type without one
+  // threw and caught an error, several per component, on every frame and
+  // for every entity under a click.
+  return null;
 }
 
 Size? _sizeFromRenderable(Renderable renderable) {
@@ -503,54 +499,6 @@ Size? _sizeFromRenderable(Renderable renderable) {
   final width = sx > 0.0001 ? rect.width / sx : rect.width;
   final height = sy > 0.0001 ? rect.height / sy : rect.height;
   return Size(width, height);
-}
-
-Size? _sizeFromDynamic(dynamic component) {
-  final dyn = component;
-
-  try {
-    final size = dyn.size;
-    if (size is Size) return size;
-  } catch (_) {}
-
-  try {
-    final w = dyn.width;
-    final h = dyn.height;
-    if (w is num && h is num) return Size(w.toDouble(), h.toDouble());
-  } catch (_) {}
-
-  try {
-    final r = dyn.radius;
-    if (r is num) {
-      final d = r.toDouble() * 2;
-      return Size(d, d);
-    }
-  } catch (_) {}
-
-  try {
-    final shape = dyn.shape;
-    final rect = shape.getBounds(Offset.zero);
-    if (rect is Rect) return Size(rect.width, rect.height);
-  } catch (_) {}
-
-  try {
-    final points = dyn.vertices;
-    if (points is List<Offset> && points.isNotEmpty) {
-      final rect = _rectFromOffsets(points);
-      if (rect != null) return Size(rect.width, rect.height);
-    }
-  } catch (_) {}
-
-  try {
-    final start = dyn.start;
-    final end = dyn.end;
-    if (start is Offset && end is Offset) {
-      final rect = Rect.fromPoints(start, end);
-      return Size(rect.width, rect.height);
-    }
-  } catch (_) {}
-
-  return null;
 }
 
 Rect? _rectFromOffsets(List<Offset> offsets) {

@@ -196,7 +196,7 @@ void main() {
       addTearDown(engine.dispose);
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine);
-      await plugin.onInitialize();
+      await plugin.attach(plugin.engine);
       plugin.sceneState.openScene(EditorScene(name: 'level'));
       plugin.engine.cameraSystem.mainCamera.viewportSize = const Size(800, 600);
     });

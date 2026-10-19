@@ -7,6 +7,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
+import 'package:just_editor_core/host.dart' show EditorScopeHost;
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/ui/timeline/dope_sheet.dart';
 import 'package:just_game_engine_editor/src/ui/timeline/timeline_dock.dart';
@@ -447,5 +448,18 @@ void main() {
       expect(rock.hasComponent<TimelinePlayerComponent>(), isTrue);
       expect(find.text('Add track'), findsOneWidget);
     });
+  });
+
+  test("the scope's own session is disposed with the scope (TI-34)", () {
+    final own = EditorScope(
+      world: World()..initialize(),
+      builtIns: const [BuiltInEditorModule.new],
+    );
+    final guards = own.authoredStateGuards.length;
+    final made = TimelineSession.of(own);
+    expect(TimelineSession.of(own), same(made), reason: 'one per scope');
+    expect(own.authoredStateGuards, hasLength(guards + 1));
+    own.dispose();
+    expect(own.authoredStateGuards, hasLength(guards), reason: 'let go');
   });
 }

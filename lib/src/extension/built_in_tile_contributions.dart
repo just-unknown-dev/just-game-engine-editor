@@ -5,6 +5,7 @@ import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import 'package:just_editor_core/host.dart';
+import 'package:just_editor_core/io.dart' show FileSystemException;
 import '../core/level_map/level_map_documents.dart';
 import '../core/level_map/level_map_provision.dart';
 import '../core/level_map/tiled_export.dart';
@@ -131,9 +132,34 @@ abstract final class BuiltInTileContributions {
         );
         return 0;
       }
+      // What the import was asked into: the scene open now, and its map.
+      // Reading the files takes a while, and a scene opened (or a
+      // play-test started) meanwhile is not where it was asked to go.
+      final scene = scope.sceneState.activeScene.value;
       final importer = TiledImporter(using ?? files(scope));
       final plan = await importer.read(path);
+      if (!identical(scope.sceneState.activeScene.value, scene) ||
+          scope.isPlayTesting.value ||
+          (existing != null && !existing.isAlive)) {
+        _say(
+          scope,
+          'Did not import $path: the scene changed while it was being read',
+          failed: true,
+        );
+        return 0;
+      }
       await importer.writeTilesets(plan);
+      if (!identical(scope.sceneState.activeScene.value, scene) ||
+          scope.isPlayTesting.value ||
+          (existing != null && !existing.isAlive)) {
+        _say(
+          scope,
+          'Did not import $path into the scene: it changed while the '
+          'tilesets were written (they are in the project)',
+          failed: true,
+        );
+        return 0;
+      }
       final at0 = existing?.getComponent<jge.TransformComponent>()?.position;
       final origin = at0 != null
           ? Offset(at0.x, at0.y)
@@ -173,6 +199,7 @@ abstract final class BuiltInTileContributions {
                 label: 'Import ${plan.stem}',
                 docs: scope.mapDocs,
                 entityId: existing.id,
+                entityName: existing.name,
                 before: (path: '', inline: existingMap!.inline!.toJson()),
                 after: (path: '', inline: plan.map.toJson()),
               ),
@@ -268,7 +295,12 @@ abstract final class BuiltInTileContributions {
               return path == null ? null : tiles.loadedTileset(path);
             },
           );
-      _say(scope, 'Exported $to for Tiled (${written.length} files)');
+      final wrote = written.last;
+      _say(
+        scope,
+        'Exported ${wrote == to ? to : '$wrote ($to was there already)'} '
+        'for Tiled (${written.length} files)',
+      );
       return written;
     } catch (e) {
       _say(scope, 'Could not export $to: $e', failed: true);
@@ -288,6 +320,9 @@ abstract final class BuiltInTileContributions {
       for (final ts in map.tilesets.whereType<String>()) {
         await tiles.tileset(ts);
       }
+      // Beside it: the exporter picks free names (`_2`…) for whatever is
+      // there already — a .tmx edited in Tiled since the last export, a
+      // project's own .tsx.
       final to = '${jge.TileAssets.directoryOf(path)}/${tiledStem(path)}.tmx';
       return await exportMap(scope, map, to, using: using);
     } catch (e) {
@@ -312,7 +347,7 @@ abstract final class BuiltInTileContributions {
       hint: 'Saved as $mapFolder/<name>.tmx, tilesets beside it',
     );
     if (name == null || name.trim().isEmpty) return;
-    await exportMap(scope, target.data, '$mapFolder/${name.trim()}.tmx');
+    await exportMap(scope, target.data, '$mapFolder/${_fileName(name)}.tmx');
   }
 
   static List<EntityIcon> get entityIcons => [
@@ -351,24 +386,70 @@ abstract final class BuiltInTileContributions {
     return null;
   }
 
+  /// [name] as a file name: letters, digits, `_` and `-`; anything else
+  /// (a `/`, `..`, `:`) made `_`.
+  static String _fileName(String name) {
+    final safe = name.trim().replaceAll(RegExp('[^A-Za-z0-9_-]+'), '_');
+    return safe.isEmpty ? 'map' : safe;
+  }
+
+  /// The name "Move to a file" offers for [entity]'s map: the scene's name
+  /// and the map's — every scene's map is called the same — free in
+  /// [mapFolder].
+  static String suggestedMapPath(EditorScope scope, jge.Entity entity) {
+    final scene = scope.sceneState.activeScene.value?.name;
+    final map = (entity.name ?? 'map').toLowerCase();
+    return scope.mapDocs.freeMapPath(
+      mapFolder,
+      scene == null ? map : '${scene}_$map',
+    );
+  }
+
   /// Asks for a name and moves [entity]'s map out of the scene into its own
   /// file under [mapFolder]. One undo step.
+  ///
+  /// The name offered is free; one typed that a file already has is
+  /// refused, never written over — another scene may use that map.
   static Future<void> extractToFile(
     BuildContext context,
     EditorScope scope,
     jge.Entity entity,
   ) async {
+    final suggested = suggestedMapPath(scope, entity);
     final name = await promptTimelineText(
       context,
       title: 'Move the map to a file',
-      initial: (entity.name ?? 'map').toLowerCase(),
+      initial: tiledStem(suggested),
       hint: 'Saved as $mapFolder/<name>${jge.LevelMapFiles.suffix}',
     );
     if (name == null || name.trim().isEmpty) return;
-    final path = '$mapFolder/${name.trim()}${jge.LevelMapFiles.suffix}';
-    final command = await scope.mapDocs.extractToAsset(entity, path);
-    if (command != null) scope.history.pushApplied(command);
-    scope.sceneState.refresh();
+    await extractNamed(scope, entity, name);
+  }
+
+  /// Moves [entity]'s map into `[mapFolder]/<name>.map.json` — [name] made
+  /// safe for a file — as one undo step. Whether it did: not over a file
+  /// that is there already, which is said instead.
+  static Future<bool> extractNamed(
+    EditorScope scope,
+    jge.Entity entity,
+    String name,
+  ) async {
+    final path = '$mapFolder/${_fileName(name)}${jge.LevelMapFiles.suffix}';
+    try {
+      final command = await scope.mapDocs.extractToAsset(entity, path);
+      if (command != null) scope.history.pushApplied(command);
+      return command != null;
+    } on FileSystemException {
+      _say(
+        scope,
+        '$path is there already, and may be another scene\'s map: '
+        'choose another name',
+        failed: true,
+      );
+      return false;
+    } finally {
+      scope.sceneState.refresh();
+    }
   }
 
   /// Brings [entity]'s map file into the scene. One undo step.
@@ -385,10 +466,8 @@ class _LevelMapSection extends StatelessWidget {
 
   final jge.LevelMapComponent component;
 
-  static TextStyle get _text => TextStyle(
-    color: EditorTheme.textSecondary,
-    fontSize: 11,
-  );
+  static TextStyle get _text =>
+      TextStyle(color: EditorTheme.textSecondary, fontSize: 11);
 
   @override
   Widget build(BuildContext context) {

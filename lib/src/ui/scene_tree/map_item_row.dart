@@ -12,11 +12,15 @@ import '../../core/scope/editor_scope_services.dart';
 /// A row of the scene tree that is part of a level map: one of its layers.
 ///
 /// Clicking it picks it — the tree's selection moves from any entity to it
-/// — and makes its layer the one painted; a second click renames it. The
+/// — and makes its layer the one painted; a double-click renames it. The
 /// painted layer's icon stays lit after the pick has moved on.
 /// The eye and the padlock are the map's own, saved and undoable, and hide
 /// and lock what is on the layer too. The menu renames the layer, or
 /// deletes it with what is on it.
+///
+/// A Tiled map named directly (`.tmx`, `.tmj`) is shown, not edited: its
+/// rows say whether a layer is shown and locked but change nothing, so a
+/// save never writes the editor's map over the Tiled file.
 ///
 /// What is placed on a layer is listed under its row, as entities; an
 /// entity dropped on the row goes on that layer. A layer row itself is
@@ -29,6 +33,7 @@ class MapItemRow extends StatefulWidget {
     required this.controller,
     this.onClaim,
     this.onDropEntities,
+    this.memberCount,
   });
 
   final TreeRow row;
@@ -38,6 +43,10 @@ class MapItemRow extends StatefulWidget {
   /// Told when a click lands on the row, so the list around it does not
   /// take it for a click on empty space.
   final VoidCallback? onClaim;
+
+  /// How many entities are on the layer, when the tree has counted them
+  /// already (once for all of a map's rows); counted here when null.
+  final int? memberCount;
 
   /// Entities dropped on a layer row: they go on that layer of the map.
   final void Function(List<jge.Entity> entities, jge.Entity map, int layerId)?
@@ -74,6 +83,7 @@ class _MapItemRowState extends State<MapItemRow> {
     String label,
     void Function(jge.MapLayerData layer) change,
   ) {
+    if (target.isReadOnly) return;
     final command = MapStructureCommand.record(
       label: label,
       docs: scope.mapDocs,
@@ -101,19 +111,22 @@ class _MapItemRowState extends State<MapItemRow> {
     jge.MapLayerData layer,
   ) {
     final tiles = scope.tiles;
+    final readOnly = target.isReadOnly;
     final painted =
         tiles.mapEntityId.value == map.id && tiles.layerId.value == layer.id;
-    final count = [
-      for (final id
-          in map.getComponent<jge.ChildrenComponent>()?.childIds ??
-              const <jge.EntityId>[])
-        if (scope.world
-                .getEntity(id)
-                ?.getComponent<jge.LayerComponent>()
-                ?.mapLayer ==
-            layer.id)
-          id,
-    ].length;
+    final count =
+        widget.memberCount ??
+        [
+          for (final id
+              in map.getComponent<jge.ChildrenComponent>()?.childIds ??
+                  const <jge.EntityId>[])
+            if (scope.world
+                    .getEntity(id)
+                    ?.getComponent<jge.LayerComponent>()
+                    ?.mapLayer ==
+                layer.id)
+              id,
+        ].length;
     final row = _frame(
       // Selected only while it is the tree's pick. Being painted is not
       // being selected: there always is a painted layer, and drawing it as
@@ -123,7 +136,7 @@ class _MapItemRowState extends State<MapItemRow> {
       lit: painted,
       onPressed: (event) {
         if (_isSecondClick(event)) {
-          setState(() => _renaming = true);
+          if (!readOnly) setState(() => _renaming = true);
           return;
         }
         // One selection in the tree: picking a layer lets go of the
@@ -148,32 +161,49 @@ class _MapItemRowState extends State<MapItemRow> {
         'Rename map layer',
         (l) => l.name = name,
       ),
-      trailing: [
-        SceneTreeRowButton(
-          icon: layer.visible
-              ? Icons.visibility_outlined
-              : Icons.visibility_off_outlined,
-          tooltip: layer.visible ? 'Hide map layer' : 'Show map layer',
-          faded: layer.visible,
-          onPressed: () => _layerEdit(
-            target,
-            layer.id,
-            layer.visible ? 'Hide map layer' : 'Show map layer',
-            (l) => l.visible = !l.visible,
-          ),
-        ),
-        SceneTreeRowButton(
-          icon: layer.locked ? Icons.lock_outline : Icons.lock_open_outlined,
-          tooltip: layer.locked ? 'Unlock map layer' : 'Lock map layer',
-          faded: !layer.locked,
-          onPressed: () => _layerEdit(
-            target,
-            layer.id,
-            layer.locked ? 'Unlock map layer' : 'Lock map layer',
-            (l) => l.locked = !l.locked,
-          ),
-        ),
-      ],
+      trailing: readOnly
+          ? [
+              _ReadOnlyMark(
+                icon: layer.visible
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                faded: layer.visible,
+              ),
+              _ReadOnlyMark(
+                icon: layer.locked
+                    ? Icons.lock_outline
+                    : Icons.lock_open_outlined,
+                faded: !layer.locked,
+              ),
+            ]
+          : [
+              SceneTreeRowButton(
+                icon: layer.visible
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                tooltip: layer.visible ? 'Hide map layer' : 'Show map layer',
+                faded: layer.visible,
+                onPressed: () => _layerEdit(
+                  target,
+                  layer.id,
+                  layer.visible ? 'Hide map layer' : 'Show map layer',
+                  (l) => l.visible = !l.visible,
+                ),
+              ),
+              SceneTreeRowButton(
+                icon: layer.locked
+                    ? Icons.lock_outline
+                    : Icons.lock_open_outlined,
+                tooltip: layer.locked ? 'Unlock map layer' : 'Lock map layer',
+                faded: !layer.locked,
+                onPressed: () => _layerEdit(
+                  target,
+                  layer.id,
+                  layer.locked ? 'Unlock map layer' : 'Lock map layer',
+                  (l) => l.locked = !l.locked,
+                ),
+              ),
+            ],
     );
     final drop = widget.onDropEntities;
     if (drop == null || target.isReadOnly) return row;
@@ -203,14 +233,23 @@ class _MapItemRowState extends State<MapItemRow> {
     jge.MapLayerData layer,
     Offset at,
   ) async {
+    final readOnly = target.isReadOnly;
     final chosen = await showEditorMenu<String>(context, at, [
-      editorMenuItem('rename', 'Rename', icon: Icons.edit_outlined),
+      if (readOnly) editorMenuHeading(_readOnlyNote),
+      editorMenuItem(
+        'rename',
+        'Rename',
+        icon: Icons.edit_outlined,
+        enabled: !readOnly,
+      ),
       editorMenuItem(
         'delete',
         'Delete the layer, and what is on it',
         icon: Icons.delete_outline,
+        enabled: !readOnly,
       ),
     ]);
+    if (readOnly) return;
     switch (chosen) {
       case 'rename':
         setState(() => _renaming = true);
@@ -221,6 +260,7 @@ class _MapItemRowState extends State<MapItemRow> {
 
   /// [layer], and what is on it, gone — one step.
   void _deleteLayer(LevelMapTarget target, jge.MapLayerData layer) {
+    if (target.isReadOnly) return;
     const label = 'Delete map layer';
     final world = scope.world;
     final members = [
@@ -231,6 +271,9 @@ class _MapItemRowState extends State<MapItemRow> {
             when e.getComponent<jge.LayerComponent>()?.mapLayer == layer.id)
           e,
     ];
+    // A layer goes with what is on it: not while a module protects any of
+    // that, which would be left on a layer that is gone.
+    if (scope.deletable(members).length != members.length) return;
     final delete = members.isEmpty
         ? null
         : (DeleteEntitiesCommand(
@@ -371,6 +414,32 @@ class _MapItemRowState extends State<MapItemRow> {
       ),
     );
   }
+}
+
+/// Why a Tiled map's layer rows change nothing.
+const String _readOnlyNote = 'A Tiled map: convert it to edit it';
+
+/// A layer's eye or padlock on a map that is not edited here: what it
+/// is, said, not changed.
+class _ReadOnlyMark extends StatelessWidget {
+  const _ReadOnlyMark({required this.icon, required this.faded});
+
+  final IconData icon;
+  final bool faded;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: _readOnlyNote,
+    child: SizedBox(
+      width: kSceneTreeRowTileHeight,
+      height: kSceneTreeRowTileHeight,
+      child: Icon(
+        icon,
+        size: 13,
+        color: EditorTheme.textMuted.withValues(alpha: faded ? 0.3 : 0.7),
+      ),
+    ),
+  );
 }
 
 /// Typing a new name in place: Enter keeps it, Escape or a click away

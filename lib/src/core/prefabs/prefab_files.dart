@@ -37,16 +37,34 @@ abstract final class PrefabFiles {
       under: asset.surface == null ? LevelMaps.primaryEntity(world) : null,
     );
     if (instances.library.loaded(asset.path) != null) return place();
-    instances.library.load(asset.path).then<void>(
-      (_) => place(),
-      onError: (Object error) {
-        asset.scope.log.log(
-          'Could not read the prefab ${asset.path}: $error',
-          source: 'editor',
-          category: 'prefab',
+    // Dropped on the scene open now: one opened (or a play-test started)
+    // while the file was read is not where it was dropped.
+    final sceneState = asset.scope.sceneState;
+    final scene = sceneState.activeScene.value;
+    instances.library
+        .load(asset.path)
+        .then<void>(
+          (_) {
+            if (!identical(sceneState.activeScene.value, scene) ||
+                asset.scope.isPlayTesting.value) {
+              asset.scope.log.log(
+                'Did not place ${asset.path}: the scene changed while it '
+                'was read.',
+                source: 'editor',
+                category: 'prefab',
+              );
+              return;
+            }
+            place();
+          },
+          onError: (Object error) {
+            asset.scope.log.log(
+              'Could not read the prefab ${asset.path}: $error',
+              source: 'editor',
+              category: 'prefab',
+            );
+          },
         );
-      },
-    );
     return null;
   }
 
@@ -58,10 +76,14 @@ abstract final class PrefabFiles {
     final out = <PrefabDefinition>[];
     for (final entry in scope.assetIndex.entries) {
       if (entry.isDirectory || !PrefabFile.isPrefabPath(entry.path)) continue;
-      if (library.loaded(entry.path) == null && library.errorOf(entry.path) == null) {
+      if (library.loaded(entry.path) == null &&
+          library.errorOf(entry.path) == null) {
         library.load(entry.path).ignore();
       }
-      final stem = entry.name.substring(0, entry.name.length - PrefabFile.ending.length);
+      final stem = entry.name.substring(
+        0,
+        entry.name.length - PrefabFile.ending.length,
+      );
       final name = library.loaded(entry.path)?.name ?? stem;
       out.add(
         PrefabDefinition(

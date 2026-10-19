@@ -1,11 +1,12 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
@@ -128,13 +129,23 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
 
   Material2DFile? _parent(String path) => _parents.putIfAbsent(path, () {
     try {
-      return Material2DFile.parse(
-        File('${widget.root}/$path').readAsStringSync(),
-      );
+      return Material2DFile.parse(_fileOf(path).readAsStringSync());
     } on Object {
       return null;
     }
   });
+
+  // The file at [path]: the project's, or a package's asset key.
+  File _fileOf(String path) =>
+      File(PackageAssetPaths.of(widget.root).absolute(path));
+
+  // Why [path] can't be written, or null when it can: a package in pub's
+  // shared cache is every project's.
+  String? _readOnly(String path) =>
+      PackageAssetPaths.of(widget.root).isWritable(path)
+      ? null
+      : "$path is in pub's shared cache, used by every project: it can't be "
+            'changed here.';
 
   /// The preview's subject and background, kept for the next material.
   static Material2DSubject _lastSubject = Material2DSubject.auto;
@@ -173,15 +184,25 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   final Map<String, GlobalKey> _cardKeys = {};
   final ScrollController _effectsScroll = ScrollController();
 
-  /// The same subject drawn without the material, to compare with.
-  late final Material2DStage plainStage = Material2DStage(root: widget.root)
-    ..plain = true;
+  /// The same subject drawn without the material, to compare with: it
+  /// reads the material through [stage]'s library, so the images are
+  /// decoded once for both.
+  late final Material2DStage plainStage = Material2DStage(
+    root: widget.root,
+    filesFrom: stage,
+  )..plain = true;
 
   /// Where the compare line is, a share of the preview across: drawn
   /// without the material to its left, with it to its right. Null when not
   /// comparing.
   double? get compareAt => _compareAt;
   double? _compareAt;
+
+  // The compare line moved: the preview is built again, not the window.
+  final ValueNotifier<int> _compareLine = ValueNotifier(0);
+
+  // The zoom changed: the zoom controls are built again, not the window.
+  final ValueNotifier<int> _framing = ValueNotifier(0);
 
   /// Whether Space is held: drawn without the material while it is.
   bool get holdingPlain => _holdingPlain;
@@ -236,7 +257,7 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   final ValueNotifier<int> _repaint = ValueNotifier(0);
   StreamSubscription<String>? _changes;
 
-  File get _file => File('${widget.root}/${widget.path}');
+  File get _file => _fileOf(widget.path);
 
   @override
   void initState() {
@@ -250,8 +271,9 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     if (widget.loadOnStart) load();
   }
 
-  /// The least time between two drawings of what moves: a preview needs no
-  /// more than about 60 a second, whatever the screen's refresh rate.
+  /// The least time between two drawings of what moves: at most one every
+  /// 12 ms, about 83 a second — every frame of a 60 Hz screen (whose frames
+  /// come a little early or late), every other one of a 120 or 144 Hz one.
   static const Duration movingFrame = Duration(milliseconds: 12);
 
   // Seconds played that are not drawn yet, and when what moves last was.
@@ -289,8 +311,20 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     if (parent) _shownFor = null;
     _maps.forget(path);
     stage.library.reload(path);
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
     _sync();
+    if (path == _user?.spritePath) {
+      // The sprite Auto shows it on: read again (the old image goes once
+      // the new one is laid out).
+      stage.forgetImage(path);
+      unawaited(pickUser(_user));
+    } else if (path.endsWith('.json') &&
+        !path.endsWith('.material.json') &&
+        !Material2DFile.isMaterial2DPath(path)) {
+      // A scene or prefab: what is drawn with the material may be another.
+      unawaited(_findUser());
+    }
   }
 
   /// Reads the file and shows it.
@@ -316,13 +350,23 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   }
 
   // What Auto shows the material on: the game's own sprites and shapes
-  // drawn with it — the first of them, until another is picked.
+  // drawn with it — the first of them, until another is picked (and kept
+  // when they are looked for again, while it is still one of them).
   Future<void> _findUser() async {
     final users = await Material2DUsers.findAll(widget.root, widget.path);
     if (!mounted) return;
+    final was = _user;
     setState(() => _users = users);
-    await pickUser(users.firstOrNull);
+    await pickUser(
+      users.where((u) => _sameUser(u, was)).firstOrNull ?? users.firstOrNull,
+    );
   }
+
+  static bool _sameUser(Material2DUser a, Material2DUser? b) =>
+      b != null &&
+      a.file == b.file &&
+      a.entity == b.entity &&
+      a.spritePath == b.spritePath;
 
   /// Shows the material on [user] (one of [users]) when Auto is chosen.
   Future<void> pickUser(Material2DUser? user) async {
@@ -338,8 +382,11 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     _sync();
   }
 
-  /// Puts [next] in as the material, one undo step.
+  /// Puts [next] in as the material, one undo step. Nothing is edited until
+  /// the file is read: one that could not be (broken JSON, a newer format)
+  /// is never written over with the defaults shown meanwhile.
   void edit(Material2DFile next) {
+    if (!_loaded) return;
     _live = null;
     if (next != material) {
       setState(() {
@@ -358,6 +405,65 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   void change(Material2DFile Function(Material2DFile m) change) =>
       edit(change(material));
 
+  /// [m] as it draws: for a variant, laid over its parents.
+  Material2DFile _resolved(Material2DFile m) => !m.isVariant
+      ? m
+      : MaterialChain.resolve2D(
+          widget.path,
+          (p) => p == widget.path ? m : _parent(p),
+        ).value;
+
+  /// [after] — what an edit made of [before], the material as it draws —
+  /// kept as this window's material: on a variant, every effect switched
+  /// and every value set that differs from [before] becomes its own, and
+  /// the rest stay its parents'. A plain material is [after] itself.
+  Material2DFile _withEdit(Material2DFile before, Material2DFile after) {
+    final own = material;
+    if (!own.isVariant) return after;
+    final effects = {...own.effects};
+    for (final id in {...before.effects.keys, ...after.effects.keys}) {
+      final on = after.isOn(id);
+      if (before.isOn(id) != on) effects[id] = on;
+    }
+    final values = {...own.values};
+    for (final key in {...before.values.keys, ...after.values.keys}) {
+      final value = after.values[key];
+      if (jsonEncode(before.values[key]) == jsonEncode(value)) continue;
+      if (value == null) {
+        values.remove(key);
+        continue;
+      }
+      values[key] = value;
+      // A variant keeps a value under its effect switched on, as
+      // [Material2DFile.withValue] does.
+      final dot = key.indexOf('.');
+      final id = dot < 0 ? key : key.substring(0, dot);
+      if (after.isOn(id)) effects[id] = true;
+    }
+    return Material2DFile(
+      kind: own.kind,
+      parent: own.parent,
+      effects: effects,
+      values: values,
+    );
+  }
+
+  /// Changes the material as it draws — a variant over its parents — as
+  /// [change] says, as one undo step: what a module adding to the window
+  /// edits ([Material2DWorkspaceView.change]), as the 3-D window's do.
+  void changeShown(Material2DFile Function(Material2DFile m) change) {
+    final before = _resolved(material);
+    edit(_withEdit(before, change(before)));
+  }
+
+  /// [changeShown] without an undo step: a [preview].
+  void previewShown(Material2DFile Function(Material2DFile m) change) {
+    if (!_loaded) return;
+    final before = _resolved(material);
+    final after = _withEdit(before, change(before));
+    preview((_) => after);
+  }
+
   /// Shows [change] without making an undo step: a value being dragged or
   /// picked. [change] or [edit] puts it in for good; [endPreview] lets it
   /// go.
@@ -369,6 +475,7 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     Material2DFile Function(Material2DFile m) change, {
     bool rebuild = true,
   }) {
+    if (!_loaded) return;
     final live = change(material);
     if (rebuild) {
       setState(() => _live = live);
@@ -405,12 +512,21 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     _sync();
   }
 
-  /// Writes the file; whether it went through.
+  /// Writes the file, whole or not at all; whether it went through. Never
+  /// when the file was not read ([load]): what is shown then is no more
+  /// than defaults.
   Future<bool> save() async {
+    if (!_loaded) return false;
     final current = material;
+    if (_readOnly(widget.path) case final why?) {
+      if (mounted) setState(() => _error = why);
+      return false;
+    }
     try {
-      await _file.writeAsString(current.encode());
-      if (mounted) setState(() => _saved = current);
+      await ProjectFiles.writeString(_file.path, current.encode());
+      _saved = current;
+      // Read already: what went wrong before was a save's.
+      if (mounted) setState(() => _error = null);
       _syncScene();
       widget.workspace.reloadAssets?.call(widget.path);
       return true;
@@ -433,7 +549,11 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   Future<bool> applyToParent({bool confirm = true}) async {
     final m = material;
     final own = m.effects.length + m.values.length;
-    if (!m.isVariant || own == 0) return false;
+    if (!_loaded || !m.isVariant || own == 0) return false;
+    if (_readOnly(m.parent) case final why?) {
+      setState(() => _error = why);
+      return false;
+    }
     if (confirm &&
         !await showEditorConfirm(
           context,
@@ -447,7 +567,7 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
         )) {
       return false;
     }
-    final file = File('${widget.root}/${m.parent}');
+    final file = _fileOf(m.parent);
     try {
       var parent = Material2DFile.parse(await file.readAsString());
       for (final MapEntry(:key, :value) in m.effects.entries) {
@@ -456,15 +576,17 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
       for (final MapEntry(:key, :value) in m.values.entries) {
         parent = parent.withValue(key, value);
       }
-      await file.writeAsString(parent.encode());
+      // Whole or not at all: every variant of it is drawn from it.
+      await ProjectFiles.writeString(file.path, parent.encode());
     } on Object catch (error) {
       if (mounted) setState(() => _error = error);
       return false;
     }
     _parents.remove(m.parent);
     _shownFor = null;
-    stage.library.reload(m.parent);
     widget.workspace.reloadAssets?.call(m.parent);
+    if (!mounted) return true;
+    stage.library.reload(m.parent);
     edit(Material2DFile(kind: m.kind, parent: m.parent));
     return true;
   }
@@ -488,8 +610,10 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   }
 
   // The open scene draws what is edited — a value being dragged too —
-  // until it is saved or put back.
+  // until it is saved or put back. Not once the window went: it put the
+  // file back as it closed.
   void _syncScene() {
+    if (!mounted) return;
     final library = sceneMaterials;
     if (library == null) return;
     if (!_liveInScene || !_loaded || drawn == _saved) {
@@ -529,8 +653,10 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   /// Draws a pixel of what is shown [zoom] logical pixels big; null fits it
   /// to the preview.
   void setZoom(double? zoom) {
-    setState(() {});
     _view2((s) => s.zoom = zoom);
+    // The zoom controls say so; the window is not built again for each
+    // turn of the wheel.
+    _framing.value++;
   }
 
   /// One step of [zoomSteps] in (+1) or out (-1), around [around] — a
@@ -557,12 +683,12 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
 
   /// Fits what is shown to the preview again, in its middle.
   void fit() {
-    setState(() {});
     _view2(
       (s) => s
         ..zoom = null
         ..pan = Offset.zero,
     );
+    _framing.value++;
   }
 
   /// Moves what is shown by [delta] logical pixels.
@@ -583,7 +709,17 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   /// Compares with and without the material — a line across the preview
   /// at [at] (a share of it across) — or stops.
   void setCompare(double? at) {
-    setState(() => _compareAt = at?.clamp(0.02, 0.98).toDouble());
+    final next = at?.clamp(0.02, 0.98).toDouble();
+    if (next == _compareAt) return;
+    final turned = (next == null) != (_compareAt == null);
+    _compareAt = next;
+    if (turned) {
+      // On or off: the toolbar's button says so.
+      setState(() {});
+    } else {
+      // The line dragged: only the preview follows it.
+      _compareLine.value++;
+    }
     _repaint.value++;
   }
 
@@ -780,12 +916,12 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     return file;
   }
 
-  // The stage shows what the workspace does.
+  // The stage shows what the workspace does. (The plain stage reads the
+  // material through the stage's library.)
   void _sync() {
-    if (!_loaded) return;
+    if (!mounted || !_loaded) return;
     _syncScene();
     stage.library.preview(widget.path, _solo == null ? drawn : _soloed(drawn));
-    plainStage.library.preview(widget.path, drawn);
     final sprite = _subject == Material2DSubject.selected
         ? selectedSprite
         : null;
@@ -827,6 +963,8 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     plainStage.dispose();
     _repaint.dispose();
     _lightMoved.dispose();
+    _compareLine.dispose();
+    _framing.dispose();
     _widths.dispose();
     _effectsScroll.dispose();
     _clock.dispose();
@@ -835,14 +973,17 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     super.dispose();
   }
 
-  /// The preview's keys, as its shortcut list says them.
-  static const String shortcuts =
+  /// The preview's keys, as its shortcut list says them: Cmd for Ctrl on
+  /// macOS.
+  static String get shortcuts =>
       'F  fit      1 / 2 / 4  zoom      + / −  zoom in, out\n'
       'Wheel  zoom      Drag  pan      Double-click  fit\n'
       'C  compare      Hold Space  without the material\n'
       'B  background      L  light      N  normals\n'
       'T  tile 3 × 3      P  play or pause\n'
-      'Ctrl+S  save      Ctrl+Z / Ctrl+Y  undo, redo';
+      '${EditorKeys.withPrimary('S')}  save      '
+      '${EditorKeys.withPrimary('Z')} / ${EditorKeys.withPrimary('Y')}  undo, '
+      'redo';
 
   KeyEventResult _onKey(KeyEvent event) {
     final screen = shown.kind == Material2DKind.screen;
@@ -854,10 +995,15 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
       return KeyEventResult.handled;
     }
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    final ctrl = HardwareKeyboard.instance.isControlPressed;
+    // Ctrl is Cmd on macOS.
+    final ctrl = EditorKeys.primaryPressed;
     final shift = HardwareKeyboard.instance.isShiftPressed;
     if (!ctrl) {
       if (WorkspaceKeyScope.isTyping) return KeyEventResult.ignored;
+      // A chord is not a bare key: Alt+C, or Ctrl+C on a Mac, is not C.
+      if (HardwareKeyboard.instance.isAltPressed || EditorKeys.otherPressed) {
+        return KeyEventResult.ignored;
+      }
       switch (event.logicalKey) {
         case LogicalKeyboardKey.keyF:
           fit();
@@ -919,7 +1065,7 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
               title: screen ? 'Screen material' : '2D material',
               file: name,
               dirty: dirty,
-              onSave: save,
+              onSave: _loaded ? save : null,
               onUndo: _at > 0 ? undo : null,
               onRedo: _at < _history.length - 1 ? redo : null,
               tools: [
@@ -1170,12 +1316,41 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     );
   }
 
+  // Until the file is read — or when it could not be — only that, and a
+  // way to read it again: fields over the defaults shown meanwhile would
+  // save those over the file.
+  Widget _unread() => ListView(
+    children: [
+      if (_error == null)
+        _note('Loading…')
+      else ...[
+        _note("Can't be read: $_error", color: EditorTheme.warning),
+        _note(
+          'Nothing is saved over it. Put the file right (it is JSON) and '
+          'read it again.',
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: EditorButton(
+              label: 'Read it again',
+              icon: Icons.refresh,
+              kind: EditorButtonKind.ghost,
+              onPressed: load,
+            ),
+          ),
+        ),
+      ],
+    ],
+  );
+
   Widget _fields() {
+    if (!_loaded) return _unread();
     final m = shown;
     final problems = material.validate();
     return ListView(
       children: [
-        if (!_loaded && _error == null) _note('Loading…'),
         if (_error != null) _note('$_error', color: EditorTheme.warning),
         if (material.isVariant) _variant(),
         const SizedBox(height: 6),
@@ -1285,7 +1460,9 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
             controller: _effectsScroll,
             padding: const EdgeInsets.only(bottom: 16),
             children: [
-              if (on.isEmpty)
+              if (!_loaded)
+                _note(_error == null ? 'Loading…' : 'Not read: no effects.')
+              else if (on.isEmpty)
                 _note('No effect is on yet: add one, or start from a preset.'),
               for (final e in on) _card(e, m),
               if (offHere.isNotEmpty) ...[
@@ -1517,7 +1694,8 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
                         kind: EditorButtonKind.ghost,
                         onPressed: () async {
                           final made = await generateNormalMap();
-                          if (made != null) set(made);
+                          // The window may have closed meanwhile.
+                          if (made != null && mounted) set(made);
                         },
                       ),
                     ),
@@ -1738,37 +1916,42 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
         ],
       ),
       const ToolSeparator(),
-      ZoomControls(
-        label: ValueListenableBuilder<double>(
-          valueListenable: _drawnScale,
-          builder: (context, scale, _) => Text(
-            stage.zoom == null
-                ? 'Fit · ${(scale * 100).round()}%'
-                : '${(scale * 100).round()}%',
-            textAlign: TextAlign.center,
-            style: _label,
-          ),
-        ),
-        onZoomOut: () => zoomBy(-1),
-        onZoomIn: () => zoomBy(1),
-        steps: [
-          for (final (label, zoom, tip) in const [
-            ('Fit', null, 'Fit it to the preview (F; double-click)'),
-            ('1:1', 1.0, 'A pixel of it a pixel of the screen (1)'),
-            ('2×', 2.0, 'Twice as big (2)'),
-            ('4×', 4.0, 'Four times as big (4)'),
-          ])
-            ZoomStep(
-              label,
-              tip,
-              selected: zoom == null ? stage.zoom == null : stage.zoom == zoom,
-              onTap: () => zoom == null ? fit() : setZoom(zoom),
+      ValueListenableBuilder<int>(
+        valueListenable: _framing,
+        builder: (context, _, _) => ZoomControls(
+          label: ValueListenableBuilder<double>(
+            valueListenable: _drawnScale,
+            builder: (context, scale, _) => Text(
+              stage.zoom == null
+                  ? 'Fit · ${(scale * 100).round()}%'
+                  : '${(scale * 100).round()}%',
+              textAlign: TextAlign.center,
+              style: _label,
             ),
-        ],
+          ),
+          onZoomOut: () => zoomBy(-1),
+          onZoomIn: () => zoomBy(1),
+          steps: [
+            for (final (label, zoom, tip) in const [
+              ('Fit', null, 'Fit it to the preview (F; double-click)'),
+              ('1:1', 1.0, 'A pixel of it a pixel of the screen (1)'),
+              ('2×', 2.0, 'Twice as big (2)'),
+              ('4×', 4.0, 'Four times as big (4)'),
+            ])
+              ZoomStep(
+                label,
+                tip,
+                selected: zoom == null
+                    ? stage.zoom == null
+                    : stage.zoom == zoom,
+                onTap: () => zoom == null ? fit() : setZoom(zoom),
+              ),
+          ],
+        ),
       ),
       WorkspaceToolButtons(view: _extensionView),
       const ToolSeparator(),
-      const ShortcutsHint(shortcuts),
+      ShortcutsHint(shortcuts),
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
@@ -2063,7 +2246,6 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
     builder: (context, constraints) {
       final size = Size(constraints.maxWidth, constraints.maxHeight);
       final lit = !screen && (_lit || stage.showNormals);
-      final split = _compareAt;
       return Listener(
         onPointerSignal: (e) {
           if (e is PointerScrollEvent && e.scrollDelta.dy != 0) {
@@ -2077,72 +2259,82 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
         child: GestureDetector(
           onPanUpdate: (d) => panBy(d.delta),
           onDoubleTap: fit,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: ClipRect(
-                  child: CustomPaint(
-                    size: size,
-                    painter: _StagePainter(
-                      stage,
-                      plainStage,
-                      () => _holdingPlain ? 1.0 : _compareAt,
-                      MediaQuery.devicePixelRatioOf(context),
-                      _repaint,
-                      onDrawn: (scale) {
-                        if (scale == _drawnScale.value) return;
-                        SchedulerBinding.instance.addPostFrameCallback((_) {
-                          if (mounted) _drawnScale.value = scale;
-                        });
-                      },
-                    ),
-                  ),
-                ),
-              ),
-              if (split != null && !_holdingPlain) ...[
-                Positioned(
-                  left: split * size.width - 12,
-                  top: 0,
-                  bottom: 0,
-                  width: 24,
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.resizeColumn,
-                    child: GestureDetector(
-                      onHorizontalDragUpdate: (d) => setCompare(
-                        (split * size.width + d.delta.dx) / size.width,
-                      ),
-                      child: Center(
-                        child: Container(
-                          width: 2,
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 8,
-                  right: size.width * (1 - split) + 10,
-                  child: PreviewChip('Without', icon: Icons.chevron_left),
-                ),
-                Positioned(
-                  top: 8,
-                  left: split * size.width + 10,
-                  child: PreviewChip('With', icon: Icons.chevron_right),
-                ),
-              ],
-              if (lit)
-                ValueListenableBuilder<int>(
-                  valueListenable: _lightMoved,
-                  builder: (context, _, _) => _lightHandle(size),
-                ),
-              ...workspaceOverlays(_extensionView, size),
-            ],
+          // Built again as the compare line is dragged; the window is not.
+          child: ValueListenableBuilder<int>(
+            valueListenable: _compareLine,
+            builder: (context, _, _) => _previewStack(size, lit: lit),
           ),
         ),
       );
     },
   );
+
+  // The stage's picture, the compare line, the light's handle and what
+  // modules lay over it.
+  Widget _previewStack(Size size, {required bool lit}) {
+    final split = _compareAt;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: ClipRect(
+            child: CustomPaint(
+              size: size,
+              painter: _StagePainter(
+                stage,
+                plainStage,
+                () => _holdingPlain ? 1.0 : _compareAt,
+                MediaQuery.devicePixelRatioOf(context),
+                _repaint,
+                onDrawn: (scale) {
+                  if (scale == _drawnScale.value) return;
+                  SchedulerBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _drawnScale.value = scale;
+                  });
+                },
+              ),
+            ),
+          ),
+        ),
+        if (split != null && !_holdingPlain) ...[
+          Positioned(
+            left: split * size.width - 12,
+            top: 0,
+            bottom: 0,
+            width: 24,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.resizeColumn,
+              child: GestureDetector(
+                onHorizontalDragUpdate: (d) =>
+                    setCompare((split * size.width + d.delta.dx) / size.width),
+                child: Center(
+                  child: Container(
+                    width: 2,
+                    color: Colors.white.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 8,
+            right: size.width * (1 - split) + 10,
+            child: PreviewChip('Without', icon: Icons.chevron_left),
+          ),
+          Positioned(
+            top: 8,
+            left: split * size.width + 10,
+            child: PreviewChip('With', icon: Icons.chevron_right),
+          ),
+        ],
+        if (lit)
+          ValueListenableBuilder<int>(
+            valueListenable: _lightMoved,
+            builder: (context, _, _) => _lightHandle(size),
+          ),
+        ...workspaceOverlays(_extensionView, size),
+      ],
+    );
+  }
 
   // The light: a sun to drag.
   Widget _lightHandle(Size size) {
@@ -2268,11 +2460,11 @@ final class _Material2DView implements Material2DWorkspaceView {
 
   @override
   void change(Material2DFile Function(Material2DFile m) change) =>
-      _state.change(change);
+      _state.changeShown(change);
 
   @override
   void preview(Material2DFile Function(Material2DFile m) change) =>
-      _state.preview(change);
+      _state.previewShown(change);
 
   @override
   void endPreview() => _state.endPreview();

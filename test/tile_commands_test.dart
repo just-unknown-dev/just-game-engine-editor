@@ -9,6 +9,9 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/level_map/level_map_documents.dart';
+import 'package:just_game_engine_editor/src/core/level_map/tile_commands.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
 
 void main() {
   late World world;

@@ -29,6 +29,26 @@ class _PhysicsLayersDockState extends State<PhysicsLayersDock> {
 
   EditorScope get scope => widget.scope;
 
+  /// The layer whose row or grid line the pointer is over: its bodies ring
+  /// in the level. One that goes from under the pointer — deleted, the
+  /// dock shut — hears no exit, so the ring is taken off here.
+  int? _hovered;
+
+  void _hover(int layer, bool on) {
+    if (on) {
+      _hovered = layer;
+    } else if (_hovered == layer) {
+      _hovered = null;
+    }
+    LayerHighlight.set(scope, layer, on);
+  }
+
+  @override
+  void dispose() {
+    if (_hovered case final layer?) LayerHighlight.set(scope, layer, false);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => SignalBuilder<jge.PhysicsLayers>(
     signal: scope.physicsLayers.layers,
@@ -41,10 +61,18 @@ class _PhysicsLayersDockState extends State<PhysicsLayersDock> {
 
   /// The bodies, 2-D and 3-D, an author placed on each layer — not the
   /// level map's.
-  List<List<jge.Entity>> _bodies() => PhysicsBodies.byLayer(scope.world, scope.definitions);
+  List<List<jge.Entity>> _bodies() =>
+      PhysicsBodies.byLayer(scope.world, scope.definitions);
 
   Widget _body(BuildContext context, jge.PhysicsLayers layers) {
     final store = scope.physicsLayers;
+    if (_hovered case final layer?
+        when layer != 0 && !layers.named.contains(layer)) {
+      _hovered = null;
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => LayerHighlight.set(scope, layer, false),
+      );
+    }
     final bodies = _bodies();
     final q = _query.trim().toLowerCase();
     final shown = [
@@ -81,15 +109,29 @@ class _PhysicsLayersDockState extends State<PhysicsLayersDock> {
                 style: TextStyle(color: EditorTheme.textMuted, fontSize: 10.5),
               ),
               const Spacer(),
-              if (store.error case final error?)
+              if (store.error case final error?) ...[
                 Flexible(
-                  child: Text(
-                    error,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: EditorTheme.error, fontSize: 10.5),
+                  child: Tooltip(
+                    message: error,
+                    child: Text(
+                      error,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: EditorTheme.error,
+                        fontSize: 10.5,
+                      ),
+                    ),
                   ),
-                )
-              else if (!store.hasFile)
+                ),
+                // A file left as it is because it could not be read: read
+                // again once it is fixed.
+                if (store.isUnreadable)
+                  EditorIconButton(
+                    icon: Icons.refresh_rounded,
+                    tooltip: 'Read the layer file again',
+                    onTap: () => setState(store.load),
+                  ),
+              ] else if (!store.hasFile)
                 Flexible(
                   child: Tooltip(
                     message: store.path,
@@ -150,7 +192,21 @@ class _PhysicsLayersDockState extends State<PhysicsLayersDock> {
                 child: _GridPanel(
                   layers: layers,
                   onChanged: store.setCollision,
-                  onHover: (layer, on) => LayerHighlight.set(scope, layer, on),
+                  // One write of the file and one change, for every pair:
+                  // from the layers as they are now, not as last built.
+                  onAllCollide: () {
+                    var next = store.value;
+                    final named = next.named.toList();
+                    for (var i = 0; i < named.length; i++) {
+                      for (var j = i; j < named.length; j++) {
+                        if (!next.collides(named[i], named[j])) {
+                          next = next.withCollision(named[i], named[j], true);
+                        }
+                      }
+                    }
+                    if (!identical(next, store.value)) store.set(next);
+                  },
+                  onHover: _hover,
                 ),
               ),
             ],
@@ -170,8 +226,8 @@ class _PhysicsLayersDockState extends State<PhysicsLayersDock> {
     final description = layers.descriptionOf(layer);
     final color = layers.colorOf(layer);
     return MouseRegion(
-      onEnter: (_) => LayerHighlight.set(scope, layer, true),
-      onExit: (_) => LayerHighlight.set(scope, layer, false),
+      onEnter: (_) => _hover(layer, true),
+      onExit: (_) => _hover(layer, false),
       child: Container(
         padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
         decoration: BoxDecoration(
@@ -365,15 +421,7 @@ class _PhysicsLayersDockState extends State<PhysicsLayersDock> {
           _DeleteLayerDialog(layers: scope.physicsLayers.value, plan: found),
     );
     if (moveTo == null) return;
-    await refactor.apply(
-      LayerChangePlan(
-        layer: found.layer,
-        moveTo: moveTo,
-        openScene: found.openScene,
-        openUses: found.openUses,
-        scenes: found.scenes,
-      ),
-    );
+    await refactor.apply(found.movingTo(moveTo));
   }
 }
 
@@ -495,6 +543,14 @@ class _DeleteLayerDialogState extends State<_DeleteLayerDialog> {
                     e.value,
                     note: 'Rewritten on disk, after a backup.',
                   ),
+                for (final e in plan.prefabs.entries)
+                  group(
+                    'Prefab ${e.key}',
+                    e.value,
+                    note:
+                        'Rewritten on disk, after a backup; every instance '
+                        'follows it.',
+                  ),
               ],
             ],
           ),
@@ -521,11 +577,15 @@ class _GridPanel extends StatelessWidget {
   const _GridPanel({
     required this.layers,
     required this.onChanged,
+    required this.onAllCollide,
     required this.onHover,
   });
 
   final jge.PhysicsLayers layers;
   final void Function(int a, int b, bool collide) onChanged;
+
+  /// Every pair collides again.
+  final VoidCallback onAllCollide;
   final void Function(int layer, bool on) onHover;
 
   static const double _cell = 22;
@@ -554,13 +614,7 @@ class _GridPanel extends StatelessWidget {
               EditorIconButton(
                 icon: Icons.grid_on_rounded,
                 tooltip: 'Make every pair collide again',
-                onTap: () {
-                  for (final a in named) {
-                    for (final b in named) {
-                      if (!layers.collides(a, b)) onChanged(a, b, true);
-                    }
-                  }
-                },
+                onTap: onAllCollide,
               ),
             ],
           ),

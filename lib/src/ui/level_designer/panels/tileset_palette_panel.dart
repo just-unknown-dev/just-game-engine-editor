@@ -1,10 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
@@ -196,7 +195,7 @@ class _TerrainList extends StatelessWidget {
     if (ts.wangSets.isEmpty) {
       return TilePanelMessage(
         text:
-            'No terrains in ${tilesetLabel(target, slot)}. Give its tiles '
+            'No terrains in ${_tilesetLabel(target, slot)}. Give its tiles '
             'terrains in the Tileset Editor\'s Terrain mode.',
         action: (
           'Edit tileset',
@@ -325,32 +324,23 @@ class _ThumbPainter extends CustomPainter {
       old.image != image || old.source != source;
 }
 
-/// Every `.tileset.json` under [root]/assets, project-relative, then those
-/// installed packages ship (`packages/<name>/…`).
-List<String> findTilesets(String root) {
-  final dir = Directory('$root/assets');
-  final out = <String>[];
-  if (dir.existsSync()) {
-    try {
-      for (final f in dir.listSync(recursive: true)) {
-        if (f is! File) continue;
-        final p = f.path.replaceAll(r'\', '/');
-        if (!p.toLowerCase().endsWith('.tileset.json')) continue;
-        out.add(p.startsWith('$root/') ? p.substring(root.length + 1) : p);
-      }
-    } on FileSystemException {
-      out.clear();
-    }
+/// Every `.tileset.json` the project's asset index has found: those under
+/// assets/, project-relative, then those installed packages ship
+/// (`packages/<name>/…`). The index scans in the background and follows the
+/// disk, so opening the menu reads nothing.
+List<String> _findTilesets(AssetIndex index) {
+  final project = <String>[];
+  final packages = <String>[];
+  for (final entry in index.entries) {
+    if (entry.isDirectory) continue;
+    if (!entry.path.toLowerCase().endsWith('.tileset.json')) continue;
+    (entry.isPackage ? packages : project).add(entry.path);
   }
-  out.sort();
-  return out
-    ..addAll(
-      PackageAssetPaths.of(root).packageFiles(endings: const ['.tileset.json']),
-    );
+  return [...project..sort(), ...packages..sort()];
 }
 
 /// What the list calls the tileset in [slot].
-String tilesetLabel(LevelMapTarget target, int slot) {
+String _tilesetLabel(LevelMapTarget target, int slot) {
   final ts = target.tilesetAt(slot);
   if (ts != null && ts.name.isNotEmpty) return ts.name;
   final path = target.data.tilesets[slot] ?? '';
@@ -408,8 +398,8 @@ class _TopRow extends StatelessWidget {
               onSelected: _add,
               itemBuilder: (context) {
                 final used = target.data.tilesets.toSet();
-                final files = findTilesets(
-                  session.scope.mapDocs.projectRoot,
+                final files = _findTilesets(
+                  session.scope.assetIndex,
                 ).where((p) => !used.contains(p)).toList();
                 if (files.isEmpty) {
                   return [
@@ -501,7 +491,7 @@ class _TilesetSection extends StatelessWidget {
     if (ts != null && ts.name.isNotEmpty) return ts.name;
     final slot = this.slot;
     final target = this.target;
-    if (slot != null && target != null) return tilesetLabel(target, slot);
+    if (slot != null && target != null) return _tilesetLabel(target, slot);
     return path;
   }
 
@@ -569,7 +559,14 @@ class _TilesetSection extends StatelessWidget {
       // their numbers.
       change: (map) => map.tilesets[slot] = null,
     );
-    if (command != null) scope.history.pushApplied(command);
+    if (command == null) return;
+    scope.history.pushApplied(command);
+    // A terrain of it can no longer be painted. The brush and the
+    // clipboard know their tilesets by path, and refuse to paint one the
+    // map has not got (TileEditState.stampIn).
+    if (scope.tiles.terrain.value?.slot == slot) {
+      scope.tiles.terrain.value = null;
+    }
   }
 
   @override
@@ -702,11 +699,11 @@ class _TilesetSection extends StatelessWidget {
                 key: ValueKey(('grid', path, slot)),
                 session: session,
                 tileset: ts,
-                image: _image(ts),
+                image: () => _image(ts),
                 slot: slot,
                 ensureSlot: editable || target == null ? _ensureSlot : null,
                 geometry: target?.geometry,
-                clockMs: target?.component.runtime?.animationMs ?? 0,
+                clock: () => target?.component.runtime?.animationMs ?? 0,
                 zoom: zoom,
               );
             },
@@ -727,13 +724,15 @@ class _TilesetGrid extends StatefulWidget {
     required this.slot,
     required this.ensureSlot,
     required this.geometry,
-    required this.clockMs,
+    required this.clock,
     required this.zoom,
   });
 
   final LevelDesignerSession session;
   final jge.TilesetData tileset;
-  final ui.Image? image;
+
+  /// The tileset's image, once it has loaded: asked again while it loads.
+  final ui.Image? Function() image;
 
   /// Where the map has it; null for a built-in one it has not yet.
   final int? slot;
@@ -743,7 +742,10 @@ class _TilesetGrid extends StatefulWidget {
 
   /// The map's grid, which a block picked keeps the layout of.
   final jge.MapGeometry? geometry;
-  final int clockMs;
+
+  /// The map's animation clock, in milliseconds: read as the tiles are
+  /// drawn, so animated ones play.
+  final int Function() clock;
   final double zoom;
 
   @override
@@ -755,12 +757,24 @@ class _TilesetGridState extends State<_TilesetGrid> {
   (int, int)? _dragEnd;
   bool _gathering = false;
 
-  /// Redraws while the image loads and while animated tiles play.
+  /// Looks again while the image loads, and redraws while animated tiles
+  /// play.
   Timer? _tick;
+
+  /// Bumped to redraw the tiles — an animation frame — without building
+  /// anything again.
+  final ValueNotifier<int> _frames = ValueNotifier(0);
+
+  /// Whether the image is still being waited for, and how many looks it
+  /// has had: past [_maxLooks] (a file that will not load) it stops.
+  bool _loading = false;
+  int _looks = 0;
+  static const int _maxLooks = 100;
 
   @override
   void dispose() {
     _tick?.cancel();
+    _frames.dispose();
     super.dispose();
   }
 
@@ -771,7 +785,13 @@ class _TilesetGridState extends State<_TilesetGrid> {
       return;
     }
     _tick ??= Timer.periodic(const Duration(milliseconds: 100), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      if (_loading) {
+        _looks++;
+        setState(() {});
+      } else {
+        _frames.value++;
+      }
     });
   }
 
@@ -799,7 +819,7 @@ class _TilesetGridState extends State<_TilesetGrid> {
     setState(() {
       _dragStart = at;
       _dragEnd = at;
-      _gathering = HardwareKeyboard.instance.isControlPressed;
+      _gathering = EditorKeys.primaryPressed;
     });
   }
 
@@ -825,12 +845,24 @@ class _TilesetGridState extends State<_TilesetGrid> {
     int cellOf(int col, int row) =>
         jge.TileCell.make(slot, row * _tileset.columns + col);
     tiles.slot.value = slot;
+    // The brush's slots are the map's: kept with it, so another map — or
+    // this one with a tileset taken off — paints the same tiles or none.
+    final map = tiles.peek(session.world);
+    final tilesets = map == null
+        ? const <int, String>{}
+        : TileEditState.tilesetsOf(map.data);
     if (_gathering) {
-      tiles.stamp.value = _toggleRandom(cellOf(start.$1, start.$2));
+      tiles.setStamp(
+        _toggleRandom(cellOf(start.$1, start.$2)),
+        tilesets: tilesets,
+      );
     } else {
-      final geometry = widget.geometry ?? tiles.peek(session.world)?.geometry;
+      final geometry = widget.geometry ?? map?.geometry;
       if (geometry == null) return;
-      tiles.stamp.value = blockStamp(geometry, start, end, cellOf);
+      tiles.setStamp(
+        _blockStamp(geometry, start, end, cellOf),
+        tilesets: tilesets,
+      );
     }
     // A tile picked is a tile to paint; the fill tool fills with it.
     final tool = session.controller.activeTool;
@@ -884,11 +916,15 @@ class _TilesetGridState extends State<_TilesetGrid> {
   @override
   Widget build(BuildContext context) {
     final ts = _tileset;
-    final image = widget.image;
+    final image = widget.image();
     final zoom = widget.zoom;
     final hasAnimation = ts.tiles.values.any((t) => t.isAnimated);
-    // An image still loading, or tiles that animate.
-    _keepTicking((image == null && ts.image.isNotEmpty) || hasAnimation);
+    // An image still loading — for a while: one that will not load is not
+    // looked for forever — or tiles that animate, once there is an image.
+    final waiting = image == null && ts.image.isNotEmpty;
+    if (!waiting) _looks = 0;
+    _loading = waiting && _looks < _maxLooks;
+    _keepTicking(_loading || (hasAnimation && image != null));
     final width = (image?.width ?? ts.imageWidth) * zoom;
     final height = (image?.height ?? ts.imageHeight) * zoom;
     return SignalBuilder<jge.TileStamp?>(
@@ -910,8 +946,7 @@ class _TilesetGridState extends State<_TilesetGrid> {
               _dragEnd = null;
             }),
             onPointerSignal: (e) {
-              if (e is PointerScrollEvent &&
-                  HardwareKeyboard.instance.isControlPressed) {
+              if (e is PointerScrollEvent && EditorKeys.primaryPressed) {
                 TilesetPalettePanel._zoomBy(
                   widget.session,
                   e.scrollDelta.dy < 0 ? 1 : -1,
@@ -928,7 +963,8 @@ class _TilesetGridState extends State<_TilesetGrid> {
                 drag: _dragStart == null
                     ? null
                     : (_dragStart!, _dragEnd ?? _dragStart!),
-                clockMs: widget.clockMs,
+                clock: widget.clock,
+                frames: _frames,
               ),
             ),
           ),
@@ -940,7 +976,7 @@ class _TilesetGridState extends State<_TilesetGrid> {
 
 /// The brush a block of a tileset makes, from tile column/row [a] to [b]:
 /// laid out on the map as it is in the tileset, the pointer at its middle.
-jge.TileStamp blockStamp(
+jge.TileStamp _blockStamp(
   jge.MapGeometry g,
   (int, int) a,
   (int, int) b,
@@ -979,7 +1015,7 @@ class _ZoomBar extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            'Ctrl+click: random set',
+            '${EditorKeys.withPrimary('click')}: random set',
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 10, color: EditorTheme.textMuted),
           ),
@@ -1039,19 +1075,23 @@ class _TilesetPainter extends CustomPainter {
     required this.zoom,
     required this.chosen,
     required this.drag,
-    required this.clockMs,
-  });
+    required this.clock,
+    required Listenable frames,
+  }) : super(repaint: frames);
 
   final jge.TilesetData tileset;
   final ui.Image? image;
   final double zoom;
   final Set<int> chosen;
   final ((int, int), (int, int))? drag;
-  final int clockMs;
+
+  /// The animation clock, read as the tiles are drawn.
+  final int Function() clock;
 
   @override
   void paint(Canvas canvas, Size size) {
     final ts = tileset;
+    final clockMs = clock();
     canvas
       ..save()
       ..scale(zoom);
@@ -1110,5 +1150,10 @@ class _TilesetPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_TilesetPainter old) => true;
+  bool shouldRepaint(_TilesetPainter old) =>
+      old.tileset != tileset ||
+      old.image != image ||
+      old.zoom != zoom ||
+      old.drag != drag ||
+      !setEquals(old.chosen, chosen);
 }

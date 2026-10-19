@@ -9,6 +9,14 @@ import 'package:just_editor_core/host.dart';
 import '../core/scope/editor_scope_services.dart';
 import '../ui/level_designer/commands/editor_command_context.dart';
 
+/// Shift+L's state, one per editor: whether the scene is seen unlit, and
+/// the pass turned off for it with what the game had it at.
+class _UnlitView {
+  bool unlit = false;
+  jge.Lighting2DPass? heldPass;
+  bool gameEnabled = true;
+}
+
 /// What the editor itself brings for 2-D lighting, through the seams a
 /// module uses: a marker on every light and on the scene's lighting, how far
 /// a selected light reaches (and its cone), the outline of a selected shadow
@@ -124,6 +132,10 @@ abstract final class BuiltInLighting2DContributions {
   static const String toggleId = 'view.toggleLighting2D';
 
   /// Turning 2-D lighting off to see the scene as drawn, and back on.
+  ///
+  /// A view of the editor's, not a change to the game: it is off only while
+  /// authoring ([syncUnlit]) — a play-test, and the game once the editor
+  /// closes, are lit as the game has them.
   static List<DesignerCommand> get commands => [
     DesignerCommand(
       id: toggleId,
@@ -132,14 +144,45 @@ abstract final class BuiltInLighting2DContributions {
       dimensions: jge.Dimensions.twoD,
       isEnabled: (c) => passOf(c.scope.engine) != null,
       run: (c) {
-        final pass = passOf(c.scope.engine)!;
-        pass.enabled = !pass.enabled;
+        final view = _viewOf(c.scope)..unlit = !_viewOf(c.scope).unlit;
+        syncUnlit(c.scope, authoring: !c.scope.isPlayTesting.value);
         c.designer?.controller.setStatus(
-          pass.enabled ? '2-D lighting on' : '2-D lighting off: as drawn',
+          view.unlit ? '2-D lighting off: as drawn' : '2-D lighting on',
         );
       },
     ),
   ];
+
+  /// Whether the editor shows [scope]'s scene unlit while authoring (Shift+L).
+  static bool isUnlit(EditorScope scope) => _viewOf(scope).unlit;
+
+  /// Puts the engine's 2-D lighting pass as it should be now: off while
+  /// [authoring] with the scene asked to be seen unlit, and otherwise as
+  /// the game had it before the editor turned it off. The editor calls it
+  /// every frame, and when it closes.
+  static void syncUnlit(EditorScope scope, {required bool authoring}) {
+    final view = _viewOf(scope);
+    final pass = passOf(scope.engine);
+    final want = authoring && view.unlit && pass != null;
+    final held = view.heldPass;
+    if (held != null && (!want || !identical(held, pass))) {
+      held.enabled = view.gameEnabled;
+      view.heldPass = null;
+    }
+    if (want && view.heldPass == null) {
+      view.gameEnabled = pass.enabled;
+      view.heldPass = pass;
+      pass.enabled = false;
+    }
+  }
+
+  static _UnlitView _viewOf(EditorScope scope) {
+    final container = scope.container;
+    if (!container.isRegistered<_UnlitView>()) {
+      container.registerLazySingleton<_UnlitView>(_UnlitView.new);
+    }
+    return container.get<_UnlitView>();
+  }
 
   /// 2-D lights in a scene with no Scene lighting on light nothing: said,
   /// with Scene lighting added (or the one there turned on) as the fix.

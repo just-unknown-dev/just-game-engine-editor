@@ -14,6 +14,8 @@ import 'package:just_game_engine_editor/src/ui/overlay/shared/quick_snap_bar.dar
 import 'package:just_game_engine_editor/src/ui/overlay/shared/transform_toolbar.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/tool_palette.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart';
 
 void main() {
   const defaults = OverlayUiSettings.defaults();
@@ -30,7 +32,7 @@ void main() {
       addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       plugin = JustGameEditorPlugin(engine: engine);
-      await tester.runAsync(plugin.onInitialize);
+      await tester.runAsync(() => plugin.attach(plugin.engine));
       plugin.setVisible(true);
       await tester.pumpWidget(
         MaterialApp(
@@ -64,10 +66,7 @@ void main() {
       expect(bar.bottom, lessThanOrEqualTo(gear.top), reason: 'above it');
       expect((bar.right - gear.right).abs(), lessThan(12), reason: 'aligned');
       // What the chrome keeps clear of it is how tall it is.
-      expect(
-        bar.height,
-        closeTo(QuickSnapBar.heightFor(plugin.scope.prefs.settings.value), 1),
-      );
+      expect(bar.height, closeTo(QuickSnapBar.heightFor(), 1));
       await stop(tester);
     });
 
@@ -188,13 +187,13 @@ void main() {
       ], name: 'Floor_solid');
       plugin.openLevelDesigner();
       await tester.pump();
-      plugin.onUpdate(1 / 60);
+      plugin.update(1 / 60);
       expect(physics.drawsOutlines, isFalse, reason: 'hidden as it starts');
 
       await tester.tap(gizmoButton());
       await tester.pump();
       await tester.pump();
-      plugin.onUpdate(1 / 60);
+      plugin.update(1 / 60);
       expect(plugin.gizmoMode, GizmoMode.designer);
       expect(physics.drawsOutlines, isTrue);
       expect(physics.outlineFilter!(solid), isTrue, reason: 'off the map');
@@ -202,13 +201,14 @@ void main() {
       await tester.tap(gizmoButton());
       await tester.pump();
       await tester.pump();
-      plugin.onUpdate(1 / 60);
+      plugin.update(1 / 60);
       expect(physics.drawsOutlines, isFalse);
       await stop(tester);
     });
 
-    testWidgets('a right-click on it slides out the kinds, for the mode now',
-        (tester) async {
+    testWidgets('a right-click on it slides out the kinds, for the mode now', (
+      tester,
+    ) async {
       if (!kDebugMode) return;
       await start(tester);
       await tester.tap(gizmoButton(), buttons: kSecondaryButton);
@@ -235,7 +235,10 @@ void main() {
       expect(gizmos.play.hidden, isEmpty);
       expect(plugin.showsGizmo(GizmoKind.colliders), isFalse);
       expect(plugin.showsGizmo(GizmoKind.icons), isTrue);
-      expect(inBar(find.text('${GizmoKind.values.length - 1}')), findsOneWidget);
+      expect(
+        inBar(find.text('${GizmoKind.values.length - 1}')),
+        findsOneWidget,
+      );
 
       // The same in every mode, then this mode back as it starts.
       await tester.tap(find.text('Every mode'));
@@ -311,6 +314,40 @@ void main() {
       await stop(tester);
     });
 
+    testWidgets('in a 3-D scene the steps are the 3-D move step, in metres', (
+      tester,
+    ) async {
+      if (!kDebugMode) return;
+      await start(tester);
+      plugin.sceneState.openScene(
+        EditorScene(name: 'space', mode: SceneMode.threeD),
+      );
+      plugin.scope.prefs.settings.value = defaults.copyWith(
+        moveStep: 4,
+        moveStep3D: 0.5,
+      );
+      await tester.pump();
+      final magnet = inBar(find.byType(MagnetGlyph));
+      expect(inBar(find.text('0.5')), findsWidgets, reason: 'the 3-D step');
+      expect(inBar(find.text('4')), findsNothing, reason: "not the plane's");
+      await tester.tap(magnet, buttons: kSecondaryButton);
+      await tester.pump();
+      expect(find.text('Step'), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(QuickValueRow),
+          matching: find.text('2'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      final settings = plugin.scope.prefs.settings.value;
+      expect(settings.moveStep3D, 2);
+      expect(settings.moveStep, 4, reason: 'the 2-D step left alone');
+      expect(plugin.scope.sceneState.moveStep3D, 2);
+      await stop(tester);
+    });
+
     testWidgets('a right-click on the grid slides out its sizes', (
       tester,
     ) async {
@@ -355,7 +392,6 @@ void main() {
         'snapping is back after it', (tester) async {
       if (!kDebugMode) return;
       await start(tester);
-      final settings = plugin.scope.prefs.settings.value;
       plugin.play();
       await tester.pump();
       expect(find.byType(QuickSnapBar), findsOneWidget);
@@ -363,7 +399,7 @@ void main() {
       expect(gizmoButton(), findsOneWidget);
       expect(
         tester.getSize(find.byType(QuickSnapBar)).height,
-        closeTo(QuickSnapBar.heightFor(settings, snapping: false), 1),
+        closeTo(QuickSnapBar.heightFor(snapping: false), 1),
       );
       expect(plugin.areGizmosVisible, isFalse, reason: 'as it starts');
       await tester.tap(gizmoButton());

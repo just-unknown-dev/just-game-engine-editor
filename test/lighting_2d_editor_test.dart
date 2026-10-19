@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
+import 'package:just_game_engine_editor/src/extension/built_in_lighting_2d_contributions.dart';
 
 /// Counts the lines drawn on it.
 class _Lines implements Canvas {

@@ -1,8 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:just_editor_core/io.dart';
+import 'package:just_editor_core/just_editor_core.dart' show PackageAssetPaths;
 
 /// A map's picture for its slot: small, and how big the image really is.
 final class MapPicture {
@@ -16,7 +17,8 @@ final class MapPicture {
 }
 
 /// Small pictures of the images a material's maps name, read from the
-/// project once each and kept until [forget].
+/// project (or a package, for its asset keys) once each and kept until
+/// [forget].
 final class MapPictures {
   MapPictures({required this.root});
 
@@ -50,22 +52,30 @@ final class MapPictures {
 
   Future<void> _read(String path, Object token) async {
     MapPicture? picture;
+    ui.ImmutableBuffer? buffer;
+    ui.ImageDescriptor? descriptor;
+    ui.Codec? codec;
     try {
-      final bytes = await File('$root/$path').readAsBytes();
-      final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-      final descriptor = await ui.ImageDescriptor.encoded(buffer);
+      // A project path, or a package's asset key.
+      final bytes = await File(
+        PackageAssetPaths.of(root).absolute(path),
+      ).readAsBytes();
+      buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      descriptor = await ui.ImageDescriptor.encoded(buffer);
       final w = descriptor.width, h = descriptor.height;
-      final codec = await descriptor.instantiateCodec(
+      codec = await descriptor.instantiateCodec(
         targetWidth: w >= h ? (w < size ? w : size) : null,
         targetHeight: h > w ? (h < size ? h : size) : null,
       );
       final frame = await codec.getNextFrame();
-      codec.dispose();
-      descriptor.dispose();
-      buffer.dispose();
       picture = MapPicture(frame.image, w, h);
     } on Object catch (error) {
-      debugPrint('just_material_editor: no picture of map "$path": $error');
+      debugPrint('just_game_engine_editor: no picture of map "$path": $error');
+    } finally {
+      // Let go however it went: a broken image throws halfway.
+      codec?.dispose();
+      descriptor?.dispose();
+      buffer?.dispose();
     }
     // Forgotten meanwhile (or read again since): this one is stale.
     if (_disposed || !identical(_reading[path], token)) {
@@ -79,10 +89,10 @@ final class MapPictures {
 
   /// [path] changed on disk: it is read again when next asked for.
   void forget(String path) {
-    // Not disposed: a slot may still be showing it until it rebuilds.
     final reading = _reading.remove(path) != null;
     final done = _done.containsKey(path);
-    _done.remove(path);
+    // A slot showing it has its own handle on it (RawImage clones it).
+    _done.remove(path)?.image.dispose();
     if ((reading || done) && !_disposed) revision.value++;
   }
 

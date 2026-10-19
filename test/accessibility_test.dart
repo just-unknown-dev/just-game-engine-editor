@@ -12,6 +12,7 @@ import 'package:just_game_engine_editor/src/ui/overlay/settings/settings_control
 import 'package:just_game_engine_editor/src/ui/overlay/settings/settings_dialog.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart';
 
 double _luminance(Color c) => c.computeLuminance();
 
@@ -162,7 +163,7 @@ void main() {
       addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       plugin = JustGameEditorPlugin(engine: engine);
-      await tester.runAsync(plugin.onInitialize);
+      await tester.runAsync(() => plugin.attach(plugin.engine));
       plugin.setVisible(true);
       await tester.pumpWidget(
         MaterialApp(

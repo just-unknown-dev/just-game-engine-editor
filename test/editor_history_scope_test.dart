@@ -7,6 +7,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/entity/entity_ops.dart';
 
 void main() {
   late EditorScope scope;

@@ -13,6 +13,8 @@ import 'package:just_game_engine_editor/src/core/prefabs/prefab_files.dart';
 import 'package:just_game_engine_editor/src/ui/inspector/prefab_inspector.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/prefabs/prefab_instances.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
 
 Map<String, dynamic> _transform(double x, double y) => {
   'type': 'TransformComponent',

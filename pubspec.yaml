@@ -1,29 +1,48 @@
 name: just_game_engine_editor
-description: "Developer-only runtime level editor scaffolding for just_game_engine."
+description: "A level editor that runs inside your just_game_engine game while you develop it: scenes, inspector, 2D and 3D level design, timelines, tilesets, materials."
 version: 0.1.0-dev.1
 homepage: https://justunknown.com
-publish_to: none
+repository: https://github.com/just-unknown-dev/just-game-engine-editor
+issue_tracker: https://github.com/just-unknown-dev/just-game-engine-editor/issues
+topics:
+  - game-engine
+  - gamedev
+  - level-editor
+  - editor
+  - game
+
+# Declared, so pub.dev does not infer platforms from dependencies. The
+# package compiles everywhere Flutter does (web and wasm too); it edits a
+# project only on a desktop — Windows, macOS or Linux — in a debug build.
+# Elsewhere JustGameEditorPlugin.register returns null and the game runs on
+# its own.
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  windows:
+  web:
 
 environment:
   sdk: ^3.11.0
-  flutter: ">=1.17.0"
+  # just_game_engine's floor: Flutter GPU in Windows and Linux debug builds.
+  flutter: ">=3.47.1"
 
 dependencies:
   flutter:
     sdk: flutter
-  just_game_engine: ^2.0.0
+  just_game_engine: ^2.0.0-dev.2
   just_editor_core: ^0.1.0-dev.1
-  just_tiled: ^0.4.0
+  just_tiled: ^0.4.1
   just_signals: ^1.0.2
-  just_di: ^1.0.0
   just_debugger: ^0.0.1
-  just_colours: ^0.1.0
-  just_storage: ^1.2.1
-  path_provider: ^2.1.2
 
 dev_dependencies:
   # GPU checks and pixel reads for the material tests that render.
   just_graphics_engine: ^0.1.0-dev.2
+  just_colours: ^0.1.0
+  just_storage: ^1.2.1
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0

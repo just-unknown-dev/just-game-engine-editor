@@ -13,6 +13,12 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/shared/transform_toolbar.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/level_map/tile_turn.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/tool_palette.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/tools/tiles/tile_tool_base.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/gizmo_painter.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/transform_gizmo.dart';
 
 final int a = TileCell.make(0, 1);
 final int b = TileCell.make(0, 2);
@@ -492,7 +498,7 @@ void main() {
       addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       plugin = JustGameEditorPlugin(engine: engine);
-      await tester.runAsync(plugin.onInitialize);
+      await tester.runAsync(() => plugin.attach(plugin.engine));
       plugin
         ..setVisible(true)
         ..sceneState.openScene(EditorScene(name: 'level'));

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data' show Float32List;
 import 'dart:ui' show PointMode;
 
 import 'package:flutter/painting.dart';
@@ -8,11 +9,27 @@ import 'package:just_editor_core/host.dart';
 import 'gizmo_painter.dart';
 
 /// X, Y and Z.
-const List<Color> gizmoAxisColors = [Color(0xFFE5484D), Color(0xFF30A46C), Color(0xFF3E8EDE)];
+const List<Color> gizmoAxisColors = [
+  Color(0xFFE5484D),
+  Color(0xFF30A46C),
+  Color(0xFF3E8EDE),
+];
 
-const List<GizmoHandle> _moveHandles = [GizmoHandle.translateX, GizmoHandle.translateY, GizmoHandle.translateZ];
-const List<GizmoHandle> _turnHandles = [GizmoHandle.rotateX, GizmoHandle.rotateY, GizmoHandle.rotate];
-const List<GizmoHandle> _scaleHandles = [GizmoHandle.scaleX, GizmoHandle.scaleY, GizmoHandle.scaleZ];
+const List<GizmoHandle> _moveHandles = [
+  GizmoHandle.translateX,
+  GizmoHandle.translateY,
+  GizmoHandle.translateZ,
+];
+const List<GizmoHandle> _turnHandles = [
+  GizmoHandle.rotateX,
+  GizmoHandle.rotateY,
+  GizmoHandle.rotate,
+];
+const List<GizmoHandle> _scaleHandles = [
+  GizmoHandle.scaleX,
+  GizmoHandle.scaleY,
+  GizmoHandle.scaleZ,
+];
 const List<(int, int, GizmoHandle)> _planes = [
   (0, 1, GizmoHandle.translateXY),
   (0, 2, GizmoHandle.translateXZ),
@@ -26,7 +43,14 @@ const List<(int, int, GizmoHandle)> _planes = [
 /// the world's — X right, Y up (the engine's -Y), Z ahead — or the
 /// entity's own ([local]). Anything behind the viewer is left out.
 final class Gizmo3D {
-  Gizmo3D._(this.view, this.position, this.origin, this.axes, this.length, this.tips);
+  Gizmo3D._(
+    this.view,
+    this.position,
+    this.origin,
+    this.axes,
+    this.length,
+    this.tips,
+  );
 
   /// The gizmo of [entity] seen through [view], or null when it has no
   /// transform or sits behind the viewer. At [pivot] when given — the
@@ -72,7 +96,9 @@ final class Gizmo3D {
       if (p != null) perMetre = math.max(perMetre, (p - origin).distance);
     }
     final length = perMetre > 1e-6 ? pixels / perMetre : 1.0;
-    final tips = [for (final a in axes) view.projectToScreen(position + a * length)];
+    final tips = [
+      for (final a in axes) view.projectToScreen(position + a * length),
+    ];
     return Gizmo3D._(view, position, origin, axes, length, tips);
   }
 
@@ -107,7 +133,9 @@ final class Gizmo3D {
     var run = <Offset>[];
     for (var k = 0; k <= 48; k++) {
       final a = k / 48 * 2 * math.pi;
-      final p = view.projectToScreen(position + u * (math.cos(a) * radius) + v * (math.sin(a) * radius));
+      final p = view.projectToScreen(
+        position + u * (math.cos(a) * radius) + v * (math.sin(a) * radius),
+      );
       if (p == null) {
         if (run.length > 1) out.add(run);
         run = <Offset>[];
@@ -144,7 +172,9 @@ final class Gizmo3D {
     final moves = mode == TransformMode.move || mode == TransformMode.all;
     final turns = mode == TransformMode.rotate || mode == TransformMode.all;
     final scales = mode == TransformMode.scale || mode == TransformMode.all;
-    if (scales && (screen - origin).distance <= grab) return GizmoHandle.scaleUniform;
+    if (scales && (screen - origin).distance <= grab) {
+      return GizmoHandle.scaleUniform;
+    }
     if (moves) {
       for (final (a, b, handle) in _planes) {
         final quad = plane(a, b);
@@ -157,14 +187,14 @@ final class Gizmo3D {
       final tip = tips[i];
       if (tip == null) continue;
       final d = _toSegment(screen, origin, tip);
-      if (d < bestDistance && (moves || (scales && mode == TransformMode.scale))) {
+      if (d < bestDistance &&
+          (moves || (scales && mode == TransformMode.scale))) {
         bestDistance = d;
         best = moves ? _moveHandles[i] : _scaleHandles[i];
       }
     }
     if (best != GizmoHandle.none) return best;
-    if (turns &&
-        ((screen - origin).distance - viewRingRadius).abs() <= grab) {
+    if (turns && ((screen - origin).distance - viewRingRadius).abs() <= grab) {
       return GizmoHandle.rotateView;
     }
     if (turns) {
@@ -187,7 +217,10 @@ final class Gizmo3D {
     final ab = b - a;
     final length2 = ab.dx * ab.dx + ab.dy * ab.dy;
     if (length2 < 1e-9) return (p - a).distance;
-    final t = (((p - a).dx * ab.dx + (p - a).dy * ab.dy) / length2).clamp(0.0, 1.0);
+    final t = (((p - a).dx * ab.dx + (p - a).dy * ab.dy) / length2).clamp(
+      0.0,
+      1.0,
+    );
     return (p - (a + ab * t)).distance;
   }
 
@@ -196,7 +229,8 @@ final class Gizmo3D {
     var sign = 0;
     for (var i = 0; i < 4; i++) {
       final a = q[i], b = q[(i + 1) % 4];
-      final cross = (b.dx - a.dx) * (p.dy - a.dy) - (b.dy - a.dy) * (p.dx - a.dx);
+      final cross =
+          (b.dx - a.dx) * (p.dy - a.dy) - (b.dy - a.dy) * (p.dx - a.dx);
       final s = cross > 0 ? 1 : (cross < 0 ? -1 : 0);
       if (s == 0) continue;
       if (sign == 0) {
@@ -240,7 +274,12 @@ void paintGizmo3D(
       ),
     );
     for (var i = 0; i < 3; i++) {
-      final paint = stroke(active == _turnHandles[i] ? highlight : gizmoAxisColors[i].withValues(alpha: 0.85), 2);
+      final paint = stroke(
+        active == _turnHandles[i]
+            ? highlight
+            : gizmoAxisColors[i].withValues(alpha: 0.85),
+        2,
+      );
       for (final run in gizmo.ring(i)) {
         canvas.drawPoints(PointMode.polygon, run, paint);
       }
@@ -276,15 +315,27 @@ void paintGizmo3D(
           ..close();
         canvas.drawPath(head, Paint()..color = colour);
       } else {
-        canvas.drawRect(Rect.fromCenter(center: tip, width: 9, height: 9), Paint()..color = colour);
+        canvas.drawRect(
+          Rect.fromCenter(center: tip, width: 9, height: 9),
+          Paint()..color = colour,
+        );
       }
     }
   }
   if (scales) {
-    final colour = active == GizmoHandle.scaleUniform ? highlight : const Color(0xFFE6E6E6);
-    canvas.drawRect(Rect.fromCenter(center: gizmo.origin, width: 10, height: 10), Paint()..color = colour);
+    final colour = active == GizmoHandle.scaleUniform
+        ? highlight
+        : const Color(0xFFE6E6E6);
+    canvas.drawRect(
+      Rect.fromCenter(center: gizmo.origin, width: 10, height: 10),
+      Paint()..color = colour,
+    );
   } else {
-    canvas.drawCircle(gizmo.origin, 3, Paint()..color = const Color(0xFFE6E6E6));
+    canvas.drawCircle(
+      gizmo.origin,
+      3,
+      Paint()..color = const Color(0xFFE6E6E6),
+    );
   }
 }
 
@@ -346,11 +397,13 @@ Rect? screenBoundsOf3D(Entity entity, EditorView view) {
   if (!RayEntityPicker.boundsOf(entity, box)) return null;
   double? left, top, right, bottom;
   for (var i = 0; i < 8; i++) {
-    final p = view.projectToScreen(Vector3(
-      i & 1 == 0 ? box.min.x : box.max.x,
-      i & 2 == 0 ? box.min.y : box.max.y,
-      i & 4 == 0 ? box.min.z : box.max.z,
-    ));
+    final p = view.projectToScreen(
+      Vector3(
+        i & 1 == 0 ? box.min.x : box.max.x,
+        i & 2 == 0 ? box.min.y : box.max.y,
+        i & 4 == 0 ? box.min.z : box.max.z,
+      ),
+    );
     if (p == null) return null;
     left = math.min(left ?? p.dx, p.dx);
     top = math.min(top ?? p.dy, p.dy);
@@ -363,10 +416,16 @@ Rect? screenBoundsOf3D(Entity entity, EditorView view) {
 /// The spacing a grid seen through [view] is drawn at near [at]: [step]
 /// metres when its lines stay at least [minPixels] apart on screen there,
 /// else the first of a metre, ten, a hundred… that does.
-double gridSpacing(EditorView view, Vector3 at, double step, {double minPixels = 8}) {
+double gridSpacing(
+  EditorView view,
+  Vector3 at,
+  double step, {
+  double minPixels = 8,
+}) {
   final base = step > 0 ? step : 1.0;
   final eye = view.projectToScreen(at);
-  final aside = view.projectToScreen(Vector3(at.x + 1, at.y, at.z)) ??
+  final aside =
+      view.projectToScreen(Vector3(at.x + 1, at.y, at.z)) ??
       view.projectToScreen(Vector3(at.x, at.y, at.z + 1));
   if (eye == null || aside == null) return base;
   final perMetre = (aside - eye).distance;
@@ -425,18 +484,27 @@ void paintPlaneGrid(
     ..color = gizmoAxisColors[which].withValues(alpha: 0.8)
     ..strokeWidth = 1.5;
   final alongV = axis(v), alongU = axis(u);
+  // Every segment of one paint drawn in one call at the end: a call per
+  // segment was some two thousand draws a frame, and the raster thread's
+  // time with the designer open tripled.
+  final segments = <Paint, List<double>>{};
   void line(Vector3 a, Vector3 b, Paint paint) {
     // In pieces, so a line reaching behind the viewer keeps its front part.
     const pieces = 10;
+    final into = segments.putIfAbsent(paint, () => <double>[]);
     Offset? last;
     for (var k = 0; k <= pieces; k++) {
       final t = k / pieces;
-      final p = view.projectToScreen(Vector3(
-        a.x + (b.x - a.x) * t,
-        a.y + (b.y - a.y) * t,
-        a.z + (b.z - a.z) * t,
-      ));
-      if (p != null && last != null) canvas.drawLine(last, p, paint);
+      final p = view.projectToScreen(
+        Vector3(
+          a.x + (b.x - a.x) * t,
+          a.y + (b.y - a.y) * t,
+          a.z + (b.z - a.z) * t,
+        ),
+      );
+      if (p != null && last != null) {
+        into.addAll([last.dx, last.dy, p.dx, p.dy]);
+      }
       last = p;
     }
   }
@@ -451,5 +519,10 @@ void paintPlaneGrid(
     final paintB = b.abs() < spacing / 2 ? alongU : (isMajor ? major : minor);
     line(point(a, cv - half), point(a, cv + half), paintA);
     line(point(cu - half, b), point(cu + half, b), paintB);
+  }
+  // The axes were added last, so they are drawn over the other lines.
+  for (final MapEntry(key: paint, value: points) in segments.entries) {
+    if (points.isEmpty) continue;
+    canvas.drawRawPoints(PointMode.lines, Float32List.fromList(points), paint);
   }
 }

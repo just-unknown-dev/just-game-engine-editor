@@ -1,5 +1,4 @@
-import 'dart:io';
-
+import 'package:just_editor_core/io.dart';
 import 'package:just_game_engine/just_game_engine.dart' show SceneNames;
 
 import 'package:just_editor_core/host.dart';

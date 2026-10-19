@@ -13,6 +13,8 @@ import 'package:just_editor_core/just_editor_core.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/materials/materials.dart';
 
+import '../support/real_io.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory dir;
@@ -434,11 +436,13 @@ void main() {
         ],
       });
       final state = await open(tester, path);
-      await tester.runAsync(() async {
-        for (var i = 0; i < 300 && state.user == null; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-        }
-      });
+      // Looked for, and its sprite read, on the real clock.
+      await tester.runAsync(
+        () => waitUntil(
+          () => state.user != null,
+          what: 'the first sprite drawn with the material',
+        ),
+      );
       await tester.pump();
       expect(
         [for (final u in state.users) (u.entity, u.count)],

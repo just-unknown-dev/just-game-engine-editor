@@ -241,7 +241,8 @@ Future<void> showViewportMenu(
       await Clipboard.setData(ClipboardData(text: entity?.name ?? ''));
     default:
       if (chosen.startsWith('category:') && surface != null) {
-        final list = byCategory[chosen.substring('category:'.length)] ?? const [];
+        final list =
+            byCategory[chosen.substring('category:'.length)] ?? const [];
         if (!context.mounted || list.isEmpty) return;
         final picked = await showEditorMenu<String>(context, globalPosition, [
           editorMenuHeading(list.first.category),

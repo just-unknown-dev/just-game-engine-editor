@@ -14,6 +14,7 @@ import 'package:just_game_engine_editor/src/ui/level_designer_3d/aids/level_chec
 import 'package:just_game_engine_editor/src/ui/level_designer_3d/aids/ruler_3d.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
 
 /// A kit whose things are lost below 10 m down.
 class _Aids extends LevelAids {

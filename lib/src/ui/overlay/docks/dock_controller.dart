@@ -17,10 +17,6 @@ import 'package:just_editor_core/host.dart';
 class DockController {
   DockController();
 
-  /// What the settings panel was saved as when it shared the dock slot; a
-  /// saved state from then is read as "nothing open".
-  static const String _legacySettingsId = 'settings';
-
   /// The open dock's id, or null when the panel is collapsed.
   final Signal<String?> openId = Signal(null, debugLabel: 'openDock');
 
@@ -45,7 +41,8 @@ class DockController {
   );
 
   /// What the open dock was opened with; cleared when another opens.
-  Map<String, Object?> openArgs = const {};
+  Map<String, Object?> get openArgs => _openArgs;
+  Map<String, Object?> _openArgs = const {};
 
   /// The dock last shown, for "toggle the panel" to come back to.
   String? _lastDock;
@@ -60,9 +57,21 @@ class DockController {
   /// The dock showing in the panel, or null when it is collapsed.
   String? get activeDock => openId.value;
 
-  /// Opens [id] with [args].
+  /// Opens [id] with [args]. A dock popped out into a window of its own
+  /// stays there, brought in front of the other windows: it is never built
+  /// in the panel and the window at once.
   void open(String id, {Map<String, Object?> args = const {}}) {
-    openArgs = args;
+    if (poppedOut.value.contains(id)) {
+      poppedOut.value = Set.unmodifiable({
+        for (final o in poppedOut.value)
+          if (o != id) o,
+        id,
+      });
+      return;
+    }
+    // A copy each time: a dock opened again with the same args — a click on
+    // the same readout — is told so, and takes them again.
+    _openArgs = Map.unmodifiable({...args});
     _lastDock = id;
     if (!order.value.contains(id) && !poppedOut.value.contains(id)) pin(id);
     // Same dock, new args: say so, or nobody rebuilds.
@@ -73,12 +82,28 @@ class DockController {
   /// Opens [id], or closes it when it is the open one.
   void toggle(String id) => isOpen(id) ? close() : open(id);
 
-  /// Collapses the panel, or brings back the dock last shown.
+  /// Collapses the panel, or brings back the dock last shown — or, when
+  /// that one is in a window of its own now, the first tab that is not.
   void togglePanel({String? fallback}) {
     if (activeDock != null) return close();
+    // The dock last shown — unless it is gone (a module taken out): then
+    // the first one there is.
+    final last = _lastDock;
     final id =
-        _lastDock ?? (order.value.isEmpty ? fallback : order.value.first);
-    if (id != null) open(id);
+        last != null &&
+            order.value.contains(last) &&
+            !poppedOut.value.contains(last)
+        ? last
+        : _firstInPanel ?? fallback;
+    if (id != null && !poppedOut.value.contains(id)) open(id);
+  }
+
+  /// The first tab that shows in the panel, not in a window.
+  String? get _firstInPanel {
+    for (final id in order.value) {
+      if (!poppedOut.value.contains(id)) return id;
+    }
+    return null;
   }
 
   void close() {
@@ -87,9 +112,12 @@ class DockController {
     _save();
   }
 
-  /// The next (or previous) pinned tab, wrapping.
+  /// The next (or previous) pinned tab in the panel, wrapping.
   void cycle(int delta) {
-    final tabs = order.value;
+    final tabs = [
+      for (final id in order.value)
+        if (!poppedOut.value.contains(id)) id,
+    ];
     if (tabs.isEmpty) return;
     final at = tabs.indexOf(activeDock ?? '');
     open(
@@ -141,7 +169,8 @@ class DockController {
         if (o != id) o,
     ]);
     if (activeDock == id) {
-      order.value.isEmpty ? close() : open(order.value.first);
+      final next = _firstInPanel;
+      next == null ? close() : open(next);
     }
     _save();
   }
@@ -281,9 +310,7 @@ class DockController {
       // on the level, its panels and the status strip, and the docks are
       // there when they are asked for. Which dock it was is remembered,
       // so F2 brings that one straight back.
-      _lastDock =
-          json['last'] as String? ??
-          (open is String && open != _legacySettingsId ? open : null);
+      _lastDock = json['last'] as String? ?? (open is String ? open : null);
     } catch (_) {
       // A damaged preference is not worth failing the editor over.
     }

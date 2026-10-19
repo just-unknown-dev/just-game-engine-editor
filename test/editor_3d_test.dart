@@ -12,6 +12,12 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/entity/entity_ops.dart';
+import 'package:just_game_engine_editor/src/core/input/gizmo_drag_solver.dart';
+import 'package:just_game_engine_editor/src/core/input/ray_gizmo_drag_solver.dart';
+import 'package:just_game_engine_editor/src/core/input/viewport_input.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/gizmo_3d.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/gizmo_painter.dart';
 
 /// Reports a press on [handle] of the selected entity, wherever it lands.
 class _OnHandle extends GizmoHitTester {
@@ -362,11 +368,11 @@ void main() {
     test("a module's kind is known while it is in, with its drop", () {
       final dropped = <AssetDrop>[];
       final scope = testScope(modules: [_Models(dropped)]);
-      final kind = AssetKind.of('assets/models/Crate.GLB');
+      final kind = scope.assetKinds.of('assets/models/Crate.GLB');
       expect(kind.id, 'model');
-      expect(AssetKinds.active.filters.map((k) => k.id), contains('model'));
-      expect(AssetKind.of('assets/a.scene.json'), AssetKind.scene);
-      expect(AssetKind.of('assets/a.json'), AssetKind.data);
+      expect(scope.assetKinds.filters.map((k) => k.id), contains('model'));
+      expect(scope.assetKinds.of('assets/a.scene.json'), AssetKind.scene);
+      expect(scope.assetKinds.of('assets/a.json'), AssetKind.data);
 
       Entity? placed;
       final drop = AssetDrop(
@@ -381,8 +387,11 @@ void main() {
       final p = placed!.getComponent<TransformComponent>()!.position;
       expect([p.x, p.y, p.z], [1, 0, 2], reason: 'stood where it was dropped');
 
-      testScope();
-      expect(AssetKind.of('assets/models/crate.glb'), AssetKind.other);
+      // Another editor without the module does not know it — and does not
+      // take it away from this one: what files are is each scope's own.
+      final other = testScope();
+      expect(other.assetKinds.of('assets/models/crate.glb'), AssetKind.other);
+      expect(scope.assetKinds.of('assets/models/crate.glb').id, 'model');
     });
   });
 

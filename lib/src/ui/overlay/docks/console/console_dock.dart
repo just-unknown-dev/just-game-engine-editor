@@ -1,8 +1,9 @@
-import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_debugger/just_debugger.dart';
+import 'package:just_editor_core/io.dart';
 import 'package:just_game_engine/just_game_engine.dart' show Entity;
 
 import 'package:just_editor_core/host.dart';
@@ -172,6 +173,26 @@ class _ConsoleDockState extends State<ConsoleDock> {
   int _historyAt = -1;
   VoidCallback? _stopWatchingLog;
   VoidCallback? _stopWatchingSettings;
+  VoidCallback? _stopWatchingScene;
+
+  /// A burst of lines — an error every frame — draws the list at most this
+  /// often, not once per line.
+  static const Duration _redrawEvery = Duration(milliseconds: 100);
+  Timer? _redraw;
+
+  /// Bumped by every change of what is shown (a filter, the search, the
+  /// folding), so the rows are worked out again only when that or the log
+  /// has changed.
+  int _filters = 0;
+  List<EditorLogEntry>? _madeFrom;
+  int _madeWith = -1;
+  List<ConsoleRow> _rows = const [];
+  Map<DebuggerLogLevel, int> _counts = const {};
+  List<String> _sources = const [];
+
+  /// The entity each line is about, found once per line; forgotten when the
+  /// scene or the play-test changes, as entities come and go then.
+  final Map<EditorLogEntry, Entity?> _about = {};
   late bool _timestamps = widget.scope.prefs.settings.value.consoleTimestamps;
 
   @override
@@ -182,6 +203,9 @@ class _ConsoleDockState extends State<ConsoleDock> {
       final on = widget.scope.prefs.settings.value.consoleTimestamps;
       if (mounted && on != _timestamps) setState(() => _timestamps = on);
     });
+    _stopWatchingScene = widget.scope.sceneState.activeScene.watch(
+      _about.clear,
+    );
     widget.playChanges?.addListener(_onPlayChanged);
     _applyArgs();
     if (_follow) _scrollToEnd();
@@ -190,6 +214,8 @@ class _ConsoleDockState extends State<ConsoleDock> {
   @override
   void didUpdateWidget(ConsoleDock oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // The dock controller hands a new map on every open, so a second click
+    // on the same readout applies its level again.
     if (!identical(oldWidget.dock.args, widget.dock.args)) _applyArgs();
   }
 
@@ -201,40 +227,62 @@ class _ConsoleDockState extends State<ConsoleDock> {
     _levels
       ..clear()
       ..add(level);
+    _filters++;
   }
 
   void _onLog() {
-    if (!mounted || _frozen != null) return;
-    setState(() {});
-    if (_follow) _scrollToEnd();
+    if (!mounted) return;
+    // Paused, only the count of new lines on Resume changes: still drawn.
+    _redraw ??= Timer(_redrawEvery, () {
+      _redraw = null;
+      if (!mounted) return;
+      setState(() {});
+      if (_follow && _frozen == null) _scrollToEnd();
+    });
   }
 
   bool _wasPlaying = false;
 
   void _onPlayChanged() {
+    _about.clear();
     final playing = widget.isPlaying?.call() ?? false;
     // Once, as play starts — not again on pause and resume.
     if (_clearOnPlay && playing && !_wasPlaying) widget.scope.log.clear();
     _wasPlaying = playing;
   }
 
+  bool _scrolling = false;
+
   /// Jumps to the newest line. Rows are built lazily and are not all one
   /// height, so the list only learns its true length by getting there: the
-  /// jump is made twice, a frame apart.
-  void _scrollToEnd([int again = 1]) =>
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_scroll.hasClients) return;
-        _scroll.jumpTo(_scroll.position.maxScrollExtent);
-        if (again > 0) {
-          setState(() {});
-          _scrollToEnd(again - 1);
-        }
-      });
+  /// jump is made twice, a frame apart. Asked again while one is on its
+  /// way, nothing more is done.
+  void _scrollToEnd() {
+    if (_scrolling) return;
+    _scrolling = true;
+    void jump(int again) => WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) {
+        _scrolling = false;
+        return;
+      }
+      _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      if (again > 0) {
+        // The next frame lays out what the jump brought into view; no
+        // rebuild of the whole dock is needed for that.
+        jump(again - 1);
+      } else {
+        _scrolling = false;
+      }
+    });
+    jump(1);
+  }
 
   @override
   void dispose() {
     _stopWatchingLog?.call();
     _stopWatchingSettings?.call();
+    _stopWatchingScene?.call();
+    _redraw?.cancel();
     widget.playChanges?.removeListener(_onPlayChanged);
     _scroll.dispose();
     _command.dispose();
@@ -256,8 +304,27 @@ class _ConsoleDockState extends State<ConsoleDock> {
   }
 
   void _update(VoidCallback change) {
-    setState(change);
+    setState(() {
+      change();
+      _filters++;
+    });
     _remember();
+  }
+
+  /// [_rows], [_counts] and [_sources] for [all], worked out again only
+  /// when the log or what is shown of it has changed since.
+  void _make(List<EditorLogEntry> all) {
+    if (identical(all, _madeFrom) && _madeWith == _filters) return;
+    _madeFrom = all;
+    _madeWith = _filters;
+    _counts = ConsoleView.countLevels(all);
+    _sources = {for (final e in all) e.source}.toList()..sort();
+    _rows = ConsoleView(
+      query: _query,
+      levels: _levels,
+      hiddenSources: _hiddenSources,
+      collapse: _collapse,
+    ).apply(all);
   }
 
   /// Lines that came in since Pause. The log is capped, so lengths cannot
@@ -325,12 +392,24 @@ class _ConsoleDockState extends State<ConsoleDock> {
     }
   }
 
+  /// The entity [entry] is about, found once.
+  Entity? _entityOf(EditorLogEntry entry) {
+    if (_about.containsKey(entry)) {
+      final known = _about[entry];
+      if (known == null || known.isAlive) return known;
+    }
+    if (_about.length > 4000) _about.clear();
+    return _about[entry] = _entityIn(entry.message);
+  }
+
   /// The entity a line is about: `#12`, or a name in double quotes.
   Entity? _entityIn(String message) {
     final world = widget.scope.world;
     final id = RegExp(r'#(\d+)').firstMatch(message)?.group(1);
-    if (id != null) {
-      final entity = world.getEntity(int.parse(id));
+    // A run of digits too long for an id is not one.
+    final number = id == null ? null : int.tryParse(id);
+    if (number != null) {
+      final entity = world.getEntity(number);
       if (entity != null) return entity;
     }
     for (final m in RegExp('"([^"]+)"').allMatches(message)) {
@@ -410,14 +489,10 @@ class _ConsoleDockState extends State<ConsoleDock> {
   @override
   Widget build(BuildContext context) {
     final all = _entries;
-    final counts = ConsoleView.countLevels(all);
-    final sources = {for (final e in all) e.source}.toList()..sort();
-    final rows = ConsoleView(
-      query: _query,
-      levels: _levels,
-      hiddenSources: _hiddenSources,
-      collapse: _collapse,
-    ).apply(all);
+    _make(all);
+    final counts = _counts;
+    final sources = _sources;
+    final rows = _rows;
     final completions = _commandFocus.hasFocus
         ? _completions
         : const <(String, String)>[];
@@ -513,11 +588,17 @@ class _ConsoleDockState extends State<ConsoleDock> {
                   : 'Resume ($_arrivedWhilePaused new)',
               isActive: _frozen != null,
               color: EditorTheme.warning,
-              onTap: () => setState(
-                () => _frozen = _frozen == null
-                    ? List.of(widget.scope.log.entries.value)
-                    : null,
-              ),
+              onTap: () {
+                final resuming = _frozen != null;
+                setState(
+                  () => _frozen = resuming
+                      ? null
+                      : List.of(widget.scope.log.entries.value),
+                );
+                // What came in meanwhile is at the end: shown, when
+                // following.
+                if (resuming && _follow) _scrollToEnd();
+              },
             ),
             EditorIconButton(
               icon: Icons.vertical_align_bottom_rounded,
@@ -661,7 +742,7 @@ class _ConsoleDockState extends State<ConsoleDock> {
       _ => EditorTheme.textSecondary,
     };
     final expanded = _expanded.contains(e);
-    final entity = _entityIn(e.message);
+    final entity = _entityOf(e);
     final hasMore = e.details != null || e.message.contains('\n');
     return InkWell(
       onTap: hasMore

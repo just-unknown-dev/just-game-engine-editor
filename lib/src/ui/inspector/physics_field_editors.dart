@@ -24,10 +24,28 @@ abstract final class PhysicsFieldEditors {
   static void openDock(EditorScope? scope) =>
       scope?.dockController.open(BuiltInDocks.physics);
 
-  /// How many bodies, 2-D and 3-D, in [scope]'s scene are on each layer.
+  // The counts per scene revision: every layer field asks on every build,
+  // and each count walks every body in the scene.
+  static final Expando<(int, jge.World, List<int>)> _counts = Expando(
+    'physicsBodyCounts',
+  );
+
+  /// How many bodies, 2-D and 3-D, in [scope]'s scene are on each layer —
+  /// counted once per change to the scene.
   static List<int> bodyCounts(EditorScope? scope) {
     if (scope == null) return List.filled(jge.PhysicsLayers.count, 0);
-    return [for (final bodies in PhysicsBodies.byLayer(scope.world, scope.definitions)) bodies.length];
+    final revision = scope.sceneState.revision.value;
+    final world = scope.world;
+    final known = _counts[scope];
+    if (known != null && known.$1 == revision && identical(known.$2, world)) {
+      return known.$3;
+    }
+    final counts = List<int>.unmodifiable([
+      for (final bodies in PhysicsBodies.byLayer(world, scope.definitions))
+        bodies.length,
+    ]);
+    _counts[scope] = (revision, world, counts);
+    return counts;
   }
 
   /// `3 bodies`, `1 body`, or nothing.
@@ -144,7 +162,13 @@ class PhysicsLayerField extends StatelessWidget {
               if (picked == currentKey) return;
               final known = layers.indexOf(picked);
               final layer = known ?? scope?.physicsLayers.create(picked.trim());
-              if (layer != null && layer != current) ctx.onChanged(layer);
+              if (layer != null && layer != current) {
+                // The ring is on the layer the pointer came in over; once
+                // the field shows the new one, leaving would clear that
+                // instead, and the old one would stay ringed.
+                LayerHighlight.set(scope, current, false);
+                ctx.onChanged(layer);
+              }
             },
           ),
         ),
@@ -172,7 +196,9 @@ class PhysicsLayerMaskField extends StatelessWidget {
     final component = ctx.component;
     final definition = ctx.scope?.definitions.definitionFor(component);
     for (final f in definition?.fields ?? const <jge.SchemaField>[]) {
-      if (f.kind == jge.FieldTypes.physicsLayer) return (f.read(component) as num?)?.toInt() ?? 0;
+      if (f.kind == jge.FieldTypes.physicsLayer) {
+        return (f.read(component) as num?)?.toInt() ?? 0;
+      }
     }
     return 0;
   }

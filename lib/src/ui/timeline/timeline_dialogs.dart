@@ -10,7 +10,8 @@ import '../inspector/tag_field_editors.dart' show TagPicker;
 import '../overlay/docks/shared/dock_widgets.dart';
 import 'timeline_session.dart';
 
-TextStyle get _body => TextStyle(color: EditorTheme.textSecondary, fontSize: 12);
+TextStyle get _body =>
+    TextStyle(color: EditorTheme.textSecondary, fontSize: 12);
 
 InputDecoration _input(String? hint) => InputDecoration(
   isDense: true,
@@ -52,34 +53,59 @@ Future<String?> promptTimelineText(
   required String title,
   String initial = '',
   String? hint,
-}) {
-  final text = TextEditingController(text: initial);
-  return showDialog<String>(
-    context: context,
-    builder: (context) => EditorLook(
-      child: AlertDialog(
-        backgroundColor: EditorTheme.dialogBg,
-        title: Text(title, style: _body.copyWith(fontSize: 13)),
-        content: SizedBox(
-          width: 280,
-          child: TextField(
-            controller: text,
-            autofocus: true,
-            style: _body.copyWith(color: EditorTheme.textPrimary),
-            decoration: _input(hint),
-            onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
-          ),
-        ),
-        actions: [
-          timelineDialogButton('Cancel', () => Navigator.of(context).pop()),
-          timelineDialogButton(
-            'OK',
-            () => Navigator.of(context).pop(text.text.trim()),
-            primary: true,
-          ),
-        ],
+}) => showDialog<String>(
+  context: context,
+  builder: (context) => EditorLook(
+    child: _TextDialog(title: title, initial: initial, hint: hint),
+  ),
+);
+
+// The dialog owns its text, so the text goes with it — after its closing
+// animation, not while it still draws.
+class _TextDialog extends StatefulWidget {
+  const _TextDialog({required this.title, required this.initial, this.hint});
+
+  final String title;
+  final String initial;
+  final String? hint;
+
+  @override
+  State<_TextDialog> createState() => _TextDialogState();
+}
+
+class _TextDialogState extends State<_TextDialog> {
+  late final TextEditingController _text = TextEditingController(
+    text: widget.initial,
+  );
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    backgroundColor: EditorTheme.dialogBg,
+    title: Text(widget.title, style: _body.copyWith(fontSize: 13)),
+    content: SizedBox(
+      width: 280,
+      child: TextField(
+        controller: _text,
+        autofocus: true,
+        style: _body.copyWith(color: EditorTheme.textPrimary),
+        decoration: _input(widget.hint),
+        onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
       ),
     ),
+    actions: [
+      timelineDialogButton('Cancel', () => Navigator.of(context).pop()),
+      timelineDialogButton(
+        'OK',
+        () => Navigator.of(context).pop(_text.text.trim()),
+        primary: true,
+      ),
+    ],
   );
 }
 

@@ -13,6 +13,10 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/physics/layer_refactor.dart';
+import 'package:just_game_engine_editor/src/core/validation/physics_checks.dart';
+import 'package:just_game_engine_editor/src/ui/inspector/physics_field_editors.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/docks/physics/physics_layers_dock.dart';
 
 void main() {
   late Directory root;
@@ -95,15 +99,7 @@ void main() {
       final refactor = LayerRefactor(scope);
       final found = refactor.plan(coins);
       expect([for (final u in found.openUses) u.owner], ['A', 'B']);
-      await refactor.apply(
-        LayerChangePlan(
-          layer: coins,
-          moveTo: 2,
-          openScene: found.openScene,
-          openUses: found.openUses,
-          scenes: found.scenes,
-        ),
-      );
+      await refactor.apply(found.movingTo(2));
       expect(a.getComponent<jge.RigidBody2D>()!.layer, 2);
       expect(b.getComponent<jge.RigidBody2D>()!.layer, 2);
       expect(store.value.isNamed(coins), isFalse);

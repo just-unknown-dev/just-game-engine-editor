@@ -61,6 +61,8 @@ class TileAnimationEditor extends StatelessWidget {
                     value: frames[i].tileId.toDouble(),
                     fractionDigits: 0,
                     onSubmitted: (v) {
+                      // `Infinity` reads as a number, but is no tile.
+                      if (!v.isFinite) return;
                       final tile = v.round().clamp(0, ts.tileCount - 1);
                       write(
                         [...frames]
@@ -75,13 +77,16 @@ class TileAnimationEditor extends StatelessWidget {
                   child: MiniNumberField(
                     value: frames[i].durationMs.toDouble(),
                     fractionDigits: 0,
-                    onSubmitted: (v) => write(
-                      [...frames]
-                        ..[i] = TileFrame(
-                          frames[i].tileId,
-                          v.round().clamp(1, 60000),
-                        ),
-                    ),
+                    onSubmitted: (v) {
+                      if (!v.isFinite) return;
+                      write(
+                        [...frames]
+                          ..[i] = TileFrame(
+                            frames[i].tileId,
+                            v.round().clamp(1, 60000),
+                          ),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 2),
@@ -146,10 +151,8 @@ class TileAnimationEditor extends StatelessWidget {
   }
 }
 
-TextStyle get _label => TextStyle(
-  fontSize: 11,
-  color: EditorTheme.textSecondary,
-);
+TextStyle get _label =>
+    TextStyle(fontSize: 11, color: EditorTheme.textSecondary);
 
 class _Icon extends StatelessWidget {
   const _Icon({required this.icon, required this.tooltip, required this.onTap});

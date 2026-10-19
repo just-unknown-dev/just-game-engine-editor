@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import 'package:just_editor_core/host.dart';
-import '../overlay/docks/shared/dock_widgets.dart';
 import 'timeline_dialogs.dart';
 import 'timeline_menu.dart';
 import 'timeline_session.dart';
@@ -128,34 +127,47 @@ class TimelineHeader extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 _divider(),
+                // Each reads the timeline as it is when the change lands —
+                // not as it was when the bar was built — so an edit made in
+                // between (a recorded key, another field kept on Save) stays.
                 _timeBox(
                   label: 'Length',
                   tooltip: 'How long the timeline is',
                   seconds: asset.duration,
                   width: 46,
                   onSeconds: (v) {
-                    if (v > 0) {
-                      session.apply('Length', asset.copyWith(duration: v));
+                    final now = session.asset.value;
+                    if (now != null && v > 0) {
+                      session.apply('Length', now.copyWith(duration: v));
                     }
                   },
                 ),
                 _NumberBox(
                   label: 'FPS',
-                  tooltip: 'Frames per second: how time is divided and snapped',
+                  tooltip:
+                      'Frames per second: how time is divided and snapped '
+                      '(1 to ${TimelineSession.maxFps})',
                   value: asset.fps.toDouble(),
                   width: 34,
                   integer: true,
                   onSubmitted: (v) {
-                    if (v >= 1) {
-                      session.apply('FPS', asset.copyWith(fps: v.round()));
+                    final now = session.asset.value;
+                    if (now == null || v < 1) return;
+                    final fps = v.round().clamp(1, TimelineSession.maxFps);
+                    if (fps != now.fps) {
+                      session.apply('FPS', now.copyWith(fps: fps));
                     }
                   },
                 ),
                 PopupMenuButton<jge.TimelineWrap>(
                   tooltip: 'What happens at the end',
                   color: EditorTheme.menuBg,
-                  onSelected: (w) =>
-                      session.apply('Wrap', asset.copyWith(wrap: w)),
+                  onSelected: (w) {
+                    final now = session.asset.value;
+                    if (now != null) {
+                      session.apply('Wrap', now.copyWith(wrap: w));
+                    }
+                  },
                   itemBuilder: (context) => [
                     for (final w in jge.TimelineWrap.values)
                       timelineMenuItem(w, _wrapLabel(w)),
@@ -199,12 +211,12 @@ class TimelineHeader extends StatelessWidget {
         ),
         EditorIconButton(
           icon: Icons.undo_rounded,
-          tooltip: 'Undo  (Ctrl+Z)',
+          tooltip: 'Undo  (${EditorKeys.withPrimary('Z')})',
           onTap: session.canUndo ? session.undo : null,
         ),
         EditorIconButton(
           icon: Icons.redo_rounded,
-          tooltip: 'Redo  (Ctrl+Y)',
+          tooltip: 'Redo  (${EditorKeys.withPrimary('Y')})',
           onTap: session.canRedo ? session.redo : null,
         ),
         if (session.isInline)
@@ -212,26 +224,41 @@ class TimelineHeader extends StatelessWidget {
             icon: Icons.output_rounded,
             tooltip:
                 'Extract to a .timeline.json, so other entities can play it',
-            onTap: () async {
-              final name = await promptTimelineText(
-                context,
-                title: 'Name the timeline',
-                initial: (session.owner?.name ?? 'timeline').toLowerCase(),
-              );
-              if (name != null && name.isNotEmpty) {
-                await session.extractToAsset(name);
-              }
-            },
+            onTap: () => _extract(context),
           )
         else
           EditorIconButton(
             icon: Icons.save_outlined,
-            tooltip: 'Save  (Ctrl+S)',
+            tooltip: 'Save  (${EditorKeys.withPrimary('S')})',
             isActive: session.isDirty.value,
             onTap: session.save,
           ),
       ],
     );
+  }
+
+  /// Asks for a name and moves the inline timeline into a file of that name.
+  /// The name offered is one no file has yet; a name that is taken is asked
+  /// for again rather than written over.
+  Future<void> _extract(BuildContext context) async {
+    var title = 'Name the timeline';
+    var initial = session.freeTimelineName(
+      (session.owner?.name ?? 'timeline').toLowerCase(),
+    );
+    while (true) {
+      final name = await promptTimelineText(
+        context,
+        title: title,
+        initial: initial,
+      );
+      if (name == null || name.isEmpty || !context.mounted) return;
+      if (!session.isTimelineNameTaken(name)) {
+        await session.extractToAsset(name);
+        return;
+      }
+      title = '"$name" is taken: name the timeline';
+      initial = session.freeTimelineName(name);
+    }
   }
 
   /// A box holding a time, in whichever unit the dock is counting.
@@ -421,7 +448,9 @@ class _NumberBoxState extends State<_NumberBox> {
 
   void _keep() {
     final v = double.tryParse(_text.text.trim());
-    if (v != null && v != widget.value) widget.onSubmitted(v);
+    // `NaN` and `Infinity` parse as numbers but are none a timeline can
+    // hold — or save.
+    if (v != null && v.isFinite && v != widget.value) widget.onSubmitted(v);
   }
 
   /// Esc, with a change typed: what was there, and out of the field.

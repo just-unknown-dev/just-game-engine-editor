@@ -307,10 +307,19 @@ class PlacementChip extends StatelessWidget {
 
 /// The map layer being painted, and a menu to paint another.
 class MapLayerPicker extends StatelessWidget {
-  const MapLayerPicker({super.key, required this.scope, required this.world});
+  const MapLayerPicker({
+    super.key,
+    required this.scope,
+    required this.world,
+    this.controller,
+  });
 
   final EditorScope scope;
   final jge.World world;
+
+  /// The designer's, whose depth to place things at follows the layer
+  /// chosen — as choosing one in the Layers panel does.
+  final LevelDesignerController? controller;
 
   @override
   Widget build(BuildContext context) {
@@ -336,7 +345,12 @@ class MapLayerPicker extends StatelessWidget {
           color: EditorTheme.menuBg,
           // At the foot of the window: over the button, kept on screen.
           position: PopupMenuPosition.over,
-          onSelected: (id) => tiles.layerId.value = id,
+          onSelected: (id) {
+            final chosen = target?.data.layerById(id);
+            if (chosen != null) {
+              tiles.selectLayer(chosen, controller: controller);
+            }
+          },
           itemBuilder: (context) => [
             // Top layer first, as the layers panel lists them.
             for (final l in layers.reversed)

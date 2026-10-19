@@ -1,7 +1,7 @@
-import 'dart:io' show FileSystemException;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:just_editor_core/io.dart' show FileSystemException;
 import 'package:just_signals/just_signals.dart';
 
 import 'package:just_editor_core/host.dart';

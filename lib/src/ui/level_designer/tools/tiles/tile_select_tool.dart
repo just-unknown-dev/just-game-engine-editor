@@ -20,10 +20,11 @@ import 'tile_tool_base.dart';
 /// run of one tile (the wand), or every cell holding one tile. V again
 /// cycles between them.
 ///
-/// Shift adds to the selection and Ctrl takes away. Dragging the selection
-/// moves its tiles. The selection shows the Move or Rotate gizmo, as the
-/// toolbar says (W, R): an arrow moves the tiles along it, the ring turns
-/// them a quarter at a time. Tiles do not scale. Ctrl+C copies, Ctrl+X cuts, Delete clears, Ctrl+A
+/// Shift adds to the selection and Ctrl takes away (Cmd on macOS, here and
+/// in the chords below). Dragging the selection moves its tiles. The
+/// selection shows the Move or Rotate gizmo, as the toolbar says (W, R): an
+/// arrow moves the tiles along it, the ring turns them a quarter at a time.
+/// Tiles do not scale. Ctrl+C copies, Ctrl+X cuts, Delete clears, Ctrl+A
 /// selects every painted cell and Esc lets go. Enter — or *Make entity*,
 /// or the right-click menu while tiles are selected — cuts the selected
 /// tiles out into an entity of their own.
@@ -95,8 +96,10 @@ class TileSelectTool extends TileTool {
   @override
   String? get description =>
       'Select tiles: a box, the connected run of a tile, or every cell of a '
-      'tile (V again switches). Shift adds, Ctrl takes away, drag to move. '
-      'Ctrl+C / Ctrl+X copy and cut, Delete clears, Enter makes an entity.';
+      'tile (V again switches). Shift adds, ${EditorKeys.primaryLabel} takes '
+      'away, drag to move. ${EditorKeys.withPrimary('C')} / '
+      '${EditorKeys.withPrimary('X')} copy and cut, Delete clears, Enter '
+      'makes an entity.';
 
   TileAim? _aim;
   TileCoord? _start;
@@ -240,12 +243,13 @@ class TileSelectTool extends TileTool {
 
   /// The topmost shown layer of [target] with a tile under [world], where
   /// each layer is drawn with the camera at [camera]; null when none has.
+  /// Topmost as drawn ([TileTool.drawOrder]), not as listed.
   static MapLayerData? layerUnder(
     LevelMapTarget target,
     Offset world,
     Offset? camera,
   ) {
-    for (final layer in target.data.layers.reversed) {
+    for (final layer in TileTool.drawOrder(target.data.layers).reversed) {
       if (!layer.visible) continue;
       final cell = target.geometry.cellAt(
         world - target.layerShift(layer, camera),
@@ -256,7 +260,9 @@ class TileSelectTool extends TileTool {
   }
 
   /// Every cell of [aim]'s layer holding [value]. Empty cells are counted
-  /// only inside what is painted: an infinite map is mostly empty.
+  /// only inside what is painted: an infinite map is mostly empty — and
+  /// none when what is painted spans more than [TileTool.maxRegion] cells
+  /// ([emptyCellsTooMany] says so first).
   static Set<TileCoord> cellsHolding(TileAim aim, int value) {
     final cells = aim.layer.cells;
     if (!TileCell.isEmpty(value)) {
@@ -266,12 +272,19 @@ class TileSelectTool extends TileTool {
       };
     }
     final used = cells.usedBounds;
-    if (used == null) return const {};
+    if (used == null || emptyCellsTooMany(aim)) return const {};
     return {
       for (var y = used.top.toInt(); y < used.bottom.toInt(); y++)
         for (var x = used.left.toInt(); x < used.right.toInt(); x++)
           if (TileCell.isEmpty(cells.cellAt(x, y))) TileCoord(x, y),
     };
+  }
+
+  /// Whether the empty cells among what [aim]'s layer has painted are too
+  /// many to list: its painted area is past [TileTool.maxRegion] cells.
+  static bool emptyCellsTooMany(TileAim aim) {
+    final used = aim.layer.cells.usedBounds;
+    return used != null && used.width * used.height > TileTool.maxRegion;
   }
 
   void _apply(Set<TileCoord> cells, ToolContext c) {
@@ -326,17 +339,30 @@ class TileSelectTool extends TileTool {
         _start = at;
         state.dragArea = (at, at);
       case TileSelectMode.wand:
-        _apply(
-          TileTool.connected(
-            a.target.geometry,
-            a.layer.cells,
-            at,
-            TileTool.floodLimit(a, c),
-          ),
-          c,
+        final run = TileTool.connected(
+          a.target.geometry,
+          a.layer.cells,
+          at,
+          TileTool.floodLimit(a, c),
         );
+        if (run.length >= TileTool.maxRegion) {
+          // Stopped part way, at a diamond round the click: not the run.
+          c.controller.setStatus(
+            'That run is more than ${TileTool.maxRegion} cells: zoom in, '
+            'or select a box',
+          );
+        } else {
+          _apply(run, c);
+        }
       case TileSelectMode.sameTile:
-        _apply(cellsHolding(a, a.layer.cells.cellAt(at.x, at.y)), c);
+        final value = a.layer.cells.cellAt(at.x, at.y);
+        if (TileCell.isEmpty(value) && emptyCellsTooMany(a)) {
+          c.controller.setStatus(
+            'Too many empty cells to select: at most ${TileTool.maxRegion}',
+          );
+        } else {
+          _apply(cellsHolding(a, value), c);
+        }
     }
     return true;
   }
@@ -389,7 +415,13 @@ class TileSelectTool extends TileTool {
     } else {
       final area = state.dragArea;
       if (area != null) {
-        _apply(TileTool.rectCells(area.$1, area.$2).toSet(), c);
+        if (TileTool.areaOf(area.$1, area.$2) > TileTool.maxRegion) {
+          c.controller.setStatus(
+            'Too many cells to select at once: at most ${TileTool.maxRegion}',
+          );
+        } else {
+          _apply(TileTool.rectCells(area.$1, area.$2).toSet(), c);
+        }
       }
     }
     _end();
@@ -477,7 +509,7 @@ class TileSelectTool extends TileTool {
   bool onKey(LogicalKeyboardKey key, ToolContext context) {
     final c = context;
     final m = c.modifiers;
-    final bare = !m.control && !m.alt && !m.shift;
+    final bare = !m.control && !m.alt && !m.shift && !m.other;
     if (key == LogicalKeyboardKey.keyV && bare) {
       final modes = TileSelectMode.values;
       final next = modes[(state.selectMode.value.index + 1) % modes.length];
@@ -489,8 +521,8 @@ class TileSelectTool extends TileTool {
       });
       return true;
     }
-    // Ctrl+Shift chords open docks: not ours.
-    if (m.control && !m.alt && !m.shift) {
+    // Ctrl+Shift chords open docks: not ours. (Ctrl is Cmd on macOS.)
+    if (m.control && !m.alt && !m.shift && !m.other) {
       switch (key) {
         case LogicalKeyboardKey.keyC:
           TileSelectionOps.copy(scope, c.world, c.controller.setStatus);
@@ -510,7 +542,7 @@ class TileSelectTool extends TileTool {
           return true;
       }
     }
-    if (!m.control && !m.alt) {
+    if (!m.control && !m.alt && !m.other) {
       if (key == LogicalKeyboardKey.delete ||
           key == LogicalKeyboardKey.backspace) {
         // Kept even with nothing selected: the map's entity is usually the

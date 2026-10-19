@@ -124,6 +124,7 @@ abstract final class TagChecks {
                   ComponentFieldCommand(
                     label: 'Change what the spawn point spawns',
                     component: spawn,
+                    entity: entity,
                     write: (c, v) =>
                         (c as jge.SpawnComponent).spawner = v! as String,
                     before: spawn.spawner,
@@ -226,6 +227,7 @@ abstract final class TagChecks {
           ComponentFieldCommand(
             label: 'Fix $what',
             component: component,
+            entity: entity,
             write: (c, v) => write(c, v),
             before: field.read(component),
             after: value,
@@ -295,6 +297,7 @@ abstract final class TagChecks {
           ComponentFieldCommand(
             label: 'Fix $where',
             component: component,
+            entity: entity,
             write: (c, v) => write(c, v),
             before: field.read(component),
             after: value,

@@ -21,7 +21,9 @@ final class ShapeSizeHandles extends ViewportHandles {
     final shape = entity.getComponent<Primitive3D>();
     final transform = entity.getComponent<TransformComponent>();
     if (shape == null || transform == null) return const [];
-    if (scope.designer3D.viewMode.value == ViewMode3D.collision) return const [];
+    if (scope.designer3D.viewMode.value == ViewMode3D.collision) {
+      return const [];
+    }
     final axes = axesOf(shape);
     if (axes.isEmpty) return const [];
     final frame = Matrix4.identity();
@@ -33,83 +35,79 @@ final class ShapeSizeHandles extends ViewportHandles {
       moveTo: (origin) => scope.sceneState.setPosition3(entity, origin),
       component: shape,
       alsoEdits: [transform],
-      what: shape.runtimeType.toString(),
     );
   }
 
   /// How [shape]'s size is set along each of its axes; empty for a shape
   /// it does not know.
   static List<FaceAxis> axesOf(Primitive3D shape) {
-    FaceAxis axis(int a, double Function() get, void Function(double v) set) =>
-        FaceAxis(a, set);
+    FaceAxis axis(int a, void Function(double v) set) => FaceAxis(a, set);
     // A round shape's radius, from its size across.
-    List<FaceAxis> across(double Function() radius, void Function(double r) set) => [
-      for (final a in const [0, 2]) axis(a, () => radius() * 2, (v) => set(v / 2)),
+    List<FaceAxis> across(void Function(double r) set) => [
+      for (final a in const [0, 2]) axis(a, (v) => set(v / 2)),
     ];
     return switch (shape) {
       Cube3D s => [
-        axis(0, () => s.width, (v) => s.width = v),
-        axis(1, () => s.height, (v) => s.height = v),
-        axis(2, () => s.depth, (v) => s.depth = v),
+        axis(0, (v) => s.width = v),
+        axis(1, (v) => s.height = v),
+        axis(2, (v) => s.depth = v),
       ],
       Ramp3D s => [
-        axis(0, () => s.width, (v) => s.width = v),
-        axis(1, () => s.height, (v) => s.height = v),
-        axis(2, () => s.depth, (v) => s.depth = v),
+        axis(0, (v) => s.width = v),
+        axis(1, (v) => s.height = v),
+        axis(2, (v) => s.depth = v),
       ],
       Stairs3D s => [
-        axis(0, () => s.width, (v) => s.width = v),
-        axis(1, () => s.height, (v) => s.height = v),
-        axis(2, () => s.depth, (v) => s.depth = v),
+        axis(0, (v) => s.width = v),
+        axis(1, (v) => s.height = v),
+        axis(2, (v) => s.depth = v),
       ],
-      Plane3D s => [
-        axis(0, () => s.width, (v) => s.width = v),
-        axis(2, () => s.depth, (v) => s.depth = v),
-      ],
+      Plane3D s => [axis(0, (v) => s.width = v), axis(2, (v) => s.depth = v)],
       Sphere3D s => [
-        for (final a in const [0, 1, 2])
-          axis(a, () => s.radius * 2, (v) => s.radius = v / 2),
+        for (final a in const [0, 1, 2]) axis(a, (v) => s.radius = v / 2),
       ],
       Cylinder3D s => [
-        ...across(() => s.radius, (r) => s.radius = r),
-        axis(1, () => s.height, (v) => s.height = v),
+        ...across((r) => s.radius = r),
+        axis(1, (v) => s.height = v),
       ],
       Cone3D s => [
-        ...across(() => s.radius, (r) => s.radius = r),
-        axis(1, () => s.height, (v) => s.height = v),
+        ...across((r) => s.radius = r),
+        axis(1, (v) => s.height = v),
       ],
       Capsule3D s => [
-        ...across(() => s.radius, (r) => s.radius = r),
-        axis(1, () => s.height, (v) => s.height = v),
+        ...across((r) => s.radius = r),
+        axis(1, (v) => s.height = v),
       ],
       // Across: the ring's size, its tube kept; up: the tube.
       Torus3D s => [
         for (final a in const [0, 2])
           axis(
             a,
-            () => (s.radius + s.tubeRadius) * 2,
-            (v) => s.radius = (v / 2 - s.tubeRadius).clamp(0.01, double.infinity),
+            (v) =>
+                s.radius = (v / 2 - s.tubeRadius).clamp(0.01, double.infinity),
           ),
-        axis(1, () => s.tubeRadius * 2, (v) => s.tubeRadius = v / 2),
+        axis(1, (v) => s.tubeRadius = v / 2),
       ],
       // Across and up: the whole arch, in proportion; along: its depth.
       Arch3D s => [
         for (final a in const [0, 1])
-          axis(a, () => _extentOf(s, a), (v) {
+          axis(a, (v) {
             final ratio = v / _extentOf(s, a);
             s
               ..radius *= ratio
               ..thickness *= ratio;
           }),
-        axis(2, () => s.depth, (v) => s.depth = v),
+        axis(2, (v) => s.depth = v),
       ],
       // Across: its outline spread or drawn in; up: its height.
       Polygon3D s => [
         for (final a in const [0, 2])
-          axis(a, () => _extentOf(s, a), (v) {
+          axis(a, (v) {
             final ratio = v / _extentOf(s, a);
             final box = Aabb3()..also(s.boundsInto);
-            final mid = a == 0 ? (box.min.x + box.max.x) / 2 : (box.min.z + box.max.z) / 2;
+            final mid = a == 0
+                ? (box.min.x + box.max.x) / 2
+                : (box.min.z + box.max.z) / 2;
             s.points = [
               for (final p in s.points)
                 a == 0
@@ -117,7 +115,7 @@ final class ShapeSizeHandles extends ViewportHandles {
                     : Offset(p.dx, mid + (p.dy - mid) * ratio),
             ];
           }),
-        axis(1, () => s.height, (v) => s.height = v),
+        axis(1, (v) => s.height = v),
       ],
       _ => const [],
     };

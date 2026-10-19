@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
+
+import 'package:just_editor_core/io.dart';
 
 /// Something in the project drawn with a 2-D material: an entity of a scene
 /// or prefab file with a `Material2D` naming it — what the material is shown
@@ -70,12 +71,26 @@ abstract final class Material2DUsers {
   static Future<Material2DUser?> find(String root, String path) async =>
       (await findAll(root, path)).firstOrNull;
 
+  // What each scene or prefab file draws with 2-D materials — every user
+  // in it, by material — with the file's stamp when it was read (when it
+  // changed and how big it is). Read again only once the stamp is another,
+  // or the editor says it changed ([forget]): a whole folder of pictures
+  // reads each file once, not once a picture.
+  static final Map<String, (String, Map<String, List<Material2DUser>>)> _files =
+      {};
+
+  /// [path] (project-relative, under [root]) changed on disk: it is read
+  /// again when next asked.
+  static void forget(String root, String path) =>
+      _files.remove('${_normal(root)}/$path');
+
   /// Everything drawn with the material at [path] in the scene and prefab
   /// files under [root]'s `assets` folder, sprites first, then shapes, in
   /// file order — those drawing the same (the same image, the same shape)
   /// as one, with how many they are ([Material2DUser.count]).
   static Future<List<Material2DUser>> findAll(String root, String path) async {
-    final folder = Directory('$root/assets');
+    final base = _normal(root);
+    final folder = Directory('$base/assets');
     if (!await folder.exists()) return const [];
     final files = <String>[];
     await for (final f in folder.list(recursive: true, followLinks: false)) {
@@ -86,25 +101,13 @@ abstract final class Material2DUsers {
       files.add(p);
     }
     files.sort();
+    // Files gone since: nothing to keep of them.
+    final listed = files.toSet();
+    _files.removeWhere((p, _) => p.startsWith('$base/') && !listed.contains(p));
     final found = <String, Material2DUser>{};
     for (final p in files) {
-      final String text;
-      try {
-        text = await File(p).readAsString();
-      } on Object {
-        continue;
-      }
-      if (!text.contains(path)) continue;
-      final Object? json;
-      try {
-        json = jsonDecode(text);
-      } on Object {
-        continue;
-      }
-      final relative = p.substring(root.replaceAll(r'\', '/').length + 1);
-      for (final entity in _entities(json)) {
-        final user = _userOf(entity, path, relative);
-        if (user == null) continue;
+      final users = await _usersIn(p, p.substring(base.length + 1));
+      for (final user in users[path] ?? const <Material2DUser>[]) {
         final known = found[user._drawing];
         found[user._drawing] = known == null
             ? user
@@ -115,6 +118,62 @@ abstract final class Material2DUsers {
       ...found.values.where((u) => u.spritePath != null),
       ...found.values.where((u) => u.spritePath == null),
     ];
+  }
+
+  // Every user in the file at [absolute] ([relative] to the project), by
+  // the material it draws with; read once while the file stays as it is.
+  static Future<Map<String, List<Material2DUser>>> _usersIn(
+    String absolute,
+    String relative,
+  ) async {
+    final file = File(absolute);
+    String stamp;
+    try {
+      final stat = await file.stat();
+      stamp = '${stat.modified.microsecondsSinceEpoch}:${stat.size}';
+    } on FileSystemException {
+      return const {};
+    }
+    final known = _files[absolute];
+    if (known != null && known.$1 == stamp) return known.$2;
+    final users = <String, List<Material2DUser>>{};
+    try {
+      final text = await file.readAsString();
+      // Most files draw nothing with a 2-D material: not decoded.
+      if (text.contains('Material2D')) {
+        for (final entity in _entities(jsonDecode(text))) {
+          for (final material in _materialsOf(entity)) {
+            final user = _userOf(entity, material, relative);
+            if (user != null) (users[material] ??= []).add(user);
+          }
+        }
+      }
+    } on Object {
+      // Unreadable, or not JSON: no users in it.
+    }
+    _files[absolute] = (stamp, users);
+    return users;
+  }
+
+  // The 2-D materials [entity] draws with.
+  static Set<String> _materialsOf(Map<String, dynamic> entity) {
+    final raw = entity['components'];
+    final out = <String>{};
+    for (final c in [if (raw is List) ...raw, if (raw is Map) ...raw.values]) {
+      if (c is! Map<String, dynamic> || c['type'] != 'Material2D') continue;
+      final fields = c['fields'];
+      final material = fields is Map ? fields['material'] : null;
+      if (material is String && material.isNotEmpty) out.add(material);
+    }
+    return out;
+  }
+
+  static String _normal(String root) {
+    var r = root.replaceAll(r'\', '/');
+    while (r.length > 1 && r.endsWith('/')) {
+      r = r.substring(0, r.length - 1);
+    }
+    return r;
   }
 
   // Every map with components, at any depth (children included).

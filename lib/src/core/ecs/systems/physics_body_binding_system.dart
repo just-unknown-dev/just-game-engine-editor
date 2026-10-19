@@ -2,14 +2,16 @@ import 'package:just_game_engine/just_game_engine.dart';
 
 import 'package:just_editor_core/host.dart';
 
-/// Live gizmo-drag authoring override for physics bodies.
+/// Keeps a physics body still while the editor's gizmo drags it.
 ///
 /// Body lifecycle (creation, property sync, stepping, and syncing results
 /// back to [TransformComponent]) is entirely owned by the core
-/// [PhysicsSystem] now — this system's only remaining job is making a
-/// selected/dragged entity feel immediate: it zeroes residual
-/// velocity/angular-velocity and wakes the body while the entity is being
-/// authored, so momentum from gameplay/simulation doesn't fight the drag.
+/// [PhysicsSystem] — this system's only job is making a dragged entity
+/// feel immediate during a play-test, when bodies move: while a gizmo drag
+/// is under way it zeroes the dragged bodies' velocity and angular velocity
+/// and wakes them, so momentum and gravity do not fight the drag. While
+/// authoring the game's time stands still and nothing steps, so it has
+/// nothing to do then.
 ///
 /// The actual position push happens for free: [EditorSceneState]'s
 /// translate/rotate/scale operations mutate [TransformComponent] directly,
@@ -25,7 +27,8 @@ class PhysicsBodyBindingSystem extends System {
 
   final EditorSceneState? sceneState;
 
-  /// Optional gate to limit the drag override below.
+  /// Optional gate to limit the drag override below: when it says false,
+  /// nothing is done. Always on when null.
   final bool Function()? isAuthoringActive;
 
   /// Reports whether a gizmo drag is actually in progress right now. Without

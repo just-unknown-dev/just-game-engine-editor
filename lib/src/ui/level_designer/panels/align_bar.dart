@@ -135,7 +135,7 @@ class AlignBar extends StatelessWidget {
                 Icons.content_copy,
                 'Duplicate the selection',
                 session.onDuplicate,
-                shortcut: 'Ctrl+D',
+                shortcut: session.scope.commands.shortcutOf('editor.duplicate'),
               ),
               button(
                 Icons.grid_on,
@@ -146,7 +146,7 @@ class AlignBar extends StatelessWidget {
                 Icons.delete_outline,
                 'Delete the selection',
                 session.onDelete,
-                shortcut: 'Delete',
+                shortcut: session.scope.commands.shortcutOf('editor.delete'),
               ),
             ],
           ),
@@ -190,7 +190,6 @@ class AlignBar extends StatelessWidget {
         case AlignEdge.bottom:
           transform.setPositionXY(transform.position.x, union.bottom - halfH);
       }
-      session.sceneState.syncEntityNode(entity);
     }
 
     _record(entities, before, 'Align ${edge.name}');
@@ -226,7 +225,6 @@ class AlignBar extends StatelessWidget {
       } else {
         transform.setPositionXY(transform.position.x, value);
       }
-      session.sceneState.syncEntityNode(entities[i]);
     }
 
     _record(
@@ -258,7 +256,6 @@ class AlignBar extends StatelessWidget {
         carriedBefore.add(TransformSnapshot.of(child));
         if (dx == 0 && dy == 0) continue;
         t.setPositionXY(t.position.x + dx, t.position.y + dy);
-        session.sceneState.syncEntityNode(child);
       }
     }
     final all = [...entities, ...carried];

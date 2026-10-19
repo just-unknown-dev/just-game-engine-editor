@@ -1,5 +1,4 @@
 import 'package:flutter/painting.dart';
-import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import 'package:just_editor_core/host.dart';
@@ -10,9 +9,8 @@ import '../scope/editor_scope_services.dart';
 /// Creates, deletes, groups, re-parents and copies entities in the world
 /// being edited, keeping [sceneState] in step.
 ///
-/// The selection operations take the designer's [EditorHistory] so each is
-/// one undo step; the rest edit the world directly, as the scene tree always
-/// has.
+/// Each edit of the scene is one undo step on the scope's history — the
+/// selection operations on the [EditorHistory] they are given.
 class EntityOps {
   EntityOps({
     required this.scope,
@@ -46,18 +44,20 @@ class EntityOps {
   /// (count now 2) is named `entity_2`, duplicating the survivor. Duplicate
   /// names silently corrupt [openScene]'s name-keyed parent/child relinking
   /// on the next scene load.
+  ///
+  /// Every live entity's name counts — one without a transform (a piece of
+  /// interface) too: names are how a scene file links a child to its
+  /// parent, whatever either is made of.
   late final UniqueNamer uniqueName = UniqueNamer(
-    () => world
-        .query([TransformComponent])
+    () => world.entities
+        .where((e) => e.isAlive)
         .map((e) => e.name)
         .whereType<String>(),
   );
 
-  /// Creates a new entity at the camera centre, adds a visible
-  /// [RectangleComponent] so it immediately appears on canvas, selects it,
-  /// and registers it in the authoring scene graph.
-  /// Makes an empty entity, at [at] in world coordinates when given — a
-  /// right click on the level means "one of these, here".
+  /// Makes an empty entity — a transform and nothing else — at [at] in
+  /// world coordinates when given (a right click on the level means "one of
+  /// these, here"), selected, as one undo step.
   ///
   /// [point] places it in space (a 3-D scene's ground under the pointer)
   /// and wins over [at]; with neither it goes where the view is looking.
@@ -65,8 +65,7 @@ class EntityOps {
     if (!sceneState.hasScene) return;
 
     final spawnPos =
-        point ??
-        (at != null ? Vector3.fromOffset(at) : cameraOf().focus);
+        point ?? (at != null ? Vector3.fromOffset(at) : cameraOf().focus);
 
     final entity = world.createEntityWithComponents([
       TransformComponent(position: Vector3.copy(spawnPos)),
@@ -74,6 +73,7 @@ class EntityOps {
 
     sceneState.registerEntity(entity);
     sceneState.selectEntity(entity);
+    _recordCreated(entity, 'Create ${entity.name ?? 'entity'}');
     scope.log.log(
       'Created entity ${entity.name ?? entity.id}.',
       source: 'editor',
@@ -94,7 +94,13 @@ class EntityOps {
     double spin = 0,
     double size = 1,
   }) {
-    final entity = spawnPrefab(prefab, at, align: align, spin: spin, size: size);
+    final entity = spawnPrefab(
+      prefab,
+      at,
+      align: align,
+      spin: spin,
+      size: size,
+    );
     recordPlaced([entity], 'Place ${prefab.name}');
     return entity;
   }
@@ -140,7 +146,6 @@ class EntityOps {
       components,
       name: uniqueName(prefab.namePrefix ?? prefab.id),
     );
-    sceneState.syncEntityNode(entity);
     return entity;
   }
 
@@ -158,10 +163,7 @@ class EntityOps {
       final instances = scope.prefabInstances;
       final entries = [
         for (final top in tops)
-          {
-            'name': top.name,
-            'prefab': instances.changesOf(top).block.toJson(),
-          },
+          {'name': top.name, 'prefab': instances.changesOf(top).block.toJson()},
       ];
       final plain = [
         for (final e in entities)
@@ -244,9 +246,28 @@ class EntityOps {
     return true;
   }
 
-  /// Turns everything selected into one group, as an undoable step.
+  /// [entity], just made, as one undo step: undone it goes, redone it is
+  /// made again as it is now. The scene has changed.
+  void _recordCreated(Entity entity, String label) {
+    sceneState
+      ..markDirty()
+      ..refresh();
+    scope.history.pushApplied(
+      CreateEntitiesCommand.adopting(
+        label: label,
+        world: world,
+        sceneState: sceneState,
+        entities: [entity],
+        codec: scope.codec,
+      ),
+    );
+  }
+
+  /// Turns everything selected into one group, as an undoable step. A
+  /// selected entity inside another selected one stays where it is, inside
+  /// it: the group takes the outer one, and it with it.
   Entity? groupSelection() {
-    final targets = selectionEntities;
+    final targets = _outermost(selectionEntities);
     if (targets.isEmpty || !sceneState.hasScene) return null;
 
     // Where the group goes: the middle of what it holds, so moving it
@@ -260,9 +281,7 @@ class EntityOps {
       sum.add(t.position);
       counted++;
     }
-    var centre = counted == 0
-        ? cameraOf().focus
-        : (sum..scale(1 / counted));
+    var centre = counted == 0 ? cameraOf().focus : (sum..scale(1 / counted));
     if (!cameraOf().isPlanar && counted > 0) {
       centre = SelectionPivot.of(targets, PivotMode3D.base);
     }
@@ -285,10 +304,11 @@ class EntityOps {
   }
 
   /// Takes a group apart: its children move up to where it was, and the
-  /// empty group goes.
+  /// empty group goes. Does nothing unless [group] is a group ([isGroup]):
+  /// an entity of its own that holds others would be destroyed with every
+  /// component it has.
   void ungroup(Entity group) {
-    final children = group.getComponent<ChildrenComponent>()?.childIds;
-    if (children == null || children.isEmpty) return;
+    if (!isGroup(group)) return;
     scope.history.push(
       UngroupCommand(
         world: world,
@@ -303,13 +323,18 @@ class EntityOps {
 
   /// Entities covered by the current selection: the multi-selection when there
   /// is one, otherwise just the primary selection.
+  ///
+  /// Every selected entity that is still there — switched off or not:
+  /// `isActive` is the saved Enabled flag, and filtering on it dropped a
+  /// switched-off row out of Delete, Duplicate, Group and Array while it
+  /// showed as selected.
   List<Entity> get selectionEntities {
     final ids = sceneState.multiSelectedIds.value;
     if (ids.isNotEmpty) {
       return ids
           .map(world.getEntity)
           .whereType<Entity>()
-          .where((e) => e.isActive)
+          .where((e) => e.isAlive)
           .toList();
     }
     final selected = sceneState.selectedEntity.value;
@@ -328,7 +353,8 @@ class EntityOps {
   /// Deletes everything selected as one undoable action — once confirmed,
   /// when the settings ask for that.
   void deleteSelection(EditorHistory history) {
-    final targets = selectionEntities;
+    // What a module protects stays, and the log says so.
+    final targets = scope.deletable(selectionEntities);
     if (targets.isEmpty) return;
     final ask = confirmDelete;
     if (ask == null || !scope.prefs.settings.value.confirmDelete) {
@@ -372,7 +398,9 @@ class EntityOps {
             : Vector3(1, 0, 0));
     final from = [
       for (final e in targets)
-        Vector3.copy(e.getComponent<TransformComponent>()?.position ?? Vector3.zero()),
+        Vector3.copy(
+          e.getComponent<TransformComponent>()?.position ?? Vector3.zero(),
+        ),
     ];
     final specs = [
       for (final entity in targets)
@@ -420,14 +448,42 @@ class EntityOps {
     return moved.lengthSquared < 1e-12 ? null : moved;
   }
 
+  /// The most entities one array may make. Every copy is built at once,
+  /// in one undo step: a 100 × 100 × 100 grid would stall the editor or
+  /// run it out of memory.
+  static const int maxArrayEntities = 2000;
+
+  /// How many entities [spec] would make from the selection: a copy of
+  /// each outermost selected thing, and of all it holds, per copy.
+  int arrayEntityCount3D(Array3DSpec spec) {
+    final copies = spec.total - 1;
+    if (copies <= 0) return 0;
+    var each = 0;
+    for (final entity in _outermost(selectionEntities)) {
+      each += 1 + _descendantsOf(entity).length;
+    }
+    return copies * each;
+  }
+
   /// Copies the selection as [spec] lays them out — in a row, a grid or
   /// round a circle — about [pivot], as one undo step. The copies are
-  /// selected with the originals.
+  /// selected with the originals. Refused, and said in the log, when it
+  /// would make more than [maxArrayEntities] entities.
   void arraySelection3D(
     EditorHistory history,
     Array3DSpec spec,
     Vector3 pivot,
   ) {
+    final made = arrayEntityCount3D(spec);
+    if (made > maxArrayEntities) {
+      scope.log.log(
+        'Not made: that array is $made entities, and one array makes at '
+        'most $maxArrayEntities.',
+        source: 'editor',
+        category: 'entity',
+      );
+      return;
+    }
     final targets = _outermost(selectionEntities);
     final steps = spec.steps(pivot);
     if (targets.isEmpty || steps.isEmpty) return;
@@ -469,8 +525,11 @@ class EntityOps {
     }
 
     final specs = [
-      EntitySpec.of(entity, scope.codec, world: world)
-          .transformed(edit, newName: copyName(entity)),
+      EntitySpec.of(
+        entity,
+        scope.codec,
+        world: world,
+      ).transformed(edit, newName: copyName(entity)),
     ];
     for (final child in _descendantsOf(entity)) {
       final spec = EntitySpec.of(child, scope.codec, world: world);
@@ -483,13 +542,25 @@ class EntityOps {
     return specs;
   }
 
+  /// What [duplicateSelection] makes of [entities], not yet in the world:
+  /// what is inside another of them goes with it, each copy has a name of
+  /// its own, a copy's children go under it, and each outermost copy just
+  /// after what it copies. Where they stand is unchanged. For a gesture
+  /// that makes copies up front (the Level Designer's Alt+drag).
+  List<EntitySpec> copySpecs(List<Entity> entities) => [
+    for (final entity in _outermost(entities)) ..._copiesOf(entity, (_) {}),
+  ];
+
   /// Whether [entity] is a group: an empty entity holding others, there
   /// to move, hide and lock them together.
   bool isGroup(Entity entity) {
     final children = entity.getComponent<ChildrenComponent>()?.childIds;
     if (children == null || children.isEmpty) return false;
     return entity.components.every(
-      (c) => c is TransformComponent || c is ParentComponent || c is ChildrenComponent,
+      (c) =>
+          c is TransformComponent ||
+          c is ParentComponent ||
+          c is ChildrenComponent,
     );
   }
 
@@ -500,12 +571,18 @@ class EntityOps {
       var parent = e.getComponent<ParentComponent>()?.parentId;
       for (var guard = 0; parent != null && guard < 64; guard++) {
         if (ids.contains(parent)) return true;
-        parent = world.getEntity(parent)?.getComponent<ParentComponent>()?.parentId;
+        parent = world
+            .getEntity(parent)
+            ?.getComponent<ParentComponent>()
+            ?.parentId;
       }
       return false;
     }
 
-    return [for (final e in entities) if (!inside(e)) e];
+    return [
+      for (final e in entities)
+        if (!inside(e)) e,
+    ];
   }
 
   /// Drops each selected thing straight down onto what is under it — the
@@ -524,17 +601,28 @@ class EntityOps {
       final transform = entity.getComponent<TransformComponent>();
       if (transform == null || !RayEntityPicker.boundsOf(entity, box)) continue;
       // Down is +Y; the base is the box's largest Y.
-      final base = Vector3((box.min.x + box.max.x) / 2, box.max.y, (box.min.z + box.max.z) / 2);
+      final base = Vector3(
+        (box.min.x + box.max.x) / 2,
+        box.max.y,
+        (box.min.z + box.max.z) / 2,
+      );
       final ray = Ray3()..setValues(base.x, base.y - 1e-4, base.z, 0, 1, 0);
       final ignore = {entity, ..._descendantsOf(entity)};
       var landing = below(ray, ignore)?.position.y;
-      final ground = plane?.axis == WorkingPlaneAxis.ground ? plane!.offset : null;
-      if (landing == null && ground != null && ground > base.y) landing = ground;
+      final ground = plane?.axis == WorkingPlaneAxis.ground
+          ? plane!.offset
+          : null;
+      if (landing == null && ground != null && ground > base.y) {
+        landing = ground;
+      }
       if (landing == null || (landing - base.y).abs() < 1e-6) continue;
       before.add(TransformSnapshot.of(entity));
       moved.add(entity);
       // What is inside it follows it, as it does a gizmo move.
-      sceneState.setPosition3(entity, transform.position + Vector3(0, landing - base.y, 0));
+      sceneState.setPosition3(
+        entity,
+        transform.position + Vector3(0, landing - base.y, 0),
+      );
     }
     if (moved.isEmpty) return 0;
     scope.history.pushApplied(
@@ -561,7 +649,9 @@ class EntityOps {
       final child = world.getEntity(queue[i]);
       if (child == null) continue;
       out.add(child);
-      queue.addAll(child.getComponent<ChildrenComponent>()?.childIds ?? const []);
+      queue.addAll(
+        child.getComponent<ChildrenComponent>()?.childIds ?? const [],
+      );
     }
     return out;
   }
@@ -570,25 +660,26 @@ class EntityOps {
   ///
   /// Blocking out a staircase or a row of pillars by hand is the kind of
   /// repetitive work a level editor should be doing for you.
+  ///
+  /// Each copy is whole, as a duplicate is: a group with what it holds, an
+  /// instance with its entities. Something selected inside something else
+  /// selected is copied with it, not again on its own.
   void arraySelection(
     EditorHistory history, {
     required int count,
     required Offset step,
   }) {
-    final targets = selectionEntities;
+    final targets = _outermost(selectionEntities);
     if (targets.isEmpty || count < 1) return;
 
-    final specs = <EntitySpec>[];
-    for (var i = 1; i <= count; i++) {
-      for (final entity in targets) {
-        specs.add(
-          EntitySpec.of(entity, scope.codec, world: world).translated(
-            step * i.toDouble(),
-            newName: uniqueName(_baseName(entity.name)),
+    final specs = <EntitySpec>[
+      for (var i = 1; i <= count; i++)
+        for (final entity in targets)
+          ..._copiesOf(
+            entity,
+            (t) => t.position.add(Vector3(step.dx * i, step.dy * i, 0)),
           ),
-        );
-      }
-    }
+    ];
 
     history.push(
       CreateEntitiesCommand(
@@ -606,29 +697,6 @@ class EntityOps {
     if (name == null || name.isEmpty) return 'entity';
     final match = RegExp(r'^(.*?)_\d+$').firstMatch(name);
     return match?.group(1) ?? name;
-  }
-
-  /// Destroys [entity] from the ECS world and removes its authoring node.
-  void deleteEntity(Entity entity) {
-    // Clean up parent link before destroying.
-    detachFromParent(entity);
-    // Detach all children so they become root entities.
-    final children = entity.getComponent<ChildrenComponent>();
-    if (children != null) {
-      for (final childId in List.of(children.childIds)) {
-        final child = world.getEntity(childId);
-        if (child != null) detachFromParent(child);
-      }
-    }
-    sceneState.removeEntityNode(entity.id);
-    world.destroyEntity(entity);
-    scope.log.log(
-      'Deleted entity ${entity.name ?? entity.id}.',
-      source: 'editor',
-      category: 'entity',
-      level: DebuggerLogLevel.warning,
-    );
-    onChanged?.call();
   }
 
   // ── Group operations ──────────────────────────────────────────────────────
@@ -798,26 +866,6 @@ class EntityOps {
     onChanged?.call();
   }
 
-  /// Removes [child] from its parent, making it a root entity.
-  void detachFromParent(Entity child) {
-    final pc = child.getComponent<ParentComponent>();
-    if (pc?.parentId == null) return;
-
-    final parentEntity = world.getEntity(pc!.parentId!);
-    parentEntity?.getComponent<ChildrenComponent>()?.removeChild(child.id);
-
-    child.removeComponent<ParentComponent>();
-
-    sceneState.markDirty();
-    sceneState.refresh();
-    scope.log.log(
-      'Detached ${child.name ?? child.id} from parent.',
-      source: 'editor',
-      category: 'hierarchy',
-      mirrorToDebugger: false,
-    );
-  }
-
   /// Copies [entity]'s components to the clipboard as serialised JSON.
   void copyEntity(Entity entity) {
     final components = entity.components
@@ -835,7 +883,8 @@ class EntityOps {
 
   /// Spawns a new entity from the clipboard, offset from the camera centre —
   /// at [point] in space when given (a 3-D scene's ground under the
-  /// pointer), else at [at]. A copied depth (z) is kept in 2-D.
+  /// pointer), else at [at] — as one undo step. A copied depth (z) is kept
+  /// in 2-D.
   void pasteEntity({Offset? at, Vector3? point}) {
     if (!sceneState.hasClipboard) return;
 
@@ -870,6 +919,7 @@ class EntityOps {
 
     sceneState.registerEntity(entity);
     sceneState.selectEntity(entity);
+    _recordCreated(entity, 'Paste ${entity.name ?? 'entity'}');
     scope.log.log(
       'Pasted entity ${entity.name ?? entity.id} from clipboard.',
       source: 'editor',

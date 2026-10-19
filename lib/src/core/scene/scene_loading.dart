@@ -267,4 +267,12 @@ class SceneLoading {
     progress.value = null;
     isShown.value = false;
   }
+
+  /// Lets go of the signals; nothing may be reported after it.
+  void dispose() {
+    _assets = null;
+    _clock.stop();
+    progress.dispose();
+    isShown.dispose();
+  }
 }

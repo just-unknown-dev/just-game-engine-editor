@@ -10,7 +10,11 @@ import '../tools/material_paint_3d_tool.dart';
 /// it. Click one to take it in hand and paint with it; double-click to open
 /// it. Made from a folder's menu in Assets (New material).
 class Materials3DPanel extends StatelessWidget {
-  const Materials3DPanel({super.key, required this.scope, required this.setTool});
+  const Materials3DPanel({
+    super.key,
+    required this.scope,
+    required this.setTool,
+  });
 
   /// The editor whose materials it lists.
   final EditorScope scope;
@@ -42,7 +46,10 @@ class Materials3DPanel extends StatelessWidget {
                 if (materials.isEmpty)
                   Text(
                     'No materials yet: in Assets, a folder\'s menu has New material.',
-                    style: TextStyle(color: EditorTheme.textMuted, fontSize: 11),
+                    style: TextStyle(
+                      color: EditorTheme.textMuted,
+                      fontSize: 11,
+                    ),
                   )
                 else
                   Wrap(
@@ -52,7 +59,12 @@ class Materials3DPanel extends StatelessWidget {
                       for (final entry in materials)
                         _MaterialTile(
                           entry: entry,
-                          picture: entry.kind.preview?.call(context, index, entry, 40),
+                          picture: entry.kind.preview?.call(
+                            context,
+                            index,
+                            entry,
+                            40,
+                          ),
                           inHand: entry.path == inHand,
                           onTap: () {
                             scope.designer3D.materialInHand.value = entry.path;
@@ -66,13 +78,20 @@ class Materials3DPanel extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Icon(Icons.format_paint_outlined, size: 13, color: EditorTheme.textMuted),
+                      Icon(
+                        Icons.format_paint_outlined,
+                        size: 13,
+                        color: EditorTheme.textMuted,
+                      ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           'In hand: ${_name(inHand)}  (P paints, Alt+click picks up)',
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: EditorTheme.textSecondary, fontSize: 11),
+                          style: TextStyle(
+                            color: EditorTheme.textSecondary,
+                            fontSize: 11,
+                          ),
                         ),
                       ),
                       EditorIconButton(
@@ -80,7 +99,8 @@ class Materials3DPanel extends StatelessWidget {
                         tooltip: 'Put it down',
                         size: 22,
                         iconSize: 13,
-                        onTap: () => scope.designer3D.materialInHand.value = null,
+                        onTap: () =>
+                            scope.designer3D.materialInHand.value = null,
                       ),
                     ],
                   ),
@@ -95,7 +115,9 @@ class Materials3DPanel extends StatelessWidget {
 
   static String _name(String path) {
     final file = path.substring(path.lastIndexOf('/') + 1);
-    return file.toLowerCase().endsWith(ending) ? file.substring(0, file.length - ending.length) : file;
+    return file.toLowerCase().endsWith(ending)
+        ? file.substring(0, file.length - ending.length)
+        : file;
   }
 }
 
@@ -126,14 +148,18 @@ class _MaterialTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: inHand ? EditorTheme.selectionBg : Colors.transparent,
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: inHand ? EditorTheme.primary : EditorTheme.border),
+          border: Border.all(
+            color: inHand ? EditorTheme.primary : EditorTheme.border,
+          ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox.square(
               dimension: 40,
-              child: picture ?? Icon(Icons.texture, size: 22, color: EditorTheme.textMuted),
+              child:
+                  picture ??
+                  Icon(Icons.texture, size: 22, color: EditorTheme.textMuted),
             ),
             const SizedBox(height: 2),
             Text(

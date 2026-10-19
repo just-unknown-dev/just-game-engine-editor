@@ -14,6 +14,7 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/core/state/play_snapshot.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/scene/scene_io.dart';
 
 Entity _generated(World world, String name) =>
     world.createEntityWithComponents([
@@ -155,15 +156,20 @@ void main() {
     test('nor a data file a module declared', () {
       // The interface's screens and themes are its package's, not the
       // editor's: it says which endings are its own.
-      ModuleDataFiles.replace(['.ui.json', '.uitheme.json']);
-      addTearDown(() => ModuleDataFiles.replace(const []));
+      final scope = testScope(modules: [_UiFiles()]);
       for (final path in [
         'assets/ui/pause.ui.json',
         'assets/ui/default.uitheme.json',
       ]) {
         expect(
-          JustGameEditorPlugin.isSpriteAtlasPath(path),
+          JustGameEditorPlugin.isSpriteAtlasPath(path, scope: scope),
           isFalse,
+          reason: path,
+        );
+        // A scope without the module has no such files of its own.
+        expect(
+          JustGameEditorPlugin.isSpriteAtlasPath(path, scope: testScope()),
+          isTrue,
           reason: path,
         );
       }
@@ -197,4 +203,16 @@ void main() {
       }
     });
   });
+}
+
+/// A module that owns the interface's JSON files.
+class _UiFiles extends EditorModule {
+  @override
+  String get id => 'test.ui_files';
+
+  @override
+  String get name => 'UI files';
+
+  @override
+  List<String> get dataFileSuffixes => const ['.ui.json', '.UITHEME.json'];
 }

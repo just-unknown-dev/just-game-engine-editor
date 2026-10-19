@@ -37,7 +37,7 @@ class _Brush extends DesignerOverlay {
 }
 
 void main() {
-  // play() and onInitialize need a binding, though none of these are
+  // play() and attach need a binding, though none of these are
   // widget tests.
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -62,7 +62,7 @@ void main() {
     addTearDown(engine.dispose);
     await engine.initialize();
     plugin = JustGameEditorPlugin(engine: engine);
-    await plugin.onInitialize();
+    await plugin.attach(plugin.engine);
     plugin.setVisible(true);
     gizmos(defaults);
     plugin.sceneState.openScene(EditorScene(name: 'level'));
@@ -149,7 +149,7 @@ void main() {
 
   group("the engine's collider outlines", () {
     PhysicsSystem physics() => engine.world.getSystem<PhysicsSystem>()!;
-    void tick() => plugin.onUpdate(1 / 60);
+    void tick() => plugin.update(1 / 60);
 
     // A bare engine has none: a game adds it, or asks for the defaults.
     setUp(() => engine.world.addSystem(PhysicsSystem(engine.physics)));

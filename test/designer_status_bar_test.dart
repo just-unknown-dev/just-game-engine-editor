@@ -9,6 +9,10 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/designer_status_bar.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/tools/tiles/tile_tool_base.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/panels/space_status_controls.dart';
 
 void main() {
   _tileControlTests();

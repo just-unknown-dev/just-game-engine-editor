@@ -10,6 +10,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/shared/shared_widgets.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/shared/transform_toolbar.dart';
+import 'package:just_game_engine_editor/src/core/play/play_controller.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +25,7 @@ void main() {
       addTearDown(engine.dispose);
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine);
-      await plugin.onInitialize();
+      await plugin.attach(plugin.engine);
       plugin.setVisible(true);
     });
     tearDown(() {
@@ -40,9 +41,9 @@ void main() {
       expect(engine.time.timeScale, 1, reason: 'the next frame will run');
       expect(play().state.value, EditorPlayState.paused);
 
-      plugin.onUpdate(1 / 60); // that frame has now run
+      plugin.update(1 / 60); // that frame has now run
       expect(engine.time.timeScale, 0);
-      plugin.onUpdate(1 / 60);
+      plugin.update(1 / 60);
       expect(engine.time.timeScale, 0, reason: 'and only that one');
     });
 
@@ -118,13 +119,13 @@ void main() {
       play().setSpeed(2);
       play().play();
       for (var i = 0; i < 60; i++) {
-        plugin.onUpdate(1 / 60);
+        plugin.update(1 / 60);
       }
       expect(play().elapsedSeconds.value, 2);
 
       play().pause();
       for (var i = 0; i < 120; i++) {
-        plugin.onUpdate(1 / 60);
+        plugin.update(1 / 60);
       }
       expect(play().elapsedSeconds.value, 2);
     });
@@ -132,7 +133,7 @@ void main() {
     test('Restart is a fresh run; the toggles do what the keys promise', () {
       play().play();
       for (var i = 0; i < 90; i++) {
-        plugin.onUpdate(1 / 60);
+        plugin.update(1 / 60);
       }
       expect(play().elapsedSeconds.value, 1);
       play().restart();
@@ -190,7 +191,7 @@ void main() {
       addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       plugin = JustGameEditorPlugin(engine: engine);
-      await tester.runAsync(plugin.onInitialize);
+      await tester.runAsync(() => plugin.attach(plugin.engine));
       // The transport and the view buttons show with a scene open.
       if (withScene) plugin.sceneState.openScene(EditorScene(name: 'level'));
       await tester.pumpWidget(

@@ -52,9 +52,9 @@ void main() {
       );
       addTearDown(scope.dispose);
       const path = 'assets/fx/hit.material2d.json';
-      expect(AssetKind.of(path).id, 'material2D');
+      expect(scope.assetKinds.of(path).id, 'material2D');
       expect(
-        AssetKind.of('assets/fx/stone.material.json').id,
+        scope.assetKinds.of('assets/fx/stone.material.json').id,
         'material',
         reason: 'the 3-D kind keeps its own',
       );

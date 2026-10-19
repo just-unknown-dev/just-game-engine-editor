@@ -32,6 +32,7 @@ abstract final class TagEdits {
       // One label per change, so two edits in a row stay two undo steps.
       label: _describe(before, next),
       component: existing,
+      entity: entity,
       write: (c, v) =>
           (c as jge.TagComponent).tags = (v as List).cast<String>(),
       before: before,

@@ -12,7 +12,7 @@ import 'package:just_editor_core/host.dart';
 import '../../../core/plugin/editor_plugin.dart';
 import '../docks/panel_parts.dart';
 
-class EditorRightPanel extends StatelessWidget {
+class EditorRightPanel extends StatefulWidget {
   const EditorRightPanel({
     super.key,
     required this.plugin,
@@ -21,6 +21,37 @@ class EditorRightPanel extends StatelessWidget {
 
   final JustGameEditorPlugin plugin;
   final OverlayUiSettings settings;
+
+  @override
+  State<EditorRightPanel> createState() => _EditorRightPanelState();
+}
+
+class _EditorRightPanelState extends State<EditorRightPanel> {
+  JustGameEditorPlugin get plugin => widget.plugin;
+  OverlayUiSettings get settings => widget.settings;
+
+  /// What the panel shows, made once per [EditorRightPanel.settings]: the
+  /// chrome around it is built again on every move of a panel-width or a
+  /// dock-height drag, and the same widget here stops that at the panel's
+  /// edge rather than building the inspector and the tree again each time.
+  /// What it shows follows its own signals; a new theme marks it all.
+  Widget? _body;
+
+  @override
+  void didUpdateWidget(EditorRightPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.plugin != widget.plugin ||
+        oldWidget.settings != widget.settings) {
+      _body = null;
+    }
+  }
+
+  // A hot reload: made again from the code as it now is.
+  @override
+  void reassemble() {
+    super.reassemble();
+    _body = null;
+  }
 
   void _onWidthResize(double dx) {
     // Anchored to the screen's right edge, so dragging left (negative dx)
@@ -37,98 +68,7 @@ class EditorRightPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: <Widget>[
-        Material(
-          color: EditorTheme.panelBg,
-          child: SafeArea(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border(
-                  left: BorderSide(color: EditorTheme.border, width: 1),
-                ),
-              ),
-              child: SignalConsumer(
-                signals: [
-                  plugin.sceneState.activeScene,
-                  plugin.sceneState.isDirty,
-                  plugin.designer,
-                  plugin.gridSize,
-                  plugin.scope.chrome.rightPanelTab,
-                ],
-                builder: (context, _) {
-                  final designer = plugin.designer.value;
-                  final tab = plugin.scope.chrome.rightPanelTab.value;
-                  final showLevel =
-                      designer != null && tab == EditorChromeState.levelTab;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      _HeaderBar(plugin: plugin, settings: settings),
-                      Divider(height: 1, color: EditorTheme.border),
-                      if (!plugin.sceneState.hasScene)
-                        Expanded(
-                          child: ScenePickerPanel(
-                            onSceneSelected: (name) => plugin.openScene(name),
-                            sceneManager: plugin.sceneManager,
-                            prefs: plugin.scope.prefs,
-                          ),
-                        )
-                      else ...<Widget>[
-                        // While designing: the level's panel is a tab here,
-                        // beside the tree and inspector, not a second panel
-                        // taking the level's width.
-                        if (designer != null)
-                          _PanelTabs(
-                            selected: tab,
-                            onSelect: (t) =>
-                                plugin.scope.chrome.rightPanelTab.value = t,
-                          ),
-                        if (showLevel)
-                          Expanded(
-                            child: LevelDesignerWorkspace(
-                              session: designer,
-                              gridSize: plugin.gridSize.value,
-                              onGridSizeChanged: plugin.setGridSize,
-                              onClose: plugin.closeLevelDesigner,
-                            ),
-                          )
-                        else
-                          // The tree and the inspector share what is left:
-                          // a short window takes it from the tree.
-                          Expanded(
-                            child: LayoutBuilder(
-                              builder: (context, box) => Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  _ResizableSceneTreeSection(
-                                    plugin: plugin,
-                                    room: box.maxHeight,
-                                  ),
-                                  Divider(height: 1, color: EditorTheme.border),
-                                  Expanded(
-                                    child: EntityInspectorPanel(
-                                      scope: plugin.scope,
-                                      sceneState: plugin.sceneState,
-                                      world: plugin.engine.world,
-                                      onDetachFromParent:
-                                          plugin.entities.detachFromParent,
-                                      onGroupSelection:
-                                          plugin.entities.createGroup,
-                                      isLevelDesignerOpen: designer != null,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        _SaveFooter(plugin: plugin, settings: settings),
-                      ],
-                    ],
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
+        _body ??= _content(),
         Positioned(
           left: 0,
           top: 0,
@@ -142,6 +82,103 @@ class EditorRightPanel extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  /// The scene tree over the inspector. Both are made here, outside the
+  /// layout that shares the height between them, so a new size — the panel
+  /// dragged wider — lays them out again without building them again.
+  Widget _treeAndInspector(bool designing) {
+    final tree = _sceneTree(plugin);
+    final inspector = EntityInspectorPanel(
+      scope: plugin.scope,
+      sceneState: plugin.sceneState,
+      world: plugin.engine.world,
+      onGroupSelection: plugin.entities.createGroup,
+      isLevelDesignerOpen: designing,
+    );
+    return LayoutBuilder(
+      builder: (context, box) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ResizableSceneTreeSection(
+            plugin: plugin,
+            room: box.maxHeight,
+            tree: tree,
+          ),
+          Divider(height: 1, color: EditorTheme.border),
+          Expanded(child: inspector),
+        ],
+      ),
+    );
+  }
+
+  Widget _content() {
+    return Material(
+      color: EditorTheme.panelBg,
+      child: SafeArea(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(color: EditorTheme.border, width: 1),
+            ),
+          ),
+          child: SignalConsumer(
+            signals: [
+              plugin.sceneState.activeScene,
+              plugin.sceneState.isDirty,
+              plugin.designer,
+              plugin.gridSize,
+              plugin.scope.chrome.rightPanelTab,
+            ],
+            builder: (context, _) {
+              final designer = plugin.designer.value;
+              final tab = plugin.scope.chrome.rightPanelTab.value;
+              final showLevel =
+                  designer != null && tab == EditorChromeState.levelTab;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _HeaderBar(plugin: plugin, settings: settings),
+                  Divider(height: 1, color: EditorTheme.border),
+                  if (!plugin.sceneState.hasScene)
+                    Expanded(
+                      child: ScenePickerPanel(
+                        onSceneSelected: (name) => plugin.openScene(name),
+                        sceneManager: plugin.sceneManager,
+                        prefs: plugin.scope.prefs,
+                      ),
+                    )
+                  else ...<Widget>[
+                    // While designing: the level's panel is a tab here,
+                    // beside the tree and inspector, not a second panel
+                    // taking the level's width.
+                    if (designer != null)
+                      _PanelTabs(
+                        selected: tab,
+                        onSelect: (t) =>
+                            plugin.scope.chrome.rightPanelTab.value = t,
+                      ),
+                    if (showLevel)
+                      Expanded(
+                        child: LevelDesignerWorkspace(
+                          session: designer,
+                          gridSize: plugin.gridSize.value,
+                          onClose: plugin.closeLevelDesigner,
+                        ),
+                      )
+                    else
+                      // The tree and the inspector share what is left:
+                      // a short window takes it from the tree.
+                      Expanded(child: _treeAndInspector(designer != null)),
+                    _SaveFooter(plugin: plugin, settings: settings),
+                  ],
+                ],
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 }
@@ -269,9 +306,16 @@ class _VerticalPanelResizeHandle extends StatelessWidget {
 /// drag handle below it (grows/shrinks the tree; [EntityInspectorPanel]
 /// below takes whatever's left via [Expanded]).
 class _ResizableSceneTreeSection extends StatefulWidget {
-  const _ResizableSceneTreeSection({required this.plugin, required this.room});
+  const _ResizableSceneTreeSection({
+    required this.plugin,
+    required this.room,
+    required this.tree,
+  });
 
   final JustGameEditorPlugin plugin;
+
+  /// The scene tree it holds.
+  final Widget tree;
 
   /// What the tree shares with the inspector under it.
   final double room;
@@ -318,10 +362,7 @@ class _ResizableSceneTreeSectionState
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        SizedBox(
-          height: math.min(_height, _most),
-          child: _sceneTree(widget.plugin),
-        ),
+        SizedBox(height: math.min(_height, _most), child: widget.tree),
         PanelResizeHandle(
           onDrag: _onResize,
           onDragEnd: () => widget.plugin.scope.prefs.set(
@@ -352,19 +393,9 @@ Future<void> closeSceneAsking(
       message: 'Closing the scene loses what has not been saved.',
     );
     if (choice == null) return;
-    if (choice == UnsavedChoice.save) {
-      try {
-        await plugin.saveScene();
-      } catch (error) {
-        messenger.showSnackBar(
-          EditorSnackBarEntry(
-            type: EditorSnackBarType.error,
-            title: 'Could not save ${scene.name}',
-            message: '$error — the scene stays open.',
-          ),
-        );
-        return;
-      }
+    if (choice == UnsavedChoice.save &&
+        !await saveSceneTelling(messenger, plugin, staysOpen: true)) {
+      return;
     }
   } else if (plugin.scope.prefs.settings.value.closePrompt ==
       ClosePrompt.always) {
@@ -379,6 +410,35 @@ Future<void> closeSceneAsking(
   }
   if (plugin.playController.isRunning) plugin.playController.stop();
   state.closeScene();
+}
+
+/// Saves the open scene, and says so on [messenger] when it could not be:
+/// an error writing it, or an open or another save under way. Whether it
+/// was saved. With [staysOpen], the message adds that the scene was left
+/// open.
+Future<bool> saveSceneTelling(
+  EditorSnackBarController messenger,
+  JustGameEditorPlugin plugin, {
+  bool staysOpen = false,
+}) async {
+  final name = plugin.sceneState.activeScene.value?.name ?? 'the scene';
+  String? problem;
+  try {
+    if (!await plugin.saveScene()) {
+      problem = 'Another open or save is under way; try again in a moment.';
+    }
+  } catch (error) {
+    problem = '$error';
+  }
+  if (problem == null) return true;
+  messenger.showSnackBar(
+    EditorSnackBarEntry(
+      type: EditorSnackBarType.error,
+      title: 'Could not save $name',
+      message: staysOpen ? '$problem The scene stays open.' : problem,
+    ),
+  );
+  return false;
 }
 
 /// The top of the right panel: the scene open — its name, whether it has
@@ -532,7 +592,8 @@ class _SaveFooter extends StatelessWidget {
               enabled: isDirty,
               shortcut: shortcut,
               settings: settings,
-              onPressed: plugin.saveScene,
+              onPressed: () =>
+                  saveSceneTelling(EditorMessenger.of(context), plugin),
             ),
           ],
         ),

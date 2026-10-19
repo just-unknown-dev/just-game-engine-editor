@@ -23,6 +23,26 @@ class _TagsDockState extends State<TagsDock> {
 
   EditorScope get scope => widget.scope;
 
+  /// The tag whose row the pointer is over: its things ring in the level.
+  /// A row that goes from under the pointer — the tag renamed or deleted,
+  /// the dock shut — hears no exit, so the ring is taken off here.
+  String? _hovered;
+
+  void _hover(String name, bool on) {
+    if (on) {
+      _hovered = name;
+    } else if (_hovered == name) {
+      _hovered = null;
+    }
+    TagHighlight.set(scope, name, on);
+  }
+
+  @override
+  void dispose() {
+    if (_hovered case final name?) TagHighlight.set(scope, name, false);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => SignalBuilder<jge.TagLibrary>(
     signal: scope.tags.library,
@@ -36,6 +56,13 @@ class _TagsDockState extends State<TagsDock> {
 
   Widget _body(BuildContext context) {
     final tags = scope.tags;
+    if (_hovered case final name? when !tags.names.contains(name)) {
+      _hovered = null;
+      // Not mid-build: the level's ring is drawn from it.
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => TagHighlight.set(scope, name, false),
+      );
+    }
     final q = _query.trim().toLowerCase();
     final names = [
       for (final name in tags.names)
@@ -83,6 +110,21 @@ class _TagsDockState extends State<TagsDock> {
                     style: TextStyle(color: EditorTheme.error, fontSize: 10.5),
                   ),
                 ),
+              // A file left as it is because it could not be read: read
+              // again once it is fixed.
+              if (tags.isUnreadable)
+                EditorIconButton(
+                  icon: Icons.refresh_rounded,
+                  tooltip: 'Read the tag file again',
+                  onTap: () => setState(tags.load),
+                )
+              else if (tags.writeError case final error?)
+                Flexible(
+                  child: Text(
+                    error,
+                    style: TextStyle(color: EditorTheme.error, fontSize: 10.5),
+                  ),
+                ),
             ],
           ),
         ),
@@ -115,8 +157,8 @@ class _TagsDockState extends State<TagsDock> {
     final listed = def != null;
     final locked = def?.isDeclared ?? false;
     return MouseRegion(
-      onEnter: (_) => TagHighlight.set(scope, name, true),
-      onExit: (_) => TagHighlight.set(scope, name, false),
+      onEnter: (_) => _hover(name, true),
+      onExit: (_) => _hover(name, false),
       child: Container(
         padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
         decoration: BoxDecoration(
@@ -433,6 +475,14 @@ class _TagsDockState extends State<TagsDock> {
                     'Scene ${e.key}',
                     e.value,
                     note: 'Rewritten on disk, after a backup.',
+                  ),
+                for (final e in plan.prefabs.entries)
+                  group(
+                    'Prefab ${e.key}',
+                    e.value,
+                    note:
+                        'Rewritten on disk, after a backup; every instance '
+                        'follows it.',
                   ),
                 if (plan.isRename)
                   for (final e in plan.timelines.entries)

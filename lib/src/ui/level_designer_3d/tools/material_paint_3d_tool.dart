@@ -21,6 +21,11 @@ class MaterialPaint3DTool extends LevelToolHandler {
   ComponentEdit? _edit;
   final Set<jge.EntityId> _painted = {};
 
+  /// Whether a press began a painting stroke: only then do the moves that
+  /// follow paint. An Alt+click that picks a material up, or a press with
+  /// nothing in hand, is not one.
+  bool _stroking = false;
+
   @override
   String get id => toolId;
 
@@ -57,6 +62,7 @@ class MaterialPaint3DTool extends LevelToolHandler {
   @override
   bool onPointerDown(ToolContext context) {
     if (context.space == null) return false;
+    _stroking = false;
     final state = scope.designer3D;
     final under = _under(context);
     if (context.isAltDown) {
@@ -75,33 +81,36 @@ class MaterialPaint3DTool extends LevelToolHandler {
     }
     _painted.clear();
     _edit = null;
+    _stroking = true;
     _paint(under);
     return true;
   }
 
   @override
   void onPointerMove(ToolContext context) {
-    if (_edit == null && _painted.isEmpty && scope.designer3D.materialInHand.value == null) {
-      return;
-    }
+    if (!_stroking) return;
     _paint(_under(context));
   }
 
   @override
   void onPointerUp(ToolContext context) {
+    _stroking = false;
     final edit = _edit;
     final count = _painted.length;
     _edit = null;
     _painted.clear();
     if (edit == null) return;
     final path = scope.designer3D.materialInHand.value ?? '';
-    if (edit.commit(count == 1 ? 'Paint ${_name(path)}' : 'Paint $count × ${_name(path)}')) {
+    if (edit.commit(
+      count == 1 ? 'Paint ${_name(path)}' : 'Paint $count × ${_name(path)}',
+    )) {
       context.controller.setStatus('Painted $count with ${_name(path)}');
     }
   }
 
   @override
   void onCancel() {
+    _stroking = false;
     // What a stroke painted stays, as one step.
     final edit = _edit;
     _edit = null;

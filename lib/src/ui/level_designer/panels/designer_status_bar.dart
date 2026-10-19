@@ -112,7 +112,9 @@ class DesignerStatusBar extends StatelessWidget {
         icon: Icons.grid_4x4,
         label: 'Snap',
         isOn: enabled,
-        tooltip: 'Snapping  (hold Ctrl while dragging to suspend)',
+        tooltip:
+            'Snapping  (hold ${EditorKeys.primaryLabel} while dragging to '
+            'suspend)',
         onTap: () => session.setSnapping(!enabled),
       ),
     ),

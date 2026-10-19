@@ -6,9 +6,12 @@ import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_editor_core/host.dart';
+import 'package:just_game_engine_editor/src/core/entity/entity_ops.dart';
+import 'package:just_game_engine_editor/src/ui/scene_tree/scene_tree_controller.dart';
+import 'package:just_game_engine_editor/src/ui/scene_tree/scene_tree_panel.dart';
 
 void main() {
   late EditorScope scope;
@@ -126,6 +129,33 @@ void main() {
 
       expect(scope.sceneState.multiSelectedIds.value, hasLength(2));
     });
+
+    testWidgets('on a Mac Cmd adds to the selection, and Ctrl does not', (
+      tester,
+    ) async {
+      node('A');
+      node('B');
+      node('C');
+      await pumpTree(tester);
+      await tester.tap(find.text('A'));
+      await tester.pump();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.tap(find.text('B'));
+      await tester.pump();
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      expect(scope.sceneState.multiSelectedIds.value, hasLength(2));
+
+      // Ctrl+click is the Mac's context click: a plain click here.
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.tap(find.text('C'));
+      await tester.pump();
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(selected(), 'C');
+      expect(scope.sceneState.multiSelectedIds.value, hasLength(1));
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
   });
 
   group('opening and shutting', () {
@@ -430,6 +460,40 @@ void main() {
       expect(claimed(LogicalKeyboardKey.keyS), isFalse, reason: 'it saves');
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     });
+
+    testWidgets('on a Mac: Cmd+D duplicates, Backspace deletes', (
+      tester,
+    ) async {
+      node('A');
+      await pumpTree(tester);
+      await tester.tap(find.text('A'));
+      await tester.pump();
+      bool claimed(LogicalKeyboardKey key) => EditorKeyClaim.focusedClaims(
+        KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.keyA,
+          logicalKey: key,
+          timeStamp: Duration.zero,
+        ),
+      );
+      expect(claimed(LogicalKeyboardKey.backspace), isTrue);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      expect(claimed(LogicalKeyboardKey.keyD), isTrue, reason: 'one copy');
+      expect(claimed(LogicalKeyboardKey.keyS), isFalse, reason: 'it saves');
+      await press(tester, LogicalKeyboardKey.keyD);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      final copies = scope.world.entities.where(
+        (e) => (e.name ?? '').startsWith('A'),
+      );
+      expect(copies, hasLength(2), reason: 'duplicated');
+
+      await press(tester, LogicalKeyboardKey.backspace);
+      expect(
+        scope.world.entities.where((e) => (e.name ?? '').startsWith('A')),
+        hasLength(1),
+        reason: 'the selected copy deleted',
+      );
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
     testWidgets('Alt and an arrow move a row among its siblings', (
       tester,

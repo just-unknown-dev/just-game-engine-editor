@@ -37,18 +37,20 @@ class TransformToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SignalBuilder<LevelDesignerSession?>(
     signal: plugin.designer,
-    builder: (context, session, _) => SignalConsumer(
+    builder: (context, session, _) => ThrottledSignalConsumer(
+      // Which modes the selection offers can change with an edit; not
+      // every move of a drag.
+      often: plugin.sceneState.revision,
       signals: [
         plugin.isAuthoring,
         plugin.sceneState.activeScene,
         plugin.scope.view.transformMode,
         plugin.sceneState.selectedEntity,
         plugin.sceneState.multiSelectedIds,
-        plugin.sceneState.revision,
         plugin.scope.tiles.selection,
         ?session?.controller.toolId,
       ],
-      builder: (context, _) => _bar(),
+      builder: (context) => _bar(),
     ),
   );
 

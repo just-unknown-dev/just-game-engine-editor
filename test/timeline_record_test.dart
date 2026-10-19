@@ -211,6 +211,8 @@ void main() {
     scope = testScope();
     await open(TimelineSession.of(scope));
     addTearDown(s.dispose);
+    // As the Timeline dock does: the diamonds show while one shows it.
+    s.attachView();
 
     Future<void> pumpInspector() => tester.pumpWidget(
       MaterialApp(

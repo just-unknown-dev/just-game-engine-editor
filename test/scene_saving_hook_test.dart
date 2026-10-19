@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/scene/scene_io.dart';
 
 /// Notes each save, and whether the scene file was there yet.
 class _Recorder extends EditorModule {

@@ -10,6 +10,11 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/entity/entity_ops.dart';
+import 'package:just_game_engine_editor/src/core/level_map/level_map_focus.dart';
+import 'package:just_game_engine_editor/src/ui/scene_tree/scene_tree_controller.dart';
+import 'package:just_game_engine_editor/src/ui/scene_tree/scene_tree_panel.dart';
+import 'package:just_game_engine_editor/src/ui/tileset/built_in_workspaces.dart';
 
 void main() {
   group('what may be selected', () {
@@ -268,7 +273,7 @@ void main() {
       addTearDown(engine.dispose);
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine);
-      await plugin.onInitialize();
+      await plugin.attach(plugin.engine);
       plugin
         ..setVisible(true)
         ..sceneState.openScene(EditorScene(name: 'level'));

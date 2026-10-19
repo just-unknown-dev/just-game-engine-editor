@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:just_signals/just_signals.dart';
 
@@ -44,15 +46,14 @@ class View3DPanel extends StatelessWidget {
               onChanged: (m) => state.viewMode.value = m,
             ),
             const SizedBox(height: 8),
-            _row(
-              'Orthographic',
-              'Pad 5',
-              _OrthographicToggle(scope: scope),
-            ),
+            _row('Orthographic', 'Pad 5', _OrthographicToggle(scope: scope)),
             if (split case final views?)
               _row(
                 'Four views',
-                'Top, front, side and perspective  (Ctrl+Alt+Q)',
+                tooltipWithShortcut(
+                  'Top, front, side and perspective',
+                  scope.commands.shortcutOf('editor.view.split'),
+                ),
                 SignalBuilder<bool>(
                   signal: views.on,
                   builder: (context, on, _) => EditorToggle(
@@ -103,7 +104,8 @@ class View3DPanel extends StatelessWidget {
   );
 }
 
-/// Perspective or orthographic, kept in step with the view.
+/// Perspective or orthographic, kept in step with the view — which pad 5
+/// and the view cube switch too, so it looks again a few times a second.
 class _OrthographicToggle extends StatefulWidget {
   const _OrthographicToggle({required this.scope});
 
@@ -114,10 +116,33 @@ class _OrthographicToggle extends StatefulWidget {
 }
 
 class _OrthographicToggleState extends State<_OrthographicToggle> {
+  Timer? _look;
+  bool _shown = false;
+
+  bool get _ortho {
+    final view = widget.scope.sceneView;
+    return view is OrbitFlyEditorView && view.orthographic;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _shown = _ortho;
+    _look = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (mounted && _ortho != _shown) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _look?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final view = widget.scope.sceneView;
-    final ortho = view is OrbitFlyEditorView && view.orthographic;
+    final ortho = _shown = _ortho;
     return EditorToggle(
       value: ortho,
       label: 'Orthographic',
@@ -163,10 +188,19 @@ class _SliceHeight extends StatelessWidget {
             tooltip: 'Higher',
             onTap: () => state.sliceY.value = y - step(),
           ),
-          EditorIconButton(
-            icon: Icons.layers_outlined,
-            tooltip: 'At the working plane, a little above it',
-            onTap: () => state.sliceY.value = state.plane.offset - 2,
+          // A height only a level plane has: an upright one's offset is a
+          // depth or a side, not how high it is.
+          SignalBuilder<WorkingPlaneAxis>(
+            signal: state.planeAxis,
+            builder: (context, axis, _) => EditorIconButton(
+              icon: Icons.layers_outlined,
+              tooltip: axis == WorkingPlaneAxis.ground
+                  ? 'At the working plane, a little above it'
+                  : 'At the working plane: only when it lies level',
+              onTap: axis == WorkingPlaneAxis.ground
+                  ? () => state.sliceY.value = state.plane.offset - 2
+                  : null,
+            ),
           ),
         ],
       ),

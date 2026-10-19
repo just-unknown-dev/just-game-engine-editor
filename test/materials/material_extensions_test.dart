@@ -118,6 +118,54 @@ void main() {
     expect(find.text('Effects on: 1'), findsOneWidget, reason: 'built again');
   });
 
+  testWidgets("the 2-D window's view edits a variant as it draws (MA-25)", (
+    tester,
+  ) async {
+    File('${dir.path}/p.material2d.json').writeAsStringSync(
+      const Material2DFile(
+        effects: {'flash': true},
+        values: {'flash.amount': 0.4, 'flash.colour': 0xFFFF0000},
+      ).encode(),
+    );
+    File('${dir.path}/v.material2d.json').writeAsStringSync(
+      const Material2DFile(parent: 'p.material2d.json').encode(),
+    );
+    scope = EditorScope(world: World()..initialize(), modules: [_Extras()]);
+    addTearDown(scope.dispose);
+    final key = GlobalKey<Material2DWorkspaceState>();
+    await host(
+      tester,
+      Material2DWorkspace(
+        key: key,
+        path: 'v.material2d.json',
+        root: dir.path,
+        workspace: WorkspaceContext(
+          scope: scope,
+          onClose: () {},
+          path: 'v.material2d.json',
+        ),
+        loadOnStart: false,
+      ),
+    );
+    final state = key.currentState!;
+    await tester.runAsync(state.load);
+    await tester.pump();
+    final view = state.view;
+    // "Twice as strong": what the module is handed is the parent's flash,
+    // not the effect's default.
+    view.change(
+      (m) => m.withValue('flash.amount', m.number('flash.amount') * 2),
+    );
+    await tester.pump();
+    expect(view.shown.number('flash.amount'), closeTo(0.8, 1e-9));
+    expect(view.shown.colour('flash.colour'), 0xFFFF0000);
+    // Only what it changed is the variant's own; the rest stays inherited.
+    expect(state.material.parent, 'p.material2d.json');
+    expect(state.material.values.keys, ['flash.amount']);
+    expect(state.material.effects, {'flash': true});
+    expect(state.dirty, isTrue, reason: 'an undo step, to save');
+  });
+
   testWidgets('the 3-D window: a tool and a section', (tester) async {
     File(
       '${dir.path}/a.material.json',

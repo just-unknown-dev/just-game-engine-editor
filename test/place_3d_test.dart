@@ -13,6 +13,9 @@ import 'package:just_game_engine/graphics_3d.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/prefab_palette_panel.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/tools/place_3d_tool.dart';
 
 EditorScope _scope() {
   final world = World()..initialize();

@@ -73,7 +73,9 @@ class RayGizmoDragSolver implements GizmoDragSolver {
       if (t == null) continue;
       final q = Quaternion.identity();
       t.rotationInto(q);
-      _targets.add(_Start(e, Vector3.copy(t.position), q, Vector3.copy(t.scale)));
+      _targets.add(
+        _Start(e, Vector3.copy(t.position), q, Vector3.copy(t.scale)),
+      );
     }
     if (_targets.isEmpty) return;
     _pivot.setFrom(pivot);
@@ -110,7 +112,21 @@ class RayGizmoDragSolver implements GizmoDragSolver {
             ? _alongAxis(axes.single)
             : _inPlane(axes, constrain);
         if (delta == null) return;
-        delta = adjustMove?.call(delta, _ray, screen) ?? delta;
+        // Snapping to surfaces, corners and boxes — but not over a value
+        // typed (that is the move, exactly), and along an arrow only along
+        // it: the snap may slide it, not take it off its axis. A plane
+        // handle (and the body, which drags on the ground plane) is how a
+        // thing is set onto a surface, so it takes the snap as it is.
+        final adjust = adjustMove;
+        if (adjust != null && exact == null) {
+          final adjusted = adjust(delta, _ray, screen);
+          if (axes.length == 1) {
+            final a = _axes[axes.single];
+            delta = a * adjusted.dot(a);
+          } else {
+            delta = adjusted;
+          }
+        }
         for (final t in _targets) {
           sceneState.setPosition3(t.entity, t.position + delta);
         }
@@ -124,7 +140,10 @@ class RayGizmoDragSolver implements GizmoDragSolver {
           turn.rotate(offset);
           sceneState
             ..setPosition3(t.entity, _pivot + offset)
-            ..setRotation3(t.entity, Quaternion.copy(turn)..multiply(t.rotation));
+            ..setRotation3(
+              t.entity,
+              Quaternion.copy(turn)..multiply(t.rotation),
+            );
         }
       case GizmoOp.scale:
         final ratio = handle == GizmoHandle.scaleUniform
@@ -155,7 +174,9 @@ class RayGizmoDragSolver implements GizmoDragSolver {
             v.add(a * (v.dot(a) * (ratio - 1)));
           }
           sceneState.setScale3(t.entity, scaled);
-          if (_targets.length > 1) sceneState.setPosition3(t.entity, _pivot + v);
+          if (_targets.length > 1) {
+            sceneState.setPosition3(t.entity, _pivot + v);
+          }
         }
       case GizmoOp.none:
         break;
@@ -176,7 +197,8 @@ class RayGizmoDragSolver implements GizmoDragSolver {
     final a = _axes[i];
     final typed = exact;
     if (typed != null) return a * typed;
-    final s0 = closestAlong(_pivot, a, _startRay), s1 = closestAlong(_pivot, a, _ray);
+    final s0 = closestAlong(_pivot, a, _startRay),
+        s1 = closestAlong(_pivot, a, _ray);
     if (s0 == null || s1 == null) return null;
     return a * sceneState.snapLength(s1 - s0);
   }
@@ -249,7 +271,8 @@ class RayGizmoDragSolver implements GizmoDragSolver {
     final typed = exact;
     if (typed != null) return typed;
     final a = _axes[i];
-    final s0 = closestAlong(_pivot, a, _startRay), s1 = closestAlong(_pivot, a, _ray);
+    final s0 = closestAlong(_pivot, a, _startRay),
+        s1 = closestAlong(_pivot, a, _ray);
     if (s0 == null || s1 == null || s0.abs() < 1e-6) return null;
     return s1 / s0;
   }
@@ -276,7 +299,9 @@ class RayGizmoDragSolver implements GizmoDragSolver {
   /// nearest [ray] is, or null when they run parallel.
   static double? closestAlong(Vector3 point, Vector3 direction, Ray3 ray) {
     final w0 = point - ray.origin;
-    final a = direction.dot(direction), b = direction.dot(ray.direction), c = ray.direction.dot(ray.direction);
+    final a = direction.dot(direction),
+        b = direction.dot(ray.direction),
+        c = ray.direction.dot(ray.direction);
     final d = direction.dot(w0), e = ray.direction.dot(w0);
     final denom = a * c - b * b;
     if (denom.abs() < 1e-12) return null;

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart';
 
 void main() {
   testWidgets('Play takes the keyboard back from a text field', (tester) async {
@@ -13,7 +14,7 @@ void main() {
     addTearDown(engine.dispose);
     await tester.runAsync(engine.initialize);
     final plugin = JustGameEditorPlugin(engine: engine);
-    await tester.runAsync(plugin.onInitialize);
+    await tester.runAsync(() => plugin.attach(plugin.engine));
     final typing = FocusNode();
 
     await tester.pumpWidget(

@@ -46,7 +46,8 @@ final class PolygonHandles extends ViewportHandles {
       return Offset(drag.snapped(local.x), drag.snapped(local.z));
     }
 
-    void set(int index, Offset point) => polygon.points = [...polygon.points]..[index] = point;
+    void set(int index, Offset point) =>
+        polygon.points = [...polygon.points]..[index] = point;
 
     final points = polygon.points;
     final n = points.length;
@@ -66,7 +67,8 @@ final class PolygonHandles extends ViewportHandles {
             }
           },
         ),
-      for (var i = 0; i < n && n >= 2; i++) _between(polygon, i, toWorld, onOutline, set),
+      for (var i = 0; i < n && n >= 2; i++)
+        _between(polygon, i, toWorld, onOutline, set),
     ];
   }
 

@@ -1,5 +1,7 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart' show compute;
+import 'package:just_editor_core/io.dart';
+import 'package:just_editor_core/just_editor_core.dart'
+    show PackageAssetPaths, ProjectFiles;
 import 'package:just_game_engine/graphics_3d.dart';
 
 import 'image_pixels.dart';
@@ -128,7 +130,12 @@ abstract final class TextureSets {
   };
 
   static final RegExp _split = RegExp(r'[_\-. ]+');
+  // After a map's role: sizes, formats and tile numbers (`_2k`, `_png`,
+  // `.1001`) say nothing.
   static final RegExp _noise = RegExp(r'^(\d+k|\d+|png|jpe?g|webp|tga)$');
+  // Before it — the set's own name — only sizes and formats: a plain number
+  // there is part of the name (`rocks_02` and `rocks_04` are two sets).
+  static final RegExp _stemNoise = RegExp(r'^(\d+k|png|jpe?g|webp|tga)$');
 
   /// What the image file called [name] is for, and the name of the set it
   /// belongs to; null when its name says nothing of a map.
@@ -165,7 +172,7 @@ abstract final class TextureSets {
     }
     if (role == null) return null;
     final stem = words.sublist(0, words.length - take);
-    while (stem.isNotEmpty && _noise.hasMatch(stem.last.toLowerCase())) {
+    while (stem.isNotEmpty && _stemNoise.hasMatch(stem.last.toLowerCase())) {
       stem.removeLast();
     }
     return (stem.join('_'), role, directX);
@@ -173,10 +180,12 @@ abstract final class TextureSets {
 
   /// The texture sets among [paths] (project-relative image files): maps
   /// grouped by the name they share, each set in the folder its maps are
-  /// in. A set needs more than one map, or a colour map.
+  /// in. A set needs more than one map, or a colour map. Where two files
+  /// are the same map of a set, the first by name is taken, whatever order
+  /// [paths] are in.
   static List<TextureSet> find(Iterable<String> paths) {
     final sets = <(String, String), Map<TextureRole, TextureMap>>{};
-    for (final path in paths) {
+    for (final path in [...paths]..sort()) {
       final lower = path.toLowerCase();
       if (!imageEndings.any(lower.endsWith)) continue;
       final slash = path.lastIndexOf('/');
@@ -207,7 +216,7 @@ abstract final class TextureSets {
   /// The texture sets in [folder] (project-relative) under [root], its
   /// own files only.
   static List<TextureSet> inFolder(String root, String folder) {
-    final dir = Directory('$root/$folder');
+    final dir = Directory(PackageAssetPaths.of(root).absolute(folder));
     if (!dir.existsSync()) return const [];
     final base = folder.endsWith('/') ? folder : '$folder/';
     return find([
@@ -254,7 +263,11 @@ abstract final class TextureSets {
     // The normal map, turned over when it is DirectX's.
     var normal = maps[TextureRole.normal]?.path ?? '';
     if (normal.isNotEmpty && set.directX && flipDirectX) {
-      final flipped = NormalMaps.flipGreen(await Pixels.read('$root/$normal'));
+      // Off the UI's isolate: a 4K map is millions of pixels.
+      final flipped = await compute(
+        NormalMaps.flipGreen,
+        await Pixels.read('$root/$normal'),
+      );
       final out = free('${set.name}_normal_gl', '.png');
       await flipped.writePng('$root/$out');
       made.add(out);
@@ -292,18 +305,7 @@ abstract final class TextureSets {
 
       final r = await read(rough), m = await read(metal), o = await read(ao);
       final gloss = rough?.role == TextureRole.gloss;
-      final packed = Pixels(w, h);
-      for (var i = 0; i < w * h; i++) {
-        final p = i * 4;
-        packed.rgba[p] = o?.rgba[p] ?? 255;
-        packed.rgba[p + 1] = r == null
-            ? 255
-            : gloss
-            ? 255 - r.rgba[p]
-            : r.rgba[p];
-        packed.rgba[p + 2] = m?.rgba[p] ?? 0;
-        packed.rgba[p + 3] = 255;
-      }
+      final packed = await compute(_pack, (w, h, o, r, m, gloss));
       final out = free('${set.name}_orm', '.png');
       await packed.writePng('$root/$out');
       made.add(out);
@@ -328,8 +330,27 @@ abstract final class TextureSets {
       roughness: roughness,
     );
     final path = free(set.name, MaterialFile.ending);
-    await File('$root/$path').writeAsString(file.encode());
+    await ProjectFiles.writeString('$root/$path', file.encode());
     return TextureSetImport(set, path, made, notes);
+  }
+
+  // Occlusion, roughness (or gloss, turned over) and metal packed into red,
+  // green and blue, [w] × [h]: on another isolate.
+  static Pixels _pack((int, int, Pixels?, Pixels?, Pixels?, bool) job) {
+    final (w, h, o, r, m, gloss) = job;
+    final packed = Pixels(w, h);
+    for (var i = 0; i < w * h; i++) {
+      final p = i * 4;
+      packed.rgba[p] = o?.rgba[p] ?? 255;
+      packed.rgba[p + 1] = r == null
+          ? 255
+          : gloss
+          ? 255 - r.rgba[p]
+          : r.rgba[p];
+      packed.rgba[p + 2] = m?.rgba[p] ?? 0;
+      packed.rgba[p + 3] = 255;
+    }
+    return packed;
   }
 
   static String _name(String path) => path.substring(path.lastIndexOf('/') + 1);

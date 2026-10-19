@@ -6,9 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
-import 'package:just_editor_core/host.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/console/console_dock.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/shell/built_in_docks.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart';
 
 EditorLogEntry _entry(
   String message, {
@@ -109,11 +110,8 @@ void main() {
       addTearDown(engine.dispose);
       await tester.runAsync(engine.initialize);
       plugin = JustGameEditorPlugin(engine: engine);
-      await tester.runAsync(plugin.onInitialize);
+      await tester.runAsync(() => plugin.attach(plugin.engine));
       plugin.setVisible(true);
-      if (!plugin.isStatusPanelVisible.value) {
-        plugin.toggleStatusPanelVisibility();
-      }
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -144,6 +142,23 @@ void main() {
       category: 't',
       level: level,
     );
+
+    testWidgets('a run of digits too long for an id is just text', (
+      tester,
+    ) async {
+      if (!kDebugMode) return;
+      await pump(tester);
+      log('checksum #123456789012345678901234567890 failed');
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(tester.takeException(), isNull);
+      expect(
+        find.text('checksum #123456789012345678901234567890 failed'),
+        findsOneWidget,
+      );
+      await done(tester);
+    });
 
     testWidgets('new lines show; Pause holds them back; a name selects', (
       tester,
@@ -203,12 +218,25 @@ void main() {
         contains('No command'),
       );
       expect(BuiltInDocks.runCommand(plugin, 'dock'), startsWith('Which one?'));
+      // A designer command with the designer shut: not run against
+      // nothing.
+      expect(plugin.designer.value, isNull);
+      expect(
+        BuiltInDocks.runCommand(plugin, 'designer.hide'),
+        contains('open it first'),
+      );
       // By label, whatever the case.
       expect(
         BuiltInDocks.runCommand(plugin, 'play / stop'),
         isNot(contains('No command')),
       );
       plugin.playController.stop();
+
+      // A Level Designer command with the designer shut: said, not thrown.
+      expect(
+        BuiltInDocks.runCommand(plugin, 'designer.rotateClockwise'),
+        contains('open it first'),
+      );
 
       // Typed into the field: Enter runs it and the result is a log line.
       await tester.enterText(find.byType(TextField).last, 'dock.maximise');

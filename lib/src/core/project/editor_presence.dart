@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:io';
+
+import 'package:just_editor_core/io.dart';
 
 /// Tells the `just` tool the editor has this project open.
 ///

@@ -22,7 +22,9 @@ final class ColliderSizeHandles extends ViewportHandles {
     final transform = entity.getComponent<TransformComponent>();
     if (collider == null || transform == null) return const [];
     final drawn = entity.components.any(
-      (c) => scope.definitions.definitionFor(c)?.extent != null && c is! Collider3D,
+      (c) =>
+          scope.definitions.definitionFor(c)?.extent != null &&
+          c is! Collider3D,
     );
     if (drawn && scope.designer3D.viewMode.value != ViewMode3D.collision) {
       return const [];
@@ -34,7 +36,11 @@ final class ColliderSizeHandles extends ViewportHandles {
     final own = Matrix4.identity()
       ..setFromTrs(
         collider.offset,
-        Quaternion.euler(collider.rotation.x, collider.rotation.y, collider.rotation.z),
+        Quaternion.euler(
+          collider.rotation.x,
+          collider.rotation.y,
+          collider.rotation.z,
+        ),
         collider.scale,
       );
     final frame = Matrix4.identity()..setProduct(body, own);
@@ -50,7 +56,6 @@ final class ColliderSizeHandles extends ViewportHandles {
         collider.offset = offset;
       },
       component: collider,
-      what: 'collider',
     );
   }
 
@@ -58,7 +63,8 @@ final class ColliderSizeHandles extends ViewportHandles {
   /// scale.
   static Aabb3 boundsOf(Collider3D collider) {
     final s = collider.naturalSize;
-    return Aabb3()..setValues(-s.x / 2, -s.y / 2, -s.z / 2, s.x / 2, s.y / 2, s.z / 2);
+    return Aabb3()
+      ..setValues(-s.x / 2, -s.y / 2, -s.z / 2, s.x / 2, s.y / 2, s.z / 2);
   }
 
   /// How [collider]'s size is set along each of its axes; empty for a
@@ -66,12 +72,22 @@ final class ColliderSizeHandles extends ViewportHandles {
   /// matching its entity's shape).
   static List<FaceAxis> axesOf(Collider3D collider) => switch (collider.shape) {
     ColliderShape3D.box => [
-      FaceAxis(0, (v) => collider.size = Vector3(v, collider.size.y, collider.size.z)),
-      FaceAxis(1, (v) => collider.size = Vector3(collider.size.x, v, collider.size.z)),
-      FaceAxis(2, (v) => collider.size = Vector3(collider.size.x, collider.size.y, v)),
+      FaceAxis(
+        0,
+        (v) => collider.size = Vector3(v, collider.size.y, collider.size.z),
+      ),
+      FaceAxis(
+        1,
+        (v) => collider.size = Vector3(collider.size.x, v, collider.size.z),
+      ),
+      FaceAxis(
+        2,
+        (v) => collider.size = Vector3(collider.size.x, collider.size.y, v),
+      ),
     ],
     ColliderShape3D.sphere => [
-      for (final a in const [0, 1, 2]) FaceAxis(a, (v) => collider.radius = v / 2),
+      for (final a in const [0, 1, 2])
+        FaceAxis(a, (v) => collider.radius = v / 2),
     ],
     ColliderShape3D.capsule || ColliderShape3D.cylinder => [
       for (final a in const [0, 2]) FaceAxis(a, (v) => collider.radius = v / 2),

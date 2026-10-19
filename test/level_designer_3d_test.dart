@@ -13,6 +13,18 @@ import 'package:just_game_engine/graphics_3d.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/input/viewport_input.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/level_designer_workspace.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/align_bar.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/designer_status_bar.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/panels/space_status_controls.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/shapes/polygon_handles.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/shapes/shape_prefabs.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/shapes/shape_ray_test.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/tools/select_3d_tool.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/gizmo_3d.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/gizmo_painter.dart';
 
 /// A kit for 2-D levels: a prefab that places in 2-D.
 class _Flat extends EditorModule {
@@ -402,7 +414,6 @@ void main() {
               child: LevelDesignerWorkspace(
                 session: session,
                 gridSize: 32,
-                onGridSizeChanged: (_) {},
                 onClose: () {},
               ),
             ),
@@ -434,7 +445,6 @@ void main() {
               child: LevelDesignerWorkspace(
                 session: session,
                 gridSize: 32,
-                onGridSizeChanged: (_) {},
                 onClose: () {},
               ),
             ),

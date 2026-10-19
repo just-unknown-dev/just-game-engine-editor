@@ -142,10 +142,26 @@ class WorkingPlaneControl extends StatelessWidget {
               child: Text(a.label, style: _item),
             ),
           const PopupMenuDivider(),
-          PopupMenuItem(value: 'up', height: 30, child: Text('A step up', style: _item)),
-          PopupMenuItem(value: 'down', height: 30, child: Text('A step down', style: _item)),
-          PopupMenuItem(value: 'zero', height: 30, child: Text('Back to 0', style: _item)),
-          PopupMenuItem(value: 'selection', height: 30, child: Text('To the selection', style: _item)),
+          PopupMenuItem(
+            value: 'up',
+            height: 30,
+            child: Text('A step up', style: _item),
+          ),
+          PopupMenuItem(
+            value: 'down',
+            height: 30,
+            child: Text('A step down', style: _item),
+          ),
+          PopupMenuItem(
+            value: 'zero',
+            height: 30,
+            child: Text('Back to 0', style: _item),
+          ),
+          PopupMenuItem(
+            value: 'selection',
+            height: 30,
+            child: Text('To the selection', style: _item),
+          ),
           CheckedPopupMenuItem(
             value: 'follow',
             checked: follow,
@@ -207,7 +223,8 @@ class PivotModeField extends StatelessWidget {
   Widget build(BuildContext context) => SignalBuilder<PivotMode3D>(
     signal: scope.designer3D.pivotMode,
     builder: (context, mode, _) => PopupMenuButton<PivotMode3D>(
-      tooltip: 'Pivot: where the gizmo sits, and what it turns and scales about',
+      tooltip:
+          'Pivot: where the gizmo sits, and what it turns and scales about',
       initialValue: mode,
       color: EditorTheme.menuBg,
       position: PopupMenuPosition.over,
@@ -236,10 +253,21 @@ class PivotModeField extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.filter_center_focus, size: 14, color: EditorTheme.textSecondary),
+            Icon(
+              Icons.filter_center_focus,
+              size: 14,
+              color: EditorTheme.textSecondary,
+            ),
             const SizedBox(width: 4),
-            Text(mode.label, style: TextStyle(color: EditorTheme.textSecondary, fontSize: 11)),
-            Icon(Icons.arrow_drop_down, size: 16, color: EditorTheme.textSecondary),
+            Text(
+              mode.label,
+              style: TextStyle(color: EditorTheme.textSecondary, fontSize: 11),
+            ),
+            Icon(
+              Icons.arrow_drop_down,
+              size: 16,
+              color: EditorTheme.textSecondary,
+            ),
           ],
         ),
       ),

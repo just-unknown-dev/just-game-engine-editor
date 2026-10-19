@@ -26,7 +26,9 @@ abstract final class BuiltInRowDecorations {
   static Widget? _prefab(BuildContext context, jge.Entity entity) {
     final instance = entity.getComponent<jge.PrefabInstanceComponent>();
     if (instance == null && !entity.hasComponent<jge.PrefabLink>()) return null;
-    final colour = instance?.missing ?? false ? EditorTheme.warning : EditorTheme.primaryBright;
+    final colour = instance?.missing ?? false
+        ? EditorTheme.warning
+        : EditorTheme.primaryBright;
     return Tooltip(
       message: instance == null
           ? 'Part of a prefab instance'
@@ -39,7 +41,10 @@ abstract final class BuiltInRowDecorations {
             ? Container(
                 width: 5,
                 height: 5,
-                decoration: BoxDecoration(color: colour.withValues(alpha: 0.7), shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: colour.withValues(alpha: 0.7),
+                  shape: BoxShape.circle,
+                ),
               )
             : Icon(Icons.inventory_2_outlined, size: 13, color: colour),
       ),

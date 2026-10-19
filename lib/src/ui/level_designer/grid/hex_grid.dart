@@ -157,6 +157,13 @@ class HexGrid extends GridTopology {
   @override
   List<Rect>? merge(Set<Point2> cells, double cellSize) => null;
 
+  /// Past this many cells in view the grid is left out: it would be a
+  /// grey wash, and slow.
+  static const int maxCells = 40000;
+
+  /// Draws the hexes in view as one path, each corner taken to the screen
+  /// as it is. The camera is the caller's, already sized to the canvas:
+  /// painting never changes it.
   @override
   void paintGrid(
     Canvas canvas,
@@ -166,30 +173,36 @@ class HexGrid extends GridTopology {
   }) {
     if (cellSize <= 0 || canvasSize == Size.zero) return;
     if (cellSize * camera.zoom.abs() < 6) return; // too dense to read
-    camera.viewportSize = canvasSize;
     final view = Rect.fromPoints(
       camera.screenToWorld(Offset.zero),
       camera.screenToWorld(Offset(canvasSize.width, canvasSize.height)),
-    );
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.8
-      ..color = ViewportLook.gridLine(0.09);
-    for (final cell in cellsIn(view.inflate(cellSize), cellSize)) {
-      final path = cellPath(cell, cellSize);
-      final screen = Path();
-      var first = true;
-      for (final metric in path.computeMetrics()) {
-        for (var d = 0.0; d <= metric.length; d += metric.length / 6) {
-          final p = camera.worldToScreen(
-            metric.getTangentForOffset(d)!.position,
-          );
-          first ? screen.moveTo(p.dx, p.dy) : screen.lineTo(p.dx, p.dy);
-          first = false;
-        }
+    ).inflate(cellSize);
+    final range = cellRange(view, cellSize);
+    if (range.width * range.height > maxCells) return;
+    final r = radiusFor(cellSize);
+    final corners = [
+      for (var i = 0; i < 6; i++)
+        Offset(
+          r * math.cos(math.pi / 180 * (60 * i - 30)),
+          r * math.sin(math.pi / 180 * (60 * i - 30)),
+        ),
+    ];
+    final path = Path();
+    for (final cell in cellsIn(view, cellSize)) {
+      final centre = cellCenter(cell, cellSize);
+      for (var i = 0; i < corners.length; i++) {
+        final p = camera.worldToScreen(centre + corners[i]);
+        i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
       }
-      canvas.drawPath(screen..close(), paint);
+      path.close();
     }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8
+        ..color = ViewportLook.gridLine(0.09),
+    );
   }
 }
 

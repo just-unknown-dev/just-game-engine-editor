@@ -10,9 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_colours/just_colours.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
-import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_editor_core/host.dart';
 
 const _red = Color(0xFFFF0000);
 const _blue = Color(0xFF0000FF);

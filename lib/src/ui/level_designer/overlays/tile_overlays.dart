@@ -7,8 +7,8 @@ import 'package:just_game_engine/just_game_engine.dart'
 
 import 'package:just_editor_core/host.dart';
 import '../../../core/level_map/tile_edit_state.dart';
+import '../../../core/level_map/level_map_documents.dart';
 import '../../overlay/transform_gizmo.dart';
-import '../tools/tiles/tile_select_tool.dart';
 import '../tools/tiles/tile_tool_base.dart';
 import 'built_in_overlays.dart';
 import '../../../core/scope/editor_scope_services.dart';
@@ -56,19 +56,27 @@ Path _polygon(List<Offset> points, [Offset shift = Offset.zero]) {
 
 /// The outline of a set of cells: the cell edges no other cell of the set
 /// shares, whatever the map's orientation.
-Path _outline(MapGeometry g, Iterable<TileCoord> cells, Offset shift) {
+Path _outline(
+  MapGeometry g,
+  Iterable<TileCoord> cells, [
+  Offset shift = Offset.zero,
+]) {
   // Neighbouring cells share an edge's two corners exactly (to rounding),
-  // so an edge seen twice is inside the set.
-  String key(Offset a) => '${(a.dx * 64).round()},${(a.dy * 64).round()}';
-  final seen = <String, (Offset, Offset)>{};
-  final twice = <String>{};
+  // so an edge seen twice is inside the set. Keyed by whole numbers (a
+  // 64th of a pixel), not strings: this runs over every cell of an area.
+  (int, int) key(Offset a) => ((a.dx * 64).round(), (a.dy * 64).round());
+  final seen = <(int, int, int, int), (Offset, Offset)>{};
+  final twice = <(int, int, int, int)>{};
   for (final c in cells) {
     final pts = g.cellPolygon(c.x, c.y);
     for (var i = 0; i < pts.length; i++) {
       final a = pts[i];
       final b = pts[(i + 1) % pts.length];
-      final ka = key(a), kb = key(b);
-      final k = ka.compareTo(kb) < 0 ? '$ka|$kb' : '$kb|$ka';
+      final (ax, ay) = key(a);
+      final (bx, by) = key(b);
+      final k = ax < bx || (ax == bx && ay <= by)
+          ? (ax, ay, bx, by)
+          : (bx, by, ax, ay);
       if (seen.containsKey(k)) {
         twice.add(k);
       } else {
@@ -86,9 +94,44 @@ Path _outline(MapGeometry g, Iterable<TileCoord> cells, Offset shift) {
   return path;
 }
 
+/// The smallest convex shape round [points] (Andrew's monotone chain).
+Path _hull(List<Offset> points) {
+  final pts = [
+    ...points,
+  ]..sort((a, b) => a.dx != b.dx ? a.dx.compareTo(b.dx) : a.dy.compareTo(b.dy));
+  double cross(Offset o, Offset a, Offset b) =>
+      (a.dx - o.dx) * (b.dy - o.dy) - (a.dy - o.dy) * (b.dx - o.dx);
+  final lower = <Offset>[];
+  for (final p in pts) {
+    while (lower.length >= 2 &&
+        cross(lower[lower.length - 2], lower.last, p) <= 0) {
+      lower.removeLast();
+    }
+    lower.add(p);
+  }
+  final upper = <Offset>[];
+  for (final p in pts.reversed) {
+    while (upper.length >= 2 &&
+        cross(upper[upper.length - 2], upper.last, p) <= 0) {
+      upper.removeLast();
+    }
+    upper.add(p);
+  }
+  final ring = [...lower..removeLast(), ...upper..removeLast()];
+  return ring.isEmpty ? Path() : _polygon(ring);
+}
+
+/// The box of cells from [a] to [b] as one shape: round its four corner
+/// cells — exact on square and diamond grids, close on the rest — for an
+/// area too large to draw cell by cell.
+Path _boxShape(MapGeometry g, TileCoord a, TileCoord b) => _hull([
+  for (final c in [a, TileCoord(b.x, a.y), b, TileCoord(a.x, b.y)])
+    ...g.cellPolygon(c.x, c.y),
+]);
+
 /// Draws [cell]'s tile at [at] on [g], turned as the cell says: what the
 /// map would draw there. Nothing when its tileset is not loaded yet.
-void paintTile(
+void _paintTile(
   Canvas canvas,
   LevelMapRuntime runtime,
   MapGeometry g,
@@ -295,9 +338,48 @@ class TileGridOverlay extends DesignerOverlay {
   }
 }
 
+/// One value worked out for a key, and kept until the key changes: what
+/// the overlays draw every frame is laid out only when it changes.
+class _Kept<T> {
+  Object? _key;
+  T? _value;
+  bool _set = false;
+
+  T of(Object key, T Function() make) {
+    if (!_set || _key != key) {
+      _value = make();
+      _key = key;
+      _set = true;
+    }
+    return _value as T;
+  }
+}
+
+/// [value] compared by identity: a set or map that is replaced, never
+/// changed in place, as the tile state's are.
+class _Same {
+  const _Same(this.value);
+
+  final Object value;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _Same && identical(other.value, value);
+
+  @override
+  int get hashCode => identityHashCode(value);
+}
+
+/// An area's fill and its outline, in its layer's own pixels.
+typedef _AreaShape = ({Path fill, Path line});
+
 /// What the tile tools are doing: the brush under the pointer, the cells an
 /// eraser would clear, an area being dragged out, the selection, and tiles
 /// being moved.
+///
+/// Laid out only when what it shows changes — the selection, the preview,
+/// the area — and drawn shifted to its layer, so a frame with nothing new
+/// costs a few paths, however many cells there are.
 class TileBrushOverlay extends DesignerOverlay {
   TileBrushOverlay(this.scope);
 
@@ -319,8 +401,26 @@ class TileBrushOverlay extends DesignerOverlay {
   @override
   int get order => OverlayOrder.selection - 5;
 
-  /// Past this many cells, an area is outlined by its corners only.
+  /// Past this many cells, an area is drawn as one shape round the box it
+  /// spans rather than cell by cell, and the tiles of a preview or of a
+  /// block being moved are not drawn — only where they would go.
   static const int maxAreaCells = 20000;
+
+  final _Kept<_AreaShape> _selection = _Kept();
+  final _Kept<_AreaShape> _drag = _Kept();
+  final _Kept<Path> _previewLine = _Kept();
+  final _Kept<Path?> _previewErase = _Kept();
+  final _Kept<Rect?> _bounds = _Kept();
+
+  /// What [g] lays cells out by: what a shape kept for it depends on.
+  static Object _gridOf(MapGeometry g) => (
+    g.orientation,
+    g.tileWidth,
+    g.tileHeight,
+    g.staggerAxis,
+    g.staggerIndex,
+    g.hexSideLength,
+  );
 
   @override
   void paint(OverlayPaintContext context) {
@@ -333,6 +433,7 @@ class TileBrushOverlay extends DesignerOverlay {
     if (target == null || layer == null) return;
     final draw = context.draw;
     final g = target.geometry;
+    final grid = _gridOf(g);
     final shift = TileTool.layerShift(target, layer, draw.camera.position);
     final runtime = target.component.runtime;
     _inWorld(draw, (canvas, zoom) {
@@ -344,12 +445,15 @@ class TileBrushOverlay extends DesignerOverlay {
         ..color = const Color(0xA6FFFFFF)
         ..filterQuality = FilterQuality.none;
 
-      _paintSelection(canvas, state, g, shift, line, fill);
+      _paintSelection(canvas, state, g, grid, shift, line, fill);
 
       // Tiles being moved, where they would land.
-      if (state.floating.isNotEmpty && runtime != null) {
-        state.floating.forEach(
-          (cell, value) => paintTile(
+      final floating = state.floating;
+      if (floating.isNotEmpty &&
+          floating.length <= maxAreaCells &&
+          runtime != null) {
+        floating.forEach(
+          (cell, value) => _paintTile(
             canvas,
             runtime,
             g,
@@ -364,37 +468,58 @@ class TileBrushOverlay extends DesignerOverlay {
       // An area being dragged out.
       final area = state.dragArea;
       if (area != null) {
-        final cells = TileTool.rectCells(area.$1, area.$2);
-        _paintArea(
-          canvas,
-          g,
-          cells,
-          shift,
-          OverlayColors.selection,
-          line,
-          fill,
-        );
+        final shape = _drag.of((area, grid), () {
+          if (TileTool.areaOf(area.$1, area.$2) > maxAreaCells) {
+            final box = _boxShape(g, area.$1, area.$2);
+            return (fill: box, line: box);
+          }
+          return _cellsShape(g, TileTool.rectCells(area.$1, area.$2));
+        });
+        _paintShape(canvas, shape, shift, OverlayColors.selection, line, fill);
       }
 
       // What a click would do.
       final preview = state.preview;
-      if (preview.isNotEmpty && area == null && state.floating.isEmpty) {
-        var erases = false;
-        preview.forEach((cell, value) {
-          if (TileCell.isEmpty(value)) {
-            erases = true;
-          } else if (runtime != null) {
-            paintTile(canvas, runtime, g, cell, value, shift, ghost);
-          }
-        });
-        line.color = erases ? TileOverlayColors.erase : TileOverlayColors.hover;
-        if (erases) {
-          fill.color = TileOverlayColors.erase.withValues(alpha: 0.18);
-          for (final c in preview.keys) {
-            canvas.drawPath(_polygon(g.cellPolygon(c.x, c.y), shift), fill);
-          }
+      if (preview.isNotEmpty && area == null && floating.isEmpty) {
+        final small = preview.length <= maxAreaCells;
+        if (small && runtime != null) {
+          preview.forEach((cell, value) {
+            if (!TileCell.isEmpty(value)) {
+              _paintTile(canvas, runtime, g, cell, value, shift, ghost);
+            }
+          });
         }
-        canvas.drawPath(_outline(g, preview.keys, shift), line);
+        // The map is replaced whenever the preview changes: kept by it.
+        final key = (_Same(preview), grid);
+        final erase = _previewErase.of(key, () {
+          if (!preview.values.any(TileCell.isEmpty)) return null;
+          if (!small) return _boundsShape(g, preview.keys);
+          final path = Path();
+          preview.forEach((c, value) {
+            if (TileCell.isEmpty(value)) {
+              path.addPath(_polygon(g.cellPolygon(c.x, c.y)), Offset.zero);
+            }
+          });
+          return path;
+        });
+        final outline = _previewLine.of(
+          key,
+          () =>
+              small ? _outline(g, preview.keys) : _boundsShape(g, preview.keys),
+        );
+        line.color = erase != null
+            ? TileOverlayColors.erase
+            : TileOverlayColors.hover;
+        canvas
+          ..save()
+          ..translate(shift.dx, shift.dy);
+        if (erase != null) {
+          fill.color = TileOverlayColors.erase.withValues(alpha: 0.18);
+          canvas.drawPath(erase, fill);
+        }
+        canvas
+          ..drawPath(outline, line)
+          ..restore();
       } else {
         final hover = state.hoverCell;
         if (hover != null && area == null) {
@@ -406,30 +531,34 @@ class TileBrushOverlay extends DesignerOverlay {
         }
       }
     });
-    _paintGizmo(context);
+    _paintGizmo(context, target, layer, grid);
   }
 
   /// The selection's gizmo, with Select tiles in hand: arrows to move it,
-  /// the ring to turn it, or both (All) — as the toolbar says. Not while its tiles
-  /// are being carried: they are not where it would be.
-  void _paintGizmo(OverlayPaintContext context) {
+  /// the ring to turn it, or both (All) — as the toolbar says. Not while
+  /// its tiles are being carried: they are not where it would be.
+  void _paintGizmo(
+    OverlayPaintContext context,
+    LevelMapTarget target,
+    jge.MapLayerData layer,
+    Object grid,
+  ) {
     if (context.controller.toolId.value != TileTools.select) return;
     final state = scope.tiles;
     final cells = state.selection.value;
     if (cells.isEmpty || state.floating.isNotEmpty) return;
-    // Peek, never choose: choosing writes signals, and a paint that
-    // writes one schedules a build mid-frame.
-    final target = state.peek(context.world);
-    final layer = target == null ? null : state.peekLayer(target);
-    if (target == null || layer == null) return;
     final draw = context.draw;
-    final bounds = TileSelectTool.cellsBounds(
-      target,
-      layer,
-      cells,
-      draw.camera.position,
+    final g = target.geometry;
+    // In the layer's own pixels, kept by the selection — a fresh set
+    // whenever it changes — then shifted to where the layer is drawn.
+    final local = _bounds.of((
+      _Same(cells),
+      grid,
+    ), () => _cellsBounds(g, cells));
+    if (local == null) return;
+    final bounds = local.shift(
+      TileTool.layerShift(target, layer, draw.camera.position),
     );
-    if (bounds == null) return;
     final centre = draw.toScreen(bounds.center);
     final zoom = draw.camera.zoom;
     final mode = TransformModes.shown(
@@ -455,22 +584,72 @@ class TileBrushOverlay extends DesignerOverlay {
     Canvas canvas,
     TileEditState state,
     MapGeometry g,
+    Object grid,
     Offset shift,
     Paint line,
     Paint fill,
   ) {
-    var cells = state.selection.value;
+    final cells = state.selection.value;
     if (cells.isEmpty) return;
-    if (state.floating.isNotEmpty) {
-      cells = {for (final c in cells) state.floated(g, c)};
-    }
-    _paintArea(canvas, g, cells, shift, OverlayColors.selection, line, fill);
+    final moved = state.floating.isNotEmpty;
+    final offset = moved ? state.floatOffset : null;
+    final shape = _selection.of((_Same(cells), offset, grid), () {
+      final shown = moved
+          ? [for (final c in cells) state.floated(g, c)]
+          : cells.toList();
+      if (shown.length <= maxAreaCells) return _cellsShape(g, shown);
+      final box = _boundsShape(g, shown);
+      return (fill: box, line: box);
+    });
+    _paintShape(canvas, shape, shift, OverlayColors.selection, line, fill);
   }
 
-  void _paintArea(
+  /// [cells] cell by cell: every cell filled, and the outline round them.
+  static _AreaShape _cellsShape(MapGeometry g, List<TileCoord> cells) {
+    final area = Path();
+    for (final c in cells) {
+      area.addPath(_polygon(g.cellPolygon(c.x, c.y)), Offset.zero);
+    }
+    return (fill: area, line: _outline(g, cells));
+  }
+
+  /// One shape round the box [cells] span, for a set too large to draw
+  /// cell by cell.
+  static Path _boundsShape(MapGeometry g, Iterable<TileCoord> cells) {
+    var x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+    var first = true;
+    for (final c in cells) {
+      if (first) {
+        x0 = x1 = c.x;
+        y0 = y1 = c.y;
+        first = false;
+        continue;
+      }
+      x0 = math.min(x0, c.x);
+      x1 = math.max(x1, c.x);
+      y0 = math.min(y0, c.y);
+      y1 = math.max(y1, c.y);
+    }
+    return first ? Path() : _boxShape(g, TileCoord(x0, y0), TileCoord(x1, y1));
+  }
+
+  /// The box [cells] cover, in their layer's own pixels.
+  static Rect? _cellsBounds(MapGeometry g, Iterable<TileCoord> cells) {
+    double? l, t, r, b;
+    for (final c in cells) {
+      for (final p in g.cellPolygon(c.x, c.y)) {
+        l = l == null ? p.dx : math.min(l, p.dx);
+        t = t == null ? p.dy : math.min(t, p.dy);
+        r = r == null ? p.dx : math.max(r, p.dx);
+        b = b == null ? p.dy : math.max(b, p.dy);
+      }
+    }
+    return l == null ? null : Rect.fromLTRB(l, t!, r!, b!);
+  }
+
+  static void _paintShape(
     Canvas canvas,
-    MapGeometry g,
-    Iterable<TileCoord> cells,
+    _AreaShape shape,
     Offset shift,
     Color color,
     Paint line,
@@ -478,20 +657,11 @@ class TileBrushOverlay extends DesignerOverlay {
   ) {
     fill.color = color.withValues(alpha: 0.16);
     line.color = color.withValues(alpha: 0.95);
-    final list = cells is List<TileCoord> ? cells : cells.toList();
-    if (list.length > maxAreaCells) {
-      // Too many to outline one by one: mark the extremes.
-      for (final c in [list.first, list.last]) {
-        canvas.drawPath(_polygon(g.cellPolygon(c.x, c.y), shift), line);
-      }
-      return;
-    }
-    final area = Path();
-    for (final c in list) {
-      area.addPath(_polygon(g.cellPolygon(c.x, c.y)), shift);
-    }
     canvas
-      ..drawPath(area, fill)
-      ..drawPath(_outline(g, list, shift), line);
+      ..save()
+      ..translate(shift.dx, shift.dy)
+      ..drawPath(shape.fill, fill)
+      ..drawPath(shape.line, line)
+      ..restore();
   }
 }

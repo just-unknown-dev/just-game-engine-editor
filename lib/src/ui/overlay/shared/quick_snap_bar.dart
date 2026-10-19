@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:just_game_engine/just_game_engine.dart' show SceneMode;
 
 import 'package:just_editor_core/host.dart';
 import '../../level_designer/panels/tool_palette.dart';
+import '../../level_designer_3d/panels/space_status_controls.dart';
 import 'gizmo_menu.dart';
 import 'transform_toolbar.dart';
 
@@ -47,10 +49,7 @@ class QuickSnapBar extends StatefulWidget {
   /// How tall it stands, for what has to clear it: three of the tool
   /// strip's buttons, one above the other, in the frame the strip has; one
   /// without [snapping].
-  static double heightFor(
-    OverlayUiSettings settings, {
-    bool snapping = true,
-  }) =>
+  static double heightFor({bool snapping = true}) =>
       FloatingToolFrame.heightFor(ToolStripButton.extent * (snapping ? 3 : 1));
 
   /// [step] as the rows and the settings write it: `8`, `0.5`.
@@ -94,6 +93,23 @@ class _QuickSnapBarState extends State<QuickSnapBar> {
     _close();
   }
 
+  /// In space: moving snaps in [metres], and the grid is drawn at it —
+  /// snapping on when a step was asked for, the grid shown when a size was.
+  void _pickStep3D(double metres, {bool grid = false}) {
+    _scope.prefs.change(
+      (s) => s.copyWith(
+        moveStep3D: metres,
+        gridSnappingEnabled: grid ? null : true,
+        showGrid: grid ? true : null,
+      ),
+    );
+    _close();
+  }
+
+  /// [metres] as a corner label: `0.25`, `1`.
+  static String _short(double metres) =>
+      MoveStep3DField.label(metres).replaceFirst(' m', '');
+
   /// One of the bar's buttons: the tool strip's size, the whole width.
   Widget _button({
     required IconData icon,
@@ -130,11 +146,26 @@ class _QuickSnapBarState extends State<QuickSnapBar> {
     final kindsOn = GizmoKind.values.length - gizmos.hidden.length;
     final snapping = settings.gridSnappingEnabled;
     final grid = settings.showGrid;
-    final step = settings.moveStep;
-    final size = QuickSnapBar.formatStep(settings.gridSize);
-    final moves = step > 0
+    // In space, moving snaps — and the ground grid is drawn — in the 3-D
+    // move step, in metres; the 2-D grid size and step are the plane's.
+    final space = _scope.sceneState.editingMode == SceneMode.threeD;
+    final step = space ? settings.moveStep3D : settings.moveStep;
+    final size = space
+        ? MoveStep3DField.label(settings.moveStep3D)
+        : '${QuickSnapBar.formatStep(settings.gridSize)} u';
+    final moves = space
+        ? '${MoveStep3DField.label(step)} steps'
+        : step > 0
         ? '${QuickSnapBar.formatStep(step)} u steps'
         : 'grid cells';
+    final stepLabel = space
+        ? _short(step)
+        : step > 0
+        ? QuickSnapBar.formatStep(step)
+        : null;
+    final sizeLabel = space
+        ? _short(settings.moveStep3D)
+        : QuickSnapBar.formatStep(settings.gridSize);
     // Snapping's panels go with snapping: none in a play-test.
     final open = widget.snapping || _open == _Row.gizmos ? _open : _Row.none;
     // The tool strip's frame, width and buttons, so the column down the
@@ -171,7 +202,7 @@ class _QuickSnapBarState extends State<QuickSnapBar> {
                     'in $moves. Right-click for the step.',
                 commandId: QuickSnapBar.snapCommandId,
                 // The step, when it is not the grid's: seen without asking.
-                cornerLabel: step > 0 ? QuickSnapBar.formatStep(step) : null,
+                cornerLabel: stepLabel,
                 isActive: snapping,
                 onTap: () => _scope.prefs.change(
                   (s) =>
@@ -183,10 +214,10 @@ class _QuickSnapBarState extends State<QuickSnapBar> {
                 icon: grid ? Icons.grid_on_rounded : Icons.grid_off_rounded,
                 tooltip:
                     '${grid ? 'The grid is shown' : 'The grid is hidden'} — '
-                    '$size u cells. Right-click for the size.',
+                    '$size cells. Right-click for the size.',
                 commandId: QuickSnapBar.gridCommandId,
                 // Its size, always: what the lines are drawn at.
-                cornerLabel: size,
+                cornerLabel: sizeLabel,
                 isActive: grid,
                 onTap: () => _scope.prefs.change(
                   (s) => s.copyWith(showGrid: !s.showGrid),
@@ -207,6 +238,30 @@ class _QuickSnapBarState extends State<QuickSnapBar> {
         mode: mode,
         onClose: _close,
       ),
+      _Row.snap when space => QuickValueRow(
+        key: const ValueKey('snapSteps'),
+        settings: settings,
+        label: 'Step',
+        options: [
+          for (final s in MoveStep3DField.steps)
+            (s, _short(s), MoveStep3DField.label(s)),
+        ],
+        current: step,
+        onPick: _pickStep3D,
+        onClose: _close,
+      ),
+      _Row.grid when space => QuickValueRow(
+        key: const ValueKey('gridSizes'),
+        settings: settings,
+        label: 'Grid Size',
+        options: [
+          for (final s in MoveStep3DField.steps)
+            (s, _short(s), '${MoveStep3DField.label(s)} a cell: the move step'),
+        ],
+        current: settings.moveStep3D,
+        onPick: (s) => _pickStep3D(s, grid: true),
+        onClose: _close,
+      ),
       _Row.snap => QuickValueRow(
         key: const ValueKey('snapSteps'),
         settings: settings,
@@ -217,7 +272,7 @@ class _QuickSnapBarState extends State<QuickSnapBar> {
               s,
               s == 0 ? 'Auto' : QuickSnapBar.formatStep(s),
               s == 0
-                  ? 'The grid\'s own: $size u'
+                  ? 'The grid\'s own: $size'
                   : '${QuickSnapBar.formatStep(s)} world units',
             ),
         ],

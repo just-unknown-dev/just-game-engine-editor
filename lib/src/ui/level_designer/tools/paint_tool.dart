@@ -26,9 +26,10 @@ class PaintTool extends LevelToolHandler {
   /// at the depth being painted at; without it, entities of their own.
   final EditorScope? scope;
 
-  /// Shared selection and dirty state.
   /// Encodes and decodes components; the scope's codec.
   final SceneCodec codec;
+
+  /// Shared selection and dirty state.
   final EditorSceneState sceneState;
 
   /// Where the stroke is recorded.
@@ -200,31 +201,62 @@ class PaintTool extends LevelToolHandler {
     context.controller.setStatus('${_stroke.length} cells');
   }
 
+  /// Past this many cells of wall, a fill is refused rather than laid out:
+  /// a wall far bigger than any room would take seconds to grid.
+  static const int maxWallCells = 250000;
+
   /// The empty region under the pointer, bounded by existing geometry.
   ///
-  /// Walls are every visible entity's bounds; the fill is confined to the
-  /// space the level already occupies, so an open region reports itself
-  /// instead of filling to the edge of the world.
+  /// Walls are the bounds of every visible entity but those the click is
+  /// inside: a camera's bounds, a region or a trigger drawn round the
+  /// level contains the room being filled rather than walling it. A solid
+  /// the click is inside is no room at all, and says so. The fill is
+  /// confined to the space the walls occupy, so an open region reports
+  /// itself instead of filling to the edge of the world.
   Set<Point2> _fillAt(ToolContext context) {
     final cell = context.gridSize;
-    final solids = [
-      for (final e in context.world.query([jge.TransformComponent]))
-        if (e.isActive && context.controller.isShownInViewport(e))
-          ?DesignerGeometry.worldBounds(e),
-    ];
+    final at = context.worldPosition;
+    final solids = <Rect>[];
+    for (final e in context.world.query([jge.TransformComponent])) {
+      if (!e.isActive || !context.controller.isShownInViewport(e)) continue;
+      final bounds = DesignerGeometry.worldBounds(e);
+      if (bounds == null) continue;
+      if (bounds.contains(at)) {
+        if (_isSolid(e)) {
+          context.controller.setStatus(
+            'The click is inside ${e.name ?? 'something solid'}: click the '
+            'empty space to fill',
+          );
+          return const {};
+        }
+        continue;
+      }
+      solids.add(bounds);
+    }
     if (solids.isEmpty) {
       context.controller.setStatus('Nothing to fill against');
       return const {};
     }
     final extent = solids.reduce((a, b) => a.expandToInclude(b));
     final grid = context.grid;
-    final blocked = <Point2>{
-      // Deflated a hair so a wall that ends exactly on a grid line does not
-      // claim the next cell over.
-      for (final r in solids) ...grid.cellsIn(r.deflate(0.01), cell),
-    };
+    // Deflated a hair so a wall that ends exactly on a grid line does not
+    // claim the next cell over.
+    final walls = [for (final r in solids) r.deflate(0.01)];
+    var wallCells = 0.0;
+    for (final r in walls) {
+      final range = grid.cellRange(r, cell);
+      wallCells += range.width * range.height;
+    }
+    if (wallCells > maxWallCells) {
+      context.controller.setStatus(
+        'The level is too big to fill at this grid size: use a larger '
+        'grid, or Rect',
+      );
+      return const {};
+    }
+    final blocked = <Point2>{for (final r in walls) ...grid.cellsIn(r, cell)};
     final result = grid.floodFill(
-      grid.cellAt(context.worldPosition, cell),
+      grid.cellAt(at, cell),
       blocked,
       limit: grid.cellRange(extent, cell),
     );
@@ -237,9 +269,24 @@ class PaintTool extends LevelToolHandler {
     return result;
   }
 
+  /// Whether [entity] blocks movement: a collider on a body that is not a
+  /// sensor. What a fill cannot start inside.
+  static bool _isSolid(jge.Entity entity) =>
+      entity.hasComponent<jge.Collider2D>() &&
+      !(entity.getComponent<jge.RigidBody2D>()?.isSensor ?? false);
+
   void _commitPaint(ToolContext context) {
     final prefab = context.controller.activePrefab;
     if (prefab == null) return;
+    if (prefab.instanceOf != null) {
+      // A prefab file places an instance of itself, at its own size: it
+      // builds nothing to stretch over the painted cells.
+      context.controller.setStatus(
+        '${prefab.name} is a prefab file: place it with Draw (B). Paint '
+        'paints shapes',
+      );
+      return;
+    }
 
     // As few entities as the cells allow: squares merge into rectangles;
     // cells that cannot merge become one entity each, at their bounds.
@@ -250,17 +297,22 @@ class PaintTool extends LevelToolHandler {
     final layerId = context.controller.activeLayerId.value;
     final scope = this.scope;
     if (scope != null) {
+      final things = [
+        for (final worldRect in merged)
+          // A copy: what a prefab returns is never changed in place.
+          if ([...prefab.build(worldRect.center, worldRect.size)]
+              case final components when components.isNotEmpty)
+            (uniqueName(prefab.namePrefix ?? prefab.id), components),
+      ];
+      if (things.isEmpty) {
+        context.controller.setStatus('${prefab.name} builds nothing to paint');
+        return;
+      }
       // Into the level's map: children of it, on a layer at this depth.
       final placed = MapPlacement.place(
         scope,
         context.world,
-        [
-          for (final worldRect in merged)
-            (
-              uniqueName(prefab.namePrefix ?? prefab.id),
-              prefab.build(worldRect.center, worldRect.size),
-            ),
-        ],
+        things,
         depth: prefab.depth ?? layerId,
         label: 'Paint ${prefab.name} (${merged.length})',
         say: context.controller.setStatus,
@@ -277,6 +329,7 @@ class PaintTool extends LevelToolHandler {
 
     for (final worldRect in merged) {
       final components = prefab.build(worldRect.center, worldRect.size);
+      if (components.isEmpty) continue;
       for (final component in components) {
         if (component is jge.LayerComponent) component.layerId = layerId;
       }
@@ -323,14 +376,16 @@ class PaintTool extends LevelToolHandler {
     }
     // The map itself is not erased with what is on it.
     doomed.removeWhere((e) => e.hasComponent<jge.LevelMapComponent>());
+    // What a module protects stays, and the log says so.
+    final erased = scope?.deletable(doomed) ?? doomed.toList();
 
-    if (doomed.isEmpty) return;
+    if (erased.isEmpty) return;
     history.push(
       DeleteEntitiesCommand(
-        label: 'Erase ${doomed.length} entities',
+        label: 'Erase ${erased.length} entities',
         world: context.world,
         sceneState: sceneState,
-        entities: doomed.toList(),
+        entities: erased,
         codec: codec,
       ),
     );

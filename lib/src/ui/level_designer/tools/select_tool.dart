@@ -10,6 +10,7 @@ import 'package:just_editor_core/host.dart';
 import '../../overlay/gizmo_painter.dart' show GizmoHandle;
 import '../../overlay/transform_gizmo.dart';
 import '../state/component_resizer.dart';
+import '../state/selection_ops.dart';
 
 enum _Gesture { none, marquee, move, resize, rotate }
 
@@ -41,8 +42,14 @@ class SelectTool extends LevelToolHandler {
     this.layout = const SelectionHandleLayout(),
     this.mapDocs,
     this.rotationStep,
+    this.copySpecs,
     String Function(String prefix)? uniqueName,
   }) : _uniqueName = uniqueName ?? ((prefix) => prefix);
+
+  /// What an Alt+drag copies: the entities given and everything inside
+  /// them, as Ctrl+D copies them (the scope's `EntityOps.copySpecs`).
+  /// Without it, each entity alone.
+  final List<EntitySpec> Function(List<jge.Entity> entities)? copySpecs;
 
   /// The step a snapped turn moves in, in radians, read as the turn is
   /// made: the settings' step. Without it, [layout]'s.
@@ -110,6 +117,7 @@ class SelectTool extends LevelToolHandler {
   // Resize.
   ResizeHandle? _handle;
   List<EntitySpec> _beforeSpecs = const [];
+  List<_SizeStart> _sizeStarts = const [];
 
   // Move along one axis: an arrow of the move gizmo.
   Axis? _axis;
@@ -136,6 +144,10 @@ class SelectTool extends LevelToolHandler {
   jge.World? _world;
   bool _duplicating = false;
   List<jge.Entity> _originalSelection = const [];
+
+  /// Every copy an Alt+drag made — the outermost ones, which are moved,
+  /// and what is inside them — parents first.
+  List<jge.Entity> _copies = const [];
 
   @override
   bool onPointerDown(ToolContext context) {
@@ -284,6 +296,7 @@ class SelectTool extends LevelToolHandler {
         _beforeSpecs = selection
             .map((e) => EntitySpec.of(e, codec))
             .toList(growable: false);
+        _sizeStarts = selection.map(_SizeStart.new).toList(growable: false);
         return true;
       }
     }
@@ -364,11 +377,8 @@ class SelectTool extends LevelToolHandler {
     }
     for (var i = 0; i < _targets.length; i++) {
       if (!_targets[i].isAlive) continue;
-      if (_gesture == _Gesture.resize) {
-        _beforeSpecs[i].applyTo(_targets[i]);
-      } else {
-        _before[i].applyTo(_targets[i]);
-      }
+      if (_gesture == _Gesture.resize) _sizeStarts[i].restore();
+      _before[i].applyTo(_targets[i]);
     }
     if (_duplicating) _discardCopies();
     _reset(null);
@@ -432,6 +442,7 @@ class SelectTool extends LevelToolHandler {
     _carried = const [];
     _carriedBefore = const [];
     _beforeSpecs = const [];
+    _sizeStarts = const [];
     _snapRects = const [];
     _handle = null;
     _axis = null;
@@ -443,6 +454,7 @@ class SelectTool extends LevelToolHandler {
     _pieceSteps = 0;
     _duplicating = false;
     _originalSelection = const [];
+    _copies = const [];
   }
 
   // ── Move ──────────────────────────────────────────────────────────────────
@@ -485,7 +497,6 @@ class SelectTool extends LevelToolHandler {
         _before[i].x + moved.dx,
         _before[i].y + moved.dy,
       );
-      sceneState.syncEntityNode(entity);
     }
     for (var i = 0; i < _carried.length; i++) {
       final entity = _carried[i];
@@ -494,7 +505,6 @@ class SelectTool extends LevelToolHandler {
         _carriedBefore[i].x + moved.dx,
         _carriedBefore[i].y + moved.dy,
       );
-      sceneState.syncEntityNode(entity);
     }
     sceneState.refresh();
     _publishGuides(context, _startBounds.shift(moved));
@@ -562,13 +572,18 @@ class SelectTool extends LevelToolHandler {
         ? 'Duplicate ${_originalSelection.first.name ?? 'entity'}'
         : 'Duplicate ${copies.length} entities';
     _push(label, [
+      // Every copy, parents first, so a redo makes each under its parent;
+      // the outermost are selected again.
       CreateEntitiesCommand.adopting(
         codec: codec,
         label: label,
         world: context.world,
         sceneState: sceneState,
-        entities: copies,
-        onCreated: _select,
+        entities: [
+          for (final e in _copies)
+            if (e.isAlive) e,
+        ],
+        onCreated: (made) => _select(_outermostOf(made)),
       ),
     ]);
   }
@@ -644,10 +659,12 @@ class SelectTool extends LevelToolHandler {
     for (var i = 0; i < _targets.length; i++) {
       final entity = _targets[i];
       if (!entity.isAlive) continue;
-      // From the captured state every frame, not from the last frame: a
+      // From the captured sizes every frame, not from the last frame: a
       // resize that shrinks to the minimum and grows back must return to the
-      // exact starting size, and cumulative factors cannot.
-      _beforeSpecs[i].applyTo(entity);
+      // exact starting size, and cumulative factors cannot. Put back in the
+      // same components: replacing them every move would rebuild physics
+      // bodies and drop what a map piece has loaded.
+      _sizeStarts[i].restore();
       ComponentResizer.scale(entity, sx, sy);
       final to = DesignerGeometry.mapPoint(
         Offset(_before[i].x, _before[i].y),
@@ -658,7 +675,6 @@ class SelectTool extends LevelToolHandler {
         to.dx,
         to.dy,
       );
-      sceneState.syncEntityNode(entity);
     }
     sceneState.refresh();
     context.controller.setStatus(
@@ -712,7 +728,6 @@ class SelectTool extends LevelToolHandler {
       entity.getComponent<jge.TransformComponent>()
         ?..setPositionXY(to.dx, to.dy)
         ..angle = before.angle + angle;
-      sceneState.syncEntityNode(entity);
     }
 
     for (var i = 0; i < _targets.length; i++) {
@@ -803,16 +818,11 @@ class SelectTool extends LevelToolHandler {
     // A sweep takes what is on the level's map, never the map itself: it is
     // under everything, and moving it moves all of it. A click, a
     // double-click on its ground or the tree picks it.
-    final hits =
-        DesignerGeometry.entitiesIn(
-          selection,
-          context.world.query([jge.TransformComponent]),
-          pickable: context.controller.isPickable,
-        )..removeWhere(
-          (e) =>
-              e.hasComponent<jge.LevelMapComponent>() &&
-              !jge.LevelMaps.isPiece(context.world, e),
-        );
+    final hits = DesignerGeometry.entitiesIn(
+      selection,
+      context.world.query([jge.TransformComponent]),
+      pickable: context.controller.isPickable,
+    )..removeWhere((e) => isWholeMap(context.world, e));
     if (hits.isEmpty && _additiveBase.isEmpty) {
       sceneState.clearSelection();
       return;
@@ -836,41 +846,65 @@ class SelectTool extends LevelToolHandler {
 
   // ── Duplicate ─────────────────────────────────────────────────────────────
 
-  /// Copies of [entities], each just after its original under the same
-  /// parent.
-  List<jge.Entity> _duplicate(jge.World world, List<jge.Entity> entities) => [
-    for (final entity in entities)
-      () {
-        final copy = world.createEntityWithComponents([
-          for (final c in EntitySpec.of(entity, codec).decode())
-            if (c is! jge.ParentComponent && c is! jge.ChildrenComponent) c,
-        ], name: _uniqueName(_baseName(entity.name)));
-        sceneState.registerEntity(copy);
-        final at = HierarchySlot.of(
-          entity,
+  /// Copies of [entities] and of everything inside them, as Ctrl+D makes
+  /// them ([copySpecs]): each outermost copy just after its original under
+  /// the same parent, the copies inside it under it. Returns the outermost
+  /// copies — what the drag moves; the rest go along with them.
+  List<jge.Entity> _duplicate(jge.World world, List<jge.Entity> entities) {
+    final specs =
+        copySpecs?.call(entities) ??
+        [
+          for (final e in entities)
+            EntitySpec.of(
+              e,
+              codec,
+              world: world,
+            ).transformed((_) {}, newName: _uniqueName(_baseName(e.name))),
+        ];
+    final made = <jge.Entity>[];
+    for (final spec in specs) {
+      final copy = world.createEntityWithComponents([
+        for (final c in spec.decode())
+          if (c is! jge.ParentComponent && c is! jge.ChildrenComponent) c,
+      ], name: spec.name);
+      sceneState.registerEntity(copy);
+      final parentName = spec.parentName;
+      final parent = parentName == null
+          ? null
+          : world.findEntityByName(parentName);
+      if (parent != null) {
+        placeEntity(
+          copy,
           world: world,
           sceneState: sceneState,
+          slot: HierarchySlot(parentId: parent.id, index: spec.siblingIndex),
         );
-        if (at.parentId != null) {
-          placeEntity(
-            copy,
-            world: world,
-            sceneState: sceneState,
-            slot: HierarchySlot(parentId: at.parentId, index: at.index + 1),
-          );
-        }
-        return copy;
-      }(),
-  ];
+      }
+      made.add(copy);
+    }
+    _copies = made;
+    return _outermostOf(made);
+  }
+
+  /// [entities] less those under another of them.
+  static List<jge.Entity> _outermostOf(List<jge.Entity> entities) {
+    final ids = {for (final e in entities) e.id};
+    return [
+      for (final e in entities)
+        if (!ids.contains(e.getComponent<jge.ParentComponent>()?.parentId)) e,
+    ];
+  }
 
   void _discardCopies() {
     final world = _world;
-    for (final copy in _targets) {
+    // Children first, so none is left pointing at a parent that has gone.
+    for (final copy in _copies.reversed) {
       if (!copy.isAlive || world == null) continue;
       detachEntity(copy, world: world, sceneState: sceneState);
       sceneState.removeEntityNode(copy.id);
       world.destroyEntity(copy, withChildren: false);
     }
+    _copies = const [];
     _select(_originalSelection);
   }
 
@@ -898,21 +932,8 @@ class SelectTool extends LevelToolHandler {
   /// else, but it has no transform — it is placed by its slot, and moved
   /// in the UI mode. Handing one to a tool that reads transforms is how a
   /// pointer move in the viewport ended in a null check.
-  List<jge.Entity> _selectionEntities(jge.World world) {
-    final ids = sceneState.multiSelectedIds.value;
-    if (ids.isNotEmpty) {
-      return ids
-          .map(world.getEntity)
-          .whereType<jge.Entity>()
-          .where((e) => e.isActive && _isInTheWorld(e))
-          .toList();
-    }
-    final selected = sceneState.selectedEntity.value;
-    return selected == null || !_isInTheWorld(selected) ? const [] : [selected];
-  }
-
-  static bool _isInTheWorld(jge.Entity entity) =>
-      entity.getComponent<jge.TransformComponent>() != null;
+  List<jge.Entity> _selectionEntities(jge.World world) =>
+      SelectionOps.selectedIn(sceneState, world);
 
   /// Combined bounds of [entities]; a sizeless marker counts as a point.
   Rect? _groupBounds(List<jge.Entity> entities) {
@@ -929,11 +950,76 @@ class SelectTool extends LevelToolHandler {
     return union;
   }
 
-  /// Topmost pickable entity under the pointer.
+  /// Topmost pickable entity under the pointer — never the whole Level
+  /// Map. It has no size of its own, so it would be caught as a marker
+  /// near its origin, often where the level starts; dragging it drags
+  /// everything on it. A double-click on open ground, or the tree, picks
+  /// it; a piece cut from it is picked like anything else.
   jge.Entity? _entityAt(ToolContext context) => DesignerGeometry.topmostAt(
     context.world,
     context.worldPosition,
-    pickable: context.controller.isPickable,
+    pickable: (e) =>
+        context.controller.isPickable(e) && !isWholeMap(context.world, e),
     markerReach: context.pixels(12),
   );
+
+  /// Whether [entity] is a whole Level Map, not a piece cut from one.
+  static bool isWholeMap(jge.World world, jge.Entity entity) =>
+      entity.hasComponent<jge.LevelMapComponent>() &&
+      !jge.LevelMaps.isPiece(world, entity);
+}
+
+/// What a resize changes on an entity, as it was when the resize began:
+/// the saved fields of each component with a size. Put back into the same
+/// component instances — never replacing them — before each step of the
+/// drag, and on cancel.
+class _SizeStart {
+  _SizeStart(jge.Entity entity) {
+    final definitions = DesignerGeometry.definitionsFor(entity);
+    for (final component in entity.components) {
+      final definition = definitions.definitionFor(component);
+      if (definition?.extent == null) continue;
+      _saved.add((
+        component,
+        definition!,
+        {for (final f in definition.fields) f.name: f.encodeFrom(component)},
+      ));
+    }
+  }
+
+  final List<(jge.Component, jge.ComponentDefinition, Map<String, Object?>)>
+  _saved = [];
+
+  /// Puts each field back that differs from where it started; the rest are
+  /// left alone, so nothing that did not change is written (a sprite's
+  /// path, which would load it again).
+  void restore() {
+    for (final (component, definition, fields) in _saved) {
+      for (final f in definition.fields) {
+        if (f.write == null || !fields.containsKey(f.name)) continue;
+        final was = fields[f.name];
+        if (_same(f.encodeFrom(component), was)) continue;
+        f.decodeInto(component, was);
+      }
+    }
+  }
+
+  /// Whether two saved values are the same, lists and maps by content.
+  static bool _same(Object? a, Object? b) {
+    if (a is List && b is List) {
+      if (a.length != b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        if (!_same(a[i], b[i])) return false;
+      }
+      return true;
+    }
+    if (a is Map && b is Map) {
+      if (a.length != b.length) return false;
+      for (final key in a.keys) {
+        if (!b.containsKey(key) || !_same(a[key], b[key])) return false;
+      }
+      return true;
+    }
+    return a == b;
+  }
 }

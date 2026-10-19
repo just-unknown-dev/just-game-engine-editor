@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart'
     show SceneMode, SceneNames;
 import 'package:just_editor_core/host.dart';
+import 'package:just_editor_core/io.dart' show FileSystemException;
 
 import '../../core/serialization/scene_name_validator.dart';
 
@@ -112,7 +113,14 @@ class _CreateSceneOverlayState extends State<CreateSceneOverlay> {
     super.initState();
     _existingNames = SceneNameValidator.existingSceneNames(widget.store);
     // Ready to go: Enter makes it, typing replaces it.
-    final order = widget.store.playOrder();
+    List<String> order;
+    try {
+      order = widget.store.playOrder();
+    } on FileSystemException {
+      // The scenes folder could not be listed: suggest after the names
+      // that could be.
+      order = const [];
+    }
     final suggested = CreateSceneOverlay.suggestName(
       _existingNames,
       after: order.isEmpty ? null : order.last,

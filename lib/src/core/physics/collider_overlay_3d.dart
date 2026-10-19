@@ -13,8 +13,15 @@ import 'hull_outline.dart';
 /// yellow, characters in blue. A collider matching its entity's shape shows
 /// the parts it is made of.
 final class ColliderOverlay3D extends ViewportOverlay {
-  // The outlines of matched shapes, by their key: worked out once each.
+  /// How many outlines are kept, each kind: more than a scene has distinct
+  /// shapes, so drawing every frame finds them all made.
+  static const int cacheSize = 512;
+
+  // The outlines of matched shapes, by their key, and of the plain shapes,
+  // by shape and size: worked out once each, the least recently drawn
+  // let go first. Read only — each line is copied before it is placed.
   final Map<Object, List<(Vector3, Vector3)>> _matched = {};
+  final Map<Object, List<(Vector3, Vector3)>> _plain = {};
 
   // Collision shapes in space.
   @override
@@ -38,9 +45,16 @@ final class ColliderOverlay3D extends ViewportOverlay {
       final c = entity.getComponent<Collider3D>()!;
       final selected = context.isSelected(entity);
       final sensor = entity.getComponent<RigidBody3D>()?.isSensor ?? false;
-      final paint = _paint(sensor ? const Color(0xFFFFD54F) : const Color(0xFF7CFC9A), selected);
+      final paint = _paint(
+        sensor ? const Color(0xFFFFD54F) : const Color(0xFF7CFC9A),
+        selected,
+      );
       entity.getComponent<TransformComponent>()!.localToWorldInto(matrix);
-      final rotation = Quaternion.euler(c.rotation.x, c.rotation.y, c.rotation.z);
+      final rotation = Quaternion.euler(
+        c.rotation.x,
+        c.rotation.y,
+        c.rotation.z,
+      );
       Vector3 place(Vector3 p) {
         p
           ..x *= c.scale.x
@@ -53,8 +67,10 @@ final class ColliderOverlay3D extends ViewportOverlay {
       }
 
       final lines = c.shape == ColliderShape3D.matchShape
-          ? _matchedLines(entity.components.whereType<SolidShapeSource>().firstOrNull)
-          : shapeLines(c);
+          ? _matchedLines(
+              entity.components.whereType<SolidShapeSource>().firstOrNull,
+            )
+          : _plainLines(c);
       for (final (a, b) in lines) {
         _line(context, place(Vector3.copy(a)), place(Vector3.copy(b)), paint);
       }
@@ -66,47 +82,142 @@ final class ColliderOverlay3D extends ViewportOverlay {
       // Its feet are its position; the capsule stands up from them (-Y).
       final feet = entity.getComponent<TransformComponent>()!.position;
       for (final (a, b) in capsuleLines(ch.radius, ch.height)) {
-        _line(context, a..add(feet)..y -= ch.height / 2, b..add(feet)..y -= ch.height / 2, paint);
+        _line(
+          context,
+          a
+            ..add(feet)
+            ..y -= ch.height / 2,
+          b
+            ..add(feet)
+            ..y -= ch.height / 2,
+          paint,
+        );
       }
     }
   }
 
   List<(Vector3, Vector3)> _matchedLines(SolidShapeSource? source) {
     if (source == null) return const [];
-    final key = source.solidKey;
-    final known = _matched[key];
-    if (known != null) return known;
-    if (_matched.length >= 128) _matched.remove(_matched.keys.first);
-    return _matched[key] = [for (final part in source.solidParts) ...partLines(part)];
+    return _cached(
+      _matched,
+      source.solidKey,
+      () => [for (final part in source.solidParts) ...partLines(part)],
+    );
+  }
+
+  /// [c]'s outline, made once for its shape and size.
+  List<(Vector3, Vector3)> _plainLines(Collider3D c) => _cached(_plain, (
+    c.shape,
+    c.size.x,
+    c.size.y,
+    c.size.z,
+    c.radius,
+    c.height,
+  ), () => shapeLines(c));
+
+  /// [key]'s lines in [cache], made by [make] when missing; the cache keeps
+  /// the [cacheSize] drawn most recently.
+  static List<(Vector3, Vector3)> _cached(
+    Map<Object, List<(Vector3, Vector3)>> cache,
+    Object key,
+    List<(Vector3, Vector3)> Function() make,
+  ) {
+    final known = cache.remove(key);
+    if (known != null) return cache[key] = known;
+    if (cache.length >= cacheSize) cache.remove(cache.keys.first);
+    return cache[key] = make();
   }
 
   /// One convex part of a matched shape as line segments in its entity's
   /// own space.
   static List<(Vector3, Vector3)> partLines(SolidPart part) {
-    List<(Vector3, Vector3)> at(List<(Vector3, Vector3)> lines, double x, double y, double z) {
+    List<(Vector3, Vector3)> at(
+      List<(Vector3, Vector3)> lines,
+      double x,
+      double y,
+      double z,
+    ) {
       final offset = Vector3(x, y, z);
       return [for (final (a, b) in lines) (a..add(offset), b..add(offset))];
     }
 
     return switch (part) {
-      SolidBox(:final halfX, :final halfY, :final halfZ, :final x, :final y, :final z) =>
+      SolidBox(
+        :final halfX,
+        :final halfY,
+        :final halfZ,
+        :final x,
+        :final y,
+        :final z,
+      ) =>
         at(boxLines(Vector3(halfX, halfY, halfZ)), x, y, z),
-      SolidSphere(:final radius, :final x, :final y, :final z) => at([
-        ..._ring(Vector3.zero(), Vector3(1, 0, 0), Vector3(0, 1, 0), radius),
-        ..._ring(Vector3.zero(), Vector3(1, 0, 0), Vector3(0, 0, 1), radius),
-        ..._ring(Vector3.zero(), Vector3(0, 1, 0), Vector3(0, 0, 1), radius),
-      ], x, y, z),
-      SolidCapsule(:final halfHeight, :final radius, :final x, :final y, :final z) =>
+      SolidSphere(:final radius, :final x, :final y, :final z) => at(
+        [
+          ..._ring(Vector3.zero(), Vector3(1, 0, 0), Vector3(0, 1, 0), radius),
+          ..._ring(Vector3.zero(), Vector3(1, 0, 0), Vector3(0, 0, 1), radius),
+          ..._ring(Vector3.zero(), Vector3(0, 1, 0), Vector3(0, 0, 1), radius),
+        ],
+        x,
+        y,
+        z,
+      ),
+      SolidCapsule(
+        :final halfHeight,
+        :final radius,
+        :final x,
+        :final y,
+        :final z,
+      ) =>
         at(capsuleLines(radius, (halfHeight + radius) * 2), x, y, z),
-      SolidCylinder(:final halfHeight, :final radius, :final x, :final y, :final z) => at([
-        ..._ring(Vector3(0, -halfHeight, 0), Vector3(1, 0, 0), Vector3(0, 0, 1), radius),
-        ..._ring(Vector3(0, halfHeight, 0), Vector3(1, 0, 0), Vector3(0, 0, 1), radius),
-        for (final (dx, dz) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)])
-          (Vector3(dx * radius, -halfHeight, dz * radius), Vector3(dx * radius, halfHeight, dz * radius)),
-      ], x, y, z),
+      SolidCylinder(
+        :final halfHeight,
+        :final radius,
+        :final x,
+        :final y,
+        :final z,
+      ) =>
+        at(
+          [
+            ..._ring(
+              Vector3(0, -halfHeight, 0),
+              Vector3(1, 0, 0),
+              Vector3(0, 0, 1),
+              radius,
+            ),
+            ..._ring(
+              Vector3(0, halfHeight, 0),
+              Vector3(1, 0, 0),
+              Vector3(0, 0, 1),
+              radius,
+            ),
+            for (final (dx, dz) in [
+              (1.0, 0.0),
+              (-1.0, 0.0),
+              (0.0, 1.0),
+              (0.0, -1.0),
+            ])
+              (
+                Vector3(dx * radius, -halfHeight, dz * radius),
+                Vector3(dx * radius, halfHeight, dz * radius),
+              ),
+          ],
+          x,
+          y,
+          z,
+        ),
       SolidHull(:final points) => HullOutline.of(points),
-      SolidMesh(:final positions, :final indices) => _meshLines(positions, indices),
-      SolidHeightField(:final heights, :final sampleCount, :final cellSize, :final x, :final y, :final z) =>
+      SolidMesh(:final positions, :final indices) => _meshLines(
+        positions,
+        indices,
+      ),
+      SolidHeightField(
+        :final heights,
+        :final sampleCount,
+        :final cellSize,
+        :final x,
+        :final y,
+        :final z,
+      ) =>
         _fieldLines(heights, sampleCount, cellSize, Vector3(x, y, z)),
     };
   }
@@ -125,14 +236,23 @@ final class ColliderOverlay3D extends ViewportOverlay {
   }
 
   /// A height field's grid, every few rows on a big one.
-  static List<(Vector3, Vector3)> _fieldLines(Float32List h, int n, double cell, Vector3 origin) {
+  static List<(Vector3, Vector3)> _fieldLines(
+    Float32List h,
+    int n,
+    double cell,
+    Vector3 origin,
+  ) {
     if (n < 2 || h.length < n * n) return const [];
     final int step = math.max(1, n ~/ 32);
     Vector3? at(int col, int row) {
       final height = h[row * n + col];
       if (height >= SolidHeightField.holeHeight) return null;
       // Heights are up: +Y is down.
-      return Vector3(origin.x + col * cell, origin.y - height, origin.z + row * cell);
+      return Vector3(
+        origin.x + col * cell,
+        origin.y - height,
+        origin.z + row * cell,
+      );
     }
 
     final out = <(Vector3, Vector3)>[];
@@ -156,7 +276,12 @@ final class ColliderOverlay3D extends ViewportOverlay {
     ..strokeWidth = selected ? 1.5 : 1
     ..style = PaintingStyle.stroke;
 
-  static void _line(ViewportOverlayContext context, Vector3 a, Vector3 b, Paint paint) {
+  static void _line(
+    ViewportOverlayContext context,
+    Vector3 a,
+    Vector3 b,
+    Paint paint,
+  ) {
     final p = context.project(a), q = context.project(b);
     if (p != null && q != null) context.canvas.drawLine(p, q, paint);
   }
@@ -173,10 +298,23 @@ final class ColliderOverlay3D extends ViewportOverlay {
     ],
     ColliderShape3D.capsule => capsuleLines(c.radius, c.height),
     ColliderShape3D.cylinder => [
-      ..._ring(Vector3(0, -c.height / 2, 0), Vector3(1, 0, 0), Vector3(0, 0, 1), c.radius),
-      ..._ring(Vector3(0, c.height / 2, 0), Vector3(1, 0, 0), Vector3(0, 0, 1), c.radius),
+      ..._ring(
+        Vector3(0, -c.height / 2, 0),
+        Vector3(1, 0, 0),
+        Vector3(0, 0, 1),
+        c.radius,
+      ),
+      ..._ring(
+        Vector3(0, c.height / 2, 0),
+        Vector3(1, 0, 0),
+        Vector3(0, 0, 1),
+        c.radius,
+      ),
       for (final (x, z) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)])
-        (Vector3(x * c.radius, -c.height / 2, z * c.radius), Vector3(x * c.radius, c.height / 2, z * c.radius)),
+        (
+          Vector3(x * c.radius, -c.height / 2, z * c.radius),
+          Vector3(x * c.radius, c.height / 2, z * c.radius),
+        ),
     ],
     _ => boxLines(Vector3(0.5, 0.5, 0.5)),
   };
@@ -199,24 +337,51 @@ final class ColliderOverlay3D extends ViewportOverlay {
   static List<(Vector3, Vector3)> capsuleLines(double radius, double height) {
     final half = math.max(0.0, height / 2 - radius);
     return [
-      ..._ring(Vector3(0, -half, 0), Vector3(1, 0, 0), Vector3(0, 0, 1), radius),
+      ..._ring(
+        Vector3(0, -half, 0),
+        Vector3(1, 0, 0),
+        Vector3(0, 0, 1),
+        radius,
+      ),
       ..._ring(Vector3(0, half, 0), Vector3(1, 0, 0), Vector3(0, 0, 1), radius),
       for (final (x, z) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)])
-        (Vector3(x * radius, -half, z * radius), Vector3(x * radius, half, z * radius)),
+        (
+          Vector3(x * radius, -half, z * radius),
+          Vector3(x * radius, half, z * radius),
+        ),
       // The two caps, as half rings over the top and under the bottom.
       for (final side in [Vector3(1, 0, 0), Vector3(0, 0, 1)])
-        for (final (centre, up) in [(Vector3(0, -half, 0), -1.0), (Vector3(0, half, 0), 1.0)])
+        for (final (centre, up) in [
+          (Vector3(0, -half, 0), -1.0),
+          (Vector3(0, half, 0), 1.0),
+        ])
           ..._arc(centre, side, Vector3(0, up, 0), radius),
     ];
   }
 
-  static List<(Vector3, Vector3)> _ring(Vector3 centre, Vector3 u, Vector3 v, double r) =>
-      _curve(centre, u, v, r, 0, math.pi * 2, 32);
+  static List<(Vector3, Vector3)> _ring(
+    Vector3 centre,
+    Vector3 u,
+    Vector3 v,
+    double r,
+  ) => _curve(centre, u, v, r, 0, math.pi * 2, 32);
 
-  static List<(Vector3, Vector3)> _arc(Vector3 centre, Vector3 across, Vector3 out, double r) =>
-      _curve(centre, across, out, r, 0, math.pi, 16);
+  static List<(Vector3, Vector3)> _arc(
+    Vector3 centre,
+    Vector3 across,
+    Vector3 out,
+    double r,
+  ) => _curve(centre, across, out, r, 0, math.pi, 16);
 
-  static List<(Vector3, Vector3)> _curve(Vector3 centre, Vector3 u, Vector3 v, double r, double from, double to, int steps) {
+  static List<(Vector3, Vector3)> _curve(
+    Vector3 centre,
+    Vector3 u,
+    Vector3 v,
+    double r,
+    double from,
+    double to,
+    int steps,
+  ) {
     Vector3 at(int k) {
       final a = from + (to - from) * k / steps;
       return Vector3(

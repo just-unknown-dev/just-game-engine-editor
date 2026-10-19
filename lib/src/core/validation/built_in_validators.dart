@@ -215,30 +215,21 @@ abstract final class BuiltInValidators {
           continue;
         }
         // Not a file: loaded as it is — a built-in tileset, or one inside
-        // a Tiled map.
+        // a Tiled map. A file: as on disk, made once while it is unchanged.
         final tiles = context.scope.context.tiles;
         final json = jge.TileAssets.isVirtual(path)
-            ? tiles.loadedTileset(path)?.toJson()
+            ? null
             : context.readJson(path);
         tilesets[slot] = json == null
             ? tiles.loadedTileset(path)
-            : jge.TilesetData.fromJson(json);
+            : (_tilesetFromJson[json] ??= jge.TilesetData.fromJson(json));
       }
-      // Tiles no tileset can draw, counted per layer.
+      // Tiles no tileset can draw, counted per layer — again only when the
+      // layer's cells or the tilesets changed since the last run: a big
+      // map has hundreds of thousands of cells, and the checks run every
+      // second or so while it is painted.
       for (final layer in data.layers) {
-        var orphans = 0;
-        var pastEnd = 0;
-        for (final (_, _, cell) in layer.cells.cells) {
-          final slot = jge.TileCell.slotOf(cell);
-          if (slot >= data.tilesets.length || data.tilesets[slot] == null) {
-            orphans++;
-            continue;
-          }
-          final ts = tilesets[slot];
-          if (ts != null && !ts.contains(jge.TileCell.localIdOf(cell))) {
-            pastEnd++;
-          }
-        }
+        final (:orphans, :pastEnd) = _countCells(layer, data, tilesets);
         if (orphans > 0) {
           out.add(
             SceneProblem(
@@ -326,6 +317,53 @@ abstract final class BuiltInValidators {
       }
     }
     return out;
+  }
+
+  // The tileset each decoded file makes, made once per decoding (which
+  // the context keeps while the file is unchanged).
+  static final Expando<jge.TilesetData> _tilesetFromJson = Expando();
+
+  // Each layer's last count, by its cells.
+  static final Expando<_CellCount> _cellCounts = Expando();
+
+  /// Tiles of [layer] from a slot [data] no longer has (orphans), and past
+  /// the end of their tileset; counted again only when the cells or the
+  /// tilesets are not what they were at the last count.
+  static ({int orphans, int pastEnd}) _countCells(
+    jge.MapLayerData layer,
+    jge.LevelMapData data,
+    Map<int, jge.TilesetData?> tilesets,
+  ) {
+    final cells = layer.cells;
+    final paths = List<String?>.of(data.tilesets);
+    final sets = [for (var i = 0; i < paths.length; i++) tilesets[i]];
+    final revisions = [for (final ts in sets) ts?.revision];
+    final last = _cellCounts[cells];
+    if (last != null && last.matches(cells.revision, paths, sets, revisions)) {
+      return (orphans: last.orphans, pastEnd: last.pastEnd);
+    }
+    var orphans = 0;
+    var pastEnd = 0;
+    for (final (_, _, cell) in cells.cells) {
+      final slot = jge.TileCell.slotOf(cell);
+      if (slot >= paths.length || paths[slot] == null) {
+        orphans++;
+        continue;
+      }
+      final ts = sets[slot];
+      if (ts != null && !ts.contains(jge.TileCell.localIdOf(cell))) {
+        pastEnd++;
+      }
+    }
+    _cellCounts[cells] = _CellCount(
+      cells.revision,
+      paths,
+      sets,
+      revisions,
+      orphans,
+      pastEnd,
+    );
+    return (orphans: orphans, pastEnd: pastEnd);
   }
 
   /// How many of a two-or-more-colour Wang set's combinations no tile has
@@ -632,4 +670,43 @@ abstract final class BuiltInValidators {
               hint: 'Add a Transform.',
             ),
       ];
+}
+
+/// A layer's last count of tiles no tileset draws, and what it was made
+/// against.
+class _CellCount {
+  _CellCount(
+    this.revision,
+    this.paths,
+    this.sets,
+    this.setRevisions,
+    this.orphans,
+    this.pastEnd,
+  );
+
+  final int revision;
+  final List<String?> paths;
+  final List<jge.TilesetData?> sets;
+  final List<int?> setRevisions;
+  final int orphans;
+  final int pastEnd;
+
+  bool matches(
+    int revision,
+    List<String?> paths,
+    List<jge.TilesetData?> sets,
+    List<int?> setRevisions,
+  ) {
+    if (revision != this.revision || paths.length != this.paths.length) {
+      return false;
+    }
+    for (var i = 0; i < paths.length; i++) {
+      if (paths[i] != this.paths[i] ||
+          !identical(sets[i], this.sets[i]) ||
+          setRevisions[i] != this.setRevisions[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
 }

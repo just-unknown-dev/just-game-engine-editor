@@ -8,9 +8,10 @@ import 'level_map_documents.dart';
 ///
 /// Commands name their map rather than hold it. When a play-test stops, or
 /// an undo replaces the entity's components, the map object is replaced;
-/// the entity id and the file path are what stay the same.
+/// the entity id and the file path are what stay the same — and when an
+/// undo and redo make the entity again under a new id, its [entityName].
 class LevelMapRef {
-  const LevelMapRef({required this.entityId, this.path});
+  const LevelMapRef({required this.entityId, this.path, this.entityName});
 
   final int entityId;
 
@@ -18,14 +19,20 @@ class LevelMapRef {
   /// scene.
   final String? path;
 
+  /// The map entity's name: how it is found once its id is another's.
+  final String? entityName;
+
   bool get isFile => path != null;
 
   @override
   bool operator ==(Object other) =>
-      other is LevelMapRef && other.entityId == entityId && other.path == path;
+      other is LevelMapRef &&
+      other.entityId == entityId &&
+      other.path == path &&
+      other.entityName == entityName;
 
   @override
-  int get hashCode => Object.hash(entityId, path);
+  int get hashCode => Object.hash(entityId, path, entityName);
 }
 
 /// One stroke of a tile tool, recorded as it is painted.
@@ -131,66 +138,143 @@ class TileEditCommand extends EditorCommand {
 /// again gives back the same layer, cells and all, because the layer object
 /// is kept; renaming one or changing its opacity is put back from the
 /// settings recorded beside it.
+///
+/// Captured field by field: going through `toJson` encoded every chunk of
+/// every layer — twice for each step — only to throw the cells away, which
+/// made a drag of a layer's opacity slider lag on a big map.
 class MapStructure {
   MapStructure.capture(LevelMapData map)
-    : _settings = _settingsOf(map),
+    : _settings = _MapSettings.of(map),
       _layers = [...map.layers],
-      _meta = [for (final l in map.layers) _metaOf(l)];
+      _meta = [for (final l in map.layers) _LayerSettings.of(l)];
 
-  final Map<String, dynamic> _settings;
+  final _MapSettings _settings;
   final List<MapLayerData> _layers;
-  final List<Map<String, dynamic>> _meta;
-
-  static Map<String, dynamic> _settingsOf(LevelMapData m) =>
-      Map.of(m.toJson())..remove('layers');
-
-  static Map<String, dynamic> _metaOf(MapLayerData l) =>
-      Map.of(l.toJson())..remove('cells');
+  final List<_LayerSettings> _meta;
 
   /// Puts [map] back to this shape.
   void restoreInto(LevelMapData map) {
-    final settings = LevelMapData.fromJson({..._settings, 'layers': const []});
-    map
-      ..orientation = settings.orientation
-      ..tileWidth = settings.tileWidth
-      ..tileHeight = settings.tileHeight
-      ..staggerAxis = settings.staggerAxis
-      ..staggerIndex = settings.staggerIndex
-      ..hexSideLength = settings.hexSideLength
-      ..renderOrder = settings.renderOrder
-      ..nextLayerId = settings.nextLayerId
-      ..backgroundColor = settings.backgroundColor
-      ..className = settings.className
-      ..properties = settings.properties;
-    map.tilesets
-      ..clear()
-      ..addAll(settings.tilesets);
+    _settings.applyTo(map);
     map.layers
       ..clear()
       ..addAll(_layers);
     for (var i = 0; i < _layers.length; i++) {
-      final saved = MapLayerData.fromJson({..._meta[i], 'cells': const {}});
-      _layers[i]
-        ..name = saved.name
-        ..visible = saved.visible
-        ..locked = saved.locked
-        ..opacity = saved.opacity
-        ..tint = saved.tint
-        ..offsetX = saved.offsetX
-        ..offsetY = saved.offsetY
-        ..parallaxX = saved.parallaxX
-        ..parallaxY = saved.parallaxY
-        ..sortLayerId = saved.sortLayerId
-        ..sortLayer = saved.sortLayer
-        ..zOrder = saved.zOrder
-        ..collides = saved.collides
-        ..className = saved.className
-        ..properties = saved.properties
-        ..material = saved.material
-        ..castsShadows = saved.castsShadows
-        ..shadowDepth = saved.shadowDepth;
+      _meta[i].applyTo(_layers[i]);
     }
     map.touch();
+  }
+}
+
+/// A map's settings, without its layers.
+class _MapSettings {
+  _MapSettings.of(LevelMapData m)
+    : orientation = m.orientation,
+      tileWidth = m.tileWidth,
+      tileHeight = m.tileHeight,
+      staggerAxis = m.staggerAxis,
+      staggerIndex = m.staggerIndex,
+      hexSideLength = m.hexSideLength,
+      renderOrder = m.renderOrder,
+      nextLayerId = m.nextLayerId,
+      backgroundColor = m.backgroundColor,
+      className = m.className,
+      properties = m.properties.copy(),
+      tilesets = List.of(m.tilesets);
+
+  final MapOrientation orientation;
+  final int tileWidth;
+  final int tileHeight;
+  final TileStaggerAxis staggerAxis;
+  final TileStaggerIndex staggerIndex;
+  final int hexSideLength;
+  final TileRenderOrder renderOrder;
+  final int nextLayerId;
+  final int? backgroundColor;
+  final String className;
+  final TileProperties properties;
+  final List<String?> tilesets;
+
+  void applyTo(LevelMapData map) {
+    map
+      ..orientation = orientation
+      ..tileWidth = tileWidth
+      ..tileHeight = tileHeight
+      ..staggerAxis = staggerAxis
+      ..staggerIndex = staggerIndex
+      ..hexSideLength = hexSideLength
+      ..renderOrder = renderOrder
+      ..nextLayerId = nextLayerId
+      ..backgroundColor = backgroundColor
+      ..className = className
+      // A copy each time: what is edited after must not change this.
+      ..properties = properties.copy();
+    map.tilesets
+      ..clear()
+      ..addAll(tilesets);
+  }
+}
+
+/// A layer's settings, without its cells.
+class _LayerSettings {
+  _LayerSettings.of(MapLayerData l)
+    : name = l.name,
+      visible = l.visible,
+      locked = l.locked,
+      opacity = l.opacity,
+      tint = l.tint,
+      offsetX = l.offsetX,
+      offsetY = l.offsetY,
+      parallaxX = l.parallaxX,
+      parallaxY = l.parallaxY,
+      sortLayerId = l.sortLayerId,
+      sortLayer = l.sortLayer,
+      zOrder = l.zOrder,
+      collides = l.collides,
+      className = l.className,
+      properties = l.properties.copy(),
+      material = l.material,
+      castsShadows = l.castsShadows,
+      shadowDepth = l.shadowDepth;
+
+  final String name;
+  final bool visible;
+  final bool locked;
+  final double opacity;
+  final int? tint;
+  final double offsetX;
+  final double offsetY;
+  final double parallaxX;
+  final double parallaxY;
+  final String sortLayerId;
+  final int sortLayer;
+  final int zOrder;
+  final bool collides;
+  final String className;
+  final TileProperties properties;
+  final String material;
+  final bool castsShadows;
+  final double shadowDepth;
+
+  void applyTo(MapLayerData layer) {
+    layer
+      ..name = name
+      ..visible = visible
+      ..locked = locked
+      ..opacity = opacity
+      ..tint = tint
+      ..offsetX = offsetX
+      ..offsetY = offsetY
+      ..parallaxX = parallaxX
+      ..parallaxY = parallaxY
+      ..sortLayerId = sortLayerId
+      ..sortLayer = sortLayer
+      ..zOrder = zOrder
+      ..collides = collides
+      ..className = className
+      ..properties = properties.copy()
+      ..material = material
+      ..castsShadows = castsShadows
+      ..shadowDepth = shadowDepth;
   }
 }
 

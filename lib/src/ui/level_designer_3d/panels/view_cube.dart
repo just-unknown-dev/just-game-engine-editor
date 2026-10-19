@@ -8,6 +8,13 @@ import 'package:just_editor_core/host.dart';
 import '../../../core/view/orbit_fly_editor_view.dart';
 import '../../overlay/gizmo_3d.dart' show gizmoAxisColors;
 
+/// The axes' drawing: the widget less the line under it for the lens.
+const Size _drawn = Size(ViewCube.size, ViewCube.size - 6);
+
+/// Where the axes meet, in the drawing: its middle. Where the ends are
+/// placed and hit-tested, and where the lines start, so they agree.
+Offset get _centre => _drawn.center(Offset.zero);
+
 /// One end of an axis on the [ViewCube]: the side it looks from.
 class _Side {
   const _Side(this.direction, this.axis, this.positive, this.yaw, this.pitch);
@@ -97,7 +104,7 @@ class _ViewCubeState extends State<ViewCube>
   List<(_Side, Offset, double)> _ends() {
     final v = widget.view;
     final r = v.right, u = v.up, f = v.forward;
-    const centre = Offset(ViewCube.size / 2, ViewCube.size / 2 - 6);
+    final centre = _centre;
     const reach = 26.0;
     final out = <(_Side, Offset, double)>[
       for (final side in ViewCube._sides)
@@ -143,7 +150,7 @@ class _ViewCubeState extends State<ViewCube>
             child: GestureDetector(
               onTapUp: (d) => _tap(d.localPosition),
               child: CustomPaint(
-                size: const Size(ViewCube.size, ViewCube.size - 6),
+                size: _drawn,
                 painter: _ViewCubePainter(_ends()),
               ),
             ),
@@ -172,7 +179,7 @@ class _ViewCubePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final centre = Offset(size.width / 2, size.height / 2);
+    final centre = _centre;
     canvas.drawCircle(
       centre,
       size.shortestSide / 2,
@@ -209,7 +216,9 @@ class _ViewCubePainter extends CustomPainter {
           ),
           textDirection: TextDirection.ltr,
         )..layout();
-        text.paint(canvas, point - Offset(text.width / 2, text.height / 2));
+        text
+          ..paint(canvas, point - Offset(text.width / 2, text.height / 2))
+          ..dispose();
       }
     }
   }

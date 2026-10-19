@@ -35,12 +35,27 @@ class MinimapLayout {
     LevelDesignerController controller,
     Rect area,
     Rect view,
+  ) => _around(
+    [
+      for (final e in world.query([jge.TransformComponent]))
+        if (e.isActive && controller.isShownInViewport(e))
+          ?DesignerGeometry.worldBounds(e),
+    ],
+    controller,
+    area,
+    view,
+  );
+
+  /// The layout for things at [bounds] and the camera's [view].
+  static MinimapLayout? _around(
+    Iterable<Rect> bounds,
+    LevelDesignerController controller,
+    Rect area,
+    Rect view,
   ) {
     Rect? extent = view;
-    for (final e in world.query([jge.TransformComponent])) {
-      if (!e.isActive || !controller.isShownInViewport(e)) continue;
-      final b = DesignerGeometry.worldBounds(e);
-      if (b != null) extent = extent!.expandToInclude(b);
+    for (final b in bounds) {
+      extent = extent!.expandToInclude(b);
     }
     if (extent == null || extent.isEmpty) return null;
     extent = extent.inflate(math.max(extent.width, extent.height) * 0.04);
@@ -95,22 +110,38 @@ class MinimapOverlay extends DesignerOverlay with InteractiveOverlay {
   @override
   void onPointerMove(OverlayPointerContext context) => _jumpTo(context);
 
+  /// The layout the minimap was last drawn with: what a press on it
+  /// means. Laying the map out again for every move of a drag would walk
+  /// the whole level each time.
+  MinimapLayout? _drawn;
+
+  /// Each entity's colour on the map, while the scene is as it was
+  /// ([_coloursAt], its revision).
+  final Map<jge.EntityId, Color> _colours = {};
+  int _coloursAt = -1;
+
   /// Centres the visible viewport on the world point under the pointer. The
   /// camera centres the whole canvas, not the visible part, so the target is
   /// offset by how far off-centre the panels push that part.
-  static void _jumpTo(OverlayPointerContext context) {
+  void _jumpTo(OverlayPointerContext context) {
     final cam = context.camera;
     final area = context.area;
-    final view = Rect.fromPoints(
-      cam.screenToWorld(area.topLeft),
-      cam.screenToWorld(area.bottomRight),
-    );
-    final layout = MinimapLayout.of(
-      context.world,
-      context.controller,
+    final drawn = _drawn;
+    final panel = MinimapLayout.panelFor(
       area,
-      view,
+      bottomReserve: context.controller.minimapBottomReserve,
     );
+    final layout = drawn != null && drawn.panel == panel
+        ? drawn
+        : MinimapLayout.of(
+            context.world,
+            context.controller,
+            area,
+            Rect.fromPoints(
+              cam.screenToWorld(area.topLeft),
+              cam.screenToWorld(area.bottomRight),
+            ),
+          );
     if (layout == null) return;
     final target = layout.toWorld(context.screen);
     final canvasCentre = Offset(
@@ -164,13 +195,27 @@ class MinimapOverlay extends DesignerOverlay with InteractiveOverlay {
       draw.toWorld(area.topLeft),
       draw.toWorld(area.bottomRight),
     );
-    final layout = MinimapLayout.of(
-      context.world,
-      context.controller,
+    final controller = context.controller;
+    // One walk of the level a frame: the same bounds lay the map out and
+    // are drawn on it.
+    final shown = <(jge.Entity, Rect)>[
+      for (final e in context.world.query([jge.TransformComponent]))
+        if (e.isActive && controller.isShownInViewport(e))
+          if (DesignerGeometry.worldBounds(e) case final b?) (e, b),
+    ];
+    final layout = MinimapLayout._around(
+      [for (final (_, b) in shown) b],
+      controller,
       area,
       view,
     );
+    _drawn = layout;
     if (layout == null) return;
+    final revision = controller.sceneState.revision.value;
+    if (revision != _coloursAt) {
+      _colours.clear();
+      _coloursAt = revision;
+    }
 
     final canvas = draw.canvas;
     canvas
@@ -186,14 +231,11 @@ class MinimapOverlay extends DesignerOverlay with InteractiveOverlay {
       ?context.controller.sceneState.selectedEntity.value?.id,
     };
     final fill = Paint();
-    for (final e in context.world.query([jge.TransformComponent])) {
-      if (!e.isActive || !context.controller.isShownInViewport(e)) continue;
-      final b = DesignerGeometry.worldBounds(e);
-      if (b == null) continue;
+    for (final (e, b) in shown) {
       final r = layout.rectToPanel(b);
       fill.color = selected.contains(e.id)
           ? OverlayColors.selection
-          : _colourOf(e).withValues(alpha: 0.85);
+          : (_colours[e.id] ??= _colourOf(e)).withValues(alpha: 0.85);
       // At least a pixel, or small things vanish from the map entirely.
       canvas.drawRect(
         Rect.fromCenter(

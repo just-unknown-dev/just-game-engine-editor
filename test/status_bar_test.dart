@@ -7,6 +7,8 @@ import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/compact_dock.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart';
 
 void main() {
   late JustGameEditorPlugin plugin;
@@ -20,7 +22,7 @@ void main() {
     addTearDown(engine.dispose);
     await tester.runAsync(engine.initialize);
     plugin = JustGameEditorPlugin(engine: engine);
-    await tester.runAsync(plugin.onInitialize);
+    await tester.runAsync(() => plugin.attach(plugin.engine));
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -73,6 +75,23 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('in a 3-D scene the selection is where it is in metres, '
+      'and how high', (tester) async {
+    if (!kDebugMode) return;
+    await pump(tester);
+    plugin.setVisible(true);
+    plugin.sceneState.openScene(
+      EditorScene(name: 'space', mode: SceneMode.threeD),
+    );
+    final crate = plugin.engine.world.createEntityWithComponents([
+      TransformComponent(position: Vector3(0.4, 1.6, -3.2)),
+    ], name: 'Crate');
+    plugin.sceneState.selectEntity(crate);
+    await refresh(tester);
+    expect(find.text('0.40, 1.60, -3.20'), findsOneWidget);
+    await done(tester);
+  });
+
   testWidgets('facts: the scene, what is wrong, what is selected', (
     tester,
   ) async {
@@ -88,7 +107,6 @@ void main() {
       TransformComponent(position: Vector3(120, 48, 0)),
     ], name: 'Hero');
     plugin.sceneState
-      ..syncEntityNode(hero)
       ..selectEntity(hero)
       ..markDirty();
     await refresh(tester);

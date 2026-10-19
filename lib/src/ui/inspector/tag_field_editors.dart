@@ -226,10 +226,15 @@ class TagChips extends StatelessWidget {
             color: scope.tags.colorOf(tag),
             unknown: !scope.tags.isKnown(tag),
             onHover: (inside) => TagHighlight.set(scope, tag, inside),
-            onRemove: () => onChanged([
-              for (final t in tags)
-                if (t != tag) t,
-            ]),
+            onRemove: () {
+              // The chip goes without the pointer leaving it, so nothing
+              // else would put the ring out.
+              TagHighlight.set(scope, tag, false);
+              onChanged([
+                for (final t in tags)
+                  if (t != tag) t,
+              ]);
+            },
           ),
         TagPicker(
           scope: scope,

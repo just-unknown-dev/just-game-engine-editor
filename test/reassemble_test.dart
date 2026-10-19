@@ -14,6 +14,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/shell/built_in_docks.dart';
+import 'package:just_editor_core/host.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart';
 
 /// A module whose code a test edits between reloads.
 class _EditedModule extends EditorModule {
@@ -333,7 +335,8 @@ void main() {
     // A class's static, or a top-level declaration — not a local.
     final pattern = RegExp(
       r'^(?:  static final|final) (?:\w+ )?\w+ =\s*'
-      r'(?:TextStyle|PrefabDefinition|WorkspaceDefinition|DockDefinition)\(',
+      r'(?:TextStyle|PrefabDefinition|PrefabVariant|WorkspaceDefinition|'
+      r'DockDefinition)\(',
       multiLine: true,
     );
     final readsTheme = RegExp(

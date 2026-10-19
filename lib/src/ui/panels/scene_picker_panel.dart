@@ -1,4 +1,4 @@
-import 'dart:io' show FileSystemException;
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:just_editor_core/host.dart';
+import 'package:just_editor_core/io.dart' show FileSystemException;
 import '../../core/prefs/recent_scenes.dart';
 import '../../core/serialization/scene_manager.dart';
 import '../dialogs/create_scene_overlay.dart';
@@ -139,6 +140,7 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
 
   @override
   void dispose() {
+    _forgetDeleted?.cancel();
     _sortPref?.removeListener(_onSortPref);
     _recentPref?.removeListener(_onRecentPref);
     _search.dispose();
@@ -177,12 +179,11 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
     }
     final summaries = <String, SceneSummary>{};
     for (final name in all) {
-      try {
-        final summary = _manager.store.summaryOf(name);
-        if (summary != null) summaries[name] = summary;
-      } on FileSystemException {
-        // Gone between the listing and the read: the next refresh drops it.
-      }
+      // Read once and remembered until the file changes; a file that is
+      // not a scene is summed up as unreadable, and one gone between the
+      // listing and the read is null: the next refresh drops it.
+      final summary = _manager.summaryOf(name);
+      if (summary != null) summaries[name] = summary;
     }
     setState(() {
       _all = all;
@@ -285,19 +286,28 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
     await widget.onSceneSelected(name);
   }
 
-  /// Runs [action], showing what went wrong in the banner.
+  /// Runs [action], showing what went wrong in the banner. A refused or
+  /// failed action reads the list again: what it acted on may have changed
+  /// on disk.
   Future<bool> _attempt(Future<void> Function() action) async {
     setState(() => _actionError = null);
+    String? problem;
     try {
       await action();
       return true;
     } on SceneManagerException catch (e) {
-      if (mounted) setState(() => _actionError = e.message);
-      return false;
+      problem = e.message;
     } on FileSystemException catch (e) {
-      if (mounted) setState(() => _actionError = e.message);
-      return false;
+      problem = e.path == null ? e.message : '${e.message}: ${e.path}';
+    } on Exception catch (e) {
+      // An unreadable scenes.json, say: said, not thrown into the frame.
+      problem = '$e';
     }
+    if (mounted) {
+      _refreshScenes();
+      setState(() => _actionError = problem);
+    }
+    return false;
   }
 
   Future<void> _onRename(String name) async {
@@ -308,6 +318,8 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
       title: 'Rename "$name"',
       actionLabel: 'Rename',
       initialValue: name,
+      // Its own name is free, in other letter case too: `level_01` can
+      // become `Level_01`. Every other scene's name is taken.
       validate: (value) => _manager.validateName(value, ignoring: name),
     );
     if (newName == null || newName == name || !mounted) return;
@@ -318,6 +330,36 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
     if (!mounted) return;
     _refreshScenes();
     _setCursor(newName);
+    await _offerToRepoint(name, newName);
+  }
+
+  /// After [from] became [to]: the other scenes that still name [from] —
+  /// a goal's next scene — are offered to be pointed at [to] too.
+  Future<void> _offerToRepoint(String from, String to) async {
+    final Map<String, int> mentions;
+    try {
+      mentions = await _manager.mentionsOf(from, except: to);
+    } on FileSystemException {
+      return;
+    }
+    if (mentions.isEmpty || !mounted) return;
+    final where = [
+      for (final MapEntry(key: scene, value: count) in mentions.entries)
+        '  • $scene ($count)',
+    ].join('\n');
+    final go = await showEditorConfirm(
+      context,
+      title: 'Point other scenes at "$to"?',
+      message:
+          'These scenes still name "$from" — as a goal\'s next scene, say — '
+          'and would look for a scene that is not there:\n$where\n\n'
+          'Each place that is exactly "$from" becomes "$to".',
+      confirmLabel: 'Update them',
+      danger: false,
+    );
+    if (!go || !mounted) return;
+    await _attempt(() => _manager.rewriteMentions(from, to, mentions.keys));
+    if (mounted) _refreshScenes();
   }
 
   Future<void> _onDuplicate(String name) async {
@@ -327,7 +369,9 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
       title: 'Duplicate "$name"',
       actionLabel: 'Duplicate',
       initialValue: _copyName(name),
-      validate: (value) => _manager.validateName(value, ignoring: name),
+      // A copy needs a name of its own: the source's, in any letter case,
+      // is taken too.
+      validate: _manager.validateName,
     );
     if (newName == null || !mounted) return;
     final done = await _attempt(() => _manager.duplicateScene(name, newName));
@@ -361,13 +405,45 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
         : at > 0
         ? shown[at - 1]
         : null;
-    final done = await _attempt(() => _manager.deleteScene(name));
+    DeletedScene? deleted;
+    final done = await _attempt(
+      () async => deleted = await _manager.deleteScene(name),
+    );
     if (!done || !mounted) return;
     final prefs = widget.prefs;
     if (prefs != null) await RecentScenes.forget(prefs, name);
     if (!mounted) return;
     _refreshScenes();
     if (_cursor == name || _cursor == null) _setCursor(neighbour);
+    _offerUndo(deleted);
+  }
+
+  /// The scene deleted last, while it can still be brought back from here.
+  DeletedScene? _deleted;
+  Timer? _forgetDeleted;
+
+  /// How long the Undo stays offered.
+  static const Duration _undoFor = Duration(seconds: 12);
+
+  void _offerUndo(DeletedScene? deleted) {
+    _forgetDeleted?.cancel();
+    _forgetDeleted = deleted == null
+        ? null
+        : Timer(_undoFor, () {
+            if (mounted) setState(() => _deleted = null);
+          });
+    setState(() => _deleted = deleted);
+  }
+
+  Future<void> _undoDelete() async {
+    final deleted = _deleted;
+    if (deleted == null) return;
+    _forgetDeleted?.cancel();
+    setState(() => _deleted = null);
+    final done = await _attempt(deleted.restore);
+    if (!done || !mounted) return;
+    _refreshScenes();
+    _setCursor(deleted.name);
   }
 
   /// Writes [order] as the play order — straight away on screen, then to
@@ -438,7 +514,7 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
         _RowAction.duplicate,
         'Duplicate…',
         icon: Icons.copy_outlined,
-        shortcut: 'Ctrl+D',
+        shortcut: EditorKeys.withPrimary('D'),
       ),
       editorMenuDivider(),
       if (place >= 0) ...[
@@ -537,24 +613,30 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
     LogicalKeyboardKey.escape,
   };
 
-  static bool get _ctrl =>
-      HardwareKeyboard.instance.isControlPressed ||
-      HardwareKeyboard.instance.isMetaPressed;
+  /// Ctrl held — Cmd on macOS, where Ctrl is not a shortcut key.
+  static bool get _ctrl => EditorKeys.primaryPressed;
 
   /// A character typed into the list, for the search; null for anything
   /// else.
   static String? _typed(KeyEvent event) {
-    if (_ctrl || HardwareKeyboard.instance.isAltPressed) return null;
+    if (_ctrl ||
+        HardwareKeyboard.instance.isAltPressed ||
+        EditorKeys.otherPressed) {
+      return null;
+    }
     final c = event.character;
     if (c == null || c.length != 1 || c.trim().isEmpty) return null;
     return c.codeUnitAt(0) < 0x20 || c.codeUnitAt(0) == 0x7f ? null : c;
   }
 
   /// The keys the list keeps from the editor's shortcuts while it has the
-  /// focus — Ctrl+S and the rest still reach the editor.
+  /// focus — Ctrl+S and the rest still reach the editor. A Mac's Backspace
+  /// deletes, as Delete does.
   bool _claims(KeyEvent event) {
     if (_ctrl) return event.logicalKey == LogicalKeyboardKey.keyD;
-    return _listKeys.contains(event.logicalKey) || _typed(event) != null;
+    return _listKeys.contains(event.logicalKey) ||
+        EditorKeys.isDeleteKey(event.logicalKey) ||
+        _typed(event) != null;
   }
 
   KeyEventResult _onListKey(FocusNode node, KeyEvent event) {
@@ -632,7 +714,7 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
         _onDuplicate(cursor);
         return KeyEventResult.handled;
       }
-      if (key == LogicalKeyboardKey.delete) {
+      if (EditorKeys.isDeleteKey(key)) {
         _onDelete(cursor);
         return KeyEventResult.handled;
       }
@@ -688,6 +770,12 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
           _ActionErrorBanner(
             message: _actionError!,
             onDismiss: () => setState(() => _actionError = null),
+          ),
+        if (_deleted case final deleted?)
+          _DeletedBanner(
+            name: deleted.name,
+            onUndo: _undoDelete,
+            onDismiss: () => _offerUndo(null),
           ),
         Expanded(
           child: _all.isEmpty
@@ -879,15 +967,59 @@ class _ScenePickerPanelState extends State<ScenePickerPanel> {
     ),
   );
 
-  static const String _keysHelp =
+  static String get _keysHelp =>
       'With the list focused:\n'
       '↑ ↓  Home  End — move\n'
       'Enter — open\n'
       'F2 — rename\n'
-      'Ctrl+D — duplicate\n'
-      'Delete — delete\n'
+      '${EditorKeys.withPrimary('D')} — duplicate\n'
+      '${EditorKeys.isMac ? 'Delete or Backspace' : 'Delete'} — delete\n'
       'Alt+↑ ↓ — earlier or later in the play order\n'
       'Type — search';
+}
+
+/// A scene just deleted: where it went, and the way back.
+class _DeletedBanner extends StatelessWidget {
+  const _DeletedBanner({
+    required this.name,
+    required this.onUndo,
+    required this.onDismiss,
+  });
+
+  final String name;
+  final VoidCallback onUndo;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: EditorTheme.panelRaised,
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.delete_outline, size: 14, color: EditorTheme.textMuted),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Deleted "$name": it is in ${AssetIndex.trashFolder}/',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: EditorTheme.textSecondary, fontSize: 11),
+            ),
+          ),
+          EditorButton(
+            label: 'Undo',
+            kind: EditorButtonKind.ghost,
+            onPressed: onUndo,
+          ),
+          EditorIconButton(
+            icon: Icons.close_rounded,
+            tooltip: 'Dismiss',
+            onTap: onDismiss,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ActionErrorBanner extends StatelessWidget {

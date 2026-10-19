@@ -69,6 +69,7 @@ final class ShapeRayTest
     _inverse
       ..transformPointInto(ray.origin, _origin)
       ..transformDirectionInto(ray.direction, _direction);
-    return RayTriangles.nearestHit(geometry, _origin, _direction) ?? double.infinity;
+    return RayTriangles.nearestHit(geometry, _origin, _direction) ??
+        double.infinity;
   }
 }

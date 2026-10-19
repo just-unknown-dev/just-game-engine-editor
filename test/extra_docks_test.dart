@@ -8,6 +8,7 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/extra/extra_docks.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/validation/built_in_validators.dart';
 
 class _RuleModule extends EditorModule {
   @override
@@ -22,6 +23,30 @@ class _RuleModule extends EditorModule {
       if (context.world.findEntityByName('Spawn') == null)
         const SceneProblem(message: 'The level has no Spawn.'),
     ],
+  ];
+}
+
+// Counts its runs, and reads one file twice (the package's pubspec: tests
+// run in the package folder).
+class _CountingModule extends EditorModule {
+  _CountingModule(this.ran, this.read);
+
+  final void Function() ran;
+  final void Function(String?, String?) read;
+
+  @override
+  String get id => 'test.counting';
+
+  @override
+  String get name => 'Counting';
+
+  @override
+  List<SceneValidator> get validators => [
+    (context) {
+      ran();
+      read(context.readText('pubspec.yaml'), context.readText('pubspec.yaml'));
+      return const [];
+    },
   ];
 }
 
@@ -164,6 +189,68 @@ void main() {
       scan.refresh();
       expect(scan.problems, hasLength(1), reason: 'the module: no Spawn');
       expect(scan.errors, 0);
+    });
+
+    test('the scan runs again only when the scene changes, and never '
+        'during a play-test', () {
+      var runs = 0;
+      String? first, second;
+      final counting = testScope(
+        modules: [
+          _CountingModule(() => runs++, (a, b) => (first, second) = (a, b)),
+        ],
+      );
+      var clock = DateTime(2026);
+      final scan = ProblemScan(counting)..now = () => clock;
+      counting.sceneState.openScene(EditorScene(name: 'level'));
+      for (var i = 0; i < 10; i++) {
+        scan.problems;
+      }
+      expect(runs, 1, reason: 'asked ten times, checked once');
+      expect(first, isNotNull);
+      expect(identical(first, second), isTrue, reason: 'read once per scan');
+
+      counting.sceneState.refresh();
+      scan.problems;
+      expect(runs, 1, reason: 'an edit right after a scan waits its turn');
+      clock = clock.add(const Duration(seconds: 1));
+      scan.problems;
+      expect(runs, 2, reason: 'an edit, a second on');
+
+      counting.isPlayTesting.value = true;
+      counting.sceneState.refresh();
+      clock = clock.add(const Duration(seconds: 1));
+      scan.problems;
+      expect(runs, 2, reason: "the play-test's world is not the scene");
+      counting.isPlayTesting.value = false;
+      scan.problems;
+      expect(runs, 3);
+
+      counting.sceneState.openScene(EditorScene(name: 'other'));
+      scan.problems;
+      expect(runs, 4, reason: 'another scene is checked at once');
+    });
+
+    test('edits that keep coming are checked at most once a second', () {
+      var runs = 0;
+      final counting = testScope(
+        modules: [_CountingModule(() => runs++, (_, _) {})],
+      );
+      var clock = DateTime(2026);
+      final scan = ProblemScan(counting)..now = () => clock;
+      counting.sceneState.openScene(EditorScene(name: 'level'));
+      scan.problems;
+      expect(runs, 1);
+      // A drag: an edit every frame, the problems asked for each time.
+      for (var i = 0; i < 30; i++) {
+        counting.sceneState.refresh();
+        clock = clock.add(const Duration(milliseconds: 16));
+        scan.problems;
+      }
+      expect(runs, 1, reason: 'not once per move: 0.48 s went by');
+      clock = clock.add(ProblemScan.editEvery);
+      scan.problems;
+      expect(runs, 2, reason: 'the last edits are checked');
     });
   });
 

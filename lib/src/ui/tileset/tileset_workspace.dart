@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -38,6 +37,7 @@ class TilesetEditor extends StatefulWidget {
     this.readText,
     this.writeText,
     this.collisionKinds,
+    this.disposesImages,
   });
 
   /// The project folder paths are relative to.
@@ -66,6 +66,11 @@ class TilesetEditor extends StatefulWidget {
   /// engine's own when null.
   final MapCollisionKinds? collisionKinds;
 
+  /// Whether the images [loadImage] hands back are the editor's to dispose
+  /// (see [SpriteAssetLoader.callerDisposesImages]); by default only when
+  /// it loads from the bundle itself.
+  final bool? disposesImages;
+
   // Seams for tests.
   final TilesetImageLoader? loadImage;
   final TilesetTextReader? readText;
@@ -75,6 +80,8 @@ class TilesetEditor extends StatefulWidget {
   State<TilesetEditor> createState() => TilesetEditorState();
 }
 
+/// Public only so tests can reach the session: [session].
+@visibleForTesting
 class TilesetEditorState extends State<TilesetEditor> {
   TilesetSession? _session;
   String? _error;
@@ -122,9 +129,16 @@ class TilesetEditorState extends State<TilesetEditor> {
         loadImage: widget.loadImage,
         writeText: widget.writeText,
         collisionKinds: widget.collisionKinds,
+        disposesImages: widget.disposesImages,
       );
       if (!mounted) return s.dispose();
       _adopt(s);
+      if (!s.canSaveTo(path)) {
+        s.say(
+          'Read-only: pub\'s shared cache. Save puts a copy in '
+          '${widget.newTilesetFolder}.',
+        );
+      }
     } catch (e) {
       if (mounted) setState(() => _error = 'Could not open $path: $e');
     }
@@ -143,6 +157,9 @@ class TilesetEditorState extends State<TilesetEditor> {
         loadImage: widget.loadImage,
         writeText: widget.writeText,
         collisionKinds: widget.collisionKinds,
+        disposesImages: widget.disposesImages,
+        imageWidth: cut.imageWidth,
+        imageHeight: cut.imageHeight,
       );
       if (!mounted) return s.dispose();
       setState(() => _creating = false);
@@ -180,15 +197,20 @@ class TilesetEditorState extends State<TilesetEditor> {
     super.dispose();
   }
 
-  /// Saves, asking for a name the first time. Returns whether it saved.
+  /// Saves, asking for a name the first time — and for a tileset that
+  /// cannot be written where it is (a package's, in pub's shared cache),
+  /// saving a copy in the project instead. Returns whether it saved.
   Future<bool> save() async {
     final s = _session;
     if (s == null) return false;
     var target = s.path;
+    if (target != null && !s.canSaveTo(target)) target = null;
     if (target == null) {
       final name = await promptTimelineText(
         context,
-        title: 'Name this tileset',
+        title: s.path == null
+            ? 'Name this tileset'
+            : 'Save a copy in the project, named',
         initial: s.data.name,
         hint: 'grassland',
       );
@@ -196,7 +218,7 @@ class TilesetEditorState extends State<TilesetEditor> {
       final safe = name.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), '_');
       target = '${widget.newTilesetFolder}/$safe.tileset.json';
       if (widget.writeText == null &&
-          File('${widget.root}/$target').existsSync()) {
+          PackageAssetPaths.of(widget.root).file(target).existsSync()) {
         s.say('$target already exists: choose another name');
         return false;
       }
@@ -230,7 +252,8 @@ class TilesetEditorState extends State<TilesetEditor> {
       return KeyEventResult.ignored;
     }
     final keys = HardwareKeyboard.instance;
-    final ctrl = keys.isControlPressed || keys.isMetaPressed;
+    // Ctrl is Cmd on macOS.
+    final ctrl = EditorKeys.primaryPressed;
     final key = event.logicalKey;
     if (ctrl && key == LogicalKeyboardKey.keyS) {
       save();
@@ -275,7 +298,7 @@ class TilesetEditorState extends State<TilesetEditor> {
     if (at == null) return;
     final id = at.$2 * s.data.columns + at.$1;
     final keys = HardwareKeyboard.instance;
-    if (keys.isControlPressed) {
+    if (EditorKeys.primaryPressed) {
       final next = {...s.selection.value};
       next.contains(id) ? next.remove(id) : next.add(id);
       s.selection.value = next;
@@ -332,8 +355,14 @@ class TilesetEditorState extends State<TilesetEditor> {
     final id = at.$2 * ts.columns + at.$1;
     final keys = HardwareKeyboard.instance;
     final color = keys.isAltPressed ? 0 : _wangColor;
-    if (start) _wangStroke++;
     final w = ts.wangSets[set];
+    // A terrain the set no longer has (its last one was removed) is not
+    // painted: the ids would name nothing.
+    if (color > w.colors.length) {
+      if (start) s.say('Pick a terrain to paint with first');
+      return;
+    }
+    if (start) _wangStroke = s.newGesture();
     if (keys.isShiftPressed) {
       if (start) s.fillWangIds(set, [id], color);
       return;
@@ -370,6 +399,7 @@ class TilesetEditorState extends State<TilesetEditor> {
               root: widget.root,
               image: widget.path,
               loadImage: widget.loadImage,
+              disposesImages: widget.disposesImages,
               onCreate: _create,
               onCancel: widget.onClose,
             ),
@@ -424,7 +454,9 @@ class TilesetEditorState extends State<TilesetEditor> {
                 _toast ??
                     '${s.data.columns} × ${s.data.rows} tiles of '
                         '${s.data.tileWidth} × ${s.data.tileHeight} px · '
-                        'Shift+click a range, Ctrl+click to add, drag a block',
+                        'Shift+click a range, '
+                        '${EditorKeys.withPrimary('click')} to add, drag a '
+                        'block',
               ),
             ],
           ),
@@ -530,8 +562,7 @@ class TilesetEditorState extends State<TilesetEditor> {
               onPointerMove: _move,
               onPointerUp: (_) => _dragFrom = null,
               onPointerSignal: (e) {
-                if (e is PointerScrollEvent &&
-                    HardwareKeyboard.instance.isControlPressed) {
+                if (e is PointerScrollEvent && EditorKeys.primaryPressed) {
                   setState(() {
                     _zoom = (e.scrollDelta.dy < 0 ? _zoom * 1.25 : _zoom / 1.25)
                         .clamp(0.5, 8);
@@ -542,6 +573,7 @@ class TilesetEditorState extends State<TilesetEditor> {
                 key: const ValueKey('tileset-grid'),
                 size: Size(width.toDouble(), height.toDouble()),
                 painter: _GridPainter(
+                  revision: ts.revision,
                   tileset: ts,
                   collisionKinds: s.collisionKinds,
                   image: image,
@@ -734,6 +766,7 @@ class _Warning extends StatelessWidget {
 
 class _GridPainter extends CustomPainter {
   _GridPainter({
+    required this.revision,
     required this.tileset,
     required this.image,
     required this.zoom,
@@ -744,6 +777,10 @@ class _GridPainter extends CustomPainter {
   });
 
   final TilesetData tileset;
+
+  /// [tileset]'s revision when this was made: the tileset is changed in
+  /// place, so this is how a change is seen.
+  final int revision;
 
   /// What colours each tile's collision kind.
   final MapCollisionKinds collisionKinds;
@@ -871,5 +908,13 @@ class _GridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_GridPainter old) => true;
+  bool shouldRepaint(_GridPainter old) =>
+      !identical(old.tileset, tileset) ||
+      old.revision != revision ||
+      !identical(old.image, image) ||
+      old.zoom != zoom ||
+      !setEquals(old.selected, selected) ||
+      old.showCollision != showCollision ||
+      !identical(old.wang, wang) ||
+      !identical(old.collisionKinds, collisionKinds);
 }

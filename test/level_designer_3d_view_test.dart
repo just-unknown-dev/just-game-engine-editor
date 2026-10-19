@@ -13,6 +13,9 @@ import 'package:just_game_engine/graphics_3d.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/panels/view_3d_panel.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/panels/view_cube.dart';
 
 EditorScope _scope({SceneMode mode = SceneMode.threeD}) {
   final world = World()..initialize();
@@ -143,8 +146,10 @@ void main() {
       expect([view.yaw, view.pitch, view.distance], [0.7, -0.3, 12]);
       expect([view.pivot.x, view.pivot.y, view.pivot.z], [1, -2, 3]);
       expect(view.orthographic, isTrue);
+      view.distance = 50;
       session.restoreEditorData(saved);
-      expect(session.bookmarks3D[1]?.distance, 12);
+      session.recallBookmark(1);
+      expect(view.distance, 12);
     });
 
     test('orthographic: a flat lens, still in space, the same scale', () {
@@ -233,7 +238,7 @@ void main() {
       engine = Engine(config: EngineConfig(graphics3D: graphics));
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
-      await plugin.onInitialize();
+      await plugin.attach(plugin.engine);
       plugin.setVisible(true);
     });
     tearDown(() {
@@ -247,7 +252,7 @@ void main() {
         ..viewMode.value = ViewMode3D.wireframe
         ..sliceOn.value = true
         ..sliceY.value = -3;
-      plugin.onUpdate(1 / 60);
+      plugin.update(1 / 60);
       final aids = graphics.sceneRenderer.aids;
       expect(aids, isNotNull);
       expect(aids!.viewMode, RenderViewMode.wireframe);
@@ -255,11 +260,11 @@ void main() {
       expect(aids.highlighted, isNotNull);
 
       plugin.scope.designer3D.viewMode.value = ViewMode3D.collision;
-      plugin.onUpdate(1 / 60);
+      plugin.update(1 / 60);
       expect(graphics.sceneRenderer.aids!.viewMode, RenderViewMode.unlit, reason: 'colliders over an unlit scene');
 
       plugin.sceneState.openScene(EditorScene(name: 'flat'));
-      plugin.onUpdate(1 / 60);
+      plugin.update(1 / 60);
       expect(graphics.sceneRenderer.aids, isNull);
     });
   });

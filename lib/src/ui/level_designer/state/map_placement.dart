@@ -88,7 +88,7 @@ abstract final class MapPlacement {
     final provision = scope.mapProvision;
     final target = provision.ensure(world);
     if (target == null) {
-      say?.call('The ${jge.LevelMaps.primaryName} is still loading');
+      say?.call(whyNoMap(scope, world));
       return null;
     }
     final mapName = target.entity.name;
@@ -171,6 +171,26 @@ abstract final class MapPlacement {
     scope.tiles.layerId.value = onLayer.id;
     scope.sceneState.markDirty();
     return List.of(made);
+  }
+
+  /// Why the scene's Level Map cannot be drawn on: there is none yet, its
+  /// file could not be read — and why — or it is still loading.
+  static String whyNoMap(EditorScope scope, jge.World world) {
+    final entity = jge.LevelMaps.primaryEntity(world);
+    if (entity == null) {
+      return 'Nothing painted yet: the ${jge.LevelMaps.primaryName} is made '
+          'when you first paint';
+    }
+    final component = entity.getComponent<jge.LevelMapComponent>();
+    final path = component != null && component.usesFile
+        ? component.mapPath.trim()
+        : null;
+    final failure = path == null ? null : scope.mapDocs.tiles.failureOf(path);
+    if (failure != null) {
+      return "The ${jge.LevelMaps.primaryName}'s file $path could not be "
+          'read: $failure';
+    }
+    return 'The ${jge.LevelMaps.primaryName} is still loading';
   }
 
   static jge.MapLayerData _newLayer(

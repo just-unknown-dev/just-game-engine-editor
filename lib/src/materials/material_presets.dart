@@ -17,8 +17,9 @@ final class MaterialPreset {
   /// The material with this preset's values.
   final MaterialFile Function(MaterialFile m) apply;
 
-  /// The presets the workspace offers, in the order it lists them.
-  static final List<MaterialPreset> all = [
+  /// The presets the workspace offers, in the order it lists them. A
+  /// getter, so an edited preset shows after a hot reload.
+  static List<MaterialPreset> get all => [
     MaterialPreset(
       'matte',
       'Matte',

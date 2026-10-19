@@ -17,7 +17,7 @@ void main() {
     addTearDown(engine.dispose);
     await engine.initialize();
     plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
-    await plugin.onInitialize();
+    await plugin.attach(plugin.engine);
   });
 
   test('a workspace over the level spares its drawing; closing it gives '

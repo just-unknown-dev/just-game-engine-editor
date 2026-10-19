@@ -104,13 +104,16 @@ class CurveViewState extends State<CurveView> {
   double timeAt(double x) =>
       s.scrollTime.value +
       (x - TimelineMetrics.leftInset) / s.pixelsPerSecond.value;
-  double yOf(double value) =>
-      _pad + (1 - (value - _lo) / (_hi - _lo)) * (_size.height - 2 * _pad);
-  double valueAt(double y) =>
-      _lo + (1 - (y - _pad) / (_size.height - 2 * _pad)) * (_hi - _lo);
+
+  /// How tall the value axis is drawn: a pixel at the least, so a dock
+  /// squeezed flat never divides by nothing (or turns a drag upside down).
+  double get _span => math.max(1.0, _size.height - 2 * _pad);
+
+  double yOf(double value) => _pad + (1 - (value - _lo) / (_hi - _lo)) * _span;
+  double valueAt(double y) => _lo + (1 - (y - _pad) / _span) * (_hi - _lo);
 
   /// Value per pixel, for turning a drag into a change of value.
-  double get _valuePerPixel => (_hi - _lo) / (_size.height - 2 * _pad);
+  double get _valuePerPixel => (_hi - _lo) / _span;
 
   Offset keyPoint(jge.TimelineKey k) => Offset(xOf(k.time), yOf(k.number));
 
@@ -195,7 +198,7 @@ class CurveViewState extends State<CurveView> {
     }
 
     final keys = HardwareKeyboard.instance;
-    final additive = keys.isShiftPressed || keys.isControlPressed;
+    final additive = keys.isShiftPressed || EditorKeys.primaryPressed;
     final hit = _keyAt(local);
     if (hit == null) {
       if (isDouble) {
@@ -319,7 +322,7 @@ class CurveViewState extends State<CurveView> {
     final dy = e.scrollDelta.dy;
     if (dy == 0) return;
     // The value axis fits itself, so a plain wheel scrolls through time.
-    HardwareKeyboard.instance.isControlPressed
+    EditorKeys.primaryPressed
         ? s.zoomAround(
             dy < 0 ? 1.15 : 1 / 1.15,
             e.localPosition.dx - TimelineMetrics.leftInset,
@@ -388,14 +391,16 @@ class _CurvePainter extends CustomPainter {
     for (var v = (view._lo / step).floor() * step; v <= view._hi; v += step) {
       final y = view.yOf(v);
       canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
-      final label = TextPainter(
-        text: TextSpan(
-          text: v.abs() < 1e-9 ? '0' : v.toStringAsFixed(step < 1 ? 2 : 0),
-          style: TextStyle(color: EditorTheme.textMuted, fontSize: 9),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      label.paint(canvas, Offset(2, y - 11));
+      TextPainter(
+          text: TextSpan(
+            text: v.abs() < 1e-9 ? '0' : v.toStringAsFixed(step < 1 ? 2 : 0),
+            style: TextStyle(color: EditorTheme.textMuted, fontSize: 9),
+          ),
+          textDirection: TextDirection.ltr,
+        )
+        ..layout()
+        ..paint(canvas, Offset(2, y - 11))
+        ..dispose();
     }
 
     final endX = view.xOf(asset.duration);

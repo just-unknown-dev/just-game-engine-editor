@@ -4,6 +4,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +12,12 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/level_map/level_map_provision.dart';
+import 'package:just_game_engine_editor/src/core/level_map/tile_commands.dart';
+import 'package:just_game_engine_editor/src/core/level_map/tiled_export.dart';
+import 'package:just_game_engine_editor/src/core/level_map/tiled_import.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/extension/built_in_tile_contributions.dart';
 
 /// just_tiled's fixtures: real Tiled 1.10 files.
 const _fixtures = '../just_tiled/test/fixtures';
@@ -156,11 +163,25 @@ void main() {
         32,
         reason: 'the Trigger prefab',
       );
-      final zoneAt = zone.whereType<TransformComponent>().single.position;
+      final zoneTransform = zone.whereType<TransformComponent>().single;
+      final zoneAt = zoneTransform.position;
+      // The Zone is turned 15° in Tiled, about its top-left corner at
+      // (100, 50): its middle is that corner plus half its size (16, 8),
+      // turned with it.
+      final turn = 15 * math.pi / 180;
       expect(
-        (zoneAt.x, zoneAt.y),
-        (116.0, 58.0),
-        reason: 'the middle of the object',
+        zoneAt.x,
+        closeTo(100 + 16 * math.cos(turn) - 8 * math.sin(turn), 1e-9),
+        reason: 'the middle of the object, turned as Tiled turns it',
+      );
+      expect(
+        zoneAt.y,
+        closeTo(50 + 16 * math.sin(turn) + 8 * math.cos(turn), 1e-9),
+      );
+      expect(
+        zoneTransform.angle,
+        closeTo(turn, 1e-9),
+        reason: 'a prefab built for it is turned as the object is',
       );
 
       // A tile object hangs from its bottom-left corner.
@@ -187,16 +208,61 @@ void main() {
     );
 
     test('a tileset already in the project is used, not overwritten', () async {
-      final memory = <String, String>{};
-      final plan = await TiledImporter(
-        _files(memory, present: {'assets/tilesets/terrain.tileset.json'}),
-      ).read('external.tmx');
+      // The one there was converted from this same TSX: the same picture.
+      final first = await TiledImporter(_files({})).read('external.tmx');
+      const existing = 'assets/tilesets/terrain.tileset.json';
+      final memory = <String, String>{
+        existing: jsonEncode(first.result.tilesets.first!.toJson()),
+      };
+      final plan = await TiledImporter(_files(memory)).read('external.tmx');
       expect(plan.newTilesets.keys, ['assets/tilesets/props.tileset.json']);
+      expect(plan.map.tilesets.first, existing);
       expect(
         plan.warnings.join(' '),
         contains('terrain.tileset.json as it is'),
       );
     });
+
+    test('another tileset of the same name is left alone; this one is '
+        'named beside it (EC-34)', () async {
+      const existing = 'assets/tilesets/terrain.tileset.json';
+      final forest = TilesetData.fromImage(
+        name: 'terrain',
+        image: 'assets/forest/terrain.png',
+        imageWidth: 64,
+        imageHeight: 32,
+        tileWidth: 16,
+        tileHeight: 16,
+      );
+      final memory = <String, String>{existing: jsonEncode(forest.toJson())};
+      final importer = TiledImporter(_files(memory));
+      final plan = await importer.read('external.tmx');
+      const named = 'assets/tilesets/terrain_2.tileset.json';
+      expect(plan.newTilesets.keys, contains(named));
+      expect(plan.map.tilesets.first, named);
+      expect(plan.warnings.join(' '), contains('is another tileset'));
+      await importer.writeTilesets(plan);
+      expect(
+        jsonDecode(memory[existing]!)['image'],
+        'assets/forest/terrain.png',
+        reason: 'the forest tileset is not written over',
+      );
+      expect(memory.containsKey(named), isTrue);
+    });
+
+    test(
+      'an unreadable tileset of the same name is not written over',
+      () async {
+        final memory = <String, String>{};
+        final plan = await TiledImporter(
+          _files(memory, present: {'assets/tilesets/terrain.tileset.json'}),
+        ).read('external.tmx');
+        expect(
+          plan.newTilesets.keys,
+          isNot(contains('assets/tilesets/terrain.tileset.json')),
+        );
+      },
+    );
 
     for (final (file, orientation) in const [
       ('isometric.tmx', MapOrientation.isometric),
@@ -304,6 +370,21 @@ void main() {
         });
       }
     }
+
+    test('never over a file that is there: names beside it (EC-5)', () async {
+      const tsx = 'assets/maps/grass.tsx';
+      const tmx = 'assets/maps/level.tmx';
+      final memory = <String, String>{tsx: "the project file", tmx: 'edited'};
+      final written = await TiledExporter(_files(memory)).export(
+        level(MapOrientation.orthogonal),
+        to: tmx,
+        tilesetAt: (_) => _grass(),
+      );
+      expect(written, ['assets/maps/grass_2.tsx', 'assets/maps/level_2.tmx']);
+      expect(memory[tsx], "the project file");
+      expect(memory[tmx], 'edited');
+      expect(memory['assets/maps/level_2.tmx'], contains('grass_2.tsx'));
+    });
 
     test('paths are written relative to the file', () {
       expect(
@@ -465,11 +546,11 @@ void main() {
     });
 
     test('the Assets dock knows the files and what to do with them', () {
-      expect(AssetKind.of('a/b.tileset.json'), AssetKind.tileset);
-      expect(AssetKind.of('a/b.map.json'), AssetKind.levelMap);
-      expect(AssetKind.of('a/b.tilemap.json'), AssetKind.levelMap);
+      expect(AssetKinds.editorKindOf('a/b.tileset.json'), AssetKind.tileset);
+      expect(AssetKinds.editorKindOf('a/b.map.json'), AssetKind.levelMap);
+      expect(AssetKinds.editorKindOf('a/b.tilemap.json'), AssetKind.levelMap);
       for (final f in ['a.tmx', 'a.tmj', 'a.tsx', 'a.TSJ']) {
-        expect(AssetKind.of(f), AssetKind.tiled, reason: f);
+        expect(AssetKinds.editorKindOf(f), AssetKind.tiled, reason: f);
       }
       final scope = testScope();
       List<String> offered(String path) => [
@@ -509,7 +590,7 @@ void main() {
       addTearDown(engine.dispose);
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine);
-      await plugin.onInitialize();
+      await plugin.attach(plugin.engine);
       plugin.sceneState.openScene(EditorScene(name: 'level'));
       plugin.engine.cameraSystem.mainCamera.viewportSize = const Size(800, 600);
     });

@@ -26,6 +26,10 @@ String relativePath(String fromDir, String to) {
 /// (or `.tmj`), each of its tilesets as a `.tsx` (`.tsj`) beside it, with
 /// paths relative to the files, as Tiled keeps them. A built-in tileset's
 /// picture, which is no file, is written beside them as a `.png`.
+///
+/// Never over a file that is there: a name taken — a `.tmx` edited in Tiled
+/// since the last export, a project's own `.tsx` of the same name — gets
+/// `_2`, `_3`… instead. The files written say which names were used.
 class TiledExporter {
   /// Writes through [files]. A built-in tileset's picture, which has no
   /// file, is taken from [tiles] (an engine's), or drawn for the export.
@@ -36,8 +40,9 @@ class TiledExporter {
   /// Where built-in pictures already drawn are kept; null draws them.
   final TileAssets? tiles;
 
-  /// Writes [map] to [to]; its tilesets come from [tilesetAt]. Returns the
-  /// files written, the map last.
+  /// Writes [map] to [to] — or, when a file is there, the first free
+  /// `<name>_2.tmx`… beside it; its tilesets come from [tilesetAt]. Returns
+  /// the files written, the map last.
   Future<List<String>> export(
     LevelMapData map, {
     required String to,
@@ -45,6 +50,7 @@ class TiledExporter {
   }) async {
     final json = to.toLowerCase().endsWith('.tmj');
     final dir = TileAssets.directoryOf(to);
+    to = _free(to);
     final tilesets = [
       for (var slot = 0; slot < map.tilesets.length; slot++)
         map.tilesets[slot] == null ? null : tilesetAt(slot),
@@ -63,11 +69,18 @@ class TiledExporter {
             ? path.substring(BuiltInTilesets.prefix.length)
             : path,
       );
+      // Free in this export, and on disk: the tileset and its picture.
+      final ending = json ? 'tsj' : 'tsx';
+      bool isFree(String name) =>
+          !taken.contains(name) &&
+          !files.exists(inDir('$name.$ending')) &&
+          !files.exists(inDir('$name.png'));
       var name = stem;
-      for (var n = 2; !taken.add(name); n++) {
+      for (var n = 2; !isFree(name); n++) {
         name = '${stem}_$n';
       }
-      final file = '$name.${json ? 'tsj' : 'tsx'}';
+      taken.add(name);
+      final file = '$name.$ending';
       names[slot] = file;
       var image = relativePath(dir, ts.image);
       final kept = tiles?.builtInImage(ts.image);
@@ -111,5 +124,19 @@ class TiledExporter {
       json ? tiled.TmjWriter.write(out) : tiled.TmxWriter.write(out),
     );
     return [...written, to];
+  }
+
+  /// [path], or the first `<stem>_2.<ending>`… beside it no file has.
+  String _free(String path) {
+    if (!files.exists(path)) return path;
+    final dot = path.lastIndexOf('.');
+    final slash = path.lastIndexOf('/');
+    final hasEnding = dot > slash + 1;
+    final stem = hasEnding ? path.substring(0, dot) : path;
+    final ending = hasEnding ? path.substring(dot) : '';
+    for (var n = 2; ; n++) {
+      final candidate = '${stem}_$n$ending';
+      if (!files.exists(candidate)) return candidate;
+    }
   }
 }

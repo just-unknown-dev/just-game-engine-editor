@@ -16,15 +16,19 @@ abstract final class PrefabInspector {
     id: 'prefab.instance',
     order: -10,
     appliesTo: (entity) => PrefabInstances.topOf(entity) != null,
-    build: (context, entity, scope) => _InstanceSection(scope: scope, entity: entity),
+    build: (context, entity, scope) =>
+        _InstanceSection(scope: scope, entity: entity),
   );
 
   /// The marks beside changed fields.
-  static FieldAccessory get marks => FieldAccessory(id: 'prefab.overrides', build: _mark);
+  static FieldAccessory get marks =>
+      FieldAccessory(id: 'prefab.overrides', build: _mark);
 
   // What the instance [top] changes, worked out once per scene revision:
   // every row asks.
-  static final Expando<(int, jge.PrefabInstance)> _cache = Expando('prefabChanges');
+  static final Expando<(int, jge.PrefabInstance)> _cache = Expando(
+    'prefabChanges',
+  );
 
   /// What [top]'s instance changes now (cached until the scene changes).
   static jge.PrefabInstance changesOf(EditorScope scope, jge.Entity top) {
@@ -46,21 +50,65 @@ abstract final class PrefabInspector {
     final block = changesOf(c.scope, top);
     final changed = [
       for (final f in c.fields)
-        if (block.overrides.any((o) => o.target == link.path && o.component == type && o.field == f.name)) f.name,
+        if (block.overrides.any(
+          (o) =>
+              o.target == link.path && o.component == type && o.field == f.name,
+        ))
+          f.name,
     ];
     if (changed.isEmpty) return null;
     return _OverrideMark(
       fields: changed,
-      onRevert: () {
-        for (final field in changed) {
-          c.scope.prefabInstances.revertField(top, link.path, type, field);
-        }
-      },
+      onRevert: () => revertFields(c.scope, top, link.path, type, changed),
       onApply: () async {
         for (final field in changed) {
-          await c.scope.prefabInstances.apply(top, only: (link.path, type, field));
+          final applied = await c.scope.prefabInstances.apply(
+            top,
+            only: (link.path, type, field),
+          );
+          // The prefab could not be written: the rest would fail as well.
+          if (!applied) return;
         }
       },
+    );
+  }
+
+  /// Puts [fields] of [component] on the instance's part [target] back as
+  /// the prefab has them — one undo step, however many fields a row edits.
+  static void revertFields(
+    EditorScope scope,
+    jge.Entity top,
+    String target,
+    String component,
+    List<String> fields,
+  ) {
+    final instances = scope.prefabInstances;
+    if (fields.length == 1) {
+      instances.revertField(top, target, component, fields.single);
+      return;
+    }
+    final before = instances.changesOf(top).block;
+    final after = jge.PrefabInstance(
+      path: before.path,
+      overrides: [
+        for (final o in before.overrides)
+          if (!(o.target == target &&
+              o.component == component &&
+              fields.contains(o.field)))
+            o,
+      ],
+      removed: before.removed,
+      addedComponents: before.addedComponents,
+      removedComponents: before.removedComponents,
+      names: before.names,
+      enabled: before.enabled,
+    );
+    scope.history.push(
+      CallbackCommand(
+        label: 'Revert ${fields.join(', ')} to the prefab',
+        onRedo: () => instances.rebuild(top, after),
+        onUndo: () => instances.rebuild(top, before),
+      ),
     );
   }
 }
@@ -68,7 +116,11 @@ abstract final class PrefabInspector {
 /// A blue mark beside a field the instance changes: a menu to put it back
 /// as the prefab has it, or to make it the prefab's.
 class _OverrideMark extends StatelessWidget {
-  const _OverrideMark({required this.fields, required this.onRevert, required this.onApply});
+  const _OverrideMark({
+    required this.fields,
+    required this.onRevert,
+    required this.onApply,
+  });
 
   final List<String> fields;
   final VoidCallback onRevert;
@@ -81,15 +133,26 @@ class _OverrideMark extends StatelessWidget {
     padding: EdgeInsets.zero,
     onSelected: (v) => v == 'revert' ? onRevert() : onApply(),
     itemBuilder: (context) => const [
-      PopupMenuItem(value: 'revert', height: 30, child: Text('Revert to the prefab', style: TextStyle(fontSize: 12))),
-      PopupMenuItem(value: 'apply', height: 30, child: Text('Apply to the prefab', style: TextStyle(fontSize: 12))),
+      PopupMenuItem(
+        value: 'revert',
+        height: 30,
+        child: Text('Revert to the prefab', style: TextStyle(fontSize: 12)),
+      ),
+      PopupMenuItem(
+        value: 'apply',
+        height: 30,
+        child: Text('Apply to the prefab', style: TextStyle(fontSize: 12)),
+      ),
     ],
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Container(
         width: 7,
         height: 7,
-        decoration: BoxDecoration(color: EditorTheme.primaryBright, shape: BoxShape.circle),
+        decoration: BoxDecoration(
+          color: EditorTheme.primaryBright,
+          shape: BoxShape.circle,
+        ),
       ),
     ),
   );
@@ -110,7 +173,9 @@ class _InstanceSection extends StatelessWidget {
       signal1: scope.sceneState.revision,
       signal2: instances.editing,
       builder: (context, _, editing, _) {
-        final block = instance.missing ? instance.block : PrefabInspector.changesOf(scope, top);
+        final block = instance.missing
+            ? instance.block
+            : PrefabInspector.changesOf(scope, top);
         final topPath = instances.library.loaded(instance.path)?.root.id ?? '';
         final changes =
             PrefabInstances.changesBeyondPlacement(block, topPath).length +
@@ -126,7 +191,9 @@ class _InstanceSection extends StatelessWidget {
           decoration: BoxDecoration(
             color: EditorTheme.primary.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: EditorTheme.primary.withValues(alpha: 0.35)),
+            border: Border.all(
+              color: EditorTheme.primary.withValues(alpha: 0.35),
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -134,13 +201,21 @@ class _InstanceSection extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.inventory_2_outlined, size: 14, color: EditorTheme.primaryBright),
+                  Icon(
+                    Icons.inventory_2_outlined,
+                    size: 14,
+                    color: EditorTheme.primaryBright,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       instance.path,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: EditorTheme.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        color: EditorTheme.textPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -160,20 +235,34 @@ class _InstanceSection extends StatelessWidget {
                 runSpacing: 6,
                 children: [
                   if (!identical(top, entity))
-                    EditorButton(label: 'Select the instance', onPressed: () => scope.sceneState.selectEntity(top)),
+                    EditorButton(
+                      label: 'Select the instance',
+                      onPressed: () => scope.sceneState.selectEntity(top),
+                    ),
                   if (!instance.missing && editing != top.id)
-                    EditorButton(label: 'Edit the prefab', icon: Icons.edit_outlined, onPressed: () => instances.edit(top)),
+                    EditorButton(
+                      label: 'Edit the prefab',
+                      icon: Icons.edit_outlined,
+                      onPressed: () => instances.edit(top),
+                    ),
                   if (!instance.missing)
                     EditorButton(
                       label: 'Apply all',
-                      onPressed: changes == 0 ? null : () => instances.apply(top),
+                      onPressed: changes == 0
+                          ? null
+                          : () => instances.apply(top),
                     ),
                   if (!instance.missing)
                     EditorButton(
                       label: 'Revert all',
-                      onPressed: changes == 0 ? null : () => instances.revertAll(top),
+                      onPressed: changes == 0
+                          ? null
+                          : () => instances.revertAll(top),
                     ),
-                  EditorButton(label: 'Unpack', onPressed: () => instances.unpack(top)),
+                  EditorButton(
+                    label: 'Unpack',
+                    onPressed: () => instances.unpack(top),
+                  ),
                 ],
               ),
             ],
@@ -210,11 +299,18 @@ class PrefabModeBanner extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.inventory_2_outlined, size: 15, color: EditorTheme.primaryBright),
+                Icon(
+                  Icons.inventory_2_outlined,
+                  size: 15,
+                  color: EditorTheme.primaryBright,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Editing the prefab ${instance.path.substring(instance.path.lastIndexOf('/') + 1)}',
-                  style: TextStyle(color: EditorTheme.textPrimary, fontSize: 12),
+                  style: TextStyle(
+                    color: EditorTheme.textPrimary,
+                    fontSize: 12,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 EditorButton(
@@ -223,7 +319,10 @@ class PrefabModeBanner extends StatelessWidget {
                   onPressed: () => instances.leave(apply: true),
                 ),
                 const SizedBox(width: 6),
-                EditorButton(label: 'Leave', onPressed: () => instances.leave()),
+                EditorButton(
+                  label: 'Leave',
+                  onPressed: () => instances.leave(),
+                ),
               ],
             ),
           ),

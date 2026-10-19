@@ -6,7 +6,6 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_signals/just_signals.dart';
 
 import 'package:just_editor_core/host.dart';
-import 'physics_body_extras.dart';
 
 /// What a collider handle does when dragged.
 enum ColliderHandleKind {
@@ -53,6 +52,11 @@ class ColliderHandle {
 /// One per editor ([of]). On while [target] is set — by the inspector's
 /// Edit collider button — and off when the selection moves to something
 /// else, a play-test starts, the body goes, or Esc is pressed.
+///
+/// A handle changes only what it stands for — a box's size, a circle's
+/// radius, a polygon's point, the offset — and leaves the collider its kind,
+/// its turn, its own scale and its rounded corners: a turned box stays a
+/// box, a rounded polygon keeps its points.
 class ColliderEditSession {
   ColliderEditSession(this.scope) {
     _stops = [
@@ -68,13 +72,18 @@ class ColliderEditSession {
     ];
   }
 
-  static final Expando<ColliderEditSession> _sessions = Expando(
-    'colliderEditSession',
-  );
-
-  /// The session of [scope]'s editor.
-  static ColliderEditSession of(EditorScope scope) =>
-      _sessions[scope] ??= ColliderEditSession(scope);
+  /// The session of [scope]'s editor, kept in the scope's container so it
+  /// is disposed with the scope.
+  static ColliderEditSession of(EditorScope scope) {
+    final container = scope.container;
+    if (!container.isRegistered<ColliderEditSession>()) {
+      container.registerLazySingleton<ColliderEditSession>(
+        () => ColliderEditSession(scope),
+        dispose: (session) => session.dispose(),
+      );
+    }
+    return container.get<ColliderEditSession>();
+  }
 
   final EditorScope scope;
   late final List<void Function()> _stops;
@@ -86,8 +95,7 @@ class ColliderEditSession {
   ColliderHandle? hovered;
 
   ColliderHandle? _drag;
-  late jge.CollisionShape _startShape;
-  late Offset _startOffset;
+  late _ColliderFields _start;
   late Offset _startPointer; // entity space, unscaled
   int _dragId = 0;
 
@@ -107,14 +115,6 @@ class ColliderEditSession {
     return c == null || c.shape == jge.ColliderShape2D.matchShape ? null : c;
   }
 
-  /// [c]'s shape as the handles edit it: in its entity's space before the
-  /// entity's scale, turned and with its own scale — but not moved by its
-  /// offset, which the handles move on their own.
-  static jge.CollisionShape _shapeOf(jge.Collider2D c) => jge.ColliderGeometry.build(
-    jge.ColliderGeometry.shapeOf(c) ?? jge.RectangleShape(1, 1),
-    rotation: c.rotation,
-  );
-
   /// Whether [entity]'s collider is the one being edited.
   bool isEditing(jge.Entity? entity) =>
       entity != null && identical(target.value, entity) && isActive;
@@ -123,7 +123,8 @@ class ColliderEditSession {
   void toggle(jge.Entity entity) {
     if (isEditing(entity)) {
       stop();
-    } else if (entity.getComponent<jge.Collider2D>()?.shape == jge.ColliderShape2D.matchShape) {
+    } else if (entity.getComponent<jge.Collider2D>()?.shape ==
+        jge.ColliderShape2D.matchShape) {
       scope.log.log(
         'Its collider matches what is drawn: change what is drawn, or pick a shape for the collider to edit it.',
         source: 'editor',
@@ -152,6 +153,11 @@ class ColliderEditSession {
   }
 
   // ── Where things are ─────────────────────────────────────────────────────
+  //
+  // Three spaces: the collider's own (its shape with its own scale, not
+  // turned and not moved — where sizes and points are measured), the
+  // entity's (turned by the collider's rotation and moved by its offset,
+  // before the entity's scale), and the body's (the entity's, scaled).
 
   jge.TransformComponent? get _transform =>
       target.value?.getComponent<jge.TransformComponent>();
@@ -161,6 +167,22 @@ class ColliderEditSession {
     double clean(double v) =>
         v.abs() < 1e-3 ? (v.isNegative ? -1e-3 : 1e-3) : v;
     return (clean(t?.scale.x ?? 1), clean(t?.scale.y ?? 1));
+  }
+
+  /// [c]'s own scale, as its shape is built with it.
+  static (double, double) _ownScale(jge.Collider2D c) {
+    double clean(double v) => v.abs() < jge.ColliderGeometry.minScale
+        ? (v.isNegative
+              ? -jge.ColliderGeometry.minScale
+              : jge.ColliderGeometry.minScale)
+        : v;
+    return (clean(c.scale.x), clean(c.scale.y));
+  }
+
+  static Offset _rotate(Offset p, double angle) {
+    if (angle == 0) return p;
+    final c = math.cos(angle), s = math.sin(angle);
+    return Offset(p.dx * c - p.dy * s, p.dx * s + p.dy * c);
   }
 
   /// A point in the body's own space (scaled, not turned) → the world.
@@ -195,37 +217,60 @@ class ColliderEditSession {
     return Offset(p.dx * sx, p.dy * sy);
   }
 
+  /// [c]'s points in its own space: its saved points with its own scale.
+  static List<Offset> _ownPoints(jge.Collider2D c) {
+    final (cx, cy) = _ownScale(c);
+    return [for (final p in c.points) Offset(p.dx * cx, p.dy * cy)];
+  }
+
+  /// [c]'s capsule in its own space: upright about its middle.
+  static jge.CapsuleShape _capsuleOf(jge.Collider2D c) {
+    final (cx, cy) = _ownScale(c);
+    final r = math.max(c.radius.abs() * cx.abs(), 1e-3);
+    final h = math.max(c.height.abs() * cy.abs(), 2 * r);
+    return jge.CapsuleShape.vertical(height: h, radius: r);
+  }
+
+  /// [c]'s box in its own space, rounded corners and all: (width, height).
+  static (double, double) _boxOf(jge.Collider2D c) {
+    final (cx, cy) = _ownScale(c);
+    return (
+      math.max(c.size.x.abs() * cx.abs(), 1e-3),
+      math.max(c.size.y.abs() * cy.abs(), 1e-3),
+    );
+  }
+
   /// Every handle of the collider, in the body's own space.
   List<ColliderHandle> handles() {
     final b = body;
     if (b == null) return const [];
     final o = b.offset;
-    Offset at(Offset p) => _scaled(p + o);
+    final turn = b.rotation;
+    // A point of the collider's own space, in the body's.
+    Offset at(Offset p) => _scaled(_rotate(p, turn) + o);
     final (sx, sy) = _scale;
     final grow = math.max(sx.abs(), sy.abs());
     final out = <ColliderHandle>[];
-    switch (_shapeOf(b)) {
-      case jge.CircleShape c:
-        final centre = at(c.center);
-        final r = c.radius * grow;
+    switch (b.shape) {
+      case jge.ColliderShape2D.circle:
+        final (cx, cy) = _ownScale(b);
+        final r = math.max(b.radius.abs() * math.max(cx.abs(), cy.abs()), 1e-3);
+        final centre = _scaled(o);
         for (final (i, d) in const [
           (0, Offset(1, 0)),
           (1, Offset(0, 1)),
           (2, Offset(-1, 0)),
           (3, Offset(0, -1)),
         ]) {
-          out.add(ColliderHandle(ColliderHandleKind.radius, i, centre + d * r));
+          out.add(
+            ColliderHandle(ColliderHandleKind.radius, i, centre + d * r * grow),
+          );
         }
-      case jge.RectangleShape r:
-        final hw = r.width / 2, hh = r.height / 2;
-        const corners = [
-          Offset(-1, -1),
-          Offset(1, -1),
-          Offset(1, 1),
-          Offset(-1, 1),
-        ];
+      case jge.ColliderShape2D.box:
+        final (w, h) = _boxOf(b);
+        final hw = w / 2, hh = h / 2;
         for (var i = 0; i < 4; i++) {
-          final k = corners[i];
+          final k = _corners[i];
           out.add(
             ColliderHandle(
               ColliderHandleKind.corner,
@@ -234,14 +279,8 @@ class ColliderEditSession {
             ),
           );
         }
-        const sides = [
-          Offset(0, -1),
-          Offset(1, 0),
-          Offset(0, 1),
-          Offset(-1, 0),
-        ];
         for (var i = 0; i < 4; i++) {
-          final k = sides[i];
+          final k = _sides[i];
           out.add(
             ColliderHandle(
               ColliderHandleKind.side,
@@ -250,7 +289,8 @@ class ColliderEditSession {
             ),
           );
         }
-      case jge.CapsuleShape c:
+      case jge.ColliderShape2D.capsule:
+        final c = _capsuleOf(b);
         final axis = c.center2 - c.center1;
         final len = axis.distance;
         final u = len < 1e-9 ? const Offset(0, 1) : axis / len;
@@ -276,43 +316,75 @@ class ColliderEditSession {
               at((c.center1 + c.center2) / 2 + Offset(-u.dy, u.dx) * c.radius),
             ),
           );
-      case jge.PolygonShape p:
-        _points(out, p.vertices, closed: true, at: at);
-      case jge.SegmentShape s:
-        out
-          ..add(ColliderHandle(ColliderHandleKind.vertex, 0, at(s.point1)))
-          ..add(ColliderHandle(ColliderHandleKind.vertex, 1, at(s.point2)));
-      case jge.ChainShape c:
-        _points(out, c.vertices, closed: c.loop, at: at);
+      case jge.ColliderShape2D.polygon:
+        _points(
+          out,
+          _ownPoints(b),
+          closed: true,
+          at: at,
+          canInsert: _canInsert,
+        );
+      case jge.ColliderShape2D.segment:
+        final points = _ownPoints(b);
+        for (var i = 0; i < math.min(2, points.length); i++) {
+          out.add(ColliderHandle(ColliderHandleKind.vertex, i, at(points[i])));
+        }
+      case jge.ColliderShape2D.chain:
+        _points(
+          out,
+          _ownPoints(b),
+          closed: b.loop,
+          at: at,
+          canInsert: _canInsert,
+        );
+      case jge.ColliderShape2D.matchShape:
+        break;
     }
     out.add(ColliderHandle(ColliderHandleKind.center, 0, _scaled(o)));
     return out;
   }
+
+  static const _corners = [
+    Offset(-1, -1),
+    Offset(1, -1),
+    Offset(1, 1),
+    Offset(-1, 1),
+  ];
+  static const _sides = [
+    Offset(0, -1),
+    Offset(1, 0),
+    Offset(0, 1),
+    Offset(-1, 0),
+  ];
 
   void _points(
     List<ColliderHandle> out,
     List<Offset> points, {
     required bool closed,
     required Offset Function(Offset) at,
+    required bool canInsert,
   }) {
     for (var i = 0; i < points.length; i++) {
       out.add(ColliderHandle(ColliderHandleKind.vertex, i, at(points[i])));
     }
+    if (!canInsert || points.length < 2) return;
     final edges = closed ? points.length : points.length - 1;
-    if (!_canInsert) return;
     for (var i = 0; i < edges; i++) {
       final a = points[i], b = points[(i + 1) % points.length];
       out.add(ColliderHandle(ColliderHandleKind.insert, i, at((a + b) / 2)));
     }
   }
 
-  /// A Box2D polygon has at most eight points.
-  bool get _canInsert => switch (body == null ? null : _shapeOf(body!)) {
-    jge.RoundedPolygonShape p => p.vertices.length < 8,
-    jge.PolygonShape p => p.vertices.length < 8,
-    jge.ChainShape _ => true,
-    _ => false,
-  };
+  /// Points can be added to a polygon (a Box2D polygon has eight at most)
+  /// and to a chain — not to a box, rounded or not.
+  bool get _canInsert {
+    final b = body;
+    return switch (b?.shape) {
+      jge.ColliderShape2D.polygon => b!.points.length < 8,
+      jge.ColliderShape2D.chain => true,
+      _ => false,
+    };
+  }
 
   /// The handle within [grabRadius] of [screen], points before the rest.
   ColliderHandle? hitTest(Offset screen, EditorView view) {
@@ -356,15 +428,13 @@ class ColliderEditSession {
     }
     scope.history.breakMerge();
     _dragId++;
-    _startShape = _shapeOf(b);
-    _startOffset = b.offset;
     _startPointer = _unscale(toLocal(view.screenToWorld(screen)));
     if (h.kind == ColliderHandleKind.insert) {
       // The new point goes in between, and is what the drag moves.
       _insertPoint(b, h.index);
-      _startShape = _shapeOf(b);
       h = ColliderHandle(ColliderHandleKind.vertex, h.index + 1, h.local);
     }
+    _start = _ColliderFields.of(b);
     _drag = h;
     hovered = h;
     return true;
@@ -376,8 +446,8 @@ class ColliderEditSession {
     final h = _drag, b = body;
     if (h == null || b == null) return;
     final p = _unscale(toLocal(view.screenToWorld(screen)));
-    final (shape, offset) = _dragged(h, p, symmetric: symmetric);
-    _push(b, shape, offset);
+    if (!p.dx.isFinite || !p.dy.isFinite) return;
+    _push(b, (c) => _dragged(c, h, p, symmetric: symmetric));
   }
 
   void onPointerUp() {
@@ -411,43 +481,39 @@ class ColliderEditSession {
   static double _snap(double v) => (v * 2).roundToDouble() / 2;
   static Offset _snapP(Offset p) => Offset(_snap(p.dx), _snap(p.dy));
 
-  /// The shape and offset [h] dragged to [p] (entity space) makes.
-  (jge.CollisionShape, Offset) _dragged(
+  /// Sets [c]'s fields to what dragging [h] to [p] (entity space) from
+  /// where the drag began makes — only those the handle stands for.
+  void _dragged(
+    jge.Collider2D c,
     ColliderHandle h,
     Offset p, {
     required bool symmetric,
   }) {
-    final shape = _startShape;
-    final o = _startOffset;
+    final start = _start;
+    final o = start.offset;
+    final turn = start.rotation;
+    // The pointer in the collider's own space, as it was at the start.
+    final q = _rotate(p - o, -turn);
+    final (cx, cy) = _ownScale(c);
     final (sx, sy) = _scale;
     final grow = math.max(sx.abs(), sy.abs());
     switch (h.kind) {
       case ColliderHandleKind.center:
-        return (shape, _snapP(o + (p - _startPointer)));
+        c.offset = _snapP(o + (p - _startPointer));
       case ColliderHandleKind.corner || ColliderHandleKind.side
-          when shape is jge.RectangleShape:
-        final hw = shape.width / 2, hh = shape.height / 2;
+          when c.shape == jge.ColliderShape2D.box:
+        final w = math.max(start.size.x.abs() * cx.abs(), 1e-3);
+        final hgt = math.max(start.size.y.abs() * cy.abs(), 1e-3);
         final k = h.kind == ColliderHandleKind.corner
-            ? const [
-                Offset(-1, -1),
-                Offset(1, -1),
-                Offset(1, 1),
-                Offset(-1, 1),
-              ][h.index]
-            : const [
-                Offset(0, -1),
-                Offset(1, 0),
-                Offset(0, 1),
-                Offset(-1, 0),
-              ][h.index];
-        var left = o.dx - hw, right = o.dx + hw;
-        var top = o.dy - hh, bottom = o.dy + hh;
+            ? _corners[h.index]
+            : _sides[h.index];
+        var left = -w / 2, right = w / 2;
+        var top = -hgt / 2, bottom = hgt / 2;
         if (k.dx != 0) {
-          final x = _snap(p.dx);
+          final x = _snap(q.dx);
           if (symmetric) {
-            final half = (x - o.dx).abs();
-            left = o.dx - half;
-            right = o.dx + half;
+            left = -x.abs();
+            right = x.abs();
           } else if (k.dx > 0) {
             right = x;
           } else {
@@ -455,11 +521,10 @@ class ColliderEditSession {
           }
         }
         if (k.dy != 0) {
-          final y = _snap(p.dy);
+          final y = _snap(q.dy);
           if (symmetric) {
-            final half = (y - o.dy).abs();
-            top = o.dy - half;
-            bottom = o.dy + half;
+            top = -y.abs();
+            bottom = y.abs();
           } else if (k.dy > 0) {
             bottom = y;
           } else {
@@ -472,20 +537,19 @@ class ColliderEditSession {
           math.max(left, right),
           math.max(top, bottom),
         );
-        return (
-          jge.RectangleShape(math.max(rect.width, 1), math.max(rect.height, 1)),
-          rect.center,
-        );
-      case ColliderHandleKind.radius when shape is jge.CircleShape:
-        final centre = _scaled(shape.center + o);
-        final r = (_scaled(p) - centre).distance / grow;
-        return (
-          jge.CircleShape(math.max(_snap(r), 0.5), center: shape.center),
-          o,
-        );
-      case ColliderHandleKind.radius when shape is jge.CapsuleShape:
-        final mid = (shape.center1 + shape.center2) / 2 + o;
-        final axis = shape.center2 - shape.center1;
+        c
+          ..size = jge.Vector2(
+            math.max(rect.width, 1) / cx.abs(),
+            math.max(rect.height, 1) / cy.abs(),
+          )
+          ..offset = o + _rotate(rect.center, turn);
+      case ColliderHandleKind.radius when c.shape == jge.ColliderShape2D.circle:
+        final r = (_scaled(p) - _scaled(o)).distance / grow;
+        c.radius = math.max(_snap(r), 0.5) / math.max(cx.abs(), cy.abs());
+      case ColliderHandleKind.radius
+          when c.shape == jge.ColliderShape2D.capsule:
+        final shape = start.capsule;
+        final axis = _rotate(shape.center2 - shape.center1, turn);
         final len = axis.distance;
         final n = len < 1e-9
             ? const Offset(1, 0)
@@ -493,126 +557,77 @@ class ColliderEditSession {
         final across = sx * sy == 0
             ? 1.0
             : (n.dx.abs() > n.dy.abs() ? sx.abs() : sy.abs());
-        final d = (_scaled(p) - _scaled(mid));
+        final d = _scaled(p) - _scaled(o);
         final r =
             (d.dx * n.dx * sx.sign + d.dy * n.dy * sy.sign).abs() / across;
-        return (
-          jge.CapsuleShape(
-            center1: shape.center1,
-            center2: shape.center2,
-            radius: math.max(_snap(r), 0.5),
-          ),
-          o,
-        );
-      case ColliderHandleKind.end when shape is jge.CapsuleShape:
+        c.radius = math.max(_snap(r), 0.5) / cx.abs();
+      case ColliderHandleKind.end when c.shape == jge.ColliderShape2D.capsule:
+        final shape = start.capsule;
         final other = h.index == 0 ? shape.center2 : shape.center1;
-        final tip = p - o;
-        final out = tip - other;
+        final out = q - other;
         final len = out.distance;
         // The end's centre sits a radius back from the tip.
-        final c = len <= shape.radius
+        final moved = len <= shape.radius
             ? other
-            : _snapP(tip - out / len * shape.radius);
-        return (
-          jge.CapsuleShape(
-            center1: h.index == 0 ? c : shape.center1,
-            center2: h.index == 0 ? shape.center2 : c,
-            radius: shape.radius,
-          ),
-          o,
-        );
+            : _snapP(q - out / len * shape.radius);
+        final c1 = h.index == 0 ? moved : shape.center1;
+        final c2 = h.index == 0 ? shape.center2 : moved;
+        final d = c2 - c1;
+        // Still upright in its own space: the capsule turns instead.
+        final extra = d.distance < 1e-9 ? 0.0 : math.atan2(-d.dx, d.dy);
+        c
+          ..height = (d.distance + 2 * shape.radius) / cy.abs()
+          ..rotation = turn + extra
+          ..offset = o + _rotate((c1 + c2) / 2, turn);
       case ColliderHandleKind.vertex:
-        final q = _snapP(p - o);
-        return (_withPoint(shape, h.index, q), o);
+        final points = start.points;
+        if (h.index < 0 || h.index >= points.length) return;
+        final at = _snapP(q);
+        c.points = [
+          for (var i = 0; i < points.length; i++)
+            i == h.index ? Offset(at.dx / cx, at.dy / cy) : points[i],
+        ];
       default:
-        return (shape, o);
+        return;
     }
-  }
-
-  static jge.CollisionShape _withPoint(
-    jge.CollisionShape shape,
-    int i,
-    Offset q,
-  ) {
-    List<Offset> set(List<Offset> v) => [
-      for (var k = 0; k < v.length; k++) k == i ? q : v[k],
-    ];
-    return switch (shape) {
-      jge.RoundedPolygonShape p => jge.RoundedPolygonShape(
-        set(p.vertices),
-        p.cornerRadius,
-      ),
-      // A box whose corner moves is no longer a box.
-      jge.PolygonShape p => jge.PolygonShape(set(p.vertices)),
-      jge.SegmentShape s => jge.SegmentShape(
-        i == 0 ? q : s.point1,
-        i == 1 ? q : s.point2,
-        thickness: s.thickness,
-      ),
-      jge.ChainShape c => jge.ChainShape(
-        set(c.vertices),
-        loop: c.loop,
-        thickness: c.thickness,
-      ),
-      _ => shape,
-    };
   }
 
   void _insertPoint(jge.Collider2D b, int edge) {
-    List<Offset> add(List<Offset> v) {
-      final a = v[edge], c = v[(edge + 1) % v.length];
-      return [...v.take(edge + 1), (a + c) / 2, ...v.skip(edge + 1)];
-    }
-
-    final next = switch (_shapeOf(b)) {
-      jge.RoundedPolygonShape p => jge.RoundedPolygonShape(
-        add(p.vertices),
-        p.cornerRadius,
-      ),
-      jge.PolygonShape p => jge.PolygonShape(add(p.vertices)),
-      jge.ChainShape c => jge.ChainShape(
-        add(c.vertices),
-        loop: c.loop,
-        thickness: c.thickness,
-      ),
-      _ => null,
-    };
-    if (next != null) _push(b, next, b.offset);
+    if (!_canInsert) return;
+    final v = b.points;
+    if (edge < 0 || edge >= v.length) return;
+    final a = v[edge], next = v[(edge + 1) % v.length];
+    _push(b, (c) {
+      c.points = [...v.take(edge + 1), (a + next) / 2, ...v.skip(edge + 1)];
+    });
   }
 
   void _removePoint(jge.Collider2D b, int i) {
-    List<Offset> drop(List<Offset> v) => [
-      for (var k = 0; k < v.length; k++)
-        if (k != i) v[k],
-    ];
-    final next = switch (_shapeOf(b)) {
-      jge.RoundedPolygonShape p when p.vertices.length > 3 =>
-        jge.RoundedPolygonShape(drop(p.vertices), p.cornerRadius),
-      jge.PolygonShape p when p.vertices.length > 3 => jge.PolygonShape(
-        drop(p.vertices),
-      ),
-      jge.ChainShape c when c.vertices.length > 2 => jge.ChainShape(
-        drop(c.vertices),
-        loop: c.loop,
-        thickness: c.thickness,
-      ),
+    final least = switch (b.shape) {
+      jge.ColliderShape2D.polygon => 4,
+      jge.ColliderShape2D.chain => 3,
       _ => null,
     };
-    if (next == null) return;
+    if (least == null || b.points.length < least) return;
+    if (i < 0 || i >= b.points.length) return;
     scope.history.breakMerge();
     _dragId++;
-    _push(b, next, b.offset);
+    final v = b.points;
+    _push(b, (c) {
+      c.points = [
+        for (var k = 0; k < v.length; k++)
+          if (k != i) v[k],
+      ];
+    });
     hovered = null;
   }
 
-  /// Gives [b] [shape] moved by [offset] — its fields set to stand for
-  /// them — as part of this gesture's one undo step.
-  void _push(jge.Collider2D b, jge.CollisionShape shape, Offset offset) {
+  /// Makes [change] to [b] as part of this gesture's one undo step.
+  void _push(jge.Collider2D b, void Function(jge.Collider2D) change) {
     final definition = scope.definitions.definitionFor(b);
     final before = ComponentEdit.snapshot(scope, b);
     if (definition == null || before == null) return;
-    PhysicsBodyExtras.setFrom(b, shape);
-    b.offset += offset;
+    change(b);
     scope.history.push(
       ColliderEditCommand(
         collider: b,
@@ -635,8 +650,9 @@ class ColliderEditSession {
     if (t == null) return;
     final (sx, sy) = _scale;
     final built = jge.ColliderGeometry.build(
-      _shapeOf(b),
+      jge.ColliderGeometry.shapeOf(b) ?? jge.RectangleShape(1, 1),
       offset: b.offset,
+      rotation: b.rotation,
       sx: sx,
       sy: sy,
     );
@@ -726,8 +742,29 @@ class ColliderEditSession {
       RRect.fromRectAndRadius(box, const Radius.circular(4)),
       Paint()..color = const Color(0xCC111111),
     );
-    tip.paint(canvas, box.topLeft + const Offset(6, 3));
+    tip
+      ..paint(canvas, box.topLeft + const Offset(6, 3))
+      ..dispose();
   }
+}
+
+/// What a drag of a collider handle is measured from: the fields as they
+/// were when it began.
+class _ColliderFields {
+  _ColliderFields.of(jge.Collider2D c)
+    : offset = c.offset,
+      rotation = c.rotation,
+      size = jge.Vector2(c.size.x, c.size.y),
+      points = List.unmodifiable(c.points),
+      capsule = ColliderEditSession._capsuleOf(c);
+
+  final Offset offset;
+  final double rotation;
+  final jge.Vector2 size;
+  final List<Offset> points;
+
+  /// The capsule in the collider's own space.
+  final jge.CapsuleShape capsule;
 }
 
 /// A change to a collider — its shape, sizes and offset together, every
@@ -779,7 +816,9 @@ class ColliderEditCommand extends EditorCommand {
   @override
   bool mergeWith(EditorCommand next) {
     if (next is! ColliderEditCommand) return false;
-    if (!identical(next.collider, collider) || next.gesture != gesture) return false;
+    if (!identical(next.collider, collider) || next.gesture != gesture) {
+      return false;
+    }
     after = next.after;
     return true;
   }

@@ -82,7 +82,10 @@ class ViewportInput {
       var parent = e.getComponent<ParentComponent>()?.parentId;
       for (var guard = 0; parent != null && guard < 64; guard++) {
         if (ids.contains(parent)) return true;
-        parent = world.getEntity(parent)?.getComponent<ParentComponent>()?.parentId;
+        parent = world
+            .getEntity(parent)
+            ?.getComponent<ParentComponent>()
+            ?.parentId;
       }
       return false;
     }
@@ -172,7 +175,8 @@ class ViewportInput {
   // The solver of the drag under way: the view's kind when it began.
   GizmoDragSolver? _solver;
 
-  GizmoHitTester _hitTesterFor(EditorView view) => view.isPlanar ? hitTester : hitTester3D;
+  GizmoHitTester _hitTesterFor(EditorView view) =>
+      view.isPlanar ? hitTester : hitTester3D;
 
   /// Opens the context menu at a pointer's local and global positions:
   /// set by the overlay. In 3-D a right-press is a look, so the menu opens
@@ -203,7 +207,9 @@ class ViewportInput {
       axis(LogicalKeyboardKey.keyW, LogicalKeyboardKey.keyS),
     );
     if (move.lengthSquared == 0) return;
-    final fast = keys.contains(LogicalKeyboardKey.shiftLeft) || keys.contains(LogicalKeyboardKey.shiftRight);
+    final fast =
+        keys.contains(LogicalKeyboardKey.shiftLeft) ||
+        keys.contains(LogicalKeyboardKey.shiftRight);
     final speed = view.distance.clamp(2.0, 60.0) * (fast ? 3 : 1);
     view.fly(move * (speed * dt));
   }
@@ -416,7 +422,8 @@ class ViewportInput {
         _activeHandle = null;
         return true;
       }
-      if ((event.buttons & kPrimaryButton) != 0 && HardwareKeyboard.instance.isAltPressed) {
+      if ((event.buttons & kPrimaryButton) != 0 &&
+          HardwareKeyboard.instance.isAltPressed) {
         _orbiting = true;
         _activeHandle = null;
         return true;
@@ -549,7 +556,9 @@ class ViewportInput {
         if (wasSelected) {
           // A second press drags it: on the screen plane in 2-D, along
           // the ground in 3-D.
-          _activeHandle = camera.isPlanar ? GizmoHandle.translateXY : GizmoHandle.translateXZ;
+          _activeHandle = camera.isPlanar
+              ? GizmoHandle.translateXY
+              : GizmoHandle.translateXZ;
           _beginDrag(event.localPosition);
           return true;
         }
@@ -595,7 +604,8 @@ class ViewportInput {
     final drags = handleDrags;
     if (drags != null && drags.isDragging) {
       final view = cameraOf()..viewportSize = canvasSize;
-      final ctrl = HardwareKeyboard.instance.isControlPressed;
+      // Ctrl is Cmd on macOS, where Ctrl+click is the context click.
+      final ctrl = EditorKeys.primaryPressed;
       // In 2-D Ctrl snaps to the grid in pixels. In space a handle snaps in
       // the move step, in metres, as the gizmo does while snapping is on;
       // Ctrl turns it the other way.

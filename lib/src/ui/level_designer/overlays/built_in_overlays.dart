@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
-import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import 'package:just_editor_core/host.dart';
+
+import '../state/selection_ops.dart';
 
 /// Palette shared by the built-in overlays.
 abstract final class OverlayColors {
@@ -43,11 +44,10 @@ class EntitySelectionOverlay extends DesignerOverlay {
     final ids = context.controller.sceneState.multiSelectedIds.value;
     if (ids.length < 2) return;
 
-    final entities = ids
-        .map(context.world.getEntity)
-        .whereType<jge.Entity>()
-        .where((e) => e.isActive)
-        .toList();
+    final entities = SelectionOps.selectedIn(
+      context.controller.sceneState,
+      context.world,
+    );
 
     for (final entity in entities) {
       final bounds = DesignerGeometry.worldBounds(entity);
@@ -162,9 +162,11 @@ class GuidesOverlay extends DesignerOverlay {
 /// Tick spacing adapts to zoom: a fixed interval either crowds into an
 /// unreadable smear when zoomed out or leaves the ruler blank when zoomed in.
 class RulersOverlay extends DesignerOverlay with InteractiveOverlay {
-  // The guide being dragged, and the guides as they were before, for undo.
+  // The guide being dragged, and the guides as they were before, for undo
+  // — and for a gesture abandoned, which puts them back.
   int _guideIndex = -1;
   List<DesignerGuide> _guidesBefore = const [];
+  LevelDesignerController? _pulling;
 
   /// A press on a ruler starts a guide: a new one, or the one under the
   /// pointer if there is one within a few pixels.
@@ -184,6 +186,7 @@ class RulersOverlay extends DesignerOverlay with InteractiveOverlay {
 
     final guides = context.controller.guides.value;
     _guidesBefore = guides;
+    _pulling = context.controller;
     _guideIndex = -1;
     for (var i = 0; i < guides.length; i++) {
       final g = guides[i];
@@ -253,13 +256,25 @@ class RulersOverlay extends DesignerOverlay with InteractiveOverlay {
         ),
       );
     }
-    onCancel();
+    _end();
   }
 
+  /// The drag abandoned (Esc, a tool switched, the designer closed): the
+  /// guides as they were — a guide made by the press goes again, as no
+  /// undo step records it.
   @override
   void onCancel() {
+    final controller = _pulling;
+    if (controller != null && _guideIndex >= 0) {
+      controller.guides.value = _guidesBefore;
+    }
+    _end();
+  }
+
+  void _end() {
     _guideIndex = -1;
     _guidesBefore = const [];
+    _pulling = null;
   }
 
   /// The id the session and the status bar refer to it by.

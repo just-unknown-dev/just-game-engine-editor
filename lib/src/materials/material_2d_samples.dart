@@ -4,10 +4,10 @@ import 'dart:ui' as ui;
 /// The pictures a 2-D material is previewed on when nothing of the game's
 /// is chosen, drawn once and kept: a textured disc (clear edges for
 /// outlines and glows, a few flat colours for palette swaps), a slime for a
-/// screen material's scene, a tile, and a sky.
+/// screen material's scene, a tile, and a sky — and plain [stone], drawn
+/// for its caller to keep.
 abstract final class Material2DSamples {
   static ui.Image? _sprite, _slime, _tile, _sky, _coin;
-  static final Map<(int, int), ui.Image> _stones = {};
 
   /// The colours [sprite] is drawn in, darkest first: what a palette swap
   /// is tried on.
@@ -128,14 +128,15 @@ abstract final class Material2DSamples {
   });
 
   /// A plain stone tile [width] × [height]: one even colour, so a normal
-  /// map's bumps are all there is to see on it.
-  static ui.Image stone(int width, int height) =>
-      _stones[(width, height)] ??= _draw(width, height, (c) {
-        c.drawRect(
-          ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
-          _fill(0xFF8A8D94),
-        );
-      });
+  /// map's bumps are all there is to see on it. It is as big as the normal
+  /// map it shows (a map is read pixel for pixel of what it is on), so it
+  /// is not kept here: each is the caller's, to dispose when done with it.
+  static ui.Image stone(int width, int height) => _draw(width, height, (c) {
+    c.drawRect(
+      ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+      _fill(0xFF8A8D94),
+    );
+  });
 
   /// A coin, 32 × 32 drawn twice as fine.
   static ui.Image get coin => _coin ??= _draw(32, 32, scale: 2, (c) {

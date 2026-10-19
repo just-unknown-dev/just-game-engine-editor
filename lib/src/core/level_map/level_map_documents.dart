@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:ui';
 
+import 'package:just_editor_core/io.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 import 'package:just_editor_core/host.dart';
@@ -29,12 +29,10 @@ class LevelMapTarget {
   bool get isFile => path != null;
 
   /// A Tiled map named directly: shown, not edited — convert it first.
-  bool get isReadOnly {
-    final p = path?.toLowerCase();
-    return p != null && (p.endsWith('.tmx') || p.endsWith('.tmj'));
-  }
+  bool get isReadOnly => _isTiledFile(path);
 
-  LevelMapRef get ref => LevelMapRef(entityId: entity.id, path: path);
+  LevelMapRef get ref =>
+      LevelMapRef(entityId: entity.id, path: path, entityName: entity.name);
 
   /// The map's grid, kept current by the running map when there is one.
   MapGeometry get geometry =>
@@ -76,6 +74,14 @@ class LevelMapTarget {
       (slot >= 0 && slot < data.tilesets.length && data.tilesets[slot] != null
           ? entity.world?.context.tiles.loadedTileset(data.tilesets[slot]!)
           : null);
+}
+
+/// Whether [path] is a Tiled map (`.tmx`, `.tmj`): read by the editor,
+/// never written by it — the editor's own map JSON over one would leave a
+/// file neither Tiled nor the engine can open.
+bool _isTiledFile(String? path) {
+  final p = path?.trim().toLowerCase();
+  return p != null && (p.endsWith('.tmx') || p.endsWith('.tmj'));
 }
 
 /// The tile maps the editor edits: in the scene, or in their own files.
@@ -145,25 +151,49 @@ class LevelMapDocuments {
 
   /// The map [ref] names now, or null when it is gone.
   ///
-  /// An entity undone and redone comes back under a new id, so a ref to one
-  /// that is gone is taken to mean the scene's Level Map — there is one per
-  /// scene — and the steps recorded on it still apply.
+  /// An entity undone and redone comes back under a new id, so the entity
+  /// is found by its name — names are unique in a scene, and the redone
+  /// one keeps it — when the id is gone or now belongs to something else.
+  /// A map that cannot be found is null, and the step does nothing: guessing
+  /// (the scene's first map) wrote one map's cells into another.
   LevelMapData? dataFor(LevelMapRef ref) {
     final path = ref.path;
     if (path != null) return tiles.loadedMap(path);
-    final own = world.getEntity(ref.entityId);
-    if (own != null && own.hasComponent<LevelMapComponent>()) {
-      return own.getComponent<LevelMapComponent>()!.inline;
-    }
-    final primary = LevelMaps.primaryEntity(world);
-    final c = primary?.getComponent<LevelMapComponent>();
-    return c == null || c.usesFile ? null : c.inline;
+    return mapEntityOf(ref)?.getComponent<LevelMapComponent>()!.inline;
   }
 
-  /// Something changed in the map [ref] names.
+  /// The entity carrying the map [ref] names: by its id while that is
+  /// still it, else by its name. Null when there is none.
+  Entity? mapEntityOf(LevelMapRef ref) =>
+      findMapEntity(world, entityId: ref.entityId, entityName: ref.entityName);
+
+  /// The live entity with a [LevelMapComponent] that is [entityId] — and
+  /// called [entityName], when given — else the one called [entityName].
+  static Entity? findMapEntity(
+    World world, {
+    required int entityId,
+    String? entityName,
+  }) {
+    bool isMap(Entity? e) =>
+        e != null && e.isAlive && e.hasComponent<LevelMapComponent>();
+    final own = world.getEntity(entityId);
+    if (isMap(own) && (entityName == null || own!.name == entityName)) {
+      return own;
+    }
+    if (entityName == null) return null;
+    for (final e in world.query([LevelMapComponent])) {
+      if (isMap(e) && e.name == entityName) return e;
+    }
+    return null;
+  }
+
+  /// Something changed in the map [ref] names. A Tiled map's file is
+  /// never marked to be saved: the editor does not write one.
   void markEdited(LevelMapRef ref) {
     final path = ref.path;
-    if (path != null && !dirtyPaths.value.contains(path)) {
+    if (path != null &&
+        !_isTiledFile(path) &&
+        !dirtyPaths.value.contains(path)) {
       dirtyPaths.value = {...dirtyPaths.value, path};
     }
     sceneState.markDirty();
@@ -237,41 +267,123 @@ class LevelMapDocuments {
     _bump();
   }
 
-  /// Writes every edited map file. Called when the scene is saved.
-  Future<void> saveDirty() async {
+  /// Writes every edited map file. Called when the scene is saved. A
+  /// Tiled map's file is left as it is.
+  ///
+  /// Each file is marked saved as it is written — one edited again while
+  /// the save went on stays unsaved — and one that cannot be written stays
+  /// unsaved and is returned, with why, by path; the rest are still written.
+  Future<Map<String, Object>> saveDirty() async {
+    final failed = <String, Object>{};
     for (final path in dirtyPaths.value.toList()) {
       final data = tiles.loadedMap(path);
-      if (data == null) continue;
-      await writeMap(path, data);
+      if (data == null || _isTiledFile(path)) {
+        _markSaved(path);
+        continue;
+      }
+      final revision = data.revision;
+      try {
+        await writeMap(path, data);
+      } on Object catch (error) {
+        failed[path] = error;
+        continue;
+      }
+      // Edited while it was being written: what is on disk is older.
+      if (data.revision == revision) _markSaved(path);
     }
-    dirtyPaths.value = const {};
+    return failed;
   }
 
-  /// Writes [data] to the project file [path].
+  void _markSaved(String path) {
+    if (!dirtyPaths.value.contains(path)) return;
+    dirtyPaths.value = {...dirtyPaths.value}..remove(path);
+  }
+
+  /// Throws away every edit to a map file that was not saved: each is read
+  /// again from disk the next time it is drawn. What a scene closed without
+  /// saving, or left for another, does with the maps it was editing — their
+  /// edits live in the engine's shared map cache, and the next scene's save
+  /// would otherwise write them.
+  void discardUnsaved() {
+    final paths = dirtyPaths.value;
+    if (paths.isEmpty) return;
+    dirtyPaths.value = const {};
+    for (final path in paths) {
+      tiles.evict(path);
+    }
+    for (final system in world.systems) {
+      if (system is! LevelMapSystem) continue;
+      for (final path in paths) {
+        system.reload(path);
+      }
+    }
+    _bump();
+  }
+
+  /// Writes [data] to the project file [path], whole or not at all.
+  /// Refuses a Tiled map's file (`.tmx`, `.tmj`) with a
+  /// [FileSystemException]: the editor's map JSON would replace the Tiled
+  /// map.
   Future<void> writeMap(String path, LevelMapData data) async {
+    if (_isTiledFile(path)) {
+      throw FileSystemException(
+        'A Tiled map is not written by the editor: convert it first',
+        path,
+      );
+    }
     final file = PackageAssetPaths.of(projectRoot).file(path);
-    await file.parent.create(recursive: true);
-    await file.writeAsString(
+    await ProjectFiles.writeString(
+      file.path,
       const JsonEncoder.withIndent('  ').convert(data.toJson()),
     );
   }
 
+  /// Whether the project file [path] is there.
+  bool exists(String path) =>
+      PackageAssetPaths.of(projectRoot).file(path).existsSync();
+
   /// Moves [entity]'s map out of the scene into [path], which the entity
   /// then names. One undo step; the file stays written either way.
+  ///
+  /// Never over another file: throws a [FileSystemException] when [path] is
+  /// taken — by another scene's map, say, which would then show this one —
+  /// and an [ArgumentError] when it leaves the project.
   Future<EditorCommand?> extractToAsset(Entity entity, String path) async {
     final c = entity.getComponent<LevelMapComponent>();
     final data = c?.inline;
     if (c == null || data == null) return null;
+    if (!ProjectFiles.isContained(path)) {
+      throw ArgumentError.value(path, 'path', 'is outside the project');
+    }
+    if (exists(path) || tiles.loadedMap(path) != null) {
+      throw FileSystemException('There is a map there already', path);
+    }
     await writeMap(path, data);
     tiles.putMap(path, data);
     final command = MapSourceCommand(
       label: 'Move map to $path',
       docs: this,
       entityId: entity.id,
+      entityName: entity.name,
       before: (path: '', inline: data.toJson()),
       after: (path: path, inline: null),
     )..redo();
     return command;
+  }
+
+  /// A free path for a map file named after [name] in [folder]: the name
+  /// made safe for a file (letters, digits, `_` and `-`), `_2`, `_3`… added
+  /// while one is taken.
+  String freeMapPath(String folder, String name) {
+    final safe = name
+        .trim()
+        .replaceAll(RegExp('[^A-Za-z0-9_-]+'), '_')
+        .replaceAll(RegExp('^_+|_+\$'), '');
+    final stem = safe.isEmpty ? 'map' : safe;
+    for (var n = 1; ; n++) {
+      final path = '$folder/$stem${n == 1 ? '' : '_$n'}${LevelMapFiles.suffix}';
+      if (!exists(path) && tiles.loadedMap(path) == null) return path;
+    }
   }
 
   void dispose() {
@@ -291,6 +403,7 @@ class LevelMapDocuments {
       label: 'Keep map in the scene',
       docs: this,
       entityId: entity.id,
+      entityName: entity.name,
       before: (path: path, inline: null),
       after: (path: '', inline: data.toJson()),
     )..redo();
@@ -303,6 +416,7 @@ class MapSourceCommand extends EditorCommand {
     required this.label,
     required this.docs,
     required this.entityId,
+    this.entityName,
     required this.before,
     required this.after,
   });
@@ -311,11 +425,19 @@ class MapSourceCommand extends EditorCommand {
   final String label;
   final LevelMapDocuments docs;
   final int entityId;
+
+  /// The map entity's name, which an undo and redo keep while its id
+  /// changes; found by it when [entityId] is no longer the map's.
+  final String? entityName;
   final ({String path, Map<String, dynamic>? inline}) before;
   final ({String path, Map<String, dynamic>? inline}) after;
 
   void _apply(({String path, Map<String, dynamic>? inline}) to) {
-    final c = docs.world.getEntity(entityId)?.getComponent<LevelMapComponent>();
+    final c = LevelMapDocuments.findMapEntity(
+      docs.world,
+      entityId: entityId,
+      entityName: entityName,
+    )?.getComponent<LevelMapComponent>();
     if (c == null) return;
     c
       ..mapPath = to.path

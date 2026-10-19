@@ -11,13 +11,18 @@ import '../state/play_snapshot.dart';
 abstract final class PhysicsBodies {
   /// The collision layer [entity]'s body is on — its rigid or character
   /// body's — 0 for a collider alone; null when it has no body.
-  static int? layerOf(jge.Entity entity, jge.ComponentDefinitionRegistry definitions) {
+  static int? layerOf(
+    jge.Entity entity,
+    jge.ComponentDefinitionRegistry definitions,
+  ) {
     var body = false;
     int? layer;
     for (final c in entity.components) {
       final definition = definitions.definitionFor(c);
       if (definition == null) continue;
-      if (definition.type == 'Collider2D' || definition.type == 'Collider3D') body = true;
+      if (definition.type == 'Collider2D' || definition.type == 'Collider3D') {
+        body = true;
+      }
       for (final f in definition.fields) {
         if (f.kind == jge.FieldTypes.physicsLayer) {
           layer ??= (f.read(c) as num?)?.toInt();
@@ -31,10 +36,14 @@ abstract final class PhysicsBodies {
   /// Whether an author placed [entity]: not a level map's body, not one
   /// the game made while it played.
   static bool isAuthored(jge.Entity entity) =>
-      !PlaySnapshot.isGenerated(entity) && !entity.hasComponent<jge.MapBodyComponent>();
+      !PlaySnapshot.isGenerated(entity) &&
+      !entity.hasComponent<jge.MapBodyComponent>();
 
   /// The bodies an author placed in [world], by the layer they are on.
-  static List<List<jge.Entity>> byLayer(jge.World world, jge.ComponentDefinitionRegistry definitions) {
+  static List<List<jge.Entity>> byLayer(
+    jge.World world,
+    jge.ComponentDefinitionRegistry definitions,
+  ) {
     final out = List.generate(jge.PhysicsLayers.count, (_) => <jge.Entity>[]);
     for (final e in world.entities) {
       if (!isAuthored(e)) continue;

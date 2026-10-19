@@ -21,7 +21,7 @@ void main() {
       }),
     );
     final plugin = JustGameEditorPlugin(engine: engine);
-    await plugin.onInitialize();
+    await plugin.attach(plugin.engine);
     addTearDown(plugin.dispose);
 
     const path = 'assets/materials/hit.material2d.json';

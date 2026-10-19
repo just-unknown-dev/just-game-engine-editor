@@ -67,11 +67,24 @@ class _ClipField extends StatelessWidget {
   final bool readOnly;
   final ValueChanged<Object?> onChanged;
 
+  // The clips per component and scene revision: found by walking every
+  // sprite in the scene, and the inspector builds on every change.
+  static final Expando<(int, List<String>)> _clipCache = Expando('spriteClips');
+
   /// The clips of the atlas [component] plays from, if the engine's system
   /// has loaded it for some entity carrying this component.
   List<String> _clips(EditorScope? scope) {
-    final world = scope?.world;
-    if (world == null) return const [];
+    if (scope == null) return const [];
+    final revision = scope.sceneState.revision.value;
+    final known = _clipCache[component];
+    if (known != null && known.$1 == revision) return known.$2;
+    final clips = _findClips(scope);
+    _clipCache[component] = (revision, clips);
+    return clips;
+  }
+
+  List<String> _findClips(EditorScope scope) {
+    final world = scope.world;
     for (final system in world.systems) {
       if (system is! jge.SpriteAnimationSystem) continue;
       for (final entity in world.query([jge.SpriteAnimationComponent])) {

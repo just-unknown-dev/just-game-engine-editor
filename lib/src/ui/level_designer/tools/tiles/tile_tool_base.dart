@@ -10,6 +10,7 @@ import '../../../../core/level_map/tile_commands.dart';
 import '../../../../core/level_map/tile_edit_state.dart';
 import '../../../../core/level_map/level_map_documents.dart';
 import '../../controls/designer_controls.dart';
+import '../../state/map_placement.dart';
 import '../../../../core/scope/editor_scope_services.dart';
 
 /// Ids of the tile tools.
@@ -58,7 +59,11 @@ abstract class TileTool extends LevelToolHandler {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        MapLayerPicker(scope: scope, world: options.world),
+        MapLayerPicker(
+          scope: scope,
+          world: options.world,
+          controller: options.controller,
+        ),
         if (own.isNotEmpty) ...[const OptionsDivider(), ...own],
         const OptionsDivider(),
         SignalToggle(
@@ -113,11 +118,8 @@ abstract class TileTool extends LevelToolHandler {
         ? scope.mapProvision.ensure(c.world)
         : state.target(c.world);
     if (target == null) {
-      say(
-        LevelMaps.primaryEntity(c.world) == null
-            ? 'Nothing painted yet: the Level Map is made when you first paint'
-            : 'The Level Map is still loading',
-      );
+      // None yet, one still loading, or one whose file will not load.
+      say(MapPlacement.whyNoMap(scope, c.world));
       return null;
     }
     final layer = state.layerOf(target);
@@ -166,6 +168,10 @@ abstract class TileTool extends LevelToolHandler {
   TileCoord? _pickStart;
   bool _picking = false;
 
+  /// Whether a gesture of this tool is under way: keys pressed meanwhile
+  /// change the brush, not what the gesture is about to paint.
+  bool _down = false;
+
   bool _isPick(ToolContext c) =>
       c.button == ToolButton.secondary ||
       (c.button == ToolButton.primary && c.isAltDown);
@@ -177,11 +183,12 @@ abstract class TileTool extends LevelToolHandler {
       final a = aim(c, forEdit: false);
       if (a == null) return true;
       _picking = true;
+      _down = true;
       _pickStart = cellAt(a, c.worldPosition, c);
       state.dragArea = (_pickStart!, _pickStart!);
       return true;
     }
-    return onPaintDown(c);
+    return _down = onPaintDown(c);
   }
 
   @override
@@ -200,6 +207,7 @@ abstract class TileTool extends LevelToolHandler {
   @override
   void onPointerUp(ToolContext context) {
     final c = context;
+    _down = false;
     if (_picking) {
       _finishPick(c);
       return;
@@ -211,6 +219,7 @@ abstract class TileTool extends LevelToolHandler {
 
   @override
   void onCancel() {
+    _down = false;
     if (_picking) {
       _picking = false;
       state.dragArea = null;
@@ -225,6 +234,12 @@ abstract class TileTool extends LevelToolHandler {
     state.dragArea = null;
     final a = aim(c, forEdit: false);
     if (a == null || area == null) return;
+    if (areaOf(area.$1, area.$2) > maxRegion) {
+      c.controller.setStatus(
+        'Too much to pick up at once: at most $maxRegion cells',
+      );
+      return;
+    }
     final cells = rectCells(area.$1, area.$2);
     final TileStamp stamp;
     if (cells.length == 1) {
@@ -244,7 +259,7 @@ abstract class TileTool extends LevelToolHandler {
       c.controller.setStatus('Nothing there to pick up');
       return;
     }
-    state.stamp.value = stamp;
+    state.setStamp(stamp, tilesets: TileEditState.tilesetsOf(a.target.data));
     c.controller.setStatus(
       stamp.isSingle
           ? (TileCell.isEmpty(stamp.cells.single.cell)
@@ -254,6 +269,25 @@ abstract class TileTool extends LevelToolHandler {
     );
     afterPick();
   }
+
+  /// [layers] in the order they are drawn, back to front: by depth
+  /// ([MapLayerData.sortLayer]), then [MapLayerData.zOrder], then their
+  /// place in the map — what the renderer sorts them by. The order of the
+  /// list alone is not it: a layer added at a depth is appended.
+  static List<MapLayerData> drawOrder(List<MapLayerData> layers) {
+    final indexed = [for (var i = 0; i < layers.length; i++) (i, layers[i])];
+    indexed.sort((a, b) {
+      final byDepth = a.$2.sortLayer.compareTo(b.$2.sortLayer);
+      if (byDepth != 0) return byDepth;
+      final byZ = a.$2.zOrder.compareTo(b.$2.zOrder);
+      return byZ != 0 ? byZ : a.$1.compareTo(b.$1);
+    });
+    return [for (final (_, layer) in indexed) layer];
+  }
+
+  /// How many cells the box from [a] to [b] holds, without listing them.
+  static int areaOf(TileCoord a, TileCoord b) =>
+      ((a.x - b.x).abs() + 1) * ((a.y - b.y).abs() + 1);
 
   /// Every cell of the box from [a] to [b], in map coordinates.
   static List<TileCoord> rectCells(TileCoord a, TileCoord b) => [
@@ -302,20 +336,27 @@ abstract class TileTool extends LevelToolHandler {
   bool onKey(LogicalKeyboardKey key, ToolContext context) {
     final c = context;
     final m = c.modifiers;
-    if (m.control && !m.alt && !m.shift && key == LogicalKeyboardKey.keyV) {
-      // Kept even with nothing copied: Ctrl+V with a tile tool in hand must
-      // not paste entities instead.
+    if (m.control &&
+        !m.alt &&
+        !m.shift &&
+        !m.other &&
+        key == LogicalKeyboardKey.keyV) {
+      // Kept even with nothing copied: Ctrl+V (Cmd+V) with a tile tool in
+      // hand must not paste entities instead.
       final copied = state.clipboard;
       if (copied == null) {
-        c.controller.setStatus('Nothing copied: select tiles and press Ctrl+C');
+        c.controller.setStatus(
+          'Nothing copied: select tiles and press '
+          '${EditorKeys.withPrimary('C')}',
+        );
         return true;
       }
-      state.stamp.value = copied;
+      state.setStamp(copied, tilesets: state.clipboardTilesets);
       c.controller.setStatus('Copied tiles are in the brush');
       if (id != TileTools.stamp) switchTool?.call(TileTools.stamp);
       return true;
     }
-    if (m.control || m.alt) return false;
+    if (m.control || m.alt || m.other) return false;
     final stamp = state.stamp.value;
     final target = state.target(c.world);
     if (stamp == null || target == null) return false;
@@ -336,32 +377,67 @@ abstract class TileTool extends LevelToolHandler {
       _ => (null, null),
     };
     if (next == null) return false;
-    state.stamp.value = next;
+    // The same tiles, turned: their slots still stand for what they did.
+    state.setStamp(next, tilesets: state.stampTilesets);
     c.controller.setStatus(said!);
-    onPointerHover(c);
+    // The brush under the pointer shows it — not mid-gesture, when what is
+    // shown is what the gesture is about to paint.
+    if (!_down) onPointerHover(c);
     return true;
   }
 
   // ── Painting ─────────────────────────────────────────────────────────────
+
+  /// The brush in [aim]'s map's numbering of its tilesets
+  /// ([TileEditState.stampIn]) — or null: no brush, or one that paints from
+  /// a tileset the map does not have, which is said unless [quiet].
+  TileStamp? brushFor(TileAim aim, ToolContext c, {bool quiet = false}) {
+    final (:stamp, :missing) = state.stampIn(aim.target.data);
+    if (missing != null && !quiet) {
+      c.controller.setStatus(
+        'The brush paints from $missing, which this map does not use: add '
+        'it in the Tileset panel (+) first',
+      );
+    }
+    return stamp;
+  }
 
   /// The value to paint where [stamp] says [value]: in random mode, one of
   /// the stamp's tiles by probability.
   int paintValue(TileAim aim, TileStamp stamp, int value) {
     if (stamp.isRandom) return stamp.pick(random);
     if (!state.random.value || stamp.cells.length < 2) return value;
+    return _randomOf(aim, stamp)?.pick(random) ?? value;
+  }
+
+  (TileStamp, LevelMapData, TileStamp?)? _random;
+
+  /// [stamp]'s tiles as a random pick, weighted by their probability on
+  /// [aim]'s map: made once per brush and map, not once per cell. Null
+  /// when the stamp holds no tile.
+  TileStamp? _randomOf(TileAim aim, TileStamp stamp) {
+    final cached = _random;
+    if (cached != null &&
+        identical(cached.$1, stamp) &&
+        identical(cached.$2, aim.target.data)) {
+      return cached.$3;
+    }
     final choices = [
       for (final c in stamp.cells)
         if (!TileCell.isEmpty(c.cell)) c.cell,
     ];
-    if (choices.isEmpty) return value;
-    return TileStamp.random(choices, [
-      for (final c in choices)
-        aim.target
-                .tilesetAt(TileCell.slotOf(c))
-                ?.tile(TileCell.localIdOf(c))
-                ?.probability ??
-            1,
-    ]).pick(random);
+    final made = choices.isEmpty
+        ? null
+        : TileStamp.random(choices, [
+            for (final c in choices)
+              aim.target
+                      .tilesetAt(TileCell.slotOf(c))
+                      ?.tile(TileCell.localIdOf(c))
+                      ?.probability ??
+                  1,
+          ]);
+    _random = (stamp, aim.target.data, made);
+    return made;
   }
 
   /// Paints [stamp] with its pointer cell at [at].

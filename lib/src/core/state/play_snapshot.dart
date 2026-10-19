@@ -18,14 +18,26 @@ class PlaySnapshot {
   );
 
   /// Captures every authored entity in [world], through [codec].
-  factory PlaySnapshot.capture(World world, SceneCodec codec) {
+  ///
+  /// [rootOrder] is the order of the scene's top-level entities as the
+  /// scene tree has them (`EditorSceneState.rootOrder`): a save during the
+  /// play-test writes them in it, as a save outside one does. Without it
+  /// they are in the order they were made.
+  factory PlaySnapshot.capture(
+    World world,
+    SceneCodec codec, {
+    List<EntityId>? rootOrder,
+  }) {
     // In the order a scene file is written — parents first — and encoded in
     // that same order, so each record stays beside the entity it was taken
     // from. Taking the entities in world order and the records in file order
     // paired them wrongly as soon as the two differed (an entity made late
     // but placed early), and stopping play then gave every entity after it
     // its neighbour's name, components and place in the tree.
-    final ordered = SceneCodec.inTreeOrder(authored(world));
+    final ordered = SceneCodec.inTreeOrder(
+      authored(world),
+      rootOrder: rootOrder,
+    );
     final encoded = codec.encodeInOrder(ordered);
     final indexOf = <EntityId, int>{
       for (var i = 0; i < ordered.length; i++) ordered[i].id: i,
@@ -61,8 +73,8 @@ class PlaySnapshot {
     );
   }
 
-  /// The entities a save writes: everything active with a transform.
-  /// What the scene file holds: everything in the world.
+  /// The entities a save writes: what the scene file holds — every live
+  /// entity in the world, switched on or off, with a transform or without.
   ///
   /// Not a list of the components that count, which is what this was —
   /// first transforms only, which lost every piece of interface, then
@@ -110,7 +122,14 @@ class PlaySnapshot {
   /// only has its components replaced, so selection, undo history and the
   /// physics body bound to it all stay valid. Only entities play destroyed are
   /// recreated, and only entities play created are removed.
-  int restoreInto(World world) {
+  ///
+  /// Each one recreated is told to [onRecreated] — the id it had, and what
+  /// it is now — so that undo steps recorded before play still find it
+  /// (`EditorSceneState.entityRebuilt`).
+  int restoreInto(
+    World world, {
+    void Function(EntityId was, Entity now)? onRecreated,
+  }) {
     final restored = <Entity>[];
     for (final record in _records) {
       final name = record.json['name'] as String?;
@@ -125,7 +144,9 @@ class PlaySnapshot {
       if (world.isEntityAlive(entity)) {
         spec.applyTo(entity);
       } else {
+        final was = entity.id;
         entity = world.createEntityWithComponents(spec.decode(), name: name);
+        onRecreated?.call(was, entity);
       }
       // On again unless the scene says it is switched off: play may
       // have disabled it, but being off is the author's choice.
@@ -146,6 +167,19 @@ class PlaySnapshot {
     // restored world transforms put it.
     world.transformHierarchy.propagate();
     return restored.length;
+  }
+
+  /// Destroys every entity of [world] that was not there when this was
+  /// captured — what a Play that failed half-way had made — and touches
+  /// nothing else. How many went.
+  int removeAddedFrom(World world) {
+    var removed = 0;
+    for (final e in world.entities.toList()) {
+      if (!e.isAlive || _existing.contains(e)) continue;
+      world.destroyEntity(e, withChildren: false);
+      removed++;
+    }
+    return removed;
   }
 
   /// Rebuilds every restored entity's place in the tree from the records.

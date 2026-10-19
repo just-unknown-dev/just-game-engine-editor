@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:just_editor_core/host.dart';
 
 /// The default chords for `BuiltInCommands`.
+///
+/// `control: true` is the platform's primary modifier, so every Ctrl chord
+/// here is a Cmd chord on macOS (see [EditorKeys]); the Delete binding also
+/// answers a Mac's Backspace.
 abstract final class BuiltInBindings {
   /// Bookmarks bind as many digits as [config] allows.
   static List<KeyBinding> of(DesignerConfig config) => [

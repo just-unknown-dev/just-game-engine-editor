@@ -24,7 +24,8 @@ class ShortcutRow extends StatefulWidget {
   final EditorScope scope;
   final DesignerCommand command;
 
-  /// The chords that run it now, as they read: `Ctrl+Shift+S`.
+  /// The chords that run it now, as they read: `Ctrl+Shift+S`, and
+  /// `Cmd+Shift+S` on macOS.
   final List<String> keys;
 
   /// Whether its keys are not the ones it was built with.
@@ -32,7 +33,8 @@ class ShortcutRow extends StatefulWidget {
   final Color accent;
 
   /// [chords] now run the command. With [takeFrom], that command gives up
-  /// [chord], which it had.
+  /// [chord], which it had. Chords come as settings store them
+  /// ([KeyBinding.savedChord]): `Ctrl+S` on every platform.
   final void Function(List<String> chords, {String? takeFrom, String? chord})
   onChanged;
 
@@ -47,6 +49,24 @@ class _ShortcutRowState extends State<ShortcutRow> {
   final FocusNode _focus = FocusNode(debugLabel: 'shortcutCapture');
   bool _listening = false;
 
+  /// The row listening for keys, per editor. Moving from one row to another
+  /// starts the second before the first hears it lost the focus: the first
+  /// must not then tell the editor nobody is listening.
+  static final Expando<_ShortcutRowState> _capturing = Expando(
+    'shortcutCapture',
+  );
+
+  void _capture(bool on) {
+    final scope = widget.scope;
+    if (on) {
+      _capturing[scope] = this;
+      scope.chrome.capturingKeys = true;
+    } else if (identical(_capturing[scope], this)) {
+      _capturing[scope] = null;
+      scope.chrome.capturingKeys = false;
+    }
+  }
+
   /// Why the last chord was not taken.
   String? _note;
 
@@ -56,13 +76,13 @@ class _ShortcutRowState extends State<ShortcutRow> {
 
   @override
   void dispose() {
-    if (_listening) widget.scope.chrome.capturingKeys = false;
+    if (_listening) _capture(false);
     _focus.dispose();
     super.dispose();
   }
 
   void _listen() {
-    widget.scope.chrome.capturingKeys = true;
+    _capture(true);
     setState(() {
       _listening = true;
       _note = null;
@@ -73,7 +93,7 @@ class _ShortcutRowState extends State<ShortcutRow> {
   }
 
   void _stop() {
-    widget.scope.chrome.capturingKeys = false;
+    _capture(false);
     if (!mounted) return;
     setState(() {
       _listening = false;
@@ -90,18 +110,42 @@ class _ShortcutRowState extends State<ShortcutRow> {
     // Held on the way to a chord: wait for the key it is held for.
     if (KeyBinding.isModifier(key)) return KeyEventResult.handled;
     final keyboard = HardwareKeyboard.instance;
-    final control = keyboard.isControlPressed;
+    // The primary modifier: Cmd on macOS, Ctrl elsewhere — what a binding's
+    // `control` means.
+    final control = EditorKeys.primaryPressed;
     final shift = keyboard.isShiftPressed;
     final alt = keyboard.isAltPressed;
     if (key == LogicalKeyboardKey.escape && !control && !shift && !alt) {
       _stop();
       return KeyEventResult.handled;
     }
+    // Ctrl on a Mac, the Windows key elsewhere: no binding is made with it,
+    // and none runs while it is held — recorded, it would be dropped.
+    if (EditorKeys.otherPressed) {
+      _refuse(
+        'Shortcuts are made with ${EditorKeys.primaryLabel}, Shift and Alt.',
+      );
+      return KeyEventResult.handled;
+    }
     if (widget.scope.chrome.reservedKeys.contains(key)) {
-      setState(() {
-        _note = '${KeyBinding.nameOf(key)} is kept for the editor itself.';
-        _pending = null;
-      });
+      _refuse('${KeyBinding.nameOf(key)} is kept for the editor itself.');
+      return KeyEventResult.handled;
+    }
+    // A command that runs even while typing (Save) on a key that types
+    // something would take that character from every text field: a letter,
+    // a digit, Shift and one — and on a Mac Option and one, which types too
+    // (Option+S is ß).
+    if (widget.command.scope == CommandScope.always &&
+        !control &&
+        (!alt || EditorKeys.isMac) &&
+        _types(key)) {
+      final typed = shift || alt
+          ? KeyBinding.chord(key, shift: shift, alt: alt)
+          : '${KeyBinding.nameOf(key)} alone';
+      _refuse(
+        '$typed would stop it being typed: add '
+        '${EditorKeys.isMac ? 'Cmd' : 'Ctrl or Alt'}.',
+      );
       return KeyEventResult.handled;
     }
     final binding = KeyBinding(
@@ -124,11 +168,23 @@ class _ShortcutRowState extends State<ShortcutRow> {
     return KeyEventResult.handled;
   }
 
+  /// Says why the chord just pressed is not taken, and keeps listening.
+  void _refuse(String why) => setState(() {
+    _note = why;
+    _pending = null;
+  });
+
+  /// Whether [key] types a character: a letter, a digit, a sign, space.
+  static bool _types(LogicalKeyboardKey key) =>
+      key == LogicalKeyboardKey.space ||
+      key.keyLabel.runes.length == 1 && key.keyLabel.trim().isNotEmpty;
+
+  /// Hands on the chord as settings store it: `Ctrl+` on every platform.
   void _use(KeyBinding binding, {DesignerCommand? takingFrom}) {
     widget.onChanged(
-      [binding.shortcut],
+      [binding.savedChord],
       takeFrom: takingFrom?.id,
-      chord: binding.shortcut,
+      chord: binding.savedChord,
     );
     _stop();
   }

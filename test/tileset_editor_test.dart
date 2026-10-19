@@ -9,9 +9,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/tileset/built_in_workspaces.dart';
+import 'package:just_game_engine_editor/src/ui/tileset/collision_shape_editor.dart';
+import 'package:just_game_engine_editor/src/ui/tileset/tileset_session.dart';
+import 'package:just_game_engine_editor/src/ui/tileset/tileset_workspace.dart';
 
 ui.Image _image(int w, int h) {
   final recorder = ui.PictureRecorder();
@@ -163,7 +167,7 @@ void main() {
       expect(s.message.value, contains('two tiles or more'));
     });
 
-    test('properties keep their type; probability merges while scrubbed', () {
+    test('properties keep their type; each value typed is its own step', () {
       final s = session();
       addTearDown(s.dispose);
       s.selection.value = {3};
@@ -171,11 +175,17 @@ void main() {
       s.setProperty('damage', 3, TilePropertyType.int);
       expect(s.data.tile(3)!.properties['damage'], 3);
       expect(s.data.tile(3)!.properties.typeOf('damage'), TilePropertyType.int);
+      // Two values typed one after the other are two edits (TI-18): one
+      // undo takes back only the second.
       s.undo();
-      expect(s.data.tile(3), isNull, reason: 'the two sets were one step');
+      expect(s.data.tile(3)!.properties['damage'], 2);
+      s.undo();
+      expect(s.data.tile(3), isNull);
 
       s.setProbability(0.5);
       s.setProbability(0.25);
+      s.undo();
+      expect(s.data.tile(3)!.probability, 0.5);
       s.undo();
       expect(s.data.tile(3), isNull);
     });
@@ -280,6 +290,55 @@ void main() {
       await ctrl(tester, LogicalKeyboardKey.keyZ);
       expect(find.byTooltip('Not saved'), findsOneWidget);
     });
+
+    testWidgets('on a Mac Cmd saves and Cmd+click adds a tile; Ctrl does not', (
+      tester,
+    ) async {
+      const path = 'assets/tilesets/grass.tileset.json';
+      String? saved;
+      await pumpEditor(
+        tester,
+        path: path,
+        readable: {path: jsonEncode(_tileset().toJson())},
+        onSaved: (p) => saved = p,
+      );
+      final grid = tester.getTopLeft(
+        find.byKey(const ValueKey('tileset-grid')),
+      );
+      Offset tile(int col, int row) =>
+          grid + Offset(col * 48 + 24.0, row * 48 + 24.0);
+      Future<void> clickWith(LogicalKeyboardKey held, Offset at) async {
+        await tester.sendKeyDownEvent(held);
+        await tester.tapAt(at);
+        await tester.sendKeyUpEvent(held);
+        await tester.pump();
+      }
+
+      await tester.tapAt(tile(1, 1));
+      await tester.pump();
+      await clickWith(LogicalKeyboardKey.metaLeft, tile(2, 1));
+      expect(
+        find.textContaining('2 TILES'),
+        findsOneWidget,
+        reason: 'Cmd+click adds',
+      );
+      await clickWith(LogicalKeyboardKey.controlLeft, tile(3, 1));
+      expect(find.text('TILE 7'), findsOneWidget, reason: 'a plain click');
+
+      await tester.tap(find.byTooltip('Full'));
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(saved, isNull, reason: 'Ctrl+S is not the Mac\'s save');
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pump();
+      await tester.pump();
+      expect(saved, path);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
     testWidgets('frames made from a selection list in the inspector, and a '
         'dragged corner is one step', (tester) async {

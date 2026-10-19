@@ -1,14 +1,23 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart' show compute;
+import 'package:just_editor_core/io.dart';
+import 'package:just_editor_core/just_editor_core.dart' show ProjectFiles;
 
 /// An image's pixels: [width] × [height] RGBA, 8 bits a channel, alpha
 /// not multiplied in, rows top to bottom.
 final class Pixels {
+  /// [width] × [height] pixels: [rgba] when given (its length must be
+  /// `width * height * 4`), else all clear black.
   Pixels(this.width, this.height, [Uint8List? rgba])
     : rgba = rgba ?? Uint8List(width * height * 4);
 
+  /// The image's size, in pixels.
   final int width, height;
+
+  /// The pixels, four bytes each — red, green, blue, alpha — row by row
+  /// from the top left.
   final Uint8List rgba;
 
   /// The channel [c] (0 red … 3 alpha) at [x], [y].
@@ -84,40 +93,48 @@ final class Pixels {
 
   /// These pixels as a PNG file's bytes.
   Future<Uint8List> png() async {
-    // The engine takes raw pixels with their alpha multiplied in.
-    final premultiplied = Uint8List(rgba.length);
+    // The engine takes raw pixels with their alpha multiplied in: worked
+    // out off the UI's isolate, as a big image takes a while.
+    final premultiplied = await compute(_premultiplied, rgba);
+    final buffer = await ui.ImmutableBuffer.fromUint8List(premultiplied);
+    ui.ImageDescriptor? descriptor;
+    ui.Codec? codec;
+    ui.Image? image;
+    try {
+      descriptor = ui.ImageDescriptor.raw(
+        buffer,
+        width: width,
+        height: height,
+        pixelFormat: ui.PixelFormat.rgba8888,
+      );
+      codec = await descriptor.instantiateCodec();
+      image = (await codec.getNextFrame()).image;
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      return data!.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    } finally {
+      // Let go however it went.
+      image?.dispose();
+      codec?.dispose();
+      descriptor?.dispose();
+      buffer.dispose();
+    }
+  }
+
+  static Uint8List _premultiplied(Uint8List rgba) {
+    final out = Uint8List(rgba.length);
     for (var i = 0; i < rgba.length; i += 4) {
       final a = rgba[i + 3];
-      premultiplied
+      out
         ..[i] = (rgba[i] * a / 255).round()
         ..[i + 1] = (rgba[i + 1] * a / 255).round()
         ..[i + 2] = (rgba[i + 2] * a / 255).round()
         ..[i + 3] = a;
     }
-    final buffer = await ui.ImmutableBuffer.fromUint8List(premultiplied);
-    final descriptor = ui.ImageDescriptor.raw(
-      buffer,
-      width: width,
-      height: height,
-      pixelFormat: ui.PixelFormat.rgba8888,
-    );
-    final codec = await descriptor.instantiateCodec();
-    final image = (await codec.getNextFrame()).image;
-    codec.dispose();
-    descriptor.dispose();
-    buffer.dispose();
-    try {
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      return data!.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-    } finally {
-      image.dispose();
-    }
+    return out;
   }
 
-  /// Writes these pixels to [path] as a PNG file.
-  Future<void> writePng(String path) async {
-    final file = File(path);
-    await file.parent.create(recursive: true);
-    await file.writeAsBytes(await png());
-  }
+  /// Writes these pixels to [path] as a PNG file, whole or not at all
+  /// (its folder made when missing).
+  Future<void> writePng(String path) async =>
+      ProjectFiles.writeBytes(path, await png());
 }

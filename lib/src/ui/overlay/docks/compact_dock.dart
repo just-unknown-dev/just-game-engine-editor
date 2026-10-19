@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:just_debugger/just_debugger.dart';
-import 'package:just_game_engine/just_game_engine.dart' show TransformComponent;
+import 'package:just_game_engine/just_game_engine.dart'
+    show SceneMode, TransformComponent;
 import 'package:just_signals/just_signals.dart';
 
 import 'package:just_editor_core/host.dart';
@@ -162,17 +162,19 @@ class _CompactStatusDockState extends State<CompactStatusDock> {
                     left: 0,
                     right: 0,
                     bottom: strip,
-                    child: ListenableBuilder(
-                      // The tabs' badges are live; the dock below them is
-                      // built once and listens to whatever it needs itself.
-                      listenable: _pulse,
-                      builder: (context, _) => DockPanel(
-                        scope: widget.plugin.scope,
-                        docks: docks,
-                        controller: _dock,
-                        settings: settings,
-                        height: panelHeight,
-                        maxHeight: _maxDockHeight,
+                    // The tabs' badges follow the pulse; the dock below them
+                    // is not built again for it, and listens to whatever it
+                    // needs itself.
+                    child: DockPanel(
+                      scope: widget.plugin.scope,
+                      docks: docks,
+                      controller: _dock,
+                      settings: settings,
+                      height: panelHeight,
+                      maxHeight: _maxDockHeight,
+                      pulse: _pulse,
+                      collapseKey: KeyBinding.nameOf(
+                        widget.plugin.statusPanelToggleKey,
                       ),
                     ),
                   ),
@@ -221,7 +223,9 @@ class DockStatusStrip extends StatelessWidget {
         onTap: () => controller.togglePanel(fallback: BuiltInDocks.console),
         hoverColor: EditorTheme.accent.withValues(alpha: 0.06),
         child: Tooltip(
-          message: isOpen ? 'Hide the docks  (F2)' : 'Show the docks  (F2)',
+          message:
+              '${isOpen ? 'Hide' : 'Show'} the docks  '
+              '(${KeyBinding.nameOf(plugin.statusPanelToggleKey)})',
           child: Container(
             decoration: BoxDecoration(
               border: Border(
@@ -280,11 +284,8 @@ class DockStatusStrip extends StatelessWidget {
     final performance = plugin.debuggerController.performance;
     final play = plugin.playController.state.value;
 
-    var errors = 0, warnings = 0;
-    for (final e in plugin.logService.entries.value) {
-      if (e.level == DebuggerLogLevel.error) errors++;
-      if (e.level == DebuggerLogLevel.warning) warnings++;
-    }
+    // This session's: the lines loaded back from earlier ones are history.
+    final (:errors, :warnings) = BuiltInDocks.sessionLogCounts(plugin);
     final problems = BuiltInDocks.problemScanOf(plugin).problems.length;
 
     // Frame time against the budget at the target rate: fine, close, over.
@@ -382,14 +383,18 @@ class DockStatusStrip extends StatelessWidget {
           ),
           if (count <= 1 && at != null)
             _Fact(
-              text: '${at.x.toStringAsFixed(0)}, ${at.y.toStringAsFixed(0)}',
+              // Pixels on the plane; metres, and how high, in space.
+              text: sceneState.editingMode == SceneMode.threeD
+                  ? '${at.x.toStringAsFixed(2)}, ${at.y.toStringAsFixed(2)}, '
+                        '${at.z.toStringAsFixed(2)}'
+                  : '${at.x.toStringAsFixed(0)}, ${at.y.toStringAsFixed(0)}',
             ),
         ],
       // What a module has to say, as facts beside the editor's own.
       for (final d in docks)
         if (d.order >= 100)
-          if ((d.readout?.value(scope) ?? d.badge?.call(scope) ?? '')
-              case final value when value.isNotEmpty)
+          if ((d.readout?.value(scope) ?? '') case final value
+              when value.isNotEmpty)
             [
               _Fact(
                 icon: d.icon,

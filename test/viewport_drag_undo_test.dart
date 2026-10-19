@@ -7,6 +7,8 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
+import 'package:just_game_engine_editor/src/core/input/viewport_input.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/gizmo_painter.dart';
 
 /// Reports a press on [handle] of the selected entity, wherever it lands.
 class _OnHandle extends GizmoHitTester {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import '../state/component_resizer.dart';
+import 'select_tool.dart';
 import 'package:just_editor_core/host.dart';
 
 /// Click an entity to make it the thing the draw and paint tools place.
@@ -59,7 +60,10 @@ class EyedropperTool extends LevelToolHandler {
     final hit = DesignerGeometry.topmostAt(
       context.world,
       context.worldPosition,
-      pickable: context.controller.isShownInViewport,
+      // Not the whole Level Map, caught near its origin as a marker.
+      pickable: (e) =>
+          context.controller.isShownInViewport(e) &&
+          !SelectTool.isWholeMap(context.world, e),
       markerReach: context.pixels(12),
     );
     if (hit == null) {
@@ -76,10 +80,25 @@ class EyedropperTool extends LevelToolHandler {
   }
 
   /// A prefab that builds copies of [entity], stretched to the drawn size.
+  ///
+  /// The drawn size is in the world's axes, as the entity is seen: its
+  /// transform's scale is kept, and the components are sized so that,
+  /// scaled, they fill the drawn box — across the box's height for an
+  /// entity turned a quarter turn, whose own width runs down the screen.
   static PrefabDefinition sample(jge.Entity entity, SceneCodec codec) {
     final spec = EntitySpec.of(entity, codec);
     final transform = entity.getComponent<jge.TransformComponent>();
     final local = DesignerGeometry.componentSize(entity);
+    final scaleX = transform?.scale.x.abs() ?? 1;
+    final scaleY = transform?.scale.y.abs() ?? 1;
+    final turned = ComponentResizer.isQuarterTurn(transform?.angle ?? 0);
+    // As it stands in the world: what a click without a drag places.
+    final shown = local == null
+        ? null
+        : Size(local.width * scaleX, local.height * scaleY);
+    final seen = shown == null || !turned
+        ? shown
+        : Size(shown.height, shown.width);
     final color = entity.components
         .whereType<jge.RectangleComponent>()
         .firstOrNull
@@ -96,17 +115,20 @@ class EyedropperTool extends LevelToolHandler {
       placement: local == null
           ? PrefabPlacement.point
           : PrefabPlacement.dragRect,
-      defaultSize: local ?? const Size(32, 32),
+      defaultSize: seen ?? const Size(32, 32),
       description: 'A copy of ${entity.name ?? 'the sampled entity'}',
       namePrefix: base,
       build: (position, size) {
         final components = spec.decode();
-        final sx = local == null || local.width == 0
+        // The drawn box in the entity's own axes, before its scale.
+        final across = turned ? size.height : size.width;
+        final down = turned ? size.width : size.height;
+        final sx = shown == null || shown.width == 0
             ? 1.0
-            : size.width / local.width;
-        final sy = local == null || local.height == 0
+            : across / shown.width;
+        final sy = shown == null || shown.height == 0
             ? 1.0
-            : size.height / local.height;
+            : down / shown.height;
         for (final c in components) {
           if (c is jge.TransformComponent) {
             c

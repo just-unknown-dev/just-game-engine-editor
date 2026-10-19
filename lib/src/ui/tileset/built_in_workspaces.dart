@@ -37,6 +37,9 @@ abstract final class BuiltInWorkspaces {
         // Through the edited engine's sprite seam: the project's files
         // while the editor runs.
         loadImage: (path) => workspace.scope.context.sprites.loadImage(path),
+        // A loader that keeps and shares its images (the project's files
+        // while the editor runs) must not have them disposed under it.
+        disposesImages: workspace.scope.context.sprites.callerDisposesImages,
         collisionKinds: workspace.scope.context.collisionKinds,
       ),
     ),

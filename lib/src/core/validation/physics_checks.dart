@@ -28,7 +28,11 @@ abstract final class PhysicsChecks {
   ) sync* {
     for (final e in context.world.query([jge.Collider2D])) {
       if (!PhysicsBodies.isAuthored(e)) continue;
-      yield (e, e.getComponent<jge.Collider2D>()!, e.getComponent<jge.RigidBody2D>());
+      yield (
+        e,
+        e.getComponent<jge.Collider2D>()!,
+        e.getComponent<jge.RigidBody2D>(),
+      );
     }
   }
 
@@ -40,11 +44,14 @@ abstract final class PhysicsChecks {
     final scope = context.scope;
     final out = <SceneProblem>[];
     for (final e in context.world.query([jge.RigidBody2D])) {
-      if (!PhysicsBodies.isAuthored(e) || e.hasComponent<jge.Collider2D>()) continue;
+      if (!PhysicsBodies.isAuthored(e) || e.hasComponent<jge.Collider2D>()) {
+        continue;
+      }
       out.add(
         SceneProblem(
           entity: e,
-          message: '${_name(e)} has a 2-D rigid body but no collider, so it has no shape and touches nothing.',
+          message:
+              '${_name(e)} has a 2-D rigid body but no collider, so it has no shape and touches nothing.',
           hint: 'Add a Collider 2D.',
           fixes: [
             ProblemFix(
@@ -52,7 +59,9 @@ abstract final class PhysicsChecks {
               apply: () => scope.history.push(
                 AddComponentCommand(
                   entity: e,
-                  component: jge.Collider2D(shape: jge.ColliderShape2D.matchShape),
+                  component: jge.Collider2D(
+                    shape: jge.ColliderShape2D.matchShape,
+                  ),
                   sceneState: scope.sceneState,
                 ),
               ),
@@ -63,13 +72,21 @@ abstract final class PhysicsChecks {
     }
     for (final (entity, collider, _) in _colliders(context)) {
       if (collider.shape != jge.ColliderShape2D.matchShape) continue;
-      if (jge.ColliderGeometry.visualShapeOf(entity, definitions: scope.definitions) != null) continue;
+      if (jge.ColliderGeometry.visualShapeOf(
+            entity,
+            definitions: scope.definitions,
+          ) !=
+          null) {
+        continue;
+      }
       out.add(
         SceneProblem(
           entity: entity,
           severity: ProblemSeverity.error,
-          message: "${_name(entity)}'s collider matches what it draws, but it draws nothing with a size, so it makes no body.",
-          hint: 'Give it a shape or a sprite to match, or pick a shape for the collider.',
+          message:
+              "${_name(entity)}'s collider matches what it draws, but it draws nothing with a size, so it makes no body.",
+          hint:
+              'Give it a shape or a sprite to match, or pick a shape for the collider.',
           fixes: [
             ProblemFix(
               label: 'Make it a box',
@@ -103,7 +120,8 @@ abstract final class PhysicsChecks {
           message: rigid != null
               ? '${_name(e)} is a character and a rigid body at once; the two would fight over where it is.'
               : "${_name(e)} is a character with a collider as well; the collider would be a second body where it stands, and the character's own shape is in its Character Body 2D.",
-          hint: 'Keep the Character Body 2D and remove the ${rigid != null ? 'Rigid Body 2D' : 'Collider 2D'}.',
+          hint:
+              'Keep the Character Body 2D and remove the ${rigid != null ? 'Rigid Body 2D' : 'Collider 2D'}.',
           fixes: [
             ProblemFix(
               label: 'Keep it a character',
@@ -112,7 +130,12 @@ abstract final class PhysicsChecks {
                   label: 'Keep it a character',
                   commands: [
                     for (final c in <jge.Component?>[rigid, collider])
-                      if (c != null) RemoveComponentCommand(entity: e, component: c, sceneState: scope.sceneState),
+                      if (c != null)
+                        RemoveComponentCommand(
+                          entity: e,
+                          component: c,
+                          sceneState: scope.sceneState,
+                        ),
                   ],
                 ),
               ),
@@ -185,7 +208,8 @@ abstract final class PhysicsChecks {
             ),
             ProblemFix(
               label: 'Fit to visual',
-              apply: () => PhysicsBodyExtras.fitToVisual(context.scope, collider),
+              apply: () =>
+                  PhysicsBodyExtras.fitToVisual(context.scope, collider),
             ),
           ],
         ),
@@ -215,9 +239,10 @@ abstract final class PhysicsChecks {
             fixes: [
               ProblemFix(
                 label: 'Move to ${grid.labelOf(0)}',
-                apply: () => _set(scope, body, 'Layer', (b) => b.layer, (b, v) {
-                  b.layer = v as int;
-                }, 0),
+                apply: () =>
+                    _set(scope, entity, body, 'Layer', (b) => b.layer, (b, v) {
+                      b.layer = v as int;
+                    }, 0),
               ),
               ProblemFix(
                 label: 'Open Physics Layers',
@@ -246,6 +271,7 @@ abstract final class PhysicsChecks {
                   label: 'Follow the project grid',
                   apply: () => _set(
                     scope,
+                    entity,
                     body,
                     'Collides with',
                     (b) => b.collidesWith,
@@ -290,6 +316,7 @@ abstract final class PhysicsChecks {
                   label: 'Take $them off the list',
                   apply: () => _set(
                     scope,
+                    entity,
                     body,
                     'Collides with',
                     (b) => b.collidesWith,
@@ -382,6 +409,7 @@ abstract final class PhysicsChecks {
 
   static void _set<T>(
     EditorScope scope,
+    jge.Entity entity,
     jge.RigidBody2D body,
     String label,
     T Function(jge.RigidBody2D) read,
@@ -396,6 +424,7 @@ abstract final class PhysicsChecks {
         before: read(body),
         after: value,
         sceneState: scope.sceneState,
+        entity: entity,
       ),
     );
   }

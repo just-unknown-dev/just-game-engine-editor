@@ -4,6 +4,9 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
+import 'package:just_game_engine_editor/src/core/input/gizmo_drag_solver.dart';
+import 'package:just_game_engine_editor/src/core/view/planar_entity_picker.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/gizmo_painter.dart';
 
 GameCameraEditorView _flatView() => GameCameraEditorView.of(
   Camera(

@@ -17,7 +17,8 @@ abstract final class TransformGizmo {
   /// How big the handles are drawn, as the settings make them.
   static double get _k => ViewportLook.gizmoScale;
   static double get _arrow => GizmoConstants.arrowLength * _k;
-  static double get _square => (GizmoConstants.moveHandleRadius * _k) * _k;
+  // Half the square's side: scaled once, as its hit area is.
+  static double get _square => GizmoConstants.moveHandleRadius * _k;
   static double get _tip => GizmoConstants.axisSquareHalf * _k;
 
   static final Paint _paint = Paint()..isAntiAlias = true;

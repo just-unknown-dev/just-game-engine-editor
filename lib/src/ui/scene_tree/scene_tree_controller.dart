@@ -12,8 +12,10 @@ import 'package:just_signals/just_signals.dart';
 
 import 'package:just_editor_core/host.dart';
 
-/// How tall one row is. The list is built by index, so it has to be told.
-const double kSceneTreeRowHeight = 26;
+/// How tall one row is: [kSceneTreeRowTileHeight], which follows the
+/// editor's target size (larger with large targets). The list is built by
+/// index, so it has to be told.
+double get kSceneTreeRowHeight => kSceneTreeRowTileHeight;
 
 class SceneTreeController {
   SceneTreeController({required this.world});
@@ -26,7 +28,6 @@ class SceneTreeController {
     debugLabel: 'treeExpanded',
   );
 
-  /// What the tree is narrowed to.
   /// The map layers that are open, by map and layer: what is on them
   /// listed.
   final Signal<Set<(jge.EntityId, int)>> expandedLayers = Signal(
@@ -43,6 +44,7 @@ class SceneTreeController {
     debugLabel: 'treePickedLayer',
   );
 
+  /// What the tree is narrowed to.
   final Signal<TreeFilter> filter = Signal(
     TreeFilter.none,
     debugLabel: 'treeFilter',
@@ -174,12 +176,14 @@ class SceneTreeController {
 
   jge.EntityId? _scrollTo;
 
-  /// Brings the row at [index] into view, if it is not already.
+  /// Brings the row at [index] into view, if it is not already. Rows are
+  /// [kSceneTreeRowTileHeight] apart, as the list lays them out.
   void scrollToIndex(int index) {
     if (!scroll.hasClients || index < 0) return;
     final position = scroll.position;
-    final top = index * kSceneTreeRowHeight;
-    final bottom = top + kSceneTreeRowHeight;
+    final row = kSceneTreeRowTileHeight;
+    final top = index * row;
+    final bottom = top + row;
     if (top < position.pixels) {
       position.jumpTo(top.clamp(0.0, position.maxScrollExtent));
     } else if (bottom > position.pixels + position.viewportDimension) {

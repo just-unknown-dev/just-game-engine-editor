@@ -1,10 +1,11 @@
-import 'dart:io';
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:just_debugger/just_debugger.dart';
 
 import 'package:just_editor_core/host.dart';
+import 'package:just_editor_core/io.dart';
 import '../shared/dock_widgets.dart';
 import 'frame_capture.dart';
 
@@ -52,6 +53,10 @@ class _ProfilerDockState extends State<ProfilerDock> {
   FrameCapture get _capture => widget.capture;
   bool _showDetails = false;
 
+  /// A new frame arrives every frame: the dock is drawn again a few times
+  /// a second for them, not sixty.
+  Timer? _redraw;
+
   @override
   void initState() {
     super.initState();
@@ -65,11 +70,23 @@ class _ProfilerDockState extends State<ProfilerDock> {
   @override
   void dispose() {
     _capture.removeListener(_changed);
+    _redraw?.cancel();
     super.dispose();
   }
 
   void _changed() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    // Paused, a click looks at a frame: that shows at once.
+    if (_capture.paused) {
+      _redraw?.cancel();
+      _redraw = null;
+      setState(() {});
+      return;
+    }
+    _redraw ??= Timer(const Duration(milliseconds: 100), () {
+      _redraw = null;
+      if (mounted) setState(() {});
+    });
   }
 
   void _setBudget(double ms) {
@@ -398,7 +415,9 @@ class _FrameGraphPainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      label.paint(canvas, Offset(4, y(ms) - label.height - 1));
+      label
+        ..paint(canvas, Offset(4, y(ms) - label.height - 1))
+        ..dispose();
     }
   }
 

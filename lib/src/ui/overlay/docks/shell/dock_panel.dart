@@ -23,6 +23,8 @@ class DockPanel extends StatelessWidget {
     required this.settings,
     required this.height,
     required this.maxHeight,
+    this.pulse,
+    this.collapseKey,
   });
 
   final EditorScope scope;
@@ -33,6 +35,14 @@ class DockPanel extends StatelessWidget {
   final OverlayUiSettings settings;
   final double height;
   final double maxHeight;
+
+  /// Ticks while the strip refreshes its numbers: the tabs' badges and the
+  /// active dock's own buttons follow it; the docks themselves do not — each
+  /// listens to whatever it shows.
+  final Listenable? pulse;
+
+  /// The key that collapses the panel, for the button's tooltip.
+  final String? collapseKey;
 
   static double get tabBarHeight => EditorMetrics.minTarget + 6;
 
@@ -93,41 +103,44 @@ class DockPanel extends StatelessWidget {
                 ),
               SizedBox(
                 height: tabBarHeight,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _TabBar(
-                        scope: scope,
-                        docks: docks,
-                        controller: controller,
-                        accent: accent,
+                child: ListenableBuilder(
+                  listenable: pulse ?? const _Never(),
+                  builder: (context, _) => Row(
+                    children: [
+                      Expanded(
+                        child: _TabBar(
+                          scope: scope,
+                          docks: docks,
+                          controller: controller,
+                          accent: accent,
+                        ),
                       ),
-                    ),
-                    ...?active.headerActions?.call(context, dockContext),
-                    const SizedBox(width: 4),
-                    EditorIconButton(
-                      icon: maximised
-                          ? Icons.close_fullscreen_rounded
-                          : Icons.open_in_full_rounded,
-                      tooltip: maximised ? 'Restore' : 'Maximise',
-                      isActive: maximised,
-                      activeColor: accent,
-                      onTap: () => controller.maximised.value = !maximised,
-                    ),
-                    EditorIconButton(
-                      icon: Icons.open_in_new_rounded,
-                      tooltip: 'Pop out into its own window',
-                      activeColor: accent,
-                      onTap: () => controller.popOut(active.id),
-                    ),
-                    EditorIconButton(
-                      icon: Icons.keyboard_arrow_down_rounded,
-                      tooltip: 'Collapse  (F2)',
-                      activeColor: accent,
-                      onTap: controller.close,
-                    ),
-                    const SizedBox(width: 4),
-                  ],
+                      ...?active.headerActions?.call(context, dockContext),
+                      const SizedBox(width: 4),
+                      EditorIconButton(
+                        icon: maximised
+                            ? Icons.close_fullscreen_rounded
+                            : Icons.open_in_full_rounded,
+                        tooltip: maximised ? 'Restore' : 'Maximise',
+                        isActive: maximised,
+                        activeColor: accent,
+                        onTap: () => controller.maximised.value = !maximised,
+                      ),
+                      EditorIconButton(
+                        icon: Icons.open_in_new_rounded,
+                        tooltip: 'Pop out into its own window',
+                        activeColor: accent,
+                        onTap: () => controller.popOut(active.id),
+                      ),
+                      EditorIconButton(
+                        icon: Icons.keyboard_arrow_down_rounded,
+                        tooltip: tooltipWithShortcut('Collapse', collapseKey),
+                        activeColor: accent,
+                        onTap: controller.close,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                  ),
                 ),
               ),
               Divider(height: 1, color: EditorTheme.border),
@@ -164,6 +177,17 @@ class DockPanel extends StatelessWidget {
   }
 }
 
+/// A listenable that never fires: a panel with no pulse.
+class _Never implements Listenable {
+  const _Never();
+
+  @override
+  void addListener(VoidCallback listener) {}
+
+  @override
+  void removeListener(VoidCallback listener) {}
+}
+
 class _TabBar extends StatelessWidget {
   const _TabBar({
     required this.scope,
@@ -177,8 +201,10 @@ class _TabBar extends StatelessWidget {
   final DockController controller;
   final Color accent;
 
-  String? _keyOf(String dockId) {
-    final bound = scope.commands.bindingsFor('dock.open.$dockId');
+  String? _keyOf(String dockId) => _key('dock.open.$dockId');
+
+  String? _key(String commandId) {
+    final bound = scope.commands.bindingsFor(commandId);
     return bound.isEmpty ? null : bound.first.shortcut;
   }
 
@@ -248,6 +274,7 @@ class _TabBar extends StatelessWidget {
                     accent: accent,
                     controller: controller,
                     shortcut: _keyOf(tabs[i].id),
+                    maximiseKey: _key('dock.maximise'),
                   ),
               ],
             ),
@@ -278,6 +305,7 @@ class _Tab extends StatefulWidget {
     required this.accent,
     required this.controller,
     this.shortcut,
+    this.maximiseKey,
   });
 
   final DockDefinition dock;
@@ -289,6 +317,9 @@ class _Tab extends StatefulWidget {
 
   /// The keys that open it, for its tooltip.
   final String? shortcut;
+
+  /// The keys that maximise the panel, for the tab's menu.
+  final String? maximiseKey;
 
   @override
   State<_Tab> createState() => _TabState();
@@ -311,7 +342,7 @@ class _TabState extends State<_Tab> {
         'maximise',
         isOpen && c.maximised.value ? 'Restore its height' : 'Maximise',
         icon: Icons.open_in_full_rounded,
-        shortcut: 'Ctrl+Shift+M',
+        shortcut: widget.maximiseKey,
       ),
       editorMenuDivider(),
       editorMenuItem(

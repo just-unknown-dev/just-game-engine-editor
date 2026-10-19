@@ -12,7 +12,10 @@ typedef TilesetTextReader = Future<String> Function(String path);
 /// Writes text to a project-relative file.
 typedef TilesetTextWriter = Future<void> Function(String path, String text);
 
-/// Loads a project-relative image.
+/// Loads a project-relative image. Whether the image it hands back is the
+/// caller's to dispose is the loader's to say: see
+/// [SpriteAssetLoader.callerDisposesImages], and the `disposesImages`
+/// argument of the sessions and views that take one.
 typedef TilesetImageLoader = Future<ui.Image> Function(String path);
 
 /// One tileset being edited: its data, what is selected, and its own undo.
@@ -22,6 +25,10 @@ typedef TilesetImageLoader = Future<ui.Image> Function(String path);
 /// collision shape, not the last tile painted in the level. Maps see the
 /// tileset as it was last saved; saving tells them to read it again.
 class TilesetSession {
+  /// A session over [data]. [disposesImages] says whether the images
+  /// [loadImage] hands back are the session's to dispose — clones, as the
+  /// bundle's loader gives — rather than ones a loader keeps and shares;
+  /// by default, only when the session uses the bundle's loader itself.
   TilesetSession(
     TilesetData data, {
     this.path,
@@ -29,11 +36,14 @@ class TilesetSession {
     TilesetImageLoader? loadImage,
     TilesetTextWriter? writeText,
     MapCollisionKinds? collisionKinds,
+    bool? disposesImages,
   }) : collisionKinds = collisionKinds ?? MapCollisionKinds.builtIn,
        _data = data,
-       _saved = jsonEncode(data.toJson()),
+       _ownsImages = disposesImages ?? loadImage == null,
        _loadImage = loadImage ?? BundleSpriteAssetLoader().loadImage,
        _writeText = writeText {
+    _current = jsonEncode(data.toJson());
+    _saved = _current;
     reloadImage();
   }
 
@@ -45,6 +55,7 @@ class TilesetSession {
     TilesetImageLoader? loadImage,
     TilesetTextWriter? writeText,
     MapCollisionKinds? collisionKinds,
+    bool? disposesImages,
   }) async {
     if (BuiltInTilesets.isBuiltIn(path)) {
       throw StateError(
@@ -60,10 +71,13 @@ class TilesetSession {
       loadImage: loadImage,
       writeText: writeText,
       collisionKinds: collisionKinds,
+      disposesImages: disposesImages,
     );
   }
 
-  /// A new, unsaved tileset cutting [image] into tiles.
+  /// A new, unsaved tileset cutting [image] into tiles. Its size is read
+  /// from the image unless [imageWidth] and [imageHeight] say it — what a
+  /// form that has shown the image already knows.
   static Future<TilesetSession> create({
     required String image,
     required String name,
@@ -75,14 +89,25 @@ class TilesetSession {
     TilesetImageLoader? loadImage,
     TilesetTextWriter? writeText,
     MapCollisionKinds? collisionKinds,
+    bool? disposesImages,
+    int? imageWidth,
+    int? imageHeight,
   }) async {
+    final owns = disposesImages ?? loadImage == null;
     final load = loadImage ?? BundleSpriteAssetLoader().loadImage;
-    final picture = await load(image);
+    var width = imageWidth, height = imageHeight;
+    if (width == null || height == null) {
+      // Read for its size only: the session loads its own to draw.
+      final picture = await load(image);
+      width = picture.width;
+      height = picture.height;
+      if (owns) picture.dispose();
+    }
     final data = TilesetData.fromImage(
       name: name,
       image: image,
-      imageWidth: picture.width,
-      imageHeight: picture.height,
+      imageWidth: width,
+      imageHeight: height,
       tileWidth: tileWidth,
       tileHeight: tileHeight,
       margin: margin,
@@ -94,6 +119,7 @@ class TilesetSession {
       loadImage: load,
       writeText: writeText,
       collisionKinds: collisionKinds,
+      disposesImages: owns,
     );
     // New, so unsaved even though nothing has been done to it yet.
     session._saved = '';
@@ -115,6 +141,10 @@ class TilesetSession {
   final TilesetImageLoader _loadImage;
   final TilesetTextWriter? _writeText;
 
+  // Whether the images [_loadImage] hands back are this session's to
+  // dispose.
+  final bool _ownsImages;
+
   TilesetData _data;
 
   /// The tileset as it stands.
@@ -135,9 +165,13 @@ class TilesetSession {
   /// A line for the author: what was done, or why not.
   final Signal<String?> message = Signal(null, debugLabel: 'tilesetMessage');
 
-  String _saved;
+  // The tileset as saved, and as it stands, encoded: kept as edits are
+  // made, so asking whether it is dirty — every build of the header — does
+  // not encode the whole tileset again.
+  late String _saved;
+  late String _current;
 
-  bool get isDirty => jsonEncode(_data.toJson()) != _saved;
+  bool get isDirty => _current != _saved;
 
   /// The file's name, or what a tileset not yet saved is called.
   String get fileName => path == null
@@ -161,15 +195,28 @@ class TilesetSession {
     if (path.isEmpty) return;
     try {
       final loaded = await _loadImage(path);
-      if (_disposed) return;
-      image.value = loaded;
+      if (_disposed) {
+        if (_ownsImages) loaded.dispose();
+        return;
+      }
+      _replaceImage(loaded);
       imageError = null;
     } catch (e) {
       if (_disposed) return;
       imageError = '$e';
-      image.value = null;
+      _replaceImage(null);
     }
     revision.value++;
+  }
+
+  // Shows [next] in place of the image there was, letting that one go when
+  // it is the session's own.
+  void _replaceImage(ui.Image? next) {
+    final previous = image.value;
+    image.value = next;
+    if (_ownsImages && previous != null && !identical(previous, next)) {
+      previous.dispose();
+    }
   }
 
   bool _disposed = false;
@@ -183,24 +230,40 @@ class TilesetSession {
   bool get canRedo => _redo.isNotEmpty;
 
   /// Makes [change] to the tileset as one undo step. Steps with the same
-  /// [mergeKey] one after another fold into one — a dragged vertex, a
-  /// number scrubbed.
+  /// [mergeKey] one after another fold into one — the moves of one drag,
+  /// keyed by its [newGesture].
+  ///
+  /// A change that leaves the tileset something that cannot be saved — a
+  /// number that is not finite — or that throws is taken back whole, and
+  /// said in [message].
   void apply(
     String label,
     void Function(TilesetData ts) change, {
     Object? mergeKey,
   }) {
     final before = _data.toJson();
-    change(_data);
-    for (final id in _data.tiles.keys.toList()) {
-      _data.prune(id);
-    }
-    _data.touch();
-    final after = _data.toJson();
-    if (jsonEncode(before) == jsonEncode(after)) {
+    final String encoded;
+    final Map<String, dynamic> after;
+    try {
+      change(_data);
+      for (final id in _data.tiles.keys.toList()) {
+        _data.prune(id);
+      }
+      _data.touch();
+      after = _data.toJson();
+      encoded = jsonEncode(after);
+    } catch (e) {
+      final revisionBefore = _data.revision;
+      _data = TilesetData.fromJson(before)..revision = revisionBefore + 1;
+      say('Not changed: $e');
       revision.value++;
       return;
     }
+    if (encoded == _current) {
+      revision.value++;
+      return;
+    }
+    _current = encoded;
     final last = _undo.isEmpty ? null : _undo.last;
     if (mergeKey != null && last != null && last.mergeKey == mergeKey) {
       last.after = after;
@@ -210,6 +273,13 @@ class TilesetSession {
     _redo.clear();
     revision.value++;
   }
+
+  int _gesture = 0;
+
+  /// A key no edit has merged under yet: one per drag or stroke, handed to
+  /// [apply] as its `mergeKey` (with whatever else tells the drag apart), so
+  /// the moves of one gesture are one undo step and two gestures are two.
+  int newGesture() => ++_gesture;
 
   void undo() {
     if (_undo.isEmpty) return;
@@ -230,6 +300,7 @@ class TilesetSession {
   void _restore(Map<String, dynamic> json) {
     final revisionBefore = _data.revision;
     _data = TilesetData.fromJson(json)..revision = revisionBefore + 1;
+    _current = jsonEncode(_data.toJson());
     selection.value = {
       for (final id in selection.value)
         if (_data.contains(id)) id,
@@ -239,22 +310,59 @@ class TilesetSession {
 
   // ── Saving ───────────────────────────────────────────────────────────────
 
+  /// Whether [key] can be saved to: inside the project, and not in pub's
+  /// shared cache — a package's tileset there is every project's.
+  bool canSaveTo(String key) =>
+      _writeText != null ||
+      (ProjectFiles.isContained(key) &&
+          PackageAssetPaths.of(root).isWritable(key));
+
+  Future<String>? _saving;
+
   /// Writes the tileset to [to], or where it was opened from. Returns the
   /// path written.
-  Future<String> save({String? to}) async {
+  ///
+  /// The file is written whole or not at all, saves follow one another,
+  /// and a path outside the project or in pub's shared cache is refused
+  /// (a [StateError]).
+  Future<String> save({String? to}) {
+    final previous = _saving;
+    final saving = () async {
+      if (previous != null) {
+        try {
+          await previous;
+        } catch (_) {
+          // That save said what went wrong; this one is its own.
+        }
+      }
+      return _save(to);
+    }();
+    _saving = saving;
+    return saving;
+  }
+
+  Future<String> _save(String? to) async {
     final target = to ?? path;
     if (target == null) throw StateError('No path to save to');
-    final text = const JsonEncoder.withIndent('  ').convert(_data.toJson());
+    if (!canSaveTo(target)) {
+      throw StateError(
+        '$target is outside the project or in pub\'s shared cache, which '
+        'is read-only',
+      );
+    }
+    final json = _data.toJson();
+    final text = const JsonEncoder.withIndent('  ').convert(json);
     final write = _writeText;
     if (write != null) {
       await write(target, text);
     } else {
-      final file = PackageAssetPaths.of(root).file(target);
-      await file.parent.create(recursive: true);
-      await file.writeAsString('$text\n');
+      await ProjectFiles.writeString(
+        PackageAssetPaths.of(root).absolute(target),
+        '$text\n',
+      );
     }
     path = target;
-    _saved = jsonEncode(_data.toJson());
+    _saved = jsonEncode(json);
     revision.value++;
     say('Saved $target');
     return target;
@@ -270,11 +378,21 @@ class TilesetSession {
     }
   });
 
-  void setProbability(double probability) => apply('Tile probability', (ts) {
-    for (final id in _selected) {
-      ts.tileOrNew(id).probability = probability < 0 ? 0 : probability;
-    }
-  }, mergeKey: ('probability', selection.value));
+  /// Whether [value] is a number a tileset can hold; says so when not.
+  bool _finite(double value, String what) {
+    if (value.isFinite) return true;
+    say('$what must be a number');
+    return false;
+  }
+
+  void setProbability(double probability) {
+    if (!_finite(probability, 'Probability')) return;
+    apply('Tile probability', (ts) {
+      for (final id in _selected) {
+        ts.tileOrNew(id).probability = probability < 0 ? 0 : probability;
+      }
+    });
+  }
 
   /// Gives every selected tile [shapes] (or no collision, when null) of
   /// [kind].
@@ -331,12 +449,14 @@ class TilesetSession {
     say('Tile ${ids.first} plays ${ids.length} frames');
   }
 
-  void setProperty(String name, Object? value, TilePropertyType type) =>
-      apply('Tile property', (ts) {
-        for (final id in _selected) {
-          ts.tileOrNew(id).properties.set(name, value, type);
-        }
-      }, mergeKey: ('property', name, selection.value));
+  void setProperty(String name, Object? value, TilePropertyType type) {
+    if (value is double && !_finite(value, name)) return;
+    apply('Tile property', (ts) {
+      for (final id in _selected) {
+        ts.tileOrNew(id).properties.set(name, value, type);
+      }
+    });
+  }
 
   void removeProperty(String name) => apply('Remove tile property', (ts) {
     for (final id in _selected) {
@@ -348,10 +468,13 @@ class TilesetSession {
 
   void rename(String name) => apply('Rename tileset', (ts) => ts.name = name);
 
-  void setTileOffset(double x, double y) => apply('Tile offset', (ts) {
-    ts.tileOffsetX = x;
-    ts.tileOffsetY = y;
-  }, mergeKey: 'tileOffset');
+  void setTileOffset(double x, double y) {
+    if (!_finite(x, 'The offset') || !_finite(y, 'The offset')) return;
+    apply('Tile offset', (ts) {
+      ts.tileOffsetX = x;
+      ts.tileOffsetY = y;
+    });
+  }
 
   // ── Terrains ─────────────────────────────────────────────────────────────
 
@@ -382,10 +505,6 @@ class TilesetSession {
     });
     return index;
   }
-
-  void removeWangSet(int set) => apply('Remove terrain set', (ts) {
-    if (set < ts.wangSets.length) ts.wangSets.removeAt(set);
-  });
 
   void renameWangSet(int set, String name) =>
       apply('Rename terrain set', (ts) => ts.wangSets[set].name = name);
@@ -437,18 +556,25 @@ class TilesetSession {
     w.wangIds.removeWhere((_, id) => id.every((c) => c == 0));
   });
 
+  /// Changes terrain [color] (from 1) of [set]. Each change is its own
+  /// undo step: a name typed, then a colour picked, are two.
   void editWangColor(
     int set,
     int color, {
     String? name,
     int? argb,
     double? probability,
-  }) => apply('Edit terrain', (ts) {
-    final c = ts.wangSets[set].colors[color - 1];
-    if (name != null) c.name = name;
-    if (argb != null) c.color = argb;
-    if (probability != null) c.probability = probability < 0 ? 0 : probability;
-  }, mergeKey: ('terrain', set, color));
+  }) {
+    if (probability != null && !_finite(probability, 'Probability')) return;
+    apply('Edit terrain', (ts) {
+      final c = ts.wangSets[set].colors[color - 1];
+      if (name != null) c.name = name;
+      if (argb != null) c.color = argb;
+      if (probability != null) {
+        c.probability = probability < 0 ? 0 : probability;
+      }
+    });
+  }
 
   /// Sets slot [slot] of [tile]'s Wang id in [set] to [color] (0 clears
   /// it). [mergeKey] folds a stroke across several tiles into one step.
@@ -527,6 +653,8 @@ class TilesetSession {
 
   void dispose() {
     _disposed = true;
+    final shown = image.value;
+    if (_ownsImages && shown != null) shown.dispose();
     for (final s in <Signal<Object?>>[revision, image, selection, message]) {
       s.dispose();
     }

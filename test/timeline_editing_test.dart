@@ -344,6 +344,56 @@ void main() {
     });
   });
 
+  testWidgets('on a Mac the dock\'s chords are Cmd, and Cmd+M is not M', (
+    tester,
+  ) async {
+    scope = testScope();
+    await open(TimelineSession.of(scope));
+    addTearDown(s.dispose);
+    scope.sceneState.selectedEntity.value = entity;
+    tester.view.physicalSize = const Size(1400, 500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: TimelineDock(scope: scope)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    final sheet = tester.getRect(find.byType(DopeSheet));
+    await tester.tapAt(
+      Offset(
+        sheet.left +
+            TimelineMetrics.leftInset +
+            (2 - s.scrollTime.value) * s.pixelsPerSecond.value,
+        sheet.top + 1.5 * TimelineMetrics.rowHeight,
+      ),
+    );
+    await tester.pump();
+    expect(s.selection.value, {const TimelineItemRef(0, 2)});
+    Future<void> chord(LogicalKeyboardKey held, LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(held);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(held);
+      await tester.pump();
+    }
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+    expect(times(0), [0, 1, 3], reason: 'Backspace deletes');
+    await chord(LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.keyZ);
+    expect(times(0), [0, 1, 3], reason: 'Ctrl is no shortcut key on a Mac');
+    await chord(LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.keyZ);
+    expect(times(0), [0, 1, 2, 3], reason: 'its own undo');
+    await chord(LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.keyM);
+    expect(s.asset.value!.markers, isEmpty, reason: 'Cmd+M is not M');
+    await chord(LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.keyY);
+    expect(times(0), [0, 1, 3], reason: 'Cmd+Y redoes');
+
+    await tester.pumpWidget(const SizedBox());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
   test('the timeline commands are registered and run', () async {
     scope = testScope();
     await open(TimelineSession.of(scope));

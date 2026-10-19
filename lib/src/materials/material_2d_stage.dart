@@ -1,9 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
+import 'package:just_editor_core/io.dart';
+import 'package:just_editor_core/just_editor_core.dart' show PackageAssetPaths;
 import 'package:just_game_engine/just_game_engine.dart';
 
 import 'material_2d_samples.dart';
@@ -65,19 +66,33 @@ enum Material2DAuto {
 /// screen material) with the material, and a light that can be moved
 /// over it.
 ///
-/// Files are read from the project: the material, its parents and the
-/// images its effects name. [library] shows unsaved edits
-/// ([Material2DLibrary.preview]); nothing of it reaches the game's world.
+/// Files are read from the project (or a package, for its asset keys): the
+/// material, its parents and the images its effects name. [library] shows
+/// unsaved edits ([Material2DLibrary.preview]); nothing of it reaches the
+/// game's world.
 final class Material2DStage {
-  /// A stage reading the project at [root].
-  Material2DStage({required this.root}) {
-    world.context.material2DText = (path) => File('$root/$path').readAsString();
-    world.context.sprites = _ProjectImages(root);
+  /// A stage reading the project at [root] — or, when [filesFrom] is given,
+  /// reading its files and images through that stage's [library], so the
+  /// two draw the same material from one copy of its images (a stage that
+  /// draws the same subject without the material, to compare).
+  Material2DStage({required this.root, Material2DStage? filesFrom})
+    : _filesFrom = filesFrom {
+    world.context.material2DText = (path) => _fileOf(path).readAsString();
+    world.context.sprites = _reader = _ProjectImages(root, _failedImages);
     world.addSystem(_render);
   }
 
   /// The project folder.
   final String root;
+
+  final Material2DStage? _filesFrom;
+  late final _ProjectImages _reader;
+
+  // The images that could not be read, by path: what is drawn without
+  // them is as ready as it will be.
+  final Set<String> _failedImages = {};
+
+  File _fileOf(String path) => File(PackageAssetPaths.of(root).absolute(path));
 
   /// The stage's own world.
   final World world = World()..initialize();
@@ -99,9 +114,13 @@ final class Material2DStage {
     clock: () => time,
   );
 
-  /// The library the stage draws with: the files, parents and images, and
-  /// unsaved edits shown in place of a file.
-  Material2DLibrary get library => Material2DLibrary.of(world.context);
+  /// The library the stage reads its material through: the files, parents
+  /// and images, and unsaved edits shown in place of a file. The stage's
+  /// own, or [filesFrom]'s.
+  Material2DLibrary get library => _filesFrom?.library ?? _own;
+
+  // The library of the stage's own world: the shaders it draws through.
+  Material2DLibrary get _own => Material2DLibrary.of(world.context);
 
   /// Seconds into the preview: what moves in a material (a wave, a
   /// shine) moves with it.
@@ -119,7 +138,14 @@ final class Material2DStage {
   bool _mapLaidOut = false;
   Material2DAuto? _autoLaidOut;
   final Map<String, Future<ui.Image?>> _loaded = {};
-  final List<ui.Image> _loadedImages = [];
+  // What [loadImage] read, by path; and images read before a path was
+  // forgotten, let go once what is laid out no longer draws them.
+  final Map<String, ui.Image> _loadedImages = {};
+  final List<ui.Image> _retired = [];
+  // The plain stone Auto shows a normal map on: the map's size.
+  ui.Image? _stone;
+  // The engine's shaders asked after, and those that could not be loaded.
+  final Set<String> _shadersAsked = {}, _shadersFailed = {};
   bool _lit = false;
   FilterQuality _quality = FilterQuality.medium;
   Size? _laidOut;
@@ -305,41 +331,84 @@ final class Material2DStage {
     return file == null ? Material2DAuto.sample : Material2DAuto.of(file);
   }
 
-  /// [path] changed on disk: [loadImage] reads it again. (The image read
-  /// before is kept until the stage goes: it may still be drawn.)
-  void forgetImage(String path) => _loaded.remove(path);
+  /// [path] changed on disk: [loadImage] reads it again. The image read
+  /// before is let go once what is laid out no longer draws it — the next
+  /// [show] of another image.
+  void forgetImage(String path) {
+    _loaded.remove(path);
+    final old = _loadedImages.remove(path);
+    if (old != null) _retired.add(old);
+  }
 
-  /// The project's image at [path], read once and kept while the stage is;
-  /// null when it can't be read.
-  Future<ui.Image?> loadImage(String path) =>
-      _loaded.putIfAbsent(path, () async {
-        try {
-          final image = await _ProjectImages(root).loadImage(path);
-          _loadedImages.add(image);
-          return image;
-        } on Object {
+  /// The project's image at [path], read once and kept while the stage is
+  /// (until [forgetImage] or [releaseImages]); null when it can't be read.
+  Future<ui.Image?> loadImage(String path) {
+    late final Future<ui.Image?> loading;
+    return loading = _loaded.putIfAbsent(path, () async {
+      try {
+        final image = await _reader.loadImage(path);
+        // Forgotten or let go meanwhile: not this stage's any more.
+        if (!identical(_loaded[path], loading)) {
+          image.dispose();
           return null;
         }
-      });
+        _loadedImages[path] = image;
+        return image;
+      } on Object {
+        return null;
+      }
+    });
+  }
 
   /// Whether what [show] asked for can be drawn yet: the file read, the
-  /// shader loaded and its images read (or found missing).
+  /// shader loaded and its images read — or each found missing, or failing
+  /// to load: drawn without them, it is as ready as it will be.
   bool get ready {
     if (_path.isEmpty) return true;
     final library = this.library;
     final file = library.fileOf(_path);
     if (file == null) return library.errorOf(_path) != null;
-    final program = _kind == Material2DKind.screen
-        ? library.screenProgram
-        : library.program;
+    // The shaders are the stage's own world's: what it draws through.
+    final own = _own;
+    final screen = _kind == Material2DKind.screen;
+    final program = screen ? own.screenProgram : own.program;
     if (_lit || _showNormals) {
-      library.normalsProgram;
-      if (library.lightingProgram == null) return false;
+      own.normalsProgram;
+      if (own.lightingProgram == null &&
+          !_shaderFailed(Material2DShader.lightingAsset)) {
+        return false;
+      }
     }
-    if (program == null) return false;
+    if (program == null &&
+        !_shaderFailed(
+          screen ? Material2DShader.screenAsset : Material2DShader.asset,
+        )) {
+      return false;
+    }
     return file.paths.every(
-      (p) => Material2DFile.isMaterial2DPath(p) || library.imageOf(p) != null,
+      (p) =>
+          Material2DFile.isMaterial2DPath(p) ||
+          library.imageOf(p) != null ||
+          _imageFailed(p),
     );
+  }
+
+  // Whether the image at [path] could not be read for the library.
+  bool _imageFailed(String path) =>
+      (_filesFrom ?? this)._failedImages.contains(path);
+
+  // Whether the engine's shader [asset] could not be loaded. The library
+  // says so for none but one, so it is asked once here; a shader loaded
+  // already is not loaded again (Flutter keeps it).
+  bool _shaderFailed(String asset) {
+    if (_shadersAsked.add(asset)) {
+      unawaited(
+        Material2DLibrary.loadProgram(
+          asset,
+        ).then<void>((_) {}, onError: (Object _) => _shadersFailed.add(asset)),
+      );
+    }
+    return _shadersFailed.contains(asset);
   }
 
   /// Whether what is shown moves, so the preview should be drawn every
@@ -357,6 +426,12 @@ final class Material2DStage {
     }
     _entities.clear();
     _light = null;
+    // Images forgotten since: drawn by nothing now, but the one still shown.
+    _retired.removeWhere((image) {
+      if (identical(image, _image)) return false;
+      image.dispose();
+      return true;
+    });
     _laidOut = size;
     _autoLaidOut = autoShows;
     if (_path.isEmpty || size.isEmpty) return;
@@ -475,12 +550,14 @@ final class Material2DStage {
               quality: _quality,
             );
           case Material2DAuto.stone:
-            // Stone tiles the size of the normal map, once it is read.
+            // Stone tiles the size of the normal map, once it is read — or
+            // known not to be, or none is named yet: then a 64 one.
             final file = library.fileOf(_path)!;
-            final map = library.imageOf(file.text('normalMap.map'));
-            _mapLaidOut = map != null;
+            final path = file.text('normalMap.map');
+            final map = library.imageOf(path);
+            _mapLaidOut = map != null || path.isEmpty || _imageFailed(path);
             return sample(
-              Material2DSamples.stone(map?.width ?? 64, map?.height ?? 64),
+              _stoneOf(map?.width ?? 64, map?.height ?? 64),
               columns: 3,
               rows: 3,
             );
@@ -512,6 +589,17 @@ final class Material2DStage {
       case Material2DSubject.selected:
         return sample(Material2DSamples.sprite);
     }
+  }
+
+  // The plain stone [width] × [height], drawn again only for another size.
+  // The one before is let go: what drew it went with the last layout.
+  ui.Image _stoneOf(int width, int height) {
+    final stone = _stone;
+    if (stone != null && stone.width == width && stone.height == height) {
+      return stone;
+    }
+    stone?.dispose();
+    return _stone = Material2DSamples.stone(width, height);
   }
 
   /// [subject] laid out on a stage of [size]: at [zoom] (or fitted), moved
@@ -677,40 +765,82 @@ final class Material2DStage {
     }
   }
 
+  /// Lets go of every image read for the stage — the sprites [loadImage]
+  /// read and the images its materials name (with the files themselves) —
+  /// and of what was laid out with them: what is shown next reads them
+  /// again. For a stage that draws one picture after another, which would
+  /// otherwise keep the images of every one.
+  void releaseImages() {
+    for (final e in _entities) {
+      if (e.isAlive) world.destroyEntity(e);
+    }
+    _entities.clear();
+    _light = null;
+    _laidOut = null;
+    // Shown again only once [show] is told what.
+    _path = '';
+    _image = null;
+    _user = null;
+    _letGoOfImages();
+    _own.clear();
+  }
+
+  void _letGoOfImages() {
+    for (final image in [
+      ..._frames,
+      ..._oldFrames,
+      ..._loadedImages.values,
+      ..._retired,
+      ?_stone,
+    ]) {
+      image.dispose();
+    }
+    _frames.clear();
+    _oldFrames.clear();
+    _loadedImages.clear();
+    _retired.clear();
+    _stone = null;
+    _loaded.clear();
+    _failedImages.clear();
+  }
+
   /// Lets the stage go.
   void dispose() {
     lighting.dispose();
     screen.dispose();
-    for (final f in [..._frames, ..._oldFrames]) {
-      f.dispose();
-    }
-    _frames.clear();
-    _oldFrames.clear();
-    for (final i in _loadedImages) {
-      i.dispose();
-    }
-    _loadedImages.clear();
-    _loaded.clear();
+    _letGoOfImages();
+    // The images its materials name: the world's own dispose leaves its
+    // library's to the garbage collector.
+    _own.clear();
     world.dispose();
   }
 }
 
-/// The project's images, for the images a material's effects name (a
-/// normal map).
+/// The project's images (and packages', by their asset keys), for the
+/// images a material's effects name (a normal map).
 final class _ProjectImages extends SpriteAssetLoader {
-  _ProjectImages(this.root);
+  _ProjectImages(this.root, this.failed);
 
   final String root;
 
+  /// The paths that could not be read; one read again leaves it.
+  final Set<String> failed;
+
   @override
   Future<ui.Image> loadImage(String path) async {
-    final codec = await ui.instantiateImageCodec(
-      await File('$root/$path').readAsBytes(),
-    );
+    failed.remove(path);
     try {
-      return (await codec.getNextFrame()).image;
-    } finally {
-      codec.dispose();
+      final codec = await ui.instantiateImageCodec(
+        await File(PackageAssetPaths.of(root).absolute(path)).readAsBytes(),
+      );
+      try {
+        return (await codec.getNextFrame()).image;
+      } finally {
+        codec.dispose();
+      }
+    } on Object {
+      failed.add(path);
+      rethrow;
     }
   }
 

@@ -111,6 +111,14 @@ class TileEditState {
   /// The layer being painted, by id within the map.
   final Signal<int?> layerId = Signal(null, debugLabel: 'tileLayer');
 
+  /// Paints [layer] from now on and, given the designer's [controller],
+  /// places what is placed at its depth: how a layer is chosen, from the
+  /// Layers panel or a layer picker alike.
+  void selectLayer(MapLayerData layer, {LevelDesignerController? controller}) {
+    layerId.value = layer.id;
+    controller?.activeLayerId.value = layer.sortLayerId;
+  }
+
   /// The tileset shown in the palette, by the map's slot.
   final Signal<int> slot = Signal(0, debugLabel: 'tileSlot');
 
@@ -205,6 +213,120 @@ class TileEditState {
   /// Tiles copied with Ctrl+C, relative to the middle of the block. The
   /// author's, like the brush: it survives opening another scene.
   TileStamp? clipboard;
+
+  // ── Which tilesets the brush paints from ────────────────────────────────
+  //
+  // A cell names its tileset by the slot its map keeps it in, and another
+  // map numbers its tilesets its own way — or lacks one. The brush and the
+  // clipboard outlive their map (they survive opening another scene, and a
+  // tileset being taken off the map), so each keeps which tileset each of
+  // its slots stood for, and is put back in the numbers of the map it
+  // paints ([stampIn]) — or refused, when that map lacks one of them.
+
+  TileStamp? _stampOfTable;
+  Map<int, String> _stampTable = const {};
+  TileStamp? _clipboardOfTable;
+  Map<int, String> _clipboardTable = const {};
+
+  /// The tileset paths [stamp]'s slots stand for, by slot; empty when the
+  /// brush was filled without saying (it is painted as it is).
+  Map<int, String> get stampTilesets =>
+      identical(stamp.value, _stampOfTable) ? _stampTable : const {};
+
+  /// The same for [clipboard].
+  Map<int, String> get clipboardTilesets =>
+      identical(clipboard, _clipboardOfTable) ? _clipboardTable : const {};
+
+  /// Fills the brush with [value], whose slots stand for [tilesets] — a
+  /// map's, from [tilesetsOf].
+  void setStamp(TileStamp? value, {Map<int, String> tilesets = const {}}) {
+    _stampOfTable = value;
+    _stampTable = Map.unmodifiable(tilesets);
+    stamp.value = value;
+  }
+
+  /// Copies [value], whose slots stand for [tilesets], for Ctrl+V.
+  void setClipboard(TileStamp? value, {Map<int, String> tilesets = const {}}) {
+    _clipboardOfTable = value;
+    _clipboardTable = Map.unmodifiable(tilesets);
+    clipboard = value;
+  }
+
+  /// [map]'s tilesets by the slots it keeps them in.
+  static Map<int, String> tilesetsOf(LevelMapData map) => {
+    for (var i = 0; i < map.tilesets.length; i++) i: ?map.tilesets[i],
+  };
+
+  (
+    TileStamp,
+    Map<int, String>,
+    LevelMapData,
+    int,
+    ({TileStamp? stamp, String? missing}),
+  )?
+  _stampInCache;
+
+  /// The brush in [map]'s numbering: its cells' slots moved to wherever
+  /// [map] keeps the tilesets they stood for. `missing` names a tileset
+  /// the brush paints from that [map] does not have, and `stamp` is then
+  /// null. With no brush, both are null.
+  ({TileStamp? stamp, String? missing}) stampIn(LevelMapData map) {
+    final value = stamp.value;
+    if (value == null) return (stamp: null, missing: null);
+    final table = stampTilesets;
+    final cached = _stampInCache;
+    if (cached != null &&
+        identical(cached.$1, value) &&
+        identical(cached.$2, table) &&
+        identical(cached.$3, map) &&
+        cached.$4 == map.revision) {
+      return cached.$5;
+    }
+    final result = remap(value, table, map);
+    _stampInCache = (value, table, map, map.revision, result);
+    return result;
+  }
+
+  /// [stamp], whose slots stand for [table], in [map]'s numbering; see
+  /// [stampIn]. A slot [table] does not name is left as it is.
+  static ({TileStamp? stamp, String? missing}) remap(
+    TileStamp stamp,
+    Map<int, String> table,
+    LevelMapData map,
+  ) {
+    if (table.isEmpty) return (stamp: stamp, missing: null);
+    final used = <int>{
+      for (final c in stamp.cells)
+        if (!TileCell.isEmpty(c.cell)) TileCell.slotOf(c.cell),
+      for (final c in stamp.choices)
+        if (!TileCell.isEmpty(c)) TileCell.slotOf(c),
+    };
+    final moves = <int, int>{};
+    for (final from in used) {
+      final path = table[from];
+      if (path == null) continue;
+      final to = map.slotOf(path);
+      if (to < 0) return (stamp: null, missing: path);
+      if (to != from) moves[from] = to;
+    }
+    if (moves.isEmpty) return (stamp: stamp, missing: null);
+    int move(int cell) {
+      if (TileCell.isEmpty(cell)) return cell;
+      final to = moves[TileCell.slotOf(cell)];
+      return to == null
+          ? cell
+          : TileCell.make(to, TileCell.localIdOf(cell), TileCell.flagsOf(cell));
+    }
+
+    return (
+      stamp: TileStamp(
+        [for (final c in stamp.cells) StampCell(c.offset, move(c.cell))],
+        choices: [for (final c in stamp.choices) move(c)],
+        weights: stamp.weights,
+      ),
+      missing: null,
+    );
+  }
 
   /// Clears what the tools are showing.
   void clearPreview() {

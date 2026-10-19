@@ -8,6 +8,8 @@ import 'package:just_debugger/just_debugger.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/profiler/frame_capture.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/profiler/profiler_dock.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/docks/shell/built_in_docks.dart';
+import 'package:just_game_engine/just_game_engine.dart' show Engine;
 
 import 'support/test_scope.dart';
 
@@ -23,6 +25,32 @@ PerformanceDebuggerSnapshot _frame(
 );
 
 void main() {
+  test("the editor gives it each frame as it runs, not the debugger's "
+      'few samples a second', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final engine = Engine();
+    await engine.initialize();
+    final plugin = JustGameEditorPlugin(engine: engine);
+    await plugin.attach(plugin.engine);
+    addTearDown(() async {
+      plugin.dispose();
+      await engine.dispose();
+    });
+    final capture = BuiltInDocks.frameCaptureOf(plugin);
+
+    // The debugger's poll no longer feeds it.
+    plugin.debuggerController.notifyListeners();
+    expect(capture.samples, isEmpty);
+
+    plugin.update(1 / 60);
+    expect(capture.samples, hasLength(1));
+    expect(capture.samples.single.frame, engine.performanceStats['frame']);
+
+    capture.paused = true;
+    plugin.update(1 / 60);
+    expect(capture.samples, hasLength(1), reason: 'paused');
+  });
+
   test('it keeps the last frames, once each', () {
     final capture = FrameCapture(capacity: 3);
     for (var i = 1; i <= 5; i++) {

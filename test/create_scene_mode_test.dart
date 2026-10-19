@@ -11,6 +11,8 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_editor_core/host.dart';
 import 'package:just_game_engine_editor/src/ui/dialogs/create_scene_overlay.dart';
 
+import 'support/real_io.dart';
+
 void main() {
   late Directory root;
   late SceneStore store;
@@ -21,12 +23,14 @@ void main() {
       codec: SceneCodec(ComponentDefinitionRegistry.core()),
     );
   });
-  tearDown(() {
-    if (root.existsSync()) root.deleteSync(recursive: true);
-  });
+  tearDown(() => deleteWhenFree(root));
 
   Map<String, dynamic> read(String name) =>
-      jsonDecode(File('${root.path}/$name.scene.json').readAsStringSync())
+      jsonDecode(
+            readWhenFree(
+              () => File('${root.path}/$name.scene.json').readAsStringSync(),
+            ),
+          )
           as Map<String, dynamic>;
 
   List<String> typesOf(Map<String, dynamic> scene, String entity) => [
@@ -51,14 +55,21 @@ void main() {
         ),
       );
 
-  Future<void> create(WidgetTester tester, String name) async {
+  Future<void> create(
+    WidgetTester tester,
+    String name,
+    List<String> created,
+  ) async {
     await tester.enterText(find.byType(TextField), name);
     await tester.pump();
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Create scene'));
-      // The file is written off the test's fake clock.
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    });
+    await tester.tap(find.text('Create scene'));
+    // The files are real writes — each beside its file, flushed and moved
+    // over it — and the page says it made the scene once they are done.
+    await pumpUntil(
+      tester,
+      () => created.contains(name),
+      what: 'scene "$name" to be made',
+    );
     await tester.pump();
   }
 
@@ -71,7 +82,7 @@ void main() {
       expect(find.text('2D'), findsOneWidget);
       expect(find.text('3D'), findsOneWidget);
       expect(find.byIcon(Icons.lock_outline), findsNothing);
-      await create(tester, 'level_a');
+      await create(tester, 'level_a', created);
       expect(created, ['level_a']);
       expect(read('level_a')['mode'], '2d');
     });
@@ -82,7 +93,7 @@ void main() {
 
       await tester.tap(find.text('3D'));
       await tester.pump();
-      await create(tester, 'level_b');
+      await create(tester, 'level_b', created);
       expect(created, ['level_b']);
       expect(read('level_b')['mode'], '3d');
     });

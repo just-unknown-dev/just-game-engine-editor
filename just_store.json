@@ -9,7 +9,7 @@
   "kind": "editor-extension",
   "name": "Just Game Engine Editor",
   "requires": {
-    "just_game_engine": "^2.0.0"
+    "just_game_engine": "^2.0.0-dev.2"
   },
   "schema": 1,
   "system": true,

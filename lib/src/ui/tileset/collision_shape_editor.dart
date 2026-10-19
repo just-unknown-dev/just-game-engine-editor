@@ -119,14 +119,9 @@ class CollisionEditor extends StatelessWidget {
   }
 }
 
-TextStyle get _label => TextStyle(
-  fontSize: 11,
-  color: EditorTheme.textSecondary,
-);
-TextStyle get _value => TextStyle(
-  fontSize: 11,
-  color: EditorTheme.textPrimary,
-);
+TextStyle get _label =>
+    TextStyle(fontSize: 11, color: EditorTheme.textSecondary);
+TextStyle get _value => TextStyle(fontSize: 11, color: EditorTheme.textPrimary);
 
 class _Swatch extends StatelessWidget {
   const _Swatch({required this.color});
@@ -251,7 +246,15 @@ class ShapeCanvas extends StatefulWidget {
 class _ShapeCanvasState extends State<ShapeCanvas> {
   /// The shape and corner being dragged.
   (int, int)? _drag;
+
+  /// The drag's own key, from the session: two drags of the same corner
+  /// are two undo steps, even after this canvas was built afresh.
   int _dragStamp = 0;
+
+  /// For a box or an ellipse, the corner across from the one dragged, where
+  /// it was when the drag began: it stays there, even when the dragged one
+  /// crosses it.
+  Offset? _fixedCorner;
 
   /// The shape last touched, for Delete and the buttons.
   int? _shape;
@@ -312,9 +315,28 @@ class _ShapeCanvasState extends State<ShapeCanvas> {
     }
   }
 
-  static Rect _dragCorner(Rect r, int i, Offset to) {
-    final opposite = [r.bottomRight, r.bottomLeft, r.topLeft, r.topRight][i];
-    return Rect.fromPoints(opposite, to);
+  static Rect _dragCorner(Rect r, int i, Offset to) =>
+      Rect.fromPoints(oppositeCorner(r, i), to);
+
+  /// The corner of [r] across from its [i]th (top left, top right, bottom
+  /// right, bottom left).
+  static Offset oppositeCorner(Rect r, int i) =>
+      [r.bottomRight, r.bottomLeft, r.topLeft, r.topRight][i];
+
+  /// [shape] with corner [i] dragged to [to], the opposite one held at
+  /// [fixed]: for a box or an ellipse, the corners cross cleanly.
+  static TileShape draggedFrom(
+    TileShape shape,
+    int i,
+    Offset to,
+    Offset? fixed,
+  ) {
+    if (fixed == null) return moved(shape, i, to);
+    return switch (shape) {
+      TileRectShape() => TileRectShape(Rect.fromPoints(fixed, to)),
+      TileEllipseShape() => TileEllipseShape(Rect.fromPoints(fixed, to)),
+      TilePolygonShape() => moved(shape, i, to),
+    };
   }
 
   (int, int)? _handleAt(Offset tilePoint) {
@@ -380,7 +402,8 @@ class _ShapeCanvasState extends State<ShapeCanvas> {
       }
       return;
     }
-    if (keys.isControlPressed) {
+    // Cmd on macOS, where Ctrl+click is the context click.
+    if (EditorKeys.primaryPressed) {
       final edge = _edgeAt(p);
       if (edge == null) return;
       final shape = _shapes[edge.$1] as TilePolygonShape;
@@ -396,10 +419,16 @@ class _ShapeCanvasState extends State<ShapeCanvas> {
       return;
     }
     if (handle != null) {
+      final shape = _shapes[handle.$1];
       setState(() {
         _drag = handle;
         _shape = handle.$1;
-        _dragStamp++;
+        _dragStamp = s.newGesture();
+        _fixedCorner = switch (shape) {
+          TileRectShape(:final rect) => oppositeCorner(rect, handle.$2),
+          TileEllipseShape(:final bounds) => oppositeCorner(bounds, handle.$2),
+          TilePolygonShape() => null,
+        };
       });
       return;
     }
@@ -424,7 +453,9 @@ class _ShapeCanvasState extends State<ShapeCanvas> {
     _write(
       [
         for (var i = 0; i < shapes.length; i++)
-          i == drag.$1 ? moved(shapes[i], drag.$2, to) : shapes[i],
+          i == drag.$1
+              ? draggedFrom(shapes[i], drag.$2, to, _fixedCorner)
+              : shapes[i],
       ],
       mergeKey: ('corner', widget.tileId, _dragStamp),
     );
@@ -475,7 +506,10 @@ class _ShapeCanvasState extends State<ShapeCanvas> {
           child: Listener(
             onPointerDown: _down,
             onPointerMove: _move,
-            onPointerUp: (_) => setState(() => _drag = null),
+            onPointerUp: (_) => setState(() {
+              _drag = null;
+              _fixedCorner = null;
+            }),
             child: CustomPaint(
               size: Size(w + 2 * ShapeCanvas.pad, h + 2 * ShapeCanvas.pad),
               painter: _ShapePainter(
@@ -503,8 +537,8 @@ class _ShapeCanvasState extends State<ShapeCanvas> {
           ],
         ),
         Text(
-          'Drag a corner · Ctrl+click an edge adds one · Alt+click removes '
-          'one · Shift snaps to eighths',
+          'Drag a corner · ${EditorKeys.withPrimary('click')} an edge adds '
+          'one · Alt+click removes one · Shift snaps to eighths',
           style: TextStyle(fontSize: 10, color: EditorTheme.textMuted),
         ),
       ],

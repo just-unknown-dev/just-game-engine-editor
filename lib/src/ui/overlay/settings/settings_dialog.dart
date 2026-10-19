@@ -1,9 +1,10 @@
-import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
+import 'package:just_editor_core/io.dart';
 import 'package:just_signals/just_signals.dart';
 
 import 'package:just_editor_core/host.dart';
@@ -31,7 +32,7 @@ class SettingsGearButton extends StatelessWidget {
 
   /// How tall it stands, for what has to clear it: the tool strip above
   /// it. One of the strip's buttons in the strip's frame.
-  static double heightFor(OverlayUiSettings settings) =>
+  static double get height =>
       FloatingToolFrame.heightFor(ToolStripButton.extent);
 
   /// How wide it stands, for what stands beside it: the messages, to its
@@ -87,7 +88,7 @@ class EditorSettingsHost extends StatelessWidget {
       void close() => scope.chrome.settingsOpen.value = false;
       return EditorDialogFrame(
         cornerRadius: settings.cornerRadius + 6,
-        borderColor: settings.themeColor,
+        borderColor: settings.accent,
         onDismiss: close,
         scrimKey: scrimKey,
         child: EditorSettingsDialog(scope: scope, onClose: close),
@@ -206,6 +207,7 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
 
   @override
   void dispose() {
+    _previewSoon?.cancel();
     _search
       ..removeListener(_onSearch)
       ..dispose();
@@ -301,10 +303,29 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
 
   // ── Changing settings ────────────────────────────────────────────────────
 
-  /// Shows [next] without saving it: a slider mid-drag.
-  void _preview(OverlayUiSettings next) => _scope.prefs.settings.value = next;
+  Timer? _previewSoon;
+  OverlayUiSettings? _previewing;
+
+  /// How often a slider mid-drag shows what it would do: a size or a colour
+  /// draws the whole editor again, which every pointer move was too often.
+  static const Duration _previewEvery = Duration(milliseconds: 100);
+
+  /// Shows [next] without saving it: a slider mid-drag. At most once per
+  /// [_previewEvery], the last value of each stretch.
+  void _preview(OverlayUiSettings next) {
+    _previewing = next;
+    _previewSoon ??= Timer(_previewEvery, () {
+      _previewSoon = null;
+      final shown = _previewing;
+      _previewing = null;
+      if (shown != null && mounted) _scope.prefs.settings.value = shown;
+    });
+  }
 
   void _save(OverlayUiSettings next) {
+    _previewSoon?.cancel();
+    _previewSoon = null;
+    _previewing = null;
     _scope.prefs.update(next);
     _scope.theme.select(next.themeId);
   }
@@ -318,16 +339,20 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
     double displayScale = 1,
     int decimals = 0,
     String unit = '',
+    bool preview = true,
   }) => EditorSlider(
     value: value,
     min: range.min,
     max: range.max,
     step: step,
-    accent: s.themeColor,
+    accent: s.accent,
     displayScale: displayScale,
     decimals: decimals,
     unit: unit,
-    onChanged: (v) => _preview(apply(v)),
+    // A limit that drops what is past it — undo steps, Console lines — is
+    // not tried out mid-drag: going under on the way would drop them for
+    // good. It applies when the drag ends.
+    onChanged: preview ? (v) => _preview(apply(v)) : (_) {},
     onChangeEnd: (v) => _save(apply(v)),
   );
 
@@ -352,7 +377,7 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
     control: EditorToggle(
       value: value,
       label: label,
-      accent: s.themeColor,
+      accent: s.accent,
       onChanged: (v) => _save(apply(v)),
     ),
   );
@@ -394,7 +419,8 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
 
   /// [chords] now run [commandId]. With [takeFrom], that command gives up
   /// [chord]. A command back at the keys it was built with is no longer a
-  /// change.
+  /// change. Chords are as settings store them ([KeyBinding.savedChord]),
+  /// so the file reads the same on every OS.
   void _setShortcut(
     OverlayUiSettings s,
     String commandId,
@@ -405,7 +431,9 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
     final registry = _scope.commands;
     final next = {...s.shortcuts};
     void put(String id, List<String> keys) {
-      final built = [for (final b in registry.builtBindingsFor(id)) b.shortcut];
+      final built = [
+        for (final b in registry.builtBindingsFor(id)) b.savedChord,
+      ];
       if (listEquals(built, keys)) {
         next.remove(id);
       } else {
@@ -416,7 +444,7 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
     if (takeFrom != null) {
       put(takeFrom, [
         for (final b in registry.bindingsFor(takeFrom))
-          if (b.shortcut != chord) b.shortcut,
+          if (b.savedChord != chord) b.savedChord,
       ]);
     }
     put(commandId, chords);
@@ -445,7 +473,7 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
   );
 
   Widget _dialog(BuildContext context, OverlayUiSettings s) {
-    final accent = s.themeColor;
+    final accent = s.accent;
     final pages = _pages;
     final page = pages.firstWhere(
       (p) => p.id == _pageId,
@@ -602,7 +630,7 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
         label: defs[i].label,
         hint: defs[i].hint,
         control: defs[i].control,
-        accent: s.themeColor,
+        accent: s.accent,
         isModified: !defs[i].isDefault,
         onReset: () => _save(defs[i].reset(s)),
       ),
@@ -629,7 +657,7 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
           command: x.command,
           keys: x.keys,
           isModified: s.shortcuts.containsKey(id),
-          accent: s.themeColor,
+          accent: s.accent,
           onChanged: (chords, {takeFrom, chord}) =>
               _setShortcut(s, id, chords, takeFrom: takeFrom, chord: chord),
           onReset: () => _resetShortcut(s, id),
@@ -717,7 +745,7 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
     List<_Setting> settings,
     bool searching,
   ) {
-    final accent = s.themeColor;
+    final accent = s.accent;
     final onPage = [
       for (final def in settings)
         if (def.page == page.id && !def.isDefault) def,

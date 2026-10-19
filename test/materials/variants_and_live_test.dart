@@ -12,6 +12,8 @@ import 'package:just_game_engine/graphics_3d.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/materials/materials.dart';
 
+import '../support/real_io.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory dir;
@@ -35,6 +37,17 @@ void main() {
   String read(String path) => File('${dir.path}/$path').readAsStringSync();
 
   Widget host(Widget workspace) => MaterialApp(home: Scaffold(body: workspace));
+
+  // Waits until the 2-D material and its parent are read, so the reads a
+  // widget test's frozen clock started (the window asks its stage every
+  // frame) are over: on Windows a file still open for reading can't be
+  // saved over (a save is written beside it and moved over it).
+  Future<void> settle(WidgetTester tester, Material2DWorkspaceState state) =>
+      pumpUntil(
+        tester,
+        () => state.stage.ready,
+        what: 'the material and its parent to be read',
+      );
 
   void bigView(WidgetTester tester) {
     tester.view.physicalSize = const Size(1400, 1000);
@@ -225,6 +238,7 @@ void main() {
 
     testWidgets('its own written into the parent', (tester) async {
       final state = await open(tester);
+      await settle(tester, state);
       await tester.runAsync(() => state.applyToParent(confirm: false));
       final base = Material2DFile.parse(read('base.material2d.json'));
       expect(base.isOn('tint'), isFalse);

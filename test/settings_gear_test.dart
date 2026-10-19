@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart';
 
 void main() {
   late JustGameEditorPlugin plugin;
@@ -19,7 +20,7 @@ void main() {
     addTearDown(engine.dispose);
     await tester.runAsync(engine.initialize);
     plugin = JustGameEditorPlugin(engine: engine);
-    await tester.runAsync(plugin.onInitialize);
+    await tester.runAsync(() => plugin.attach(plugin.engine));
     plugin.setVisible(true);
     await tester.pumpWidget(
       MaterialApp(

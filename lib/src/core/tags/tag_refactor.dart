@@ -2,11 +2,14 @@
 library;
 
 import 'dart:convert';
-import 'dart:io';
 
+import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
+import 'package:just_editor_core/io.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import 'package:just_editor_core/host.dart';
+
+import '../prefabs/prefab_rewrites.dart';
 
 /// What a rename or a delete would change, listed before anything does.
 class TagChangePlan {
@@ -16,7 +19,9 @@ class TagChangePlan {
     required this.openScene,
     required this.openUses,
     required this.scenes,
+    required this.prefabs,
     required this.timelines,
+    this.unreadable = const [],
   });
 
   final String tag;
@@ -31,16 +36,26 @@ class TagChangePlan {
   final String? openScene;
   final List<TagUse> openUses;
 
-  /// Every other scene that uses the tag, by name.
+  /// Every other scene that uses the tag, by name — instances of prefabs
+  /// included, for what they change.
   final Map<String, List<TagUse>> scenes;
+
+  /// Every prefab file (`*.prefab.json`) that uses it, by project-relative
+  /// path: what every instance of it carries.
+  final Map<String, List<TagUse>> prefabs;
 
   /// Every timeline file that binds a track to it, by path.
   final Map<String, List<TagUse>> timelines;
+
+  /// Scenes whose files could not be read: nothing in them is listed, and
+  /// nothing in them changes — they keep the old tag. Said, not skipped.
+  final List<String> unreadable;
 
   /// Every use, wherever it is.
   Iterable<TagUse> get all => [
     ...openUses,
     for (final uses in scenes.values) ...uses,
+    for (final uses in prefabs.values) ...uses,
     for (final uses in timelines.values) ...uses,
   ];
 
@@ -52,13 +67,15 @@ class TagChangePlan {
   Iterable<TagUse> get references =>
       all.where((u) => u.kind == TagUseKind.reference);
 
-  /// The files this would write: closed scenes, and timelines on a rename.
+  /// The files this would write: closed scenes and prefabs, and timelines
+  /// on a rename.
   int get fileCount =>
       (isRename
-          ? scenes.length
-          : scenes.values
-                .where((u) => u.any((x) => x.kind == TagUseKind.carried))
-                .length) +
+          ? scenes.length + prefabs.length
+          : [
+              ...scenes.values,
+              ...prefabs.values,
+            ].where((u) => u.any((x) => x.kind == TagUseKind.carried)).length) +
       (isRename ? timelines.length : 0);
 }
 
@@ -73,25 +90,31 @@ class TagChangeResult {
   /// Fields changed in the open scene — one undo step.
   final int openChanges;
 
-  /// Scene and timeline files rewritten.
+  /// Scene, prefab and timeline files rewritten.
   final List<String> filesWritten;
 
   /// Files that could not be read or written, and why.
   final Map<String, String> failures;
 }
 
-/// Renames a tag — or deletes it — in every scene and timeline of the
-/// project, and in the tag list.
+/// Renames a tag — or deletes it — in every scene, prefab and timeline of
+/// the project, and in the tag list.
 ///
+/// * **Prefab files** are rewritten on disk first, each backed up (to
+///   `.editor_backups/.prefabs/`), and the open scene's instances of them
+///   made again from them — so an instance carries the new name from its
+///   prefab rather than as a change of its own.
 /// * The **open scene** changes through the undo stack, as one step, and is
 ///   saved when you save it.
 /// * **Other scenes** are rewritten on disk, each backed up first (to
-///   `.editor_backups/`, like an autosave).
+///   `.editor_backups/`, like an autosave) — what their instances of
+///   prefabs change included.
 /// * **Timelines** have their track bindings renamed on disk.
 ///
 /// A delete takes the tag off every entity and out of the list; fields and
 /// bindings that name it are left for the Problems dock to point at, rather
-/// than silently emptied.
+/// than silently emptied. When a file cannot be rewritten, the tag list
+/// keeps the old name, which that file still uses.
 class TagRefactor {
   TagRefactor(this.scope, {String? projectRoot})
     : root = (projectRoot ?? Directory.current.path).replaceAll(r'\', '/');
@@ -102,6 +125,8 @@ class TagRefactor {
   final String root;
 
   TagReferences get _references => scope.tagReferences;
+
+  late final PrefabRewrites _prefabs = PrefabRewrites(scope, root: root);
 
   String? get _openScene => scope.sceneState.activeScene.value?.name;
 
@@ -127,15 +152,35 @@ class TagRefactor {
       }
     }
     final scenes = <String, List<TagUse>>{};
+    final unreadable = <String>[];
     for (final name in scope.scenes.listSceneNames()) {
       if (name == open) continue;
-      final raw = scope.scenes.readRawSync(name);
-      if (raw == null) continue;
-      final uses = _references.inScene(
-        jge.SceneFormat.migrate(raw, hooks: scope.context.migrations),
-        tag: tag,
-      );
-      if (uses.isNotEmpty) scenes[name] = uses;
+      try {
+        // Listed from the files on disk: null is a file that is not a
+        // scene, not one that is missing.
+        final raw = scope.scenes.readRawSync(name);
+        if (raw == null) {
+          unreadable.add(name);
+          continue;
+        }
+        final uses = _references.inScene(
+          jge.SceneFormat.migrate(raw, hooks: scope.context.migrations),
+          tag: tag,
+        );
+        if (uses.isNotEmpty) scenes[name] = uses;
+      } on Object {
+        unreadable.add(name);
+      }
+    }
+    final prefabs = <String, List<TagUse>>{};
+    for (final path in _prefabs.files()) {
+      final List<TagUse> uses;
+      try {
+        uses = _references.inScene(_prefabs.read(path).json, tag: tag);
+      } on Object {
+        continue;
+      }
+      if (uses.isNotEmpty) prefabs[path] = uses;
     }
     final timelines = <String, List<TagUse>>{};
     for (final path in timelineFiles()) {
@@ -150,16 +195,82 @@ class TagRefactor {
       openScene: open,
       openUses: openUses,
       scenes: scenes,
+      prefabs: prefabs,
       timelines: timelines,
+      unreadable: unreadable,
     );
   }
 
-  /// Carries [plan] out.
+  /// Carries [plan] out — not during a play-test: the open scene is the
+  /// running game then, and Stop would put the old tag back on it while
+  /// every other file had the new one. Nothing changes, and that is said.
+  ///
+  /// Refused too, with nothing changed, while the tag file cannot be read:
+  /// the list could not follow, and the files would name a tag it lacks.
   Future<TagChangeResult> apply(TagChangePlan plan) async {
     final from = plan.tag;
     final to = plan.renameTo;
     final written = <String>[];
     final failures = <String, String>{};
+
+    if (scope.isPlayTesting.value) {
+      const why = 'Stop the play-test first: nothing was changed.';
+      scope.log.log(
+        '${to == null ? 'Did not delete' : 'Did not rename'} the tag "$from": '
+        '$why',
+        source: 'editor',
+        category: 'tags',
+        level: DebuggerLogLevel.warning,
+      );
+      return const TagChangeResult(
+        openChanges: 0,
+        filesWritten: [],
+        failures: {'play-test': why},
+      );
+    }
+
+    if (scope.tags.isUnreadable) {
+      final why = scope.tags.loadError ?? 'The tag file cannot be read.';
+      scope.log.log(
+        'The tag "$from" was not ${to == null ? 'deleted' : 'renamed'}: '
+        '$why',
+        source: 'editor',
+        category: 'tags',
+        level: DebuggerLogLevel.warning,
+      );
+      return TagChangeResult(
+        openChanges: 0,
+        filesWritten: const [],
+        failures: {scope.tags.path: why},
+      );
+    }
+    for (final name in plan.unreadable) {
+      failures[name] = 'could not be read, so it keeps the tag "$from"';
+    }
+
+    // The prefabs first, and the open scene's instances of them made again
+    // from them: an instance then carries the new name from its prefab, and
+    // the open scene's own change below finds nothing left to do there.
+    final prefabsWritten = <String>[];
+    for (final path in plan.prefabs.keys) {
+      try {
+        final (:json, :before) = _prefabs.read(path);
+        final changed = to == null
+            ? _references.removeFromScene(json, from)
+            : _references.renameInScene(json, from, to);
+        if (changed == 0) continue;
+        await _prefabs.write(path, json, before: before);
+        prefabsWritten.add(path);
+      } on Object catch (e) {
+        failures[path] = '$e';
+      }
+    }
+    written.addAll(prefabsWritten);
+    try {
+      await _prefabs.refresh(prefabsWritten);
+    } on Object catch (e) {
+      failures['the open scene\'s prefab instances'] = '$e';
+    }
 
     final openChanges = _applyToOpenScene(from, to);
 
@@ -191,14 +302,27 @@ class TagRefactor {
     if (to != null) {
       for (final path in plan.timelines.keys) {
         try {
-          final json = _readJson('$root/$path');
-          if (json == null) continue;
+          final file = File('$root/$path');
+          final text = file.readAsStringSync();
+          final json = _decode(text);
+          if (json == null) {
+            failures[path] = 'could not be read';
+            continue;
+          }
           if (_references.renameInTimeline(json, from, to) == 0) continue;
-          await File('$root/$path').writeAsString(
-            '${const JsonEncoder.withIndent('  ').convert(json)}\n',
+          // The version replaced kept first, as the scenes are; then
+          // written whole or not at all, in the line endings it had.
+          await ProjectFiles.writeString(
+            '$root/$timelineBackups/${_stamp()}-'
+            '${path.substring(path.lastIndexOf('/') + 1)}',
+            text,
           );
+          var out = '${const JsonEncoder.withIndent('  ').convert(json)}\n';
+          if (text.contains('\r\n')) out = out.replaceAll('\n', '\r\n');
+          await ProjectFiles.writeString(file.path, out);
           written.add(path);
-          for (final module in scope.modules.all) {
+          // The editor's own modules too (its materials, its timelines).
+          for (final module in scope.modules.withBuiltIns) {
             module.onAssetChanged(path);
           }
         } on Object catch (e) {
@@ -207,19 +331,32 @@ class TagRefactor {
       }
     }
 
-    if (to == null) {
-      scope.tags.remove(from);
-    } else {
-      scope.tags.rename(from, to);
+    // A file that could not be rewritten still uses the old name, so the
+    // list keeps it — beside the new one, on a rename.
+    if (failures.isNotEmpty) {
+      if (to != null) scope.tags.adopt([to]);
+    } else if (!(to == null
+        ? scope.tags.remove(from)
+        : scope.tags.rename(from, to))) {
+      if (scope.tags.writeError case final error?) {
+        failures[scope.tags.path] = error;
+      }
     }
     scope.log.log(
-      to == null
+      failures.isNotEmpty
+          ? '${to == null ? 'Deleting' : 'Renaming'} the tag "$from" could '
+                'not change ${failures.length} files, which still name it; '
+                '${written.length} files rewritten.'
+          : to == null
           ? 'Deleted the tag "$from": ${plan.carried.length} entities no '
                 'longer carry it; ${written.length} files rewritten.'
           : 'Renamed the tag "$from" to "$to" in ${plan.all.length} places; '
                 '${written.length} files rewritten.',
       source: 'editor',
       category: 'tags',
+      level: failures.isEmpty
+          ? DebuggerLogLevel.info
+          : DebuggerLogLevel.warning,
       details: [
         ...written,
         for (final f in failures.entries) 'FAILED ${f.key}: ${f.value}',
@@ -263,6 +400,7 @@ class TagRefactor {
               before: field.kind.decodeAny(was[field.name], field.constraints),
               after: field.kind.decodeAny(now[field.name], field.constraints),
               sceneState: scope.sceneState,
+              entity: entity,
             ),
           );
         }
@@ -293,10 +431,30 @@ class TagRefactor {
 
   static Map<String, dynamic>? _readJson(String path) {
     try {
-      final json = jsonDecode(File(path).readAsStringSync());
-      return json is Map<String, dynamic> ? json : null;
+      return _decode(File(path).readAsStringSync());
     } on Object {
       return null;
     }
+  }
+
+  static Map<String, dynamic>? _decode(String text) {
+    try {
+      final json = jsonDecode(text);
+      return json is Map<String, dynamic> ? json : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// Where a timeline a rename rewrites is kept first, in the project
+  /// (never under `assets/`, which ships).
+  static const String timelineBackups = '.editor_backups/timelines';
+
+  static String _stamp() {
+    final t = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${t.year}${two(t.month)}${two(t.day)}-'
+        '${two(t.hour)}${two(t.minute)}${two(t.second)}-'
+        '${t.millisecond.toString().padLeft(3, '0')}';
   }
 }

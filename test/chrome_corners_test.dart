@@ -17,6 +17,9 @@ import 'package:just_game_engine_editor/src/ui/overlay/shared/shared_widgets.dar
 import 'package:just_game_engine_editor/src/ui/overlay/shared/transform_toolbar.dart';
 
 import 'support/memory_settings_store.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/tool_palette.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer_3d/panels/view_cube.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart';
 
 class _Module extends EditorModule {
   int shopped = 0;
@@ -78,7 +81,7 @@ void main() {
       settingsStore: MemorySettingsStore(),
     );
     plugin = JustGameEditorPlugin(engine: engine, scope: scope);
-    await tester.runAsync(plugin.onInitialize);
+    await tester.runAsync(() => plugin.attach(plugin.engine));
     plugin.setVisible(true);
     await tester.pumpWidget(
       MaterialApp(

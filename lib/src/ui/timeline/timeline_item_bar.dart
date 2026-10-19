@@ -3,9 +3,8 @@
 /// or file.
 library;
 
-import 'dart:io';
-
 import 'package:flutter/material.dart';
+import 'package:just_editor_core/io.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import 'package:just_editor_core/host.dart';
@@ -48,7 +47,8 @@ class TimelineItemBar extends StatelessWidget {
             _ => [
               Text(
                 session.selection.value.length > 1
-                    ? 'Drag to move · Alt-drag to stretch · Ctrl+C / V / D · '
+                    ? 'Drag to move · Alt-drag to stretch · '
+                          '${EditorKeys.withPrimary('C')} / V / D · '
                           'Shift+Delete ripples'
                     : 'Double-click a track to add to it. Select a key, an '
                           'event or a block to edit it here.',
@@ -70,11 +70,28 @@ class TimelineItemBar extends StatelessWidget {
             : _trim(time),
         width: 50,
         onSubmitted: (v) {
-          final n = double.tryParse(v);
+          final n = _finite(v);
           if (n == null) return;
           onChanged(session.showFrames.value ? n / session.fps : n);
         },
       );
+
+  /// [text] as a number a timeline can hold: `NaN` and `Infinity` parse
+  /// as numbers, but no file can save them.
+  static double? _finite(String text) {
+    final n = double.tryParse(text.trim());
+    return n != null && n.isFinite ? n : null;
+  }
+
+  /// [text] as an ARGB colour: `AARRGGBB`, or `RRGGBB` for an opaque one,
+  /// with or without a `#`. Null when it is neither.
+  static int? parseArgb(String text) {
+    final hex = text.trim().replaceFirst('#', '');
+    if (hex.length != 6 && hex.length != 8) return null;
+    final n = int.tryParse(hex, radix: 16);
+    if (n == null) return null;
+    return hex.length == 6 ? 0xFF000000 | n : n;
+  }
 
   static String _trim(double v) => v
       .toStringAsFixed(3)
@@ -117,7 +134,7 @@ class TimelineItemBar extends StatelessWidget {
           text: _trim(value.toDouble()),
           width: 64,
           onSubmitted: (v) {
-            final n = double.tryParse(v);
+            final n = _finite(v);
             if (n != null) set(key.copyWith(value: n), 'Key value');
           },
         )
@@ -128,7 +145,7 @@ class TimelineItemBar extends StatelessWidget {
           text: value.toRadixString(16).padLeft(8, '0').toUpperCase(),
           width: 74,
           onSubmitted: (v) {
-            final n = int.tryParse(v.replaceFirst('#', ''), radix: 16);
+            final n = parseArgb(v);
             if (n != null) set(key.copyWith(value: n), 'Key value');
           },
         )
@@ -271,7 +288,7 @@ class TimelineItemBar extends StatelessWidget {
           text: _trim(block.speed),
           width: 44,
           onSubmitted: (v) {
-            final n = double.tryParse(v);
+            final n = _finite(v);
             if (n != null && n > 0) set(block.copyWith(speed: n));
           },
         ),
@@ -282,7 +299,7 @@ class TimelineItemBar extends StatelessWidget {
           text: _trim(block.amount),
           width: 50,
           onSubmitted: (v) {
-            final n = double.tryParse(v);
+            final n = _finite(v);
             if (n != null) set(block.copyWith(amount: n));
           },
         ),

@@ -145,6 +145,39 @@ void main() {
       expect(c.isShownInViewport(b), isFalse);
     });
 
+    test('Shift+H on a child of the Level Map keeps it and what holds it '
+        'shown', () {
+      final map = world.createEntityWithComponents([
+        TransformComponent(),
+        LevelMapComponent(inline: BuiltInPrefabs.newLevelMap()),
+      ], name: LevelMaps.primaryName);
+      final a = _block(world, 'A', 0, 0);
+      final b = _block(world, 'B', 200, 0);
+      final inner = _block(world, 'Inner', 0, 0);
+      final loose = _block(world, 'Loose', 400, 0);
+      void under(Entity child, Entity parent) => placeEntity(
+        child,
+        world: world,
+        sceneState: session.sceneState,
+        slot: HierarchySlot(parentId: parent.id, index: -1),
+      );
+      under(a, map);
+      under(b, map);
+      under(inner, a);
+      final c = session.controller;
+
+      session.sceneState.selectEntity(a);
+      keys.shift = true;
+      key(LogicalKeyboardKey.keyH);
+      keys.shift = false;
+      expect(c.isShownInViewport(a), isTrue, reason: 'the thing isolated');
+      expect(c.isShownInViewport(inner), isTrue, reason: 'what it holds');
+      expect(c.isShownInViewport(map), isTrue, reason: 'what holds it');
+      expect(c.isShownInViewport(b), isFalse);
+      expect(c.isShownInViewport(loose), isFalse);
+      expect(c.isPickable(a), isTrue);
+    });
+
     test('L locks against picking without hiding', () {
       final a = _block(world, 'A', 0, 0);
       session.sceneState.selectEntity(a);
@@ -361,7 +394,9 @@ void main() {
     });
     other.restoreEditorData(saved);
     expect(other.controller.guides.value.single.position, 128);
-    expect(other.bookmarks[2]!.position, const Offset(10, 20));
+    other.camera.setPosition(Offset.zero);
+    other.recallBookmark(2);
+    expect(other.camera.position, const Offset(10, 20));
   });
 }
 

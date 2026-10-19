@@ -1,6 +1,8 @@
-import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:just_editor_core/io.dart';
+import 'package:just_editor_core/just_editor_core.dart'
+    show PackageAssetPaths, ProjectFiles;
 import 'package:just_game_engine/graphics_3d.dart';
 
 /// A model's own materials, written out as material files of the project:
@@ -11,10 +13,11 @@ abstract final class ModelMaterials {
   /// project-relative) under [root] as a material file beside it —
   /// `<model>_<material>.material.json` — its images as files in
   /// `<model>_textures/` (an image the model reads from beside it is used
-  /// where it is). Never writes over a file there already. Gives the
-  /// material files made, in the model's order.
+  /// where it is, when that is in the project; one outside it — a `..` out
+  /// of it — is copied in). Never writes over a file there already. Gives
+  /// the material files made, in the model's order.
   static Future<List<String>> extract(String root, String path) async {
-    final file = File('$root/$path');
+    final file = File(PackageAssetPaths.of(root).absolute(path));
     final folder = file.parent.path;
     final data = await loadModelData(
       await file.readAsBytes(),
@@ -37,12 +40,15 @@ abstract final class ModelMaterials {
       final known = images[index];
       if (known != null) return known;
       final image = data.images[index];
-      // A file beside the model: used where it is.
+      // A file beside the model: used where it is — when that is inside
+      // the project; one a `..` takes out of it is copied in below.
       final uri = image.name;
       if (uri != null && !uri.startsWith('data:')) {
         final rel = Uri.decodeComponent(uri);
-        if (File('$folder/$rel').existsSync()) {
-          return images[index] = _normal(at(rel));
+        final there = _normal(at(rel));
+        if (ProjectFiles.isContained(there) &&
+            File('$folder/$rel').existsSync()) {
+          return images[index] = there;
         }
       }
       final ending = switch (image.mimeType) {
@@ -54,9 +60,8 @@ abstract final class ModelMaterials {
           ? 'image_$index'
           : _safe(uri.split('/').last.split('.').first);
       final out = _free(root, at('${model}_textures/$stem'), ending);
-      final target = File('$root/$out');
-      await target.parent.create(recursive: true);
-      await target.writeAsBytes(image.bytes);
+      // Whole or not at all, its folder made when missing.
+      await ProjectFiles.writeBytes('$root/$out', image.bytes);
       return images[index] = out;
     }
 
@@ -98,7 +103,7 @@ abstract final class ModelMaterials {
         rotation: (colour?.rotation ?? 0) * 180 / math.pi,
       );
       final out = _free(root, at('${model}_$own'), MaterialFile.ending);
-      await File('$root/$out').writeAsString(material.encode());
+      await ProjectFiles.writeString('$root/$out', material.encode());
       made.add(out);
     }
     return made;

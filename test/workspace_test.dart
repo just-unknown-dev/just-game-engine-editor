@@ -12,6 +12,9 @@ import 'package:just_game_engine_editor/src/ui/overlay/chrome/editor_chrome.dart
     show WorkspaceHost;
 
 import 'support/test_scope.dart';
+import 'package:just_editor_core/host.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart';
+import 'package:just_game_engine_editor/src/ui/tileset/built_in_workspaces.dart';
 
 class _PaintModule extends EditorModule {
   final List<String> ran = [];
@@ -145,7 +148,7 @@ void main() {
       engine: engine,
       modules: [_PaintModule()],
     );
-    await tester.runAsync(plugin.onInitialize);
+    await tester.runAsync(() => plugin.attach(plugin.engine));
     plugin.setVisible(true);
     // F5 plays the scene open.
     plugin.sceneState.openScene(EditorScene(name: 'level'));

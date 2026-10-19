@@ -92,6 +92,10 @@ class PhysicsShapeEditor extends StatelessWidget {
         ? ctx.value as jge.CollisionShape
         : PhysicsShapeKind.circle.defaultShape;
     final kind = PhysicsShapeKind.of(shape);
+    // A field its hint says is not to be edited shows what it holds.
+    if (ctx.readOnly) {
+      return ReadonlyRow(label: ctx.label, value: kind.name);
+    }
     final set = ctx.onChanged;
     Widget num(
       String label,
@@ -132,6 +136,7 @@ class PhysicsShapeEditor extends StatelessWidget {
           OffsetListEditorRow(
             label: 'Vertices',
             points: List.of(s.vertices),
+            minPoints: 3,
             onChanged: (v) {
               if (v.length >= 3) {
                 set(jge.RoundedPolygonShape(List.of(v), s.cornerRadius));
@@ -163,6 +168,7 @@ class PhysicsShapeEditor extends StatelessWidget {
           OffsetListEditorRow(
             label: 'Vertices',
             points: List.of(s.vertices),
+            minPoints: 3,
             onChanged: (v) {
               if (v.length >= 3) {
                 set(jge.PolygonShape(List.of(v)));
@@ -227,6 +233,7 @@ class PhysicsShapeEditor extends StatelessWidget {
           OffsetListEditorRow(
             label: 'Vertices',
             points: List.of(s.vertices),
+            minPoints: 2,
             onChanged: (v) {
               if (v.length >= 2) {
                 set(

@@ -15,6 +15,8 @@ import 'package:just_game_engine_editor/src/ui/overlay/shared/quick_snap_bar.dar
 import 'package:just_game_engine_editor/src/ui/overlay/start/start_card.dart';
 
 import 'support/memory_settings_store.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart';
 
 class _ToolsModule extends EditorModule {
   final List<String> opened = [];
@@ -93,7 +95,7 @@ void main() {
         settingsStore: MemorySettingsStore(),
       );
       plugin = JustGameEditorPlugin(engine: engine, scope: scope);
-      await tester.runAsync(plugin.onInitialize);
+      await tester.runAsync(() => plugin.attach(plugin.engine));
       plugin.setVisible(true);
       await tester.pumpWidget(
         MaterialApp(

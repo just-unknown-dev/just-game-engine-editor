@@ -2,6 +2,8 @@
 /// track takes its entity, with a dot at every key to drag.
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 
@@ -123,9 +125,15 @@ class MotionPathOverlay extends DesignerOverlay with InteractiveOverlay {
   @override
   int get order => OverlayOrder.measurement;
 
+  /// The most speed ticks drawn along one path, however long the timeline
+  /// or high its frame rate.
+  static const int maxTicks = 300;
+
   @override
   void paint(OverlayPaintContext context) {
     final s = session();
+    // Drawn while a Timeline dock shows the timeline, not after it closed.
+    if (!s.isShown) return;
     final draw = context.draw;
     for (final path in MotionPath.of(s)) {
       final duration = s.duration;
@@ -146,7 +154,9 @@ class MotionPathOverlay extends DesignerOverlay with InteractiveOverlay {
       // A tick every few frames says how fast it goes: close together is
       // slow.
       final fps = s.fps;
-      for (var f = 0; f <= duration * fps; f += 2) {
+      final frames = duration * fps;
+      final every = math.max(2, (frames / maxTicks).ceil());
+      for (var f = 0; f <= frames; f += every) {
         draw.canvas.drawCircle(
           draw.toScreen(path.at(f / fps)),
           1.2,
@@ -184,14 +194,18 @@ class MotionPathOverlay extends DesignerOverlay with InteractiveOverlay {
   @override
   bool onPointerDown(OverlayPointerContext context) {
     final s = session();
-    if (!s.isAuthoring()) return false;
+    if (!s.isShown || !s.isAuthoring()) return false;
     for (final path in MotionPath.of(s)) {
       for (final time in path.keyTimes) {
         final p = context.camera.worldToScreen(path.at(time));
         if ((p - context.screen).distance > _hit) continue;
+        final start = s.beginDrag();
+        // A timeline that cannot be changed now says why, and is not
+        // dragged.
+        if (start == null) return true;
         _path = path;
         _time = time;
-        _start = s.beginDrag();
+        _start = start;
         s
           ..pause()
           ..scrubTo(time);

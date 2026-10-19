@@ -30,26 +30,64 @@ class _PrefabPalettePanelState extends State<PrefabPalettePanel> {
 
   LevelDesignerSession get session => widget.session;
 
+  late ValueListenable<int> _files;
+
   @override
   void initState() {
     super.initState();
     _favourites = PrefabFavourites.watch(session.scope.prefs);
+    _files = session.scope.assetIndex.revision..addListener(_listFiles);
+    _listFiles(rebuild: false);
+  }
+
+  @override
+  void dispose() {
+    _files.removeListener(_listFiles);
+    super.dispose();
+  }
+
+  /// The project's prefab files in the palette, as the files are now: one
+  /// that was deleted or renamed leaves it. When the files change, not on
+  /// every build — a keystroke in the search box rebuilds the palette.
+  void _listFiles({bool rebuild = true}) {
+    final scope = session.scope;
+    final prefabs = session.sessionPrefabs;
+    final kept = [
+      for (final p in prefabs.all)
+        if (p.instanceOf == null) p,
+    ];
+    final files = PrefabFiles.paletteEntries(scope);
+    prefabs
+      ..clear()
+      ..registerAll(kept)
+      ..registerAll(files);
+    if (rebuild && mounted) setState(() {});
+    // A file still being read is listed by its file name; once read, by
+    // its own — which needs it listed again.
+    final library = scope.prefabInstances.library;
+    final reading = [
+      for (final f in files)
+        if (library.loaded(f.instanceOf!) == null &&
+            library.errorOf(f.instanceOf!) == null)
+          library.load(f.instanceOf!),
+    ];
+    if (reading.isEmpty) return;
+    // Once all have been read — or have failed, which the prefab reports
+    // itself; that one stays listed by its file name.
+    void again([Object? _]) {
+      if (mounted) _listFiles();
+    }
+
+    Future.wait(reading).then<void>(again, onError: again);
   }
 
   @override
   Widget build(BuildContext context) => SignalBuilder<String?>(
     // Everything below follows the designer in use.
     signal: session.scope.activeDesigner,
-    builder: (context, _, _) => ValueListenableBuilder<int>(
-      // The project's prefab files come and go with its files.
-      valueListenable: session.scope.assetIndex.revision,
-      builder: (context, _, _) {
-        session.sessionPrefabs.registerAll(PrefabFiles.paletteEntries(session.scope));
-        return ValueListenableBuilder<Set<String>>(
-          valueListenable: _favourites,
-          builder: (context, favourites, _) => _buildPalette(context, favourites),
-        );
-      },
+    builder: (context, _, _) => ValueListenableBuilder<Set<String>>(
+      valueListenable: _favourites,
+      builder: (context, favourites, _) => _buildPalette(context, favourites),
     ),
   );
 

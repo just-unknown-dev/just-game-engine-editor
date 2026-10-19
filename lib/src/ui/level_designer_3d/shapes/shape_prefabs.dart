@@ -16,17 +16,83 @@ abstract final class ShapePrefabs {
 
   /// Every shape.
   static List<PrefabDefinition> get all => [
-    _prefab('cube', 'Cube', Icons.view_in_ar_outlined, Cube3D.new, 'A box, 1 m each way.'),
-    _prefab('sphere', 'Sphere', Icons.circle_outlined, Sphere3D.new, 'A ball, 1 m across.'),
-    _prefab('plane', 'Plane', Icons.crop_landscape_outlined, Plane3D.new, 'A flat 10 m square: a floor.'),
-    _prefab('cylinder', 'Cylinder', Icons.storage_outlined, Cylinder3D.new, 'An upright cylinder.'),
-    _prefab('capsule', 'Capsule', Icons.medication_outlined, Capsule3D.new, 'A cylinder with round ends.'),
-    _prefab('cone', 'Cone', Icons.change_history, Cone3D.new, 'A cone, its tip up.'),
-    _prefab('torus', 'Torus', Icons.donut_large, Torus3D.new, 'A ring lying flat.'),
-    _prefab('ramp', 'Ramp', Icons.trending_up, Ramp3D.new, 'A wedge to walk up, rising towards +Z.'),
-    _prefab('stairs', 'Stairs', Icons.stairs_outlined, Stairs3D.new, 'Five steps rising towards +Z.'),
-    _prefab('arch', 'Arch', Icons.architecture, Arch3D.new, 'A half-round arch on two feet.'),
-    _prefab('polygon', 'Polygon', Icons.hexagon_outlined, Polygon3D.new, 'An outline raised to a height: drag its corners.'),
+    _prefab(
+      'cube',
+      'Cube',
+      Icons.view_in_ar_outlined,
+      Cube3D.new,
+      'A box, 1 m each way.',
+    ),
+    _prefab(
+      'sphere',
+      'Sphere',
+      Icons.circle_outlined,
+      Sphere3D.new,
+      'A ball, 1 m across.',
+    ),
+    _prefab(
+      'plane',
+      'Plane',
+      Icons.crop_landscape_outlined,
+      Plane3D.new,
+      'A flat 10 m square: a floor.',
+    ),
+    _prefab(
+      'cylinder',
+      'Cylinder',
+      Icons.storage_outlined,
+      Cylinder3D.new,
+      'An upright cylinder.',
+    ),
+    _prefab(
+      'capsule',
+      'Capsule',
+      Icons.medication_outlined,
+      Capsule3D.new,
+      'A cylinder with round ends.',
+    ),
+    _prefab(
+      'cone',
+      'Cone',
+      Icons.change_history,
+      Cone3D.new,
+      'A cone, its tip up.',
+    ),
+    _prefab(
+      'torus',
+      'Torus',
+      Icons.donut_large,
+      Torus3D.new,
+      'A ring lying flat.',
+    ),
+    _prefab(
+      'ramp',
+      'Ramp',
+      Icons.trending_up,
+      Ramp3D.new,
+      'A wedge to walk up, rising towards +Z.',
+    ),
+    _prefab(
+      'stairs',
+      'Stairs',
+      Icons.stairs_outlined,
+      Stairs3D.new,
+      'Five steps rising towards +Z.',
+    ),
+    _prefab(
+      'arch',
+      'Arch',
+      Icons.architecture,
+      Arch3D.new,
+      'A half-round arch on two feet.',
+    ),
+    _prefab(
+      'polygon',
+      'Polygon',
+      Icons.hexagon_outlined,
+      Polygon3D.new,
+      'An outline raised to a height: drag its corners.',
+    ),
   ];
 
   static PrefabDefinition _prefab(
@@ -63,7 +129,9 @@ abstract final class ShapePrefabs {
     shape.boundsInto(b);
     final n = at.normal;
     final reach =
-        n.x.abs() * (b.max.x - b.min.x) / 2 + n.y.abs() * (b.max.y - b.min.y) / 2 + n.z.abs() * (b.max.z - b.min.z) / 2;
+        n.x.abs() * (b.max.x - b.min.x) / 2 +
+        n.y.abs() * (b.max.y - b.min.y) / 2 +
+        n.z.abs() * (b.max.z - b.min.z) / 2;
     final lift = reach + (reach < 1e-6 ? 0.001 : 0);
     return Vector3(
       at.position.x + n.x * lift - (b.min.x + b.max.x) / 2,

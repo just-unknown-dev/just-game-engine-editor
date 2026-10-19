@@ -11,7 +11,12 @@ import 'package:just_game_engine_editor/src/ui/overlay/docks/compact_dock.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/docks/shell/dock_panel.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/shared/transform_toolbar.dart';
 import 'package:just_game_engine_editor/src/ui/overlay/editor_overlay.dart'
-    show GameCanvasArea;
+    show GameCanvasArea, JustGameEditorOverlay;
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/designer_status_bar.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/tool_options_bar.dart';
+import 'package:just_game_engine_editor/src/ui/level_designer/panels/tool_palette.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/docks/dock_controller.dart';
 
 class _WavesModule extends EditorModule {
   int builds = 0;
@@ -122,19 +127,13 @@ void main() {
       expect(c.activeDock, 'b');
     });
 
-    test(
-      'a state saved with the old settings slot open restores collapsed',
-      () {
-        c.restore('{"open":"settings","order":["a","b"]}');
-        expect(c.activeDock, isNull);
-        c.togglePanel();
-        expect(
-          c.activeDock,
-          'a',
-          reason: 'settings is not a dock to go back to',
-        );
-      },
-    );
+    test('a saved state restores collapsed, and a dock that is gone is not '
+        'gone back to', () {
+      c.restore('{"open":"gone","order":["a","b"]}');
+      expect(c.activeDock, isNull);
+      c.togglePanel();
+      expect(c.activeDock, 'a', reason: '"gone" is not a dock to go back to');
+    });
 
     test('height: resized, clamped, reset, and all of it when maximised', () {
       c.open('a');
@@ -238,11 +237,8 @@ void main() {
       await tester.runAsync(engine.initialize);
       module = _WavesModule();
       plugin = JustGameEditorPlugin(engine: engine, modules: [module]);
-      await tester.runAsync(plugin.onInitialize);
+      await tester.runAsync(() => plugin.attach(plugin.engine));
       plugin.setVisible(true);
-      if (!plugin.isStatusPanelVisible.value) {
-        plugin.toggleStatusPanelVisibility();
-      }
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -353,10 +349,18 @@ void main() {
 
       final before = module.builds;
       module.waves = 1;
-      // Several strip refreshes: the readout follows, the dock is left alone.
-      await tester.pump(const Duration(seconds: 2));
+      // Several strip refreshes, each its own frame: the readout and the
+      // tab's badge follow, the dock is not built again.
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 150));
+      }
       expect(find.text('Waves  1 left'), findsOneWidget);
-      expect(module.builds - before, lessThanOrEqualTo(8));
+      expect(
+        find.descendant(of: find.byType(DockPanel), matching: find.text('1')),
+        findsOneWidget,
+        reason: 'the badge',
+      );
+      expect(module.builds - before, 0);
       await done(tester);
     });
 

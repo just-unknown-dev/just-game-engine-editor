@@ -30,12 +30,10 @@ class DetailSectionCard extends StatefulWidget {
 class _DetailSectionCardState extends State<DetailSectionCard> {
   bool _collapsed = false;
 
-  String get _prefKey => 'editor.overlay.sectionCollapsed.${widget.sectionId}';
-
-  @override
-  void initState() {
-    super.initState();
-  }
+  SettingPref<bool> get _pref => SettingPref.boolean(
+    'editor.overlay.sectionCollapsed.${widget.sectionId}',
+    false,
+  );
 
   bool _loadedCollapsed = false;
 
@@ -50,22 +48,15 @@ class _DetailSectionCardState extends State<DetailSectionCard> {
   }
 
   Future<void> _loadCollapsed() async {
-    final collapsed = await EditorScopeProvider.of(
-      context,
-    ).prefs.readBool(_prefKey, fallback: false);
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _collapsed = collapsed;
-    });
+    final prefs = EditorScopeProvider.of(context).prefs;
+    await prefs.load();
+    if (!mounted) return;
+    setState(() => _collapsed = prefs.get(_pref));
   }
 
   Future<void> _toggleCollapsed() async {
-    setState(() {
-      _collapsed = !_collapsed;
-    });
-    await EditorScopeProvider.of(context).prefs.writeBool(_prefKey, _collapsed);
+    setState(() => _collapsed = !_collapsed);
+    await EditorScopeProvider.of(context).prefs.set(_pref, _collapsed);
   }
 
   @override
@@ -873,10 +864,12 @@ class _HistoryLineChartPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    tp.paint(
-      canvas,
-      Offset((size.width - tp.width) / 2, (size.height - tp.height) / 2),
-    );
+    tp
+      ..paint(
+        canvas,
+        Offset((size.width - tp.width) / 2, (size.height - tp.height) / 2),
+      )
+      ..dispose();
   }
 
   @override

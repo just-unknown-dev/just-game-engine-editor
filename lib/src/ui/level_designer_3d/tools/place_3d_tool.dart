@@ -263,7 +263,8 @@ class Place3DTool extends LevelToolHandler {
     final turn = delta.dy != 0 ? delta.dy : delta.dx;
     if (turn == 0) return true;
     final spin = state().placeSpin;
-    spin.value = ((spin.value + (turn > 0 ? spinNotch : -spinNotch)) % 360 + 360) % 360;
+    spin.value =
+        ((spin.value + (turn > 0 ? spinNotch : -spinNotch)) % 360 + 360) % 360;
     final prefab = context.controller.activePrefab;
     final space = context.space;
     if (prefab != null && space != null && _press == null) {
@@ -296,7 +297,11 @@ class Place3DTool extends LevelToolHandler {
   /// The spin that turns what stands at [press] to face where the
   /// pointer meets the surface's plane: its forward (+Z) towards it.
   /// Null while the pointer is still on it.
-  double? _aimAt(SurfacePoint press, SpaceContext space, {bool snapping = false}) {
+  double? _aimAt(
+    SurfacePoint press,
+    SpaceContext space, {
+    bool snapping = false,
+  }) {
     final align = state().alignToSurface.value;
     final up = align
         ? (jge.Vector3.copy(press.normal)..normalize())
@@ -365,7 +370,8 @@ class Place3DTool extends LevelToolHandler {
     final out = <jge.Vector3>[];
     if (idx.length <= 3 * 1200) {
       final seen = <(int, int)>{};
-      jge.Vector3 at(int i) => jge.Vector3(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+      jge.Vector3 at(int i) =>
+          jge.Vector3(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
       // Where two triangles share a flat face, the line between them is
       // left out: a box shows its edges, not its triangles.
       final normals = <(int, int), jge.Vector3>{};
@@ -394,7 +400,9 @@ class Place3DTool extends LevelToolHandler {
           (idx[i + 2], idx[i]),
         ]) {
           final edge = _keyOf(at(u), at(v));
-          if (!seen.contains(edge)) points.putIfAbsent(edge, () => (at(u), at(v)));
+          if (!seen.contains(edge)) {
+            points.putIfAbsent(edge, () => (at(u), at(v)));
+          }
         }
       }
       for (final (a, b) in points.values) {
@@ -441,7 +449,8 @@ class PlaceOptions extends StatelessWidget {
           icon: Icons.texture,
           label: 'Align',
           isOn: on,
-          tooltip: 'Stand what is placed on the surface — a slope, a wall — '
+          tooltip:
+              'Stand what is placed on the surface — a slope, a wall — '
               'instead of upright',
           onTap: () => state.alignToSurface.value = !on,
         ),
@@ -542,7 +551,9 @@ class _Choice<T> extends StatelessWidget {
           child: Text(
             label(v),
             style: TextStyle(
-              color: v == value ? EditorTheme.textPrimary : EditorTheme.textSecondary,
+              color: v == value
+                  ? EditorTheme.textPrimary
+                  : EditorTheme.textSecondary,
               fontSize: 11,
             ),
           ),

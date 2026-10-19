@@ -81,11 +81,10 @@ class SplitViews {
   static OrbitFlyEditorView _ortho({
     required double yaw,
     required double pitch,
-  }) =>
-      OrbitFlyEditorView.of(jge.Camera())
-        ..yaw = yaw
-        ..pitch = pitch
-        ..orthographic = true;
+  }) => OrbitFlyEditorView.of(jge.Camera())
+    ..yaw = yaw
+    ..pitch = pitch
+    ..orthographic = true;
 
   /// The four panes: top, front (the top row), side and perspective.
   List<ViewPane> get panes {

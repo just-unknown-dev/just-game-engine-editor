@@ -14,7 +14,6 @@ class EntityInspectorPanel extends StatelessWidget {
     required this.sceneState,
     required this.world,
     required this.scope,
-    required this.onDetachFromParent,
     required this.onGroupSelection,
     this.isLevelDesignerOpen = false,
   });
@@ -24,7 +23,6 @@ class EntityInspectorPanel extends StatelessWidget {
 
   /// The editor: its definitions, field editors and extras.
   final EditorScope scope;
-  final void Function(Entity entity) onDetachFromParent;
   final VoidCallback onGroupSelection;
 
   /// Whether the Level Designer is open. The tiles selected with Select
@@ -34,11 +32,12 @@ class EntityInspectorPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SignalConsumer(
+    return ThrottledSignalConsumer(
+      // Not every move of a drag: a few times a second, the last always.
+      often: sceneState.revision,
       signals: [
         sceneState.selectedEntity,
         sceneState.multiSelectedIds,
-        sceneState.revision,
         scope.view.pinned,
         // The notices at the top read these, so the panel follows them.
         scope.view.locked,
@@ -46,7 +45,7 @@ class EntityInspectorPanel extends StatelessWidget {
         scope.tiles.selection,
         scope.tiles.layerId,
       ],
-      builder: (context, _) => _withTileSelection(_content()),
+      builder: (context) => _withTileSelection(_content()),
     );
   }
 
@@ -82,8 +81,15 @@ class EntityInspectorPanel extends StatelessWidget {
           sceneState: sceneState,
         );
       }
-      // Pinned to something that has gone: let it go.
-      scope.view.unpin();
+      // Pinned to something that has gone: shown as unpinned now, and let
+      // go once this frame is built — not during the build, where telling
+      // the pin's other listeners (the scene tree) would rebuild them
+      // mid-build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (scope.view.pinned.value != pinnedId) return;
+        if (world.getEntity(pinnedId)?.isAlive ?? false) return;
+        scope.view.unpin();
+      });
     }
     if (sceneState.hasMultiSelection) {
       return _MultiSelectionPanel(
@@ -211,13 +217,13 @@ class _TileSelectionCard extends StatelessWidget {
               action(
                 Icons.content_copy_outlined,
                 'Copy tiles',
-                'Ctrl+C',
+                EditorKeys.withPrimary('C'),
                 () => TileSelectionOps.copy(scope, world, _say),
               ),
               action(
                 Icons.content_cut,
                 'Cut tiles',
-                'Ctrl+X',
+                EditorKeys.withPrimary('X'),
                 () => TileSelectionOps.cut(scope, world, _say),
               ),
               action(

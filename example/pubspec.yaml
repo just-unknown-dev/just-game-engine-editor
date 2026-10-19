@@ -1,27 +1,19 @@
 name: just_game_engine_editor_example
-description: Example app for just_game_engine_editor runtime overlay scaffolding.
+description: "A game with the just_game_engine_editor over it: run it on a desktop in debug mode to edit its scene."
 publish_to: none
 
 version: 0.0.1
 
 environment:
   sdk: ^3.11.0
+  flutter: ">=3.47.1"
 
 dependencies:
   flutter:
     sdk: flutter
-  just_game_engine:
-    path: ../../just_game_engine
+  just_game_engine: ^2.0.0-dev.2
   just_game_engine_editor:
     path: ../
-
-dependency_overrides:
-  just_game_engine:
-    path: ../../just_game_engine
-  just_debugger:
-    path: ../../just_debugger
-  just_game_engine_formats:
-    path: ../../just_game_engine_formats
 
 dev_dependencies:
   flutter_test:

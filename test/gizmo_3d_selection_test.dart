@@ -12,6 +12,12 @@ import 'package:just_game_engine/graphics_3d.dart' show Cube3D, Graphics3D;
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
+import 'package:just_game_engine_editor/src/core/input/selection_pivot.dart';
+import 'package:just_game_engine_editor/src/core/input/translate_snaps_3d.dart';
+import 'package:just_game_engine_editor/src/core/input/viewport_input.dart';
+import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/gizmo_3d.dart';
+import 'package:just_game_engine_editor/src/ui/overlay/gizmo_painter.dart';
 
 /// Reports a press on [handle] of the selected entity, wherever it lands.
 class _OnHandle extends GizmoHitTester {

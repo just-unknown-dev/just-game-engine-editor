@@ -222,8 +222,12 @@ class _WangSetEditorState extends State<WangSetEditor> {
             onArgb: (v) => s.editWangColor(index, c, argb: v),
             onRemove: () {
               s.removeWangColor(index, c);
-              // The terrains after it moved down one.
-              if (widget.color >= c) {
+              final left = s.data.wangSets[index].colors.length;
+              if (left == 0) {
+                // No terrain left to paint with: the eraser.
+                widget.onColor(0);
+              } else if (widget.color >= c) {
+                // The terrains after it moved down one.
                 widget.onColor(widget.color - 1 < 1 ? 1 : widget.color - 1);
               }
             },
@@ -288,7 +292,9 @@ class _WangSetEditorState extends State<WangSetEditor> {
               child: MiniNumberField(
                 value: first.toDouble(),
                 fractionDigits: 0,
-                onSubmitted: (v) => setState(() => _firstTile = v.round()),
+                onSubmitted: (v) {
+                  if (v.isFinite) setState(() => _firstTile = v.round());
+                },
               ),
             ),
             const Spacer(),
@@ -326,10 +332,7 @@ class _WangSetEditorState extends State<WangSetEditor> {
   };
 }
 
-TextStyle get _value => TextStyle(
-  fontSize: 11,
-  color: EditorTheme.textPrimary,
-);
+TextStyle get _value => TextStyle(fontSize: 11, color: EditorTheme.textPrimary);
 TextStyle get _muted => TextStyle(fontSize: 11, color: EditorTheme.textMuted);
 
 class _Heading extends StatelessWidget {
