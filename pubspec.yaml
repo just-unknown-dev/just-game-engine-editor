@@ -58,7 +58,7 @@ dependencies:
   just_editor_core: ^0.1.0-dev.1
   just_tiled: ^0.4.1
   just_signals: ^1.0.2
-  just_debugger: ^0.0.1
+  # just_debugger: ^0.0.1
 
 dev_dependencies:
   # GPU checks and pixel reads for the material tests that render.

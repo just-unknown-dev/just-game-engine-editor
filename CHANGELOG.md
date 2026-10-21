@@ -8,7 +8,7 @@ First release: a level editor that runs inside a `just_game_engine` game in a de
 
 - `JustGameEditorPlugin.register` makes the editor for a game's engine, with the game's modules, spawners and hot reload hook; `JustGameEngineEditor` shows the game with the editor over it, and is a plain `GameWidget` when there is no editor.
 - Built on `just_editor_core` (the module contract, the scope, undo, the inspector's rows, the UI kit), re-exported by the package's library.
-- The editor's own tools come as modules, `BuiltInEditorModule` and `BuiltInMaterialsModule`, registered ahead of the game's.
+- The editor's own tools come as modules, `BuiltInEditorModule`, `BuiltInMaterialsModule` and, for a game with 3-D graphics, `BuiltInGraphicsModule`, registered ahead of the game's (`JustGameEditorPlugin.builtInsFor`).
 
 ### Scenes and play-testing
 
@@ -26,13 +26,14 @@ First release: a level editor that runs inside a `just_game_engine` game in a de
 - Snapping: one switch, move, rotation and scale steps, smart snapping to entities and guides; Ctrl (Cmd on macOS) suspends it mid-drag.
 - Gizmos shown or hidden per mode (editor, Level Designer, play-test), each kind on its own.
 - The scene tree on the editor's one undo stack: re-parent, reorder, group, rename, enable, hide, lock, isolate, colour labels, and filters by component, tag, layer or problem.
-- A right-click menu on the level; files dragged from the Assets dock become entities where they land.
+- A right-click menu on the level; files dragged from the Assets dock become entities where they land. One that goes in the other kind of scene — a model in a 2-D scene, a sprite in a 3-D one — is turned away with a message saying where it goes.
 
 ### 3-D scenes
 
 - An orbit-and-fly view, a 3-D gizmo (in world or local axes), picking by ray, a grid on the working plane, and placement on surfaces.
 - A 3-D Level Designer with a built-in Default 3D kit: marquee select, a working plane, Place with a ghost, arrays, size handles for the eleven built-in 3-D shapes and for colliders, groups, view modes and a view cube, bookmarks, a slice plane, four views, a material paint tool, prefab files with overrides, and level aids (ruler, level checks, a performance meter, Play from here).
 - 3-D physics when the engine has `Physics3D`: collider and character outlines, material presets, Solid and Trigger variants of every shape, and Problems checks.
+- 3-D graphics when the engine has `Graphics3D` (`BuiltInGraphicsModule`, in `graphics.dart`): models (`.glb`, `.gltf`) in the Assets dock with rendered pictures, dropped into 3-D scenes, opened in a Model window of their import settings and cooked (`ModelCooking`), or placed with their lights and sockets as entities; picking by triangles; light markers, a selected light's reach and a selected camera's frustum; Model, Light and Environment inspector sections with sky presets.
 
 ### Inspector
 

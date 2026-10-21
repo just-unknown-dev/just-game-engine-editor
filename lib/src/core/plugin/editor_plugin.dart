@@ -47,6 +47,7 @@ import '../level_map/tile_commands.dart';
 import '../../ui/level_designer/tools/tiles/tile_tool_base.dart';
 import '../../extension/built_in_editor_module.dart';
 import '../../extension/built_in_lighting_2d_contributions.dart';
+import '../../graphics/built_in_graphics_module.dart';
 import '../../materials/built_in_materials_module.dart';
 import '../../ui/overlay/camera_rig_painter.dart';
 import '../prefs/recent_scenes.dart';
@@ -133,10 +134,7 @@ class JustGameEditorPlugin implements EnginePlugin {
              scope ??
              EditorScope(
                engine: engine,
-               builtIns: const [
-                 BuiltInEditorModule.new,
-                 BuiltInMaterialsModule.make,
-               ],
+               builtIns: builtInsFor(engine),
                modules: modules,
              ),
          ownsScope: scope == null,
@@ -179,9 +177,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     scope.spawners.value = spawners;
     // A scope someone else built gets the editor's own tools, ahead of its
     // modules; one the plugin built already has them.
-    scope
-      ..addBuiltIn(BuiltInEditorModule.new)
-      ..addBuiltIn(BuiltInMaterialsModule.make);
+    builtInsFor(engine).forEach(scope.addBuiltIn);
     // Modules handed to the plugin alongside a scope someone else built join
     // that scope; a scope the plugin built already has them.
     if (lateModules.isNotEmpty) {
@@ -189,6 +185,18 @@ class JustGameEditorPlugin implements EnginePlugin {
       scope.reload();
     }
   }
+
+  /// The editor's own modules for [engine]'s game, as a scope takes them
+  /// (`EditorScope(builtIns: …)`): the editor's tools and materials always,
+  /// and 3-D graphics — models, lights, the environment — for a game that
+  /// has them ([BuiltInGraphicsModule.isFor]).
+  static List<EditorModule Function(EditorScope scope)> builtInsFor(
+    Engine engine,
+  ) => [
+    BuiltInEditorModule.new,
+    BuiltInMaterialsModule.make,
+    if (BuiltInGraphicsModule.isFor(engine)) BuiltInGraphicsModule.make,
+  ];
 
   /// The game's engine: the editor edits its world and draws over it.
   final Engine engine;
@@ -1231,8 +1239,9 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// Whether dropping [path] on the viewport of a scene of [mode] makes
-  /// something: a kind one of [scope]'s modules knows how to drop (a
-  /// model); in 2-D also an image, a sprite project, a sprite atlas, a
+  /// something: a kind one of [scope]'s modules knows how to drop, in the
+  /// scenes it drops in ([AssetKind.dropsIn]: a model in 3-D, a sound in
+  /// either); in 2-D also an image, a sprite project, a sprite atlas, a
   /// tileset or a map.
   @internal
   static bool canDropAsset(
@@ -1240,9 +1249,41 @@ class JustGameEditorPlugin implements EnginePlugin {
     SceneMode mode = SceneMode.twoD,
     EditorScope? scope,
   }) {
-    if (scope?.assetKinds.of(path).drop != null) return true;
+    final kind = scope?.assetKinds.of(path);
+    if (kind != null && kind.drop != null) return kind.dropsInto(mode);
     // Sprites and tile maps are 2-D: a 3-D scene does not draw them.
     if (mode != SceneMode.twoD) return false;
+    return _dropsFlat(path, scope: scope);
+  }
+
+  /// Why dropping [path] on the viewport of a scene of [mode] makes
+  /// nothing when it would in a scene of the other mode — a model in a 2-D
+  /// scene, a sprite in a 3-D one — or null when it drops, or would
+  /// nowhere. What the viewport says as it turns the file away.
+  @internal
+  static String? dropRefusal(
+    String path, {
+    SceneMode mode = SceneMode.twoD,
+    EditorScope? scope,
+  }) {
+    if (canDropAsset(path, mode: mode, scope: scope)) return null;
+    String name(SceneMode m) => m == SceneMode.threeD ? '3D' : '2D';
+    final kind = scope?.assetKinds.of(path);
+    if (kind != null && kind.drop != null) {
+      for (final other in SceneMode.values) {
+        if (other == mode || !kind.dropsInto(other)) continue;
+        return '${kind.label} go in ${name(other)} scenes: '
+            'this one is ${name(mode)}.';
+      }
+      return null;
+    }
+    if (mode == SceneMode.twoD || !_dropsFlat(path, scope: scope)) return null;
+    return 'Sprites and tile maps go in 2D scenes: this one is 3D.';
+  }
+
+  // Whether [path] is a file a 2-D scene takes from the editor itself: an
+  // image, a sprite project, a sprite atlas, a tileset or a map.
+  static bool _dropsFlat(String path, {EditorScope? scope}) {
     final p = path.toLowerCase();
     return p.endsWith('.tileset.json') ||
         LevelMapFiles.isMapFile(p) ||

@@ -100,7 +100,7 @@ flutter run -t lib/main_editor.dart -d windows   # or macos, linux
 
 ## Features
 
-- **2-D and 3-D scenes.** A 3-D scene gets an orbit-and-fly view, a 3-D gizmo, picking by ray, a grid on the working plane and placement on surfaces. The editor draws no models itself: the game's renderer does (`just_graphics_engine`, with `just_graphics_editor` as a module).
+- **2-D and 3-D scenes.** A 3-D scene gets an orbit-and-fly view, a 3-D gizmo, picking by ray, a grid on the working plane and placement on surfaces. The editor draws no models itself: the game's renderer does (`just_graphics_engine`). For a game with 3-D graphics (`EngineConfig(graphics3D:)`) the editor brings its 3-D graphics side itself: models in the Assets dock (pictured, dropped into 3-D scenes, imported and cooked), picking by triangles, light and camera aids, and Model, Light and Environment inspector sections.
 - **Scenes are JSON** in `assets/scenes/`, the play order in `scenes.json`, and the game loads the same files. Autosave keeps backups and offers to recover unsaved changes.
 - **Play-testing** in place: Play, Pause, Step, Restart and speed, a preview of what the game camera sees, and the level put back exactly as authored on Stop.
 - **Transform tools**: All (Q), Move (W), Scale (E) and Rotate (R), from a floating toolbar at the top right of the viewport. Moving a parent carries its children.
@@ -235,14 +235,13 @@ A module can bring prefabs and tools, overlays, snap providers and a grid to the
 
 Everything a module contributes is rebuilt from the modules on every reload of the editor's registries, so nothing piles up across hot reloads. `onRegister` runs once; `onReassemble` after each hot reload.
 
-The editor's own tools arrive the same way: `BuiltInEditorModule` (field editors, commands, prefabs, workspaces and the rest) and `BuiltInMaterialsModule` (materials, in `package:just_game_engine_editor/materials.dart`) are registered ahead of every other module, so a module replaces any of it by reusing an id.
+The editor's own tools arrive the same way: `BuiltInEditorModule` (field editors, commands, prefabs, workspaces and the rest), `BuiltInMaterialsModule` (materials, in `package:just_game_engine_editor/materials.dart`) and, for a game with 3-D graphics, `BuiltInGraphicsModule` (models, lights and the environment, in `package:just_game_engine_editor/graphics.dart`) are registered ahead of every other module, so a module replaces any of it by reusing an id. `JustGameEditorPlugin.builtInsFor(engine)` lists them for a game.
 
 | First-party module | Package | What it adds |
 |--------|---------|--------------|
 | `PlatformerModule` | `just_platformer_kit` | The platformer's prefabs and icons, and the Path tool |
 | `ThirdPersonModule` | `just_third_person_kit` | The third-person kit's 3-D prefabs and markers |
 | `WorldBuilderModule` | `just_world_builder_kit` | The World Builder: a 3-D Level Designer for open levels |
-| `GraphicsEditorModule` | `just_graphics_editor` | 3-D models (thumbnails, drop, cooking), lights, 3-D shapes and their handles |
 | `UiEditorModule` | `just_ui_editor` | The game's screens (`assets/ui/*.ui.json`) and themes |
 | `SpriteStudioModule` | `just_sprite_editor` | Sprite sheets, atlases and animator graphs |
 | `InputEditorModule` | `just_input_editor` | The input actions asset |
@@ -498,7 +497,7 @@ Which rows are open and how they are coloured are saved in the scene file's `edi
 
 Right-clicking an entity in the viewport opens the same menu its row does — focus, duplicate, delete, copy, group, hide, lock, isolate — and right-clicking bare level offers *Paste here* and *New entity here*, which put the entity where the pointer is rather than at the camera. While tiles are selected with Select tiles (V), right-click opens their own menu instead: *Make the N tiles an entity*, *Copy tiles*, *Cut tiles*, *Delete tiles*, *Select none*. Otherwise a tile tool keeps the plain right button for picking tiles up, so open the menu with **Shift**+right-click.
 
-Files dragged from the Assets dock become entities where they land: an image a sprite, a sprite sheet an animated sprite, a tileset or a map file the scene's Level Map, a Tiled map an import. A module's kinds of file make what the module says (a 3-D model, with `just_graphics_editor`).
+Files dragged from the Assets dock become entities where they land: an image a sprite, a sprite sheet an animated sprite, a tileset or a map file the scene's Level Map, a Tiled map an import. A module's kinds of file make what the module says (a 3-D model, in a game with 3-D graphics). A file that goes in the other kind of scene — a model in a 2-D scene, a sprite in a 3-D one — is turned away with a message saying where it goes (`AssetKind.dropsIn`).
 
 ### 3-D scenes
 

@@ -496,6 +496,14 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
     });
   }
 
+  // Why [path] dropped here makes nothing in the open scene though it
+  // would in a scene of the other mode, or null.
+  String? _refusal(String path) => JustGameEditorPlugin.dropRefusal(
+    path,
+    mode: widget.plugin.sceneState.editingMode,
+    scope: widget.plugin.scope,
+  );
+
   /// The right-click menu, on whatever the pointer is over.
   void _openMenu(BuildContext context, PointerDownEvent event) =>
       _openMenuAt(context, event.localPosition, event.position);
@@ -550,16 +558,28 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
             onPointerCancel: widget.plugin.pointerCancel,
             onPointerSignal: widget.plugin.pointerScroll,
             // An asset dragged out of the Assets dock lands here: an image
-            // becomes a sprite where it was dropped.
+            // becomes a sprite where it was dropped. One that goes in the
+            // other kind of scene — a model in a 2-D one — is taken too, to
+            // say where it goes.
             child: DragTarget<String>(
               onWillAcceptWithDetails: (d) =>
                   widget.plugin.sceneState.hasScene &&
-                  JustGameEditorPlugin.canDropAsset(
-                    d.data,
-                    mode: widget.plugin.sceneState.editingMode,
-                    scope: widget.plugin.scope,
-                  ),
+                  (JustGameEditorPlugin.canDropAsset(
+                        d.data,
+                        mode: widget.plugin.sceneState.editingMode,
+                        scope: widget.plugin.scope,
+                      ) ||
+                      _refusal(d.data) != null),
               onAcceptWithDetails: (d) {
+                if (_refusal(d.data) case final refusal?) {
+                  EditorMessenger.of(context).showSnackBar(
+                    EditorSnackBarEntry(
+                      message: refusal,
+                      type: EditorSnackBarType.warning,
+                    ),
+                  );
+                  return;
+                }
                 final box = context.findRenderObject() as RenderBox?;
                 if (box == null) return;
                 widget.plugin.dropAsset(d.data, box.globalToLocal(d.offset));
@@ -570,9 +590,13 @@ class _GameCanvasAreaState extends State<GameCanvasArea> {
                   border: incoming.isEmpty
                       ? null
                       : Border.all(
-                          color: EditorTheme.primaryBright.withValues(
-                            alpha: 0.7,
-                          ),
+                          color:
+                              (incoming.first is String &&
+                                          _refusal(incoming.first as String) !=
+                                              null
+                                      ? EditorTheme.warning
+                                      : EditorTheme.primaryBright)
+                                  .withValues(alpha: 0.7),
                           width: 2,
                         ),
                 ),

@@ -41,7 +41,7 @@ A bug report should have:
 - for a keyboard bug, the keyboard layout, and whether you changed the key in Settings → Keyboard;
 - for a layout or drawing bug, a screenshot, the window size, and your Appearance and Accessibility settings.
 
-Some bugs belong elsewhere. If the scene misbehaves in the game too, outside the editor, the bug is in `just_game_engine` (or `just_physics_engine`, for the simulation). The scene format, its migrations and the starter scenes belong to `just_game_engine_formats`; parsing Tiled files to `just_tiled` (turning them into a Level Map is this package's job); the colour picker to `just_colours`. A module's tools belong to its package: the interface editor to `just_ui_editor`, the Sprite Studio to `just_sprite_editor`, the Input Actions editor to `just_input_editor`, 3-D models, lights and shapes to `just_graphics_editor`, the Asset Store window to `just_asset_store_editor`, and a kit's prefabs and tools to `just_platformer_kit` or `just_third_person_kit`. The `just` command is `just_core_cli`, and its game commands (`just game scene`, `just game build`) are `just_game_engine_cli`.
+Some bugs belong elsewhere. If the scene misbehaves in the game too, outside the editor, the bug is in `just_game_engine` (or `just_physics_engine`, for the simulation). The scene format, its migrations and the starter scenes belong to `just_game_engine_formats`; parsing Tiled files to `just_tiled` (turning them into a Level Map is this package's job); the colour picker to `just_colours`. A module's tools belong to its package: the interface editor to `just_ui_editor`, the Sprite Studio to `just_sprite_editor`, the Input Actions editor to `just_input_editor`, the Asset Store window to `just_asset_store_editor`, and a kit's prefabs and tools to `just_platformer_kit` or `just_third_person_kit`. The `just` command is `just_core_cli`, and its game commands (`just game scene`, `just game build`) are `just_game_engine_cli`.
 
 For a feature, open an issue labelled **`enhancement`** that describes the problem it solves and how it should behave. The package's scope is editing a `just_game_engine` game's scenes from inside the running game: the overlay, the scene tree and inspector, the Level Designer and Level Map, play-testing, the docks and settings, and the `EditorModule` API that everything else plugs in through. A tool for one kind of asset or one genre belongs in a module of its own, as the sprite, interface and input editors are. A change to what the editor saves affects every game's levels, and a change to `EditorModule` affects every module, so open the issue first and agree the approach before you write it.
 
@@ -97,7 +97,7 @@ List only what you have checked out. `just_game_engine` has `just_*` dependencie
 
 Do not change `pubspec.yaml` to a path dependency. If your pull request needs a version of a `just_*` package that is not published yet, say so in the pull request: this package can only be released after it.
 
-Nine packages build on `just_editor_core`, each with an `EditorModule` of its own: the modules `just_ui_editor`, `just_sprite_editor`, `just_input_editor`, `just_graphics_editor`, `just_material_editor` and `just_asset_store_editor`, and the kits `just_platformer_kit`, `just_third_person_kit` and `just_world_builder_kit`; four of them (the interface, graphics and material editors and the World Builder kit) take this package too. If you change the public API, above all `EditorModule`, say in the pull request what they will need.
+Eight packages build on `just_editor_core`, each with an `EditorModule` of its own: the modules `just_ui_editor`, `just_sprite_editor`, `just_input_editor`, `just_material_editor` and `just_asset_store_editor`, and the kits `just_platformer_kit`, `just_third_person_kit` and `just_world_builder_kit`; three of them (the interface and material editors and the World Builder kit) take this package too. If you change the public API, above all `EditorModule`, say in the pull request what they will need.
 
 ---
 
@@ -111,6 +111,7 @@ In this package:
 |--------|----------|
 | `lib/just_game_engine_editor.dart` | The public library: what a game's editor entry point and a module's tests use (the plugin, `JustGameEngineEditor`, `BuiltInEditorModule`, `LevelDesignerSession`, the Tiled importer, ...), and `just_editor_core` re-exported |
 | `lib/materials.dart` | `BuiltInMaterialsModule` and the normal map maker (`NormalMaps`, `Pixels`) |
+| `lib/graphics.dart` | `BuiltInGraphicsModule`, model cooking (`ModelCooking`) and pictures (`ModelThumbnails`) |
 | `lib/src/core/plugin/` | `JustGameEditorPlugin`: the engine plugin, the key handler, autosave, the Level Designer session |
 | `lib/src/core/scope/` | `EditorScopeServices`: the editor's own services on the scope (the dock controller, `EntityOps`, the Level Map's) |
 | `lib/src/core/state/`, `core/play/` | `PlaySnapshot`; `PlayController` |
@@ -126,6 +127,7 @@ In this package:
 | `lib/src/integration/` | `JustGameEngineEditor`, the widget a game puts on screen |
 | `lib/src/debugger/` | The engine's debugger, attached to the plugin |
 | `lib/src/materials/` | `BuiltInMaterialsModule`: the 2-D and 3-D Material windows, their pictures, presets, checks, inspector editors and importers |
+| `lib/src/graphics/` | `BuiltInGraphicsModule`, for a game with 3-D graphics: models in the Assets dock (pictures, drop, the Model window, cooking, placing with lights and sockets), picking by triangles, light and camera aids, the Model, Light and Environment inspector sections |
 | `lib/src/ui/overlay/` | `JustGameEditorOverlay`: the chrome, docks, settings, right panel, start card, gizmos and viewport menu |
 | `lib/src/ui/inspector/`, `ui/panels/` | The built-in field editors and extras, `EntityHeader`, the physics inspector; `EntityInspectorPanel`, `ScenePickerPanel` |
 | `lib/src/ui/scene_tree/` | `SceneTreePanel`, `SceneTreeController`, `MapItemRow` |
