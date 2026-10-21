@@ -1,0 +1,9 @@
+# Plain tests that boot an engine or touch the disk get twice the default
+# 30 s: a full run on a busy machine can stall one past it.
+timeout: 2x
+
+tags:
+  # Renders with Flutter GPU (the 3-D material pictures). These tests skip
+  # themselves when it is not enabled; run them with:
+  #   flutter test --enable-impeller --enable-flutter-gpu --tags gpu
+  gpu:

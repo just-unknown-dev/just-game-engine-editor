@@ -1,23 +1,96 @@
-import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
-import 'package:just_debugger/just_debugger.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:just_signals/just_signals.dart';
 
-import '../panels/entity_inspector_panel.dart';
-import '../panels/scene_picker_panel.dart';
-import '../panels/scene_tree_panel.dart';
-import '../theme/editor_theme.dart';
+import 'package:just_editor_core/host.dart';
 import '../../core/plugin/editor_plugin.dart';
+import '../../core/entity/entity_ops.dart';
+import 'chrome/editor_chrome.dart';
+import 'viewport_menu.dart';
+import 'start/scene_loading_view.dart';
+import 'start/start_card.dart';
+import '../../core/scope/editor_scope_services.dart';
+
+// ─ Frame-safe overlay settings watcher ────────────────────────────────────
+
+/// Wrapper that applies overlay settings on the next frame, avoiding
+/// FlutterError 'Build scheduled during frame'.
+///
+/// This defers [plugin.applyOverlaySettings] to post-frame via SchedulerBinding,
+/// ensuring it runs outside of build/layout/paint phases.
+class OverlayUiSettingsWatcher extends StatefulWidget {
+  const OverlayUiSettingsWatcher({
+    super.key,
+    required this.plugin,
+    required this.settings,
+    required this.child,
+  });
+
+  final JustGameEditorPlugin plugin;
+  final OverlayUiSettings settings;
+  final Widget child;
+
+  @override
+  State<OverlayUiSettingsWatcher> createState() =>
+      _OverlayUiSettingsWatcherState();
+}
+
+class _OverlayUiSettingsWatcherState extends State<OverlayUiSettingsWatcher> {
+  @override
+  void didUpdateWidget(OverlayUiSettingsWatcher oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings != widget.settings) {
+      _scheduleSettingsApplication();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleSettingsApplication();
+  }
+
+  void _scheduleSettingsApplication() {
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.plugin.applyOverlaySettings(
+          showGrid: widget.settings.showGrid,
+          gridSnappingEnabled: widget.settings.gridSnappingEnabled,
+          gridSize: widget.settings.gridSize,
+          gizmos: widget.settings.gizmos,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
 
 // ── Public overlay host ───────────────────────────────────────────────────────
 
 /// Wraps the game surface with the runtime editor UI.
 ///
-/// When [plugin.isVisible] is false the widget is transparent and passes all
-/// events through to the game. When visible it switches to a full-screen split
-/// layout: game canvas on the left, editor panel on the right.
-class JustGameEditorOverlay extends StatelessWidget {
+/// When [plugin.isVisible.value] is false the widget keeps the game interactive.
+/// If [plugin.isStatusPanelVisible.value] is true, the compact dock can still be
+/// shown independently. When visible it switches to a split layout: game
+/// canvas on the left, editor panel on the right.
+///
+/// The docks, panels, floating controls and messages — the "chrome" — are
+/// projected into the ambient [Overlay] via [OverlayPortal] rather than
+/// painted inline. Apps typically
+/// stack pause/game-over dialogs above this widget (see just_zombies'
+/// GameScreen); painting chrome inline would put it underneath those
+/// dialogs. Routing it through the Overlay makes the editor — a developer
+/// tool, not game UI — always render on top, regardless of sibling order
+/// elsewhere in the app. Only the game canvas itself stays in its normal
+/// tree position, since gameplay must still render beneath the app's own
+/// HUD/dialogs as before.
+class JustGameEditorOverlay extends StatefulWidget {
   const JustGameEditorOverlay({
     super.key,
     required this.plugin,
@@ -28,1419 +101,538 @@ class JustGameEditorOverlay extends StatelessWidget {
   final Widget gameChild;
 
   @override
+  State<JustGameEditorOverlay> createState() => _JustGameEditorOverlayState();
+}
+
+class _JustGameEditorOverlayState extends State<JustGameEditorOverlay> {
+  final OverlayPortalController _chromeController = OverlayPortalController();
+  final List<void Function()> _stop = [];
+
+  @override
+  void initState() {
+    super.initState();
+    if (!kDebugMode) return;
+    _chromeController.show();
+    final scope = widget.plugin.scope;
+    _stop
+      ..add(scope.prefs.settings.watch(_syncTheme))
+      ..add(scope.theme.current.watch(() => _applyTheme()));
+    // The questions only the editor's window can ask.
+    widget.plugin
+      ..askToRecover = _askToRecover
+      ..askToLeaveScene = _askToLeaveScene;
+    _entities = scope.entities..confirmDelete = _confirmDelete;
+    scope.prefs.load().then((_) {
+      if (!mounted) return;
+      scope.chrome.rightPanelWidth.value = scope.prefs
+          .get(EditorChromeState.rightPanelWidthPref)
+          .clamp(
+            OverlayLayout.rightPanelMinWidth,
+            OverlayLayout.rightPanelMaxWidth,
+          );
+      // Where the last session left off, as the settings ask.
+      unawaited(widget.plugin.reopenLastSession());
+    });
+    _syncTheme();
+    _applyTheme();
+  }
+
+  /// A hot reload. The one place the editor hears of it: everything it
+  /// built from code once — registries, definitions, docks, the palette —
+  /// is built again from the code as it now is, before the frame that
+  /// shows it.
+  @override
+  void reassemble() {
+    super.reassemble();
+    if (!kDebugMode) return;
+    widget.plugin.reassemble();
+    // The palette, as the code now makes it: a picked preset was made again
+    // by the plugin; an accent of the settings' own is made again here.
+    final scope = widget.plugin.scope;
+    if (scope.theme.currentId.value == null) {
+      scope.theme.set(
+        EditorThemeData.classic.withAccent(scope.prefs.settings.value.accent),
+      );
+    }
+    _themeSource = null;
+    _syncTheme();
+  }
+
+  EntityOps? _entities;
+
+  Future<bool?> _askToRecover(String sceneName, DateTime when) {
+    if (!mounted) return Future.value();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final at = '${two(when.hour)}:${two(when.minute)}';
+    return askToRecover(
+      context,
+      title: 'Recover unsaved changes to $sceneName?',
+      message:
+          'A backup from $at holds changes to $sceneName that were never '
+          'saved. Recover them, or open the scene as it was last saved; '
+          'the backup stays in .editor_backups either way.',
+    );
+  }
+
+  Future<UnsavedChoice?> _askToLeaveScene(String leaving, String opening) {
+    if (!mounted) return Future.value();
+    return askToSaveChanges(
+      context,
+      title: 'Save changes to $leaving?',
+      message:
+          'Opening $opening closes $leaving, and loses what has not been '
+          'saved.',
+    );
+  }
+
+  Future<bool> _confirmDelete(String what) {
+    if (!mounted) return Future.value(false);
+    return showEditorConfirm(
+      context,
+      title: 'Delete $what?',
+      message: 'Undo brings it back.',
+      confirmLabel: 'Delete',
+    );
+  }
+
+  @override
+  void dispose() {
+    if (widget.plugin.askToRecover == _askToRecover) {
+      widget.plugin.askToRecover = null;
+    }
+    if (widget.plugin.askToLeaveScene == _askToLeaveScene) {
+      widget.plugin.askToLeaveScene = null;
+    }
+    // Held from the start: the scope may already be closed by now.
+    final entities = _entities;
+    if (entities != null && entities.confirmDelete == _confirmDelete) {
+      entities.confirmDelete = null;
+    }
+    for (final stop in _stop) {
+      stop();
+    }
+    // The focus outlines were the editor's setting: give the app back its
+    // own way of showing them.
+    if (_focusStrategySet) {
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.automatic;
+    }
+    super.dispose();
+  }
+
+  bool _focusStrategySet = false;
+
+  /// Always-visible focus, for everything under the editor: Flutter's own
+  /// highlights too, not only the kit's outlines.
+  void _syncFocusStrategy(bool always) {
+    if (always == _focusStrategySet) return;
+    _focusStrategySet = always;
+    FocusManager.instance.highlightStrategy = always
+        ? FocusHighlightStrategy.alwaysTraditional
+        : FocusHighlightStrategy.automatic;
+  }
+
+  /// The settings name a theme — a built-in accent or a module's preset —
+  /// and the sizes the chrome is drawn at.
+  void _syncTheme() {
+    final scope = widget.plugin.scope;
+    final settings = scope.prefs.settings.value;
+    if (scope.theme.preset(settings.themeId) != null) {
+      scope.theme.select(settings.themeId);
+    } else if (scope.theme.currentId.value != null ||
+        scope.theme.current.value.primary != settings.accent) {
+      // A preset that has gone — its module removed: the accent it had.
+      scope.theme.set(EditorThemeData.classic.withAccent(settings.accent));
+    }
+    _syncFocusStrategy(settings.alwaysShowFocus);
+    final sized = EditorMetrics.apply(settings);
+    // High contrast and colour-blind safe colours are the palette's to show,
+    // over whichever theme is picked.
+    if (!_applyTheme() && sized) _rebuildAll();
+  }
+
+  EditorThemeData? _themeSource;
+  (bool, bool)? _themeFlags;
+
+  /// Applies the picked theme, as the accessibility settings adjust it.
+  /// True when it changed — and everything was built again.
+  bool _applyTheme() {
+    final scope = widget.plugin.scope;
+    final source = scope.theme.current.value;
+    final settings = scope.prefs.settings.value;
+    final flags = (settings.highContrast, settings.colourBlindSafe);
+    if (identical(source, _themeSource) && flags == _themeFlags) return false;
+    _themeSource = source;
+    _themeFlags = flags;
+    var data = source;
+    if (settings.highContrast) data = data.highContrast();
+    if (settings.colourBlindSafe) data = data.colourBlindSafe();
+    // From the picked theme: `EditorTheme.of(context)` then hands out the
+    // adjusted palette too, not the preset beneath it.
+    EditorTheme.apply(data, from: source);
+    _rebuildAll();
+    return true;
+  }
+
+  /// Every colour and size is read as the chrome builds, so a new theme or
+  /// density means building all of it again. Its state — scroll positions,
+  /// open menus, typed text — stays. The game's own widgets are left alone:
+  /// they read none of the editor's look.
+  void _rebuildAll() {
+    if (!mounted) return;
+    final game = widget.gameChild;
+    void mark(Element element) {
+      if (identical(element.widget, game)) return;
+      element.markNeedsBuild();
+      element.visitChildren(mark);
+    }
+
+    (context as Element).visitChildren(mark);
+  }
+
+  /// Whether the editor steps aside for the game: a play-test running —
+  /// not paused, which brings it back — with the settings asking for that.
+  bool _steppedAside(OverlayUiSettings settings) =>
+      settings.hideChromeWhilePlaying &&
+      widget.plugin.playController.state.value == EditorPlayState.playing;
+
+  /// The chrome's ambient look — its text at the size and weight the
+  /// settings ask for, the game's left alone; motion as they allow; one style
+  /// of tooltip — rebuilt when they change.
+  Widget _chromeLook(Widget child) => SignalBuilder<OverlayUiSettings>(
+    signal: widget.plugin.scope.prefs.settings,
+    builder: (context, _, _) => EditorLook(child: child),
+  );
+
+  @override
   Widget build(BuildContext context) {
-    if (!kDebugMode) return gameChild;
+    if (!kDebugMode) return widget.gameChild;
 
-    return FocusScope(
-      node: plugin.gameFocusScopeNode,
-      child: Focus(
-        autofocus: true,
-        canRequestFocus: true,
-        child: AnimatedBuilder(
-          animation: plugin,
-          builder: (context, _) {
-            if (!plugin.isVisible) {
-              return AbsorbPointer(absorbing: false, child: gameChild);
-            }
+    final plugin = widget.plugin;
+    final gameChild = widget.gameChild;
 
-            return Stack(
-              children: <Widget>[
-                Positioned.fill(
-                  child: _EditorSplitLayout(
-                    plugin: plugin,
-                    gameChild: gameChild,
-                  ),
+    // Everything under here can reach the scope, portal children included.
+    return EditorScopeProvider(
+      scope: plugin.scope,
+      child: EditorThemeScope(
+        controller: plugin.scope.theme,
+        child: EditorMessenger(
+          child: FocusScope(
+            node: plugin.gameFocusScopeNode,
+            child: Focus(
+              // Not autofocus: this wrapper has no onKeyEvent of its own, and
+              // claiming focus here at mount races (and wins over) gameChild's
+              // own internal autofocus Focus node — silently swallowing all
+              // keyboard input into a no-op handler with no way to recover it
+              // short of clicking directly on the game canvas. Editor <-> game
+              // focus routing on F1 is already handled explicitly via
+              // editorFocusNode/gameFocusScopeNode.requestFocus() in
+              // JustGameEditorPlugin._onHardwareKey, so this wrapper doesn't
+              // need to grab focus itself — leave it to gameChild by default.
+              canRequestFocus: true,
+              child: OverlayPortal(
+                controller: _chromeController,
+                overlayChildBuilder: (context) {
+                  return _chromeLook(
+                    Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        SignalBuilder2<bool, bool>(
+                          signal1: plugin.isVisible,
+                          signal2: plugin.isStatusPanelVisible,
+                          builder: (context, _, _, _) {
+                            if (!plugin.isVisible.value) {
+                              if (!plugin.isStatusPanelVisible.value) {
+                                return const SizedBox.shrink();
+                              }
+                              return CompactChrome(plugin: plugin);
+                            }
+
+                            return SignalBuilder2<
+                              OverlayUiSettings,
+                              EditorPlayState
+                            >(
+                              signal1: widget.plugin.scope.prefs.settings,
+                              signal2: plugin.playController.state,
+                              builder: (context, settings, _, _) =>
+                                  _steppedAside(settings)
+                                  ? PlayTestChrome(
+                                      plugin: plugin,
+                                      settings: settings,
+                                    )
+                                  : FullEditorChrome(
+                                      plugin: plugin,
+                                      settings: settings,
+                                    ),
+                            );
+                          },
+                        ),
+                        // Over everything while a scene opens.
+                        SceneLoadingBarrier(plugin: plugin),
+                      ],
+                    ),
+                  );
+                },
+                child: SignalBuilder2<bool, bool>(
+                  signal1: plugin.isVisible,
+                  signal2: plugin.isStatusPanelVisible,
+                  builder: (context, _, _, _) {
+                    if (!plugin.isVisible.value) {
+                      return AbsorbPointer(absorbing: false, child: gameChild);
+                    }
+
+                    return SignalBuilder2<OverlayUiSettings, EditorPlayState>(
+                      signal1: widget.plugin.scope.prefs.settings,
+                      signal2: plugin.playController.state,
+                      builder: (context, settings, _, _) {
+                        return OverlayUiSettingsWatcher(
+                          plugin: plugin,
+                          settings: settings,
+                          child: _steppedAside(settings)
+                              ? gameChild
+                              : _GameInWhatIsLeft(
+                                  plugin: plugin,
+                                  gameChild: gameChild,
+                                ),
+                        );
+                      },
+                    );
+                  },
                 ),
-                const Positioned(
-                  top: 16,
-                  left: 16,
-                  child: IgnorePointer(child: _EditorStatusBadge()),
-                ),
-              ],
-            );
-          },
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-class _EditorSplitLayout extends StatelessWidget {
-  const _EditorSplitLayout({required this.plugin, required this.gameChild});
+/// The game, laid out inside whatever the editor's chrome leaves.
+///
+/// The canvas is genuinely smaller, so the camera's viewport, the pointer's
+/// coordinates and everything painted on the canvas follow by themselves —
+/// nothing has to be told where the panels are.
+class _GameInWhatIsLeft extends StatefulWidget {
+  const _GameInWhatIsLeft({required this.plugin, required this.gameChild});
 
   final JustGameEditorPlugin plugin;
   final Widget gameChild;
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: _EditorWorkspaceArea(plugin: plugin, gameChild: gameChild),
-        ),
-        SizedBox(width: 360, child: _EditorRightPanel(plugin: plugin)),
-      ],
+  State<_GameInWhatIsLeft> createState() => _GameInWhatIsLeftState();
+}
+
+class _GameInWhatIsLeftState extends State<_GameInWhatIsLeft> {
+  final List<void Function()> _stop = [];
+
+  @override
+  void initState() {
+    super.initState();
+    void rebuild() {
+      if (mounted) setState(() {});
+    }
+
+    final plugin = widget.plugin;
+    final dock = plugin.scope.dockController;
+    for (final signal in <Signal<Object?>>[
+      plugin.scope.chrome.rightPanelWidth,
+      plugin.isStatusPanelVisible,
+      plugin.designer,
+      dock.openId,
+      dock.heights,
+      dock.maximised,
+    ]) {
+      _stop.add(signal.watch(rebuild));
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final stop in _stop) {
+      stop();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => Padding(
+      padding: editorGameInsets(
+        window: constraints.biggest,
+        plugin: widget.plugin,
+        designing: widget.plugin.designer.value != null,
+        rightPanelWidth: widget.plugin.scope.chrome.rightPanelWidth.value,
+      ),
+      child: GameCanvasArea(plugin: widget.plugin, gameChild: widget.gameChild),
+    ),
+  );
+}
+
+// ── Canvas ─────────────────────────────────────────────────────────────────
+
+class GameCanvasArea extends StatefulWidget {
+  const GameCanvasArea({
+    super.key,
+    required this.plugin,
+    required this.gameChild,
+  });
+
+  final JustGameEditorPlugin plugin;
+  final Widget gameChild;
+
+  @override
+  State<GameCanvasArea> createState() => _GameCanvasAreaState();
+}
+
+class _GameCanvasAreaState extends State<GameCanvasArea> {
+  Size? _lastCanvasSize;
+
+  void _scheduleCanvasSizeUpdate(Size size) {
+    if (_lastCanvasSize == size) return;
+    _lastCanvasSize = size;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.plugin.viewport.updateCanvasSize(size);
+    });
+  }
+
+  // Why [path] dropped here makes nothing in the open scene though it
+  // would in a scene of the other mode, or null.
+  String? _refusal(String path) => JustGameEditorPlugin.dropRefusal(
+    path,
+    mode: widget.plugin.sceneState.editingMode,
+    scope: widget.plugin.scope,
+  );
+
+  /// The right-click menu, on whatever the pointer is over.
+  void _openMenu(BuildContext context, PointerDownEvent event) =>
+      _openMenuAt(context, event.localPosition, event.position);
+
+  void _openMenuAt(BuildContext context, Offset local, Offset global) {
+    final plugin = widget.plugin;
+    if (plugin.playController.isRunning || !plugin.isVisible.value) return;
+    showViewportMenu(
+      context,
+      plugin,
+      // In a split viewport, what the pane under the pointer sees there.
+      entity: plugin.atPoint(local, plugin.viewport.entityAt),
+      globalPosition: global,
+      worldPoint: plugin.atPoint(local, plugin.viewport.worldPointAt),
+      surface: plugin.scope.editorView.isPlanar
+          ? null
+          : plugin.atPoint(local, plugin.surfaceAt),
     );
   }
-}
-
-class _EditorWorkspaceArea extends StatefulWidget {
-  const _EditorWorkspaceArea({required this.plugin, required this.gameChild});
-
-  final JustGameEditorPlugin plugin;
-  final Widget gameChild;
-
-  @override
-  State<_EditorWorkspaceArea> createState() => _EditorWorkspaceAreaState();
-}
-
-class _EditorWorkspaceAreaState extends State<_EditorWorkspaceArea> {
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Stack(
-          clipBehavior: Clip.hardEdge,
-          children: <Widget>[
-            Positioned.fill(
-              child: _GameCanvasArea(
-                plugin: widget.plugin,
-                gameChild: widget.gameChild,
-              ),
-            ),
-            if (widget.plugin.isStatusPanelVisible)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _CompactStatusDock(
-                  plugin: widget.plugin,
-                  maxDetailWidth: constraints.maxWidth,
-                  maxDetailHeight: constraints.maxHeight,
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _GameCanvasArea extends StatelessWidget {
-  const _GameCanvasArea({required this.plugin, required this.gameChild});
-
-  final JustGameEditorPlugin plugin;
-  final Widget gameChild;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
-        plugin.updateCanvasSize(size);
+        _scheduleCanvasSizeUpdate(size);
 
-        return Listener(
-          onPointerDown: plugin.onPointerDown,
-          onPointerMove: plugin.onPointerMove,
-          onPointerUp: plugin.onPointerUp,
-          child: AbsorbPointer(absorbing: true, child: gameChild),
-        );
-      },
-    );
-  }
-}
-
-// ── Right panel ───────────────────────────────────────────────────────────────
-
-enum _StatusMetricId { fps, update, entities, systems, memory, health, logs }
-
-extension on _StatusMetricId {
-  _StatusDetailSection get section => switch (this) {
-    _StatusMetricId.fps => _StatusDetailSection.performance,
-    _StatusMetricId.update => _StatusDetailSection.performance,
-    _StatusMetricId.entities => _StatusDetailSection.ecs,
-    _StatusMetricId.systems => _StatusDetailSection.ecs,
-    _StatusMetricId.memory => _StatusDetailSection.memory,
-    _StatusMetricId.health => _StatusDetailSection.health,
-    _StatusMetricId.logs => _StatusDetailSection.logs,
-  };
-
-  String get label => switch (this) {
-    _StatusMetricId.fps => 'FPS',
-    _StatusMetricId.update => 'Update',
-    _StatusMetricId.entities => 'Entities',
-    _StatusMetricId.systems => 'Systems',
-    _StatusMetricId.memory => 'Memory',
-    _StatusMetricId.health => 'Health',
-    _StatusMetricId.logs => 'Logs',
-  };
-
-  IconData get icon => switch (this) {
-    _StatusMetricId.fps => Icons.speed_rounded,
-    _StatusMetricId.update => Icons.timer_outlined,
-    _StatusMetricId.entities => Icons.blur_linear_rounded,
-    _StatusMetricId.systems => Icons.settings_input_component_rounded,
-    _StatusMetricId.memory => Icons.memory_rounded,
-    _StatusMetricId.health => Icons.favorite_rounded,
-    _StatusMetricId.logs => Icons.article_outlined,
-  };
-}
-
-enum _StatusDetailSection { performance, ecs, memory, health, logs }
-
-extension on _StatusDetailSection {
-  String get title => switch (this) {
-    _StatusDetailSection.performance => 'Performance Details',
-    _StatusDetailSection.ecs => 'ECS Details',
-    _StatusDetailSection.memory => 'Memory Details',
-    _StatusDetailSection.health => 'Health Details',
-    _StatusDetailSection.logs => 'Log Details',
-  };
-
-  IconData get icon => switch (this) {
-    _StatusDetailSection.performance => Icons.bolt_rounded,
-    _StatusDetailSection.ecs => Icons.hub_rounded,
-    _StatusDetailSection.memory => Icons.memory_rounded,
-    _StatusDetailSection.health => Icons.favorite_rounded,
-    _StatusDetailSection.logs => Icons.subject_rounded,
-  };
-}
-
-class _CompactStatusDock extends StatefulWidget {
-  const _CompactStatusDock({
-    required this.plugin,
-    required this.maxDetailWidth,
-    required this.maxDetailHeight,
-  });
-
-  final JustGameEditorPlugin plugin;
-  final double maxDetailWidth;
-  final double maxDetailHeight;
-
-  static const double _panelHeight = 56;
-  static const double _detailWidth = 360;
-
-  @override
-  State<_CompactStatusDock> createState() => _CompactStatusDockState();
-}
-
-class _CompactStatusDockState extends State<_CompactStatusDock> {
-  _StatusMetricId? _selectedMetric;
-  final GlobalKey _stackKey = GlobalKey();
-  final Map<_StatusMetricId, GlobalKey> _anchorKeys =
-      <_StatusMetricId, GlobalKey>{};
-
-  GlobalKey _anchorKeyFor(_StatusMetricId metric) {
-    return _anchorKeys.putIfAbsent(metric, GlobalKey.new);
-  }
-
-  void _selectMetric(_StatusMetricId metric) {
-    setState(() {
-      _selectedMetric = _selectedMetric == metric ? null : metric;
-    });
-  }
-
-  void _clearSelection() {
-    setState(() {
-      _selectedMetric = null;
-    });
-  }
-
-  double _detailWidth() {
-    final availableWidth = widget.maxDetailWidth - 24;
-    if (availableWidth <= 0) {
-      return 0;
-    }
-    return math.min(_CompactStatusDock._detailWidth, availableWidth);
-  }
-
-  double _detailLeftFor(_StatusMetricId metric, double detailWidth) {
-    final stackContext = _stackKey.currentContext;
-    final anchorContext = _anchorKeyFor(metric).currentContext;
-    if (stackContext == null || anchorContext == null) {
-      return 12;
-    }
-
-    final stackBox = stackContext.findRenderObject() as RenderBox?;
-    final anchorBox = anchorContext.findRenderObject() as RenderBox?;
-    if (stackBox == null ||
-        anchorBox == null ||
-        !stackBox.hasSize ||
-        !anchorBox.hasSize) {
-      return 12;
-    }
-
-    final anchorCenter = anchorBox.localToGlobal(
-      anchorBox.size.center(Offset.zero),
-      ancestor: stackBox,
-    );
-    final minLeft = 12.0;
-    final maxLeft = math.max(minLeft, widget.maxDetailWidth - detailWidth - 12);
-    return (anchorCenter.dx - detailWidth / 2).clamp(minLeft, maxLeft);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: widget.plugin.debuggerController,
-      builder: (context, _) {
-        final controller = widget.plugin.debuggerController;
-        final snapshot = controller.snapshot;
-        final performance = controller.performance;
-        final memory = controller.memory;
-        final logs = controller.logs;
-        final health = controller.health;
-
-        final warningCount = logs
-            .where((entry) => entry.level == DebuggerLogLevel.warning)
-            .length;
-        final errorCount = logs
-            .where((entry) => entry.level == DebuggerLogLevel.error)
-            .length;
-
-        return Material(
-          color: Colors.transparent,
-          child: Stack(
-            key: _stackKey,
-            clipBehavior: Clip.none,
-            children: <Widget>[
-              Container(
-                height: _CompactStatusDock._panelHeight,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        // In 3-D a right-press looks around; one that never moved opens
+        // the menu when it lets go.
+        widget.plugin.viewport.openMenu = (local, global) {
+          if (mounted) _openMenuAt(context, local, global);
+        };
+        final canvas = MouseRegion(
+          onExit: (_) => widget.plugin.viewport.onPointerExit(),
+          child: Listener(
+            onPointerDown: (event) {
+              // A press on the game view mid-play means "back to the game".
+              if (widget.plugin.playController.isRunning) {
+                widget.plugin.focusGame();
+                widget.plugin.pressedPlayingGame(event);
+              }
+              final claimed = widget.plugin.pointerDown(event);
+              // A right-press is the context menu's unless a tool took it —
+              // a tile brush picking tiles up.
+              if ((event.buttons & kSecondaryButton) != 0 && !claimed) {
+                _openMenu(context, event);
+              }
+            },
+            onPointerHover: widget.plugin.pointerHover,
+            onPointerMove: widget.plugin.pointerMove,
+            onPointerUp: widget.plugin.pointerUp,
+            onPointerCancel: widget.plugin.pointerCancel,
+            onPointerSignal: widget.plugin.pointerScroll,
+            // An asset dragged out of the Assets dock lands here: an image
+            // becomes a sprite where it was dropped. One that goes in the
+            // other kind of scene — a model in a 2-D one — is taken too, to
+            // say where it goes.
+            child: DragTarget<String>(
+              onWillAcceptWithDetails: (d) =>
+                  widget.plugin.sceneState.hasScene &&
+                  (JustGameEditorPlugin.canDropAsset(
+                        d.data,
+                        mode: widget.plugin.sceneState.editingMode,
+                        scope: widget.plugin.scope,
+                      ) ||
+                      _refusal(d.data) != null),
+              onAcceptWithDetails: (d) {
+                if (_refusal(d.data) case final refusal?) {
+                  EditorMessenger.of(context).showSnackBar(
+                    EditorSnackBarEntry(
+                      message: refusal,
+                      type: EditorSnackBarType.warning,
+                    ),
+                  );
+                  return;
+                }
+                final box = context.findRenderObject() as RenderBox?;
+                if (box == null) return;
+                widget.plugin.dropAsset(d.data, box.globalToLocal(d.offset));
+              },
+              builder: (context, incoming, _) => DecoratedBox(
+                position: DecorationPosition.foreground,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF111111),
-                  borderRadius: BorderRadius.circular(0),
-                  border: Border(
-                    top: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                    left: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.04),
-                    ),
-                    right: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.04),
-                    ),
-                    bottom: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.04),
-                    ),
-                  ),
-                  boxShadow: const <BoxShadow>[
-                    BoxShadow(
-                      color: Color(0x55000000),
-                      blurRadius: 14,
-                      offset: Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 3,
-                  ),
-                  child: Column(
-                    children: <Widget>[
-                      Expanded(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: <Widget>[
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.fps,
-                                anchorKey: _anchorKeyFor(_StatusMetricId.fps),
-                                value: '${performance.currentFps}',
-                                accent: EditorTheme.primary,
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.fps,
-                                onTap: _selectMetric,
-                              ),
-                              _StatusSeparator(),
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.update,
-                                anchorKey: _anchorKeyFor(
-                                  _StatusMetricId.update,
-                                ),
-                                value:
-                                    '${performance.lastUpdateMs.toStringAsFixed(1)} ms',
-                                accent: EditorTheme.primaryBright,
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.update,
-                                onTap: _selectMetric,
-                              ),
-                              _StatusSeparator(),
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.entities,
-                                anchorKey: _anchorKeyFor(
-                                  _StatusMetricId.entities,
-                                ),
-                                value: '${snapshot.entityCount}',
-                                accent: const Color(0xFF7DE6B1),
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.entities,
-                                onTap: _selectMetric,
-                              ),
-                              _StatusSeparator(),
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.systems,
-                                anchorKey: _anchorKeyFor(
-                                  _StatusMetricId.systems,
-                                ),
-                                value: '${snapshot.systemCount}',
-                                accent: const Color(0xFF7CD7FF),
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.systems,
-                                onTap: _selectMetric,
-                              ),
-                              _StatusSeparator(),
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.memory,
-                                anchorKey: _anchorKeyFor(
-                                  _StatusMetricId.memory,
-                                ),
-                                value: _formatBytes(memory.rssBytes),
-                                accent: const Color(0xFFFFC86B),
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.memory,
-                                onTap: _selectMetric,
-                              ),
-                              _StatusSeparator(),
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.health,
-                                anchorKey: _anchorKeyFor(
-                                  _StatusMetricId.health,
-                                ),
-                                value: health.hasWarnings
-                                    ? '${health.messages.length} alerts'
-                                    : 'Healthy',
-                                accent: health.hasWarnings
-                                    ? EditorTheme.warning
-                                    : const Color(0xFF6DE0A7),
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.health,
-                                onTap: _selectMetric,
-                              ),
-                              _StatusSeparator(),
-                              _StatusMetricButton(
-                                metric: _StatusMetricId.logs,
-                                anchorKey: _anchorKeyFor(_StatusMetricId.logs),
-                                value: '${logs.length} total',
-                                trailing: errorCount > 0
-                                    ? '$errorCount err'
-                                    : '$warningCount warn',
-                                accent: const Color(0xFFD9A7FF),
-                                isSelected:
-                                    _selectedMetric == _StatusMetricId.logs,
-                                onTap: _selectMetric,
-                              ),
-                            ],
-                          ),
+                  border: incoming.isEmpty
+                      ? null
+                      : Border.all(
+                          color:
+                              (incoming.first is String &&
+                                          _refusal(incoming.first as String) !=
+                                              null
+                                      ? EditorTheme.warning
+                                      : EditorTheme.primaryBright)
+                                  .withValues(alpha: 0.7),
+                          width: 2,
                         ),
-                      ),
-                    ],
+                ),
+                child: AbsorbPointer(
+                  absorbing: true,
+                  // What the colour picker's eyedropper reads pixels from.
+                  child: RepaintBoundary(
+                    key: widget.plugin.scope.viewportCaptureKey,
+                    child: widget.gameChild,
                   ),
                 ),
               ),
-              if (_selectedMetric != null)
-                Positioned(
-                  left: _detailLeftFor(_selectedMetric!, _detailWidth()),
-                  bottom: _CompactStatusDock._panelHeight + 12,
-                  child: IgnorePointer(
-                    ignoring: false,
-                    child: SizedBox(
-                      width: _detailWidth(),
-                      child: _StatusDetailCard(
-                        controller: controller,
-                        section: _selectedMetric!.section,
-                        onClose: _clearSelection,
-                        maxHeight:
-                            widget.maxDetailHeight -
-                            _CompactStatusDock._panelHeight -
-                            40,
-                      ),
-                    ),
-                  ),
-                ),
+            ),
+          ),
+        );
+        // With no scene open there is no level to show: the start card
+        // covers the game as it booted, and takes the presses. While one
+        // opens, the backdrop covers the level being built.
+        final plugin = widget.plugin;
+        return SignalConsumer(
+          signals: [plugin.sceneState.activeScene],
+          builder: (context, _) => Stack(
+            fit: StackFit.expand,
+            children: [
+              canvas,
+              if (!plugin.sceneState.hasScene) EditorStartCover(plugin: plugin),
+              // Keyed: the start card goes from under it as the scene
+              // opens, and its fade must carry on.
+              SceneLoadingCover(
+                key: const ValueKey('sceneLoadingCover'),
+                plugin: plugin,
+              ),
             ],
           ),
         );
       },
-    );
-  }
-}
-
-class _StatusMetricButton extends StatelessWidget {
-  const _StatusMetricButton({
-    required this.metric,
-    required this.anchorKey,
-    required this.value,
-    required this.accent,
-    required this.isSelected,
-    required this.onTap,
-    this.trailing,
-  });
-
-  final _StatusMetricId metric;
-  final GlobalKey anchorKey;
-  final String value;
-  final String? trailing;
-  final Color accent;
-  final bool isSelected;
-  final ValueChanged<_StatusMetricId> onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      key: anchorKey,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => onTap(metric),
-          borderRadius: BorderRadius.circular(6),
-          child: Ink(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Icon(metric.icon, size: 11, color: accent),
-                      const SizedBox(width: 4),
-                      Text(
-                        metric.label,
-                        style: const TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w500,
-                          color: EditorTheme.textMuted,
-                        ),
-                      ),
-                      if (trailing != null) ...<Widget>[
-                        const SizedBox(width: 5),
-                        Text(
-                          trailing!,
-                          style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w500,
-                            color: EditorTheme.textMuted,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: EditorTheme.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusDetailCard extends StatelessWidget {
-  const _StatusDetailCard({
-    required this.controller,
-    required this.section,
-    required this.onClose,
-    required this.maxHeight,
-  });
-
-  final JustDebuggerController controller;
-  final _StatusDetailSection section;
-  final VoidCallback onClose;
-  final double maxHeight;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        return Material(
-          color: Colors.transparent,
-          child: Container(
-            constraints: BoxConstraints(maxHeight: maxHeight.clamp(180, 320)),
-            decoration: BoxDecoration(
-              color: const Color(0xF41B1B1B),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
-              boxShadow: const <BoxShadow>[
-                BoxShadow(
-                  color: Color(0x66000000),
-                  blurRadius: 18,
-                  offset: Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: EditorTheme.primary.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          section.icon,
-                          size: 12,
-                          color: EditorTheme.primaryBright,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              section.title,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: EditorTheme.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            Text(
-                              _detailSubtitle(section, controller),
-                              style: const TextStyle(
-                                fontSize: 9,
-                                color: EditorTheme.textMuted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: onClose,
-                        icon: const Icon(Icons.close_rounded),
-                        color: EditorTheme.textSecondary,
-                        iconSize: 16,
-                        splashRadius: 16,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      child: _buildDetailContent(controller),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  String _detailSubtitle(
-    _StatusDetailSection section,
-    JustDebuggerController controller,
-  ) {
-    final logs = controller.logs;
-    return switch (section) {
-      _StatusDetailSection.performance =>
-        'Frame ${controller.performance.frameNumber} • ${controller.performance.currentFps} FPS',
-      _StatusDetailSection.ecs =>
-        '${controller.snapshot.entityCount} entities • ${controller.snapshot.systemCount} systems',
-      _StatusDetailSection.memory =>
-        '${_formatBytes(controller.memory.rssBytes)} RSS • ${controller.memory.counters.length} counters',
-      _StatusDetailSection.health =>
-        controller.health.hasWarnings
-            ? '${controller.health.messages.length} runtime warnings need attention'
-            : 'No active runtime warnings',
-      _StatusDetailSection.logs =>
-        '${logs.length} captured events • latest ${logs.isEmpty ? '--' : logs.last.timeLabel}',
-    };
-  }
-
-  Widget _buildDetailContent(JustDebuggerController controller) {
-    return switch (section) {
-      _StatusDetailSection.performance => _PerformanceDetailContent(
-        controller: controller,
-      ),
-      _StatusDetailSection.ecs => _EcsDetailContent(controller: controller),
-      _StatusDetailSection.memory => _MemoryDetailContent(
-        controller: controller,
-      ),
-      _StatusDetailSection.health => _HealthDetailContent(
-        controller: controller,
-      ),
-      _StatusDetailSection.logs => _LogsDetailContent(controller: controller),
-    };
-  }
-}
-
-class _StatusSeparator extends StatelessWidget {
-  const _StatusSeparator();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 12,
-      margin: const EdgeInsets.symmetric(horizontal: 2),
-      color: Colors.white.withValues(alpha: 0.08),
-    );
-  }
-}
-
-class _DetailStatTile extends StatelessWidget {
-  const _DetailStatTile({required this.label, required this.value, this.hint});
-
-  final String label;
-  final String value;
-  final String? hint;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 132,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: EditorTheme.surfaceBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: EditorTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 11, color: EditorTheme.textMuted),
-          ),
-          if (hint != null) ...<Widget>[
-            const SizedBox(height: 4),
-            Text(
-              hint!,
-              style: const TextStyle(
-                fontSize: 10,
-                color: EditorTheme.primaryMutedLight,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailSectionCard extends StatelessWidget {
-  const _DetailSectionCard({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: EditorTheme.surfaceDark,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: EditorTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 10),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _PerformanceDetailContent extends StatelessWidget {
-  const _PerformanceDetailContent({required this.controller});
-
-  final JustDebuggerController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final performance = controller.performance;
-    final timings = performance.systemTimesMs.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: <Widget>[
-            _DetailStatTile(label: 'FPS', value: '${performance.currentFps}'),
-            _DetailStatTile(
-              label: 'Update Time',
-              value: '${performance.lastUpdateMs.toStringAsFixed(1)} ms',
-            ),
-            _DetailStatTile(
-              label: 'Budget Left',
-              value: '${performance.budgetRemainingMs.toStringAsFixed(1)} ms',
-              hint: performance.isOverBudget
-                  ? 'Over budget'
-                  : 'Within frame budget',
-            ),
-            _DetailStatTile(
-              label: 'Frame',
-              value: '${performance.frameNumber}',
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _DetailSectionCard(
-          title: 'Hottest Systems',
-          child: Column(
-            children: timings
-                .take(5)
-                .map((entry) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            entry.key,
-                            style: const TextStyle(
-                              color: EditorTheme.textSecondary,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '${entry.value.toStringAsFixed(2)} ms',
-                          style: const TextStyle(
-                            color: EditorTheme.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                })
-                .toList(growable: false),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _EcsDetailContent extends StatelessWidget {
-  const _EcsDetailContent({required this.controller});
-
-  final JustDebuggerController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final snapshot = controller.snapshot;
-    final components = snapshot.componentUsage.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: <Widget>[
-            _DetailStatTile(
-              label: 'Entities',
-              value: '${snapshot.entityCount}',
-            ),
-            _DetailStatTile(
-              label: 'Active Entities',
-              value: '${snapshot.activeEntityCount}',
-            ),
-            _DetailStatTile(label: 'Systems', value: '${snapshot.systemCount}'),
-            _DetailStatTile(
-              label: 'Archetypes',
-              value: '${snapshot.archetypeCount}',
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _DetailSectionCard(
-          title: 'Top Components',
-          child: Column(
-            children: components
-                .take(6)
-                .map((entry) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            entry.key,
-                            style: const TextStyle(
-                              color: EditorTheme.textSecondary,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '${entry.value}',
-                          style: const TextStyle(
-                            color: EditorTheme.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                })
-                .toList(growable: false),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MemoryDetailContent extends StatelessWidget {
-  const _MemoryDetailContent({required this.controller});
-
-  final JustDebuggerController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final memory = controller.memory;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: <Widget>[
-            _DetailStatTile(
-              label: 'App RSS',
-              value: _formatBytes(memory.rssBytes),
-            ),
-            _DetailStatTile(label: 'Entities', value: '${memory.entityCount}'),
-            _DetailStatTile(
-              label: 'Components',
-              value: '${memory.componentCount}',
-            ),
-            _DetailStatTile(
-              label: 'Cache Fallback',
-              value: memory.usingCacheFallback ? 'On' : 'Off',
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _DetailSectionCard(
-          title: 'Memory Counters',
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: memory.counters.entries
-                .map((entry) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '${entry.key}: ${entry.value}',
-                      style: const TextStyle(color: EditorTheme.textSecondary),
-                    ),
-                  );
-                })
-                .toList(growable: false),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _HealthDetailContent extends StatelessWidget {
-  const _HealthDetailContent({required this.controller});
-
-  final JustDebuggerController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final health = controller.health;
-    final performance = controller.performance;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: <Widget>[
-            _DetailStatTile(
-              label: 'Status',
-              value: health.hasWarnings ? 'Attention' : 'Healthy',
-            ),
-            _DetailStatTile(
-              label: 'Warnings',
-              value: '${health.messages.length}',
-            ),
-            _DetailStatTile(label: 'FPS', value: '${performance.currentFps}'),
-            _DetailStatTile(
-              label: 'Budget State',
-              value: performance.isOverBudget ? 'Exceeded' : 'OK',
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _DetailSectionCard(
-          title: 'Current Signals',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: health.hasWarnings
-                ? health.messages
-                      .map((message) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              const Padding(
-                                padding: EdgeInsets.only(top: 2),
-                                child: Icon(
-                                  Icons.warning_amber_rounded,
-                                  size: 14,
-                                  color: EditorTheme.warning,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  message,
-                                  style: const TextStyle(
-                                    color: EditorTheme.textSecondary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      })
-                      .toList(growable: false)
-                : const <Widget>[
-                    Text(
-                      'No active warnings. Runtime metrics look stable.',
-                      style: TextStyle(color: EditorTheme.textSecondary),
-                    ),
-                  ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _LogsDetailContent extends StatelessWidget {
-  const _LogsDetailContent({required this.controller});
-
-  final JustDebuggerController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final logs = controller.logs.reversed.take(5).toList(growable: false);
-    final infoCount = controller.logs
-        .where((entry) => entry.level == DebuggerLogLevel.info)
-        .length;
-    final warningCount = controller.logs
-        .where((entry) => entry.level == DebuggerLogLevel.warning)
-        .length;
-    final errorCount = controller.logs
-        .where((entry) => entry.level == DebuggerLogLevel.error)
-        .length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: <Widget>[
-            _DetailStatTile(
-              label: 'Total Logs',
-              value: '${controller.logs.length}',
-            ),
-            _DetailStatTile(label: 'Info', value: '$infoCount'),
-            _DetailStatTile(label: 'Warnings', value: '$warningCount'),
-            _DetailStatTile(label: 'Errors', value: '$errorCount'),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _DetailSectionCard(
-          title: 'Recent Entries',
-          child: Column(
-            children: logs.isEmpty
-                ? const <Widget>[
-                    Text(
-                      'No log entries captured yet.',
-                      style: TextStyle(color: EditorTheme.textSecondary),
-                    ),
-                  ]
-                : logs
-                      .map((entry) {
-                        final color = switch (entry.level) {
-                          DebuggerLogLevel.info => const Color(0xFF7CD7FF),
-                          DebuggerLogLevel.warning => EditorTheme.warning,
-                          DebuggerLogLevel.error => EditorTheme.errorLight,
-                        };
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  '${entry.category.toUpperCase()} • ${entry.timeLabel}',
-                                  style: TextStyle(
-                                    color: color,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  entry.message,
-                                  style: const TextStyle(
-                                    color: EditorTheme.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      })
-                      .toList(growable: false),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-String _formatBytes(int bytes) {
-  if (bytes <= 0) {
-    return '0 B';
-  }
-
-  const units = <String>['B', 'KB', 'MB', 'GB', 'TB'];
-  var value = bytes.toDouble();
-  var unitIndex = 0;
-
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex++;
-  }
-
-  final precision = unitIndex == 0 ? 0 : 1;
-  return '${value.toStringAsFixed(precision)} ${units[unitIndex]}';
-}
-
-// ── Right panel ───────────────────────────────────────────────────────────────
-
-class _EditorRightPanel extends StatelessWidget {
-  const _EditorRightPanel({required this.plugin});
-
-  final JustGameEditorPlugin plugin;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: EditorTheme.panelBg,
-      child: SafeArea(
-        child: DecoratedBox(
-          decoration: const BoxDecoration(
-            border: Border(
-              left: BorderSide(color: EditorTheme.border, width: 1),
-            ),
-          ),
-          child: ListenableBuilder(
-            listenable: plugin.sceneState,
-            builder: (context, _) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  _HeaderBar(plugin: plugin),
-                  const Divider(height: 1, color: EditorTheme.border),
-                  if (!plugin.sceneState.hasScene)
-                    Expanded(
-                      child: ScenePickerPanel(
-                        onSceneSelected: (name) => plugin.openScene(name),
-                      ),
-                    )
-                  else ...<Widget>[
-                    // Scene tree (fixed height)
-                    SizedBox(
-                      height: 220,
-                      child: SceneTreePanel(
-                        sceneState: plugin.sceneState,
-                        world: plugin.engine.world,
-                        onCreateEntity: plugin.createEntity,
-                        onCreateGroup: plugin.createGroup,
-                        onCreateGroupFrom: (entity) =>
-                            plugin.createGroup(children: [entity]),
-                        onDeleteEntity: plugin.deleteEntity,
-                        onCopyEntity: plugin.copyEntity,
-                        onPasteEntity: plugin.pasteEntity,
-                        onReparentEntity: plugin.reparentEntity,
-                      ),
-                    ),
-                    const Divider(height: 1, color: EditorTheme.border),
-                    // Inspector (fills remaining space)
-                    Expanded(
-                      child: EntityInspectorPanel(
-                        sceneState: plugin.sceneState,
-                        world: plugin.engine.world,
-                        onDetachFromParent: plugin.detachFromParent,
-                        onGroupSelection: plugin.createGroup,
-                      ),
-                    ),
-                    // Save button footer
-                    _SaveFooter(plugin: plugin),
-                  ],
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Header bar ────────────────────────────────────────────────────────────────
-
-class _HeaderBar extends StatelessWidget {
-  const _HeaderBar({required this.plugin});
-
-  final JustGameEditorPlugin plugin;
-
-  @override
-  Widget build(BuildContext context) {
-    final sceneName = plugin.sceneState.activeScene?.name;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(
-        children: <Widget>[
-          if (sceneName != null) ...<Widget>[
-            Tooltip(
-              message: 'Back to scene list',
-              child: IconButton(
-                onPressed: plugin.sceneState.closeScene,
-                icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                iconSize: 14,
-                color: EditorTheme.primary,
-                splashRadius: 16,
-                padding: const EdgeInsets.all(4),
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              ),
-            ),
-            const SizedBox(width: 4),
-          ] else ...<Widget>[
-            const Icon(
-              Icons.tune_rounded,
-              color: EditorTheme.primary,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                const Text(
-                  'Just Runtime Editor',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: EditorTheme.textPrimary,
-                  ),
-                ),
-                if (sceneName != null)
-                  Text(
-                    sceneName,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: EditorTheme.primaryMuted,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const _Badge(label: 'JIT'),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Save footer ───────────────────────────────────────────────────────────────
-
-class _SaveFooter extends StatelessWidget {
-  const _SaveFooter({required this.plugin});
-
-  final JustGameEditorPlugin plugin;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDirty = plugin.sceneState.isDirty;
-
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: EditorTheme.border)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: <Widget>[
-            if (isDirty)
-              const Padding(
-                padding: EdgeInsets.only(right: 8),
-                child: _Badge(label: 'UNSAVED', accent: EditorTheme.warning),
-              ),
-            const Spacer(),
-            SizedBox(
-              height: 32,
-              child: ElevatedButton.icon(
-                onPressed: isDirty ? () => plugin.saveScene() : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: EditorTheme.buttonBg,
-                  disabledBackgroundColor: EditorTheme.surfaceBg,
-                  foregroundColor: EditorTheme.primary,
-                  disabledForegroundColor: EditorTheme.border,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                ),
-                icon: const Icon(Icons.save_rounded, size: 14),
-                label: const Text(
-                  'Save',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Status badge (top-left corner) ────────────────────────────────────────────
-
-class _EditorStatusBadge extends StatelessWidget {
-  const _EditorStatusBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: EditorTheme.statusBadgeBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: EditorTheme.primary, width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const Icon(
-              Icons.visibility_rounded,
-              size: 14,
-              color: EditorTheme.textBright,
-            ),
-            const SizedBox(width: 6),
-            const Text(
-              'EDITOR: OPEN',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: EditorTheme.textBright,
-                letterSpacing: 0.4,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Shared badge chip ─────────────────────────────────────────────────────────
-
-class _Badge extends StatelessWidget {
-  const _Badge({required this.label, this.accent = EditorTheme.buttonBg});
-
-  final String label;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: accent,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: EditorTheme.textBadge,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
     );
   }
 }
