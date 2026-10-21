@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
@@ -6,7 +7,16 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final engine = Engine();
-  final plugin = await JustGameEditorPlugin.register(engine: engine);
+  // The editor attaches to a ready engine: its world and camera exist.
+  await engine.initialize();
+  // kDebugMode is a compile-time constant: a profile or release build drops
+  // the editor and holds only the game (register returns null there too).
+  final plugin = kDebugMode
+      ? await JustGameEditorPlugin.register(engine: engine)
+      : null;
+  // The game loop drives the editor too: Play, autosave and the 3-D fly
+  // keys all run on its frames.
+  engine.start();
 
   runApp(_ExampleApp(engine: engine, plugin: plugin));
 }
@@ -19,13 +29,13 @@ class _ExampleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // GameEditorAdapter automatically composes GameWidget + JustGameEditorOverlay
-    // and handles focus routing, update ticker, and render hook lifecycle.
-    // When plugin is null (release builds) it renders a plain GameWidget.
+    // JustGameEngineEditor puts the editor overlay over the GameWidget and
+    // routes focus between them. When plugin is null (release builds, or a
+    // platform the editor does not run on) it is a plain GameWidget.
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
-        body: GameEditorAdapter(
+        body: JustGameEngineEditor(
           engine: engine,
           plugin: plugin,
           showFPS: true,

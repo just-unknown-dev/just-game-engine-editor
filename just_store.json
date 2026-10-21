@@ -1,0 +1,17 @@
+{
+  "category": "core",
+  "editor": {
+    "editorOnlyLibraries": [
+      "*"
+    ]
+  },
+  "id": "just_game_engine_editor",
+  "kind": "editor-extension",
+  "name": "Just Game Engine Editor",
+  "requires": {
+    "just_game_engine": "^2.0.0-dev.2"
+  },
+  "schema": 1,
+  "system": true,
+  "version": "0.1.0-dev.1"
+}

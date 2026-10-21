@@ -1,23 +1,61 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show internal;
+import 'package:flutter/material.dart' show IconData;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
+import 'package:just_editor_core/host.dart';
+import 'transform_gizmo.dart';
+import 'gizmo_3d.dart' show screenBoundsOf3D;
+
 /// Gizmo handle identifier returned by [GizmoHitTester.hitTest].
 enum GizmoHandle {
-  none,
-  translateXY,
-  translateX,
-  translateY,
-  rotate,
-  scaleNW,
-  scaleNE,
-  scaleSE,
-  scaleSW,
-  scaleX,
-  scaleY,
-  body,
+  none(GizmoOp.none, 0),
+  translateXY(GizmoOp.translate, GizmoAxes.x | GizmoAxes.y),
+  translateX(GizmoOp.translate, GizmoAxes.x),
+  translateY(GizmoOp.translate, GizmoAxes.y),
+  rotate(GizmoOp.rotate, GizmoAxes.z),
+  scaleNW(GizmoOp.scale, GizmoAxes.x | GizmoAxes.y),
+  scaleNE(GizmoOp.scale, GizmoAxes.x | GizmoAxes.y),
+  scaleSE(GizmoOp.scale, GizmoAxes.x | GizmoAxes.y),
+  scaleSW(GizmoOp.scale, GizmoAxes.x | GizmoAxes.y),
+  scaleX(GizmoOp.scale, GizmoAxes.x),
+  scaleY(GizmoOp.scale, GizmoAxes.y),
+  body(GizmoOp.translate, GizmoAxes.x | GizmoAxes.y),
+
+  // A 3-D gizmo's own handles. Nothing in 2-D produces them.
+  translateZ(GizmoOp.translate, GizmoAxes.z),
+  rotateX(GizmoOp.rotate, GizmoAxes.x),
+  rotateY(GizmoOp.rotate, GizmoAxes.y),
+  scaleZ(GizmoOp.scale, GizmoAxes.z),
+  translateXZ(GizmoOp.translate, GizmoAxes.x | GizmoAxes.z),
+  translateYZ(GizmoOp.translate, GizmoAxes.y | GizmoAxes.z),
+  scaleUniform(GizmoOp.scale, GizmoAxes.x | GizmoAxes.y | GizmoAxes.z),
+
+  /// The 3-D gizmo's outer ring: turns about the way the view looks.
+  rotateView(GizmoOp.rotate, 0);
+
+  const GizmoHandle(this.op, this.axes);
+
+  /// What dragging it does.
+  final GizmoOp op;
+
+  /// Which axes it works along ([GizmoAxes] bits): a move handle's
+  /// directions, a turn handle's axis of rotation.
+  final int axes;
+
+  /// Whether it works along [axis] (one of the [GizmoAxes] bits).
+  bool uses(int axis) => axes & axis != 0;
+}
+
+/// What a gizmo handle does.
+enum GizmoOp { none, translate, rotate, scale }
+
+/// Axis bits for [GizmoHandle.axes].
+abstract final class GizmoAxes {
+  static const int x = 1, y = 2, z = 4;
 }
 
 /// Result of a [GizmoHitTester.hitTest] call.
@@ -30,46 +68,51 @@ class GizmoHitResult {
   bool get isNone => handle == GizmoHandle.none;
 }
 
-/// Paints editor gizmos (translate arrows, rotation arc, scale handles,
-/// selection outline) onto the game canvas.
+/// Paints the editor's gizmos — move arrows, the turning ring, scale
+/// handles, the selection outline — over the game, in screen space: each
+/// world position goes through the editor's view (`EditorView.worldToScreen`)
+/// before it is drawn.
 ///
-/// All drawing is done in **screen space** — call [worldToScreen] on world
-/// positions before passing them.  The canvas received by
-/// [JustGameEditorPlugin.onRender] is in screen space (parallax / background
-/// layer, before the camera transform).
+/// The editor draws with it itself. What a module reads from it is
+/// [sizeOf]: the size the gizmo frames a component at, which the marquee
+/// selection uses too.
 class GizmoPainter {
-  static const double _arrowLength = 52.0;
-  static const double _arrowHeadLength = 12.0;
-  static const double _arrowHeadWidth = 7.0;
-  static const double _rotRadius = 60.0;
-  static const double _rotSweep = math.pi * 0.75;
-  static const double _scaleHandle = 7.0;
-  static const double _dotRadius = 5.0;
-  static const double _moveHandleRadius = 8.0;
-  // Axis-scale square: sits on the arrow shaft before the arrowhead
-  static const double _axisSquareOffset = 30.0;
-  static const double _axisSquareHalf = 5.0;
+  /// The unscaled size the gizmo draws [component] at, or null. Through the
+  /// extent on its definition first, so it is the marquee's answer too.
+  ///
+  /// [definitions] defaults to the engine's own.
+  static Size? sizeOf(
+    Component component, [
+    ComponentDefinitionRegistry? definitions,
+  ]) => _sizeFromComponent(
+    component,
+    definitions ?? DesignerGeometry.definitionsFor(null),
+  );
 
-  // Colours
-  static const Color _colX = Color(0xFFE54B4B);
-  static const Color _colY = Color(0xFF4BCC73);
-  static const Color _colRot = Color(0xFFFFD660);
-  static const Color _colScale = Color(0xFFCCCCCC);
-  static const Color _colSel = Color(0xFF40E0D0);
-  static const Color _colOrigin = Color(0xFFFFFFFF);
-  static const Color _colMove = Color(0xFF40E0D0);
+  static double get _rotRadius =>
+      GizmoConstants.rotRadius * ViewportLook.gizmoScale;
+  static Color get _colSel => ViewportLook.selection;
+  static const Color _colOrigin = GizmoConstants.colOrigin;
 
   final Paint _paint = Paint()..isAntiAlias = true;
 
-  /// Paints gizmos for [entity] using [camera] to convert positions.
+  /// Paints [mode]'s gizmo for [entity] using [camera] to convert
+  /// positions: all of them in one, arrows to move it, handles to scale it,
+  /// or a ring to turn it — as the toolbar says. [allows] is what [entity]
+  /// can take; All leaves the rest off. [outline] draws the frame round it,
+  /// a gizmo the editor's switch hides; the handles stay.
   ///
   /// [canvasSize] is the full viewport size.
+  @internal
   void paintGizmos(
     Canvas canvas,
     Entity entity,
-    Camera camera,
-    Size canvasSize,
-  ) {
+    EditorView camera,
+    Size canvasSize, {
+    TransformMode mode = TransformMode.all,
+    Set<TransformMode>? allows,
+    bool outline = true,
+  }) {
     final transform = entity.getComponent<TransformComponent>();
     if (transform == null) return;
 
@@ -79,53 +122,30 @@ class GizmoPainter {
     final bounds = _computeScreenBounds(entity, transform, camera);
 
     // Selection outline
-    _paintSelectionRect(canvas, bounds.corners);
+    if (outline) _paintSelectionRect(canvas, bounds.corners);
 
-    // Translate arrows
-    _paintArrow(
-      canvas,
-      screenPos,
-      screenPos + const Offset(_arrowLength, 0),
-      _colX,
-    );
-    _paintArrow(
-      canvas,
-      screenPos,
-      screenPos + const Offset(0, -_arrowLength),
-      _colY,
-    );
-
-    // Axis-scale squares on the arrow shaft (resize width / height)
-    _paintAxisSquare(
-      canvas,
-      screenPos + const Offset(_axisSquareOffset, 0),
-      _colX,
-    );
-    _paintAxisSquare(
-      canvas,
-      screenPos + const Offset(0, -_axisSquareOffset),
-      _colY,
-    );
-
-    // Rotation arc
-    _paintRotationArc(canvas, screenPos, transform.rotation);
-
-    // Free-move center handle (drag in both X and Y)
-    _paintMoveHandle(canvas, screenPos);
-
-    // Scale handles at oriented bounds corners.
-    for (final corner in bounds.corners) {
-      _paint
-        ..style = PaintingStyle.fill
-        ..color = _colScale;
-      canvas.drawRect(
-        Rect.fromCenter(
-          center: corner,
-          width: _scaleHandle * 2,
-          height: _scaleHandle * 2,
-        ),
-        _paint,
-      );
+    switch (mode) {
+      case TransformMode.all:
+        TransformGizmo.paintAll(
+          canvas,
+          screenPos,
+          corners: bounds.corners,
+          rotation: transform.angle,
+          scale: allows?.contains(TransformMode.scale) ?? true,
+          rotate: allows?.contains(TransformMode.rotate) ?? true,
+        );
+      case TransformMode.move:
+        TransformGizmo.paintMove(canvas, screenPos);
+      case TransformMode.scale:
+        TransformGizmo.paintScaleAxes(canvas, screenPos);
+        TransformGizmo.paintScaleCorners(canvas, bounds.corners);
+      case TransformMode.rotate:
+        TransformGizmo.paintRotate(
+          canvas,
+          screenPos,
+          _rotRadius,
+          angle: transform.angle,
+        );
     }
 
     // Origin dot
@@ -135,35 +155,177 @@ class GizmoPainter {
     canvas.drawCircle(screenPos, 3.5, _paint);
   }
 
-  // ── Private helpers ───────────────────────────────────────────────────────
+  /// The outline round [entity] alone, with no handles: a selection none
+  /// can move, or one looked at in a play-test.
+  @internal
+  void paintSelectionOutline(
+    Canvas canvas,
+    Entity entity,
+    EditorView camera,
+    Size canvasSize,
+  ) {
+    final transform = entity.getComponent<TransformComponent>();
+    if (transform == null) return;
+    camera.viewportSize = canvasSize;
+    final bounds = _computeScreenBounds(entity, transform, camera);
+    _paintSelectionRect(canvas, bounds.corners);
+  }
 
-  void _paintAxisSquare(Canvas canvas, Offset center, Color color) {
-    // Filled square
+  /// Draws [marker]'s icon at each of [entities], regardless of selection,
+  /// so they can be found at a glance while editing. In 3-D at their place
+  /// in space; nothing for one behind the viewer.
+  @internal
+  void paintMarkers(
+    Canvas canvas,
+    EditorMarker marker,
+    List<Entity> entities,
+    EditorView camera,
+    Size canvasSize,
+  ) {
+    if (entities.isEmpty || canvasSize == Size.zero) return;
+    camera.viewportSize = canvasSize;
+    for (final entity in entities) {
+      final transform = entity.getComponent<TransformComponent>();
+      if (transform == null) continue;
+      final at = camera.isPlanar
+          ? camera.worldToScreen(transform.position.toOffset())
+          : camera.projectToScreen(transform.position);
+      if (at == null) continue;
+      _paintMarkerIcon(
+        canvas,
+        at,
+        marker.icon,
+        marker.color,
+        marker.label?.call(entity),
+      );
+    }
+  }
+
+  void _paintMarkerIcon(
+    Canvas canvas,
+    Offset center,
+    IconData iconData,
+    Color accent,
+    String? label,
+  ) {
     _paint
       ..style = PaintingStyle.fill
-      ..color = color;
-    canvas.drawRect(
-      Rect.fromCenter(
-        center: center,
-        width: _axisSquareHalf * 2,
-        height: _axisSquareHalf * 2,
+      ..color = accent.withValues(alpha: 0.18);
+    canvas.drawCircle(center, 16, _paint);
+
+    final iconPainter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(iconData.codePoint),
+        style: TextStyle(
+          fontSize: 20,
+          fontFamily: iconData.fontFamily,
+          package: iconData.fontPackage,
+          color: accent,
+        ),
       ),
-      _paint,
-    );
-    // Dark border so it pops over the arrow line
-    _paint
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0
-      ..color = const Color(0xFF000000).withValues(alpha: 0.4);
-    canvas.drawRect(
-      Rect.fromCenter(
-        center: center,
-        width: _axisSquareHalf * 2,
-        height: _axisSquareHalf * 2,
+      textDirection: TextDirection.ltr,
+    )..layout();
+    iconPainter
+      ..paint(
+        canvas,
+        center - Offset(iconPainter.width / 2, iconPainter.height / 2),
+      )
+      // Made for this frame: its text layout goes with it.
+      ..dispose();
+    if (label == null || label.isEmpty) return;
+
+    final labelPainter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: accent,
+        ),
       ),
-      _paint,
-    );
+      textDirection: TextDirection.ltr,
+    )..layout();
+    labelPainter
+      ..paint(
+        canvas,
+        Offset(center.dx - labelPainter.width / 2, center.dy + 18),
+      )
+      ..dispose();
   }
+
+  /// Rings every one of [entities] in [color] and labels it `#tag` — what
+  /// a tag being pointed at means in the level.
+  @internal
+  void paintTagHighlight(
+    Canvas canvas,
+    List<Entity> entities,
+    String tag,
+    Color color,
+    EditorView camera,
+    Size canvasSize,
+  ) => paintHighlight(canvas, entities, '#$tag', color, camera, canvasSize);
+
+  /// Rings every one of [entities] in [color] and labels it [text] — what a
+  /// tag or a collision layer being pointed at means in the level.
+  @internal
+  void paintHighlight(
+    Canvas canvas,
+    List<Entity> entities,
+    String text,
+    Color color,
+    EditorView camera,
+    Size canvasSize,
+  ) {
+    if (entities.isEmpty || canvasSize == Size.zero) return;
+    camera.viewportSize = canvasSize;
+    final label = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    for (final entity in entities) {
+      final transform = entity.getComponent<TransformComponent>();
+      if (transform == null) continue;
+      final Rect box;
+      if (camera.isPlanar) {
+        final bounds = _computeScreenBounds(entity, transform, camera);
+        box = Rect.fromCenter(
+          center: bounds.center,
+          width: math.max(bounds.halfW * 2, 16) + 10,
+          height: math.max(bounds.halfH * 2, 16) + 10,
+        );
+      } else {
+        // In space: the box its 3-D bounds cover on screen.
+        final screen = screenBoundsOf3D(entity, camera);
+        if (screen == null) continue;
+        box = Rect.fromCenter(
+          center: screen.center,
+          width: math.max(screen.width, 16) + 10,
+          height: math.max(screen.height, 16) + 10,
+        );
+      }
+      final shape = RRect.fromRectAndRadius(box, const Radius.circular(4));
+      _paint
+        ..style = PaintingStyle.fill
+        ..color = color.withValues(alpha: 0.12);
+      canvas.drawRRect(shape, _paint);
+      _paint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = color;
+      canvas.drawRRect(shape, _paint);
+      label.paint(canvas, Offset(box.left, box.top - label.height - 2));
+    }
+    label.dispose();
+  }
+
+  // ── Private helpers ───────────────────────────────────────────────────────
 
   void _paintSelectionRect(Canvas canvas, List<Offset> corners) {
     if (corners.length != 4) return;
@@ -179,70 +341,6 @@ class GizmoPainter {
       ..lineTo(corners[3].dx, corners[3].dy)
       ..close();
     canvas.drawPath(path, _paint);
-  }
-
-  void _paintArrow(Canvas canvas, Offset from, Offset to, Color color) {
-    _paint
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..color = color;
-    canvas.drawLine(from, to, _paint);
-
-    // Arrowhead
-    final dir = (to - from);
-    final length = dir.distance;
-    if (length == 0) return;
-    final norm = dir / length;
-    final perp = Offset(-norm.dy, norm.dx);
-
-    final tip = to;
-    final base = to - norm * _arrowHeadLength;
-    final left = base + perp * (_arrowHeadWidth / 2);
-    final right = base - perp * (_arrowHeadWidth / 2);
-
-    final path = ui.Path()
-      ..moveTo(tip.dx, tip.dy)
-      ..lineTo(left.dx, left.dy)
-      ..lineTo(right.dx, right.dy)
-      ..close();
-
-    _paint
-      ..style = PaintingStyle.fill
-      ..color = color;
-    canvas.drawPath(path, _paint);
-  }
-
-  void _paintRotationArc(Canvas canvas, Offset center, double currentRotation) {
-    final rect = Rect.fromCircle(center: center, radius: _rotRadius);
-
-    _paint
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..color = _colRot.withValues(alpha: 0.6);
-    canvas.drawArc(rect, currentRotation, _rotSweep, false, _paint);
-
-    // Dot at arc end
-    final arcEnd = Offset(
-      center.dx + _rotRadius * math.cos(currentRotation + _rotSweep),
-      center.dy + _rotRadius * math.sin(currentRotation + _rotSweep),
-    );
-    _paint
-      ..style = PaintingStyle.fill
-      ..color = _colRot;
-    canvas.drawCircle(arcEnd, _dotRadius, _paint);
-  }
-
-  void _paintMoveHandle(Canvas canvas, Offset center) {
-    _paint
-      ..style = PaintingStyle.fill
-      ..color = _colMove.withValues(alpha: 0.9);
-    canvas.drawCircle(center, _moveHandleRadius, _paint);
-
-    _paint
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..color = const Color(0xFF000000).withValues(alpha: 0.45);
-    canvas.drawCircle(center, _moveHandleRadius, _paint);
   }
 }
 
@@ -262,12 +360,12 @@ class _ScreenBounds {
   final List<Offset> corners;
 }
 
-const Size _defaultSelectionSize = Size(32, 32);
+const Size _defaultSelectionSize = GizmoConstants.defaultSelectionSize;
 
 _ScreenBounds _computeScreenBounds(
   Entity entity,
   TransformComponent transform,
-  Camera camera,
+  EditorView camera,
 ) {
   final baseSize = _largestComponentSize(entity);
   final center = camera.worldToScreen(transform.position.toOffset());
@@ -275,18 +373,13 @@ _ScreenBounds _computeScreenBounds(
       (baseSize.width / 2) * camera.zoom * transform.scale.x.abs() + 2;
   final halfH =
       (baseSize.height / 2) * camera.zoom * transform.scale.y.abs() + 2;
-  final corners = _buildRotatedCorners(
-    center,
-    halfW,
-    halfH,
-    transform.rotation,
-  );
+  final corners = _buildRotatedCorners(center, halfW, halfH, transform.angle);
 
   return _ScreenBounds(
     center: center,
     halfW: halfW,
     halfH: halfH,
-    rotation: transform.rotation,
+    rotation: transform.angle,
     corners: corners,
   );
 }
@@ -307,14 +400,24 @@ Size _largestComponentSize(Entity entity) {
     }
   }
 
+  final definitions = DesignerGeometry.definitionsFor(entity);
   for (final component in entity.components) {
-    consider(_sizeFromComponent(component));
+    consider(_sizeFromComponent(component, definitions));
   }
 
   return best;
 }
 
-Size? _sizeFromComponent(Component component) {
+Size? _sizeFromComponent(
+  Component component,
+  ComponentDefinitionRegistry definitions,
+) {
+  // The extent on the definition first: the same answer the marquee and
+  // the resize handles use. The branches below remain for anything that
+  // has no definition at all.
+  final extent = definitions.definitionFor(component)?.extent;
+  if (extent != null) return extent.sizeOf(component);
+
   if (component is RectangleComponent) {
     final inset = component.strokeWidth * 2;
     return Size(component.width + inset, component.height + inset);
@@ -341,18 +444,21 @@ Size? _sizeFromComponent(Component component) {
     );
     return Size(rect.width, rect.height);
   }
-  if (component is UIComponent) {
-    return component.size;
-  }
-  if (component is PhysicsBodyComponent) {
-    final rect = component.shape.getBounds(Offset.zero);
+  if (component is Collider2D) {
+    final shape = ColliderGeometry.of(component);
+    if (shape == null) return null;
+    final rect = ColliderGeometry.boundsOf(shape);
     return Size(rect.width, rect.height);
   }
   if (component is RenderableComponent) {
     return _sizeFromRenderable(component.renderable);
   }
 
-  return _sizeFromDynamic(component);
+  // Anything else has no size: a transform, a tag, a script. It is not
+  // probed for a `size` or a `width` — each probe of a type without one
+  // threw and caught an error, several per component, on every frame and
+  // for every entity under a click.
+  return null;
 }
 
 Size? _sizeFromRenderable(Renderable renderable) {
@@ -393,54 +499,6 @@ Size? _sizeFromRenderable(Renderable renderable) {
   final width = sx > 0.0001 ? rect.width / sx : rect.width;
   final height = sy > 0.0001 ? rect.height / sy : rect.height;
   return Size(width, height);
-}
-
-Size? _sizeFromDynamic(dynamic component) {
-  final dyn = component;
-
-  try {
-    final size = dyn.size;
-    if (size is Size) return size;
-  } catch (_) {}
-
-  try {
-    final w = dyn.width;
-    final h = dyn.height;
-    if (w is num && h is num) return Size(w.toDouble(), h.toDouble());
-  } catch (_) {}
-
-  try {
-    final r = dyn.radius;
-    if (r is num) {
-      final d = r.toDouble() * 2;
-      return Size(d, d);
-    }
-  } catch (_) {}
-
-  try {
-    final shape = dyn.shape;
-    final rect = shape.getBounds(Offset.zero);
-    if (rect is Rect) return Size(rect.width, rect.height);
-  } catch (_) {}
-
-  try {
-    final points = dyn.vertices;
-    if (points is List<Offset> && points.isNotEmpty) {
-      final rect = _rectFromOffsets(points);
-      if (rect != null) return Size(rect.width, rect.height);
-    }
-  } catch (_) {}
-
-  try {
-    final start = dyn.start;
-    final end = dyn.end;
-    if (start is Offset && end is Offset) {
-      final rect = Rect.fromPoints(start, end);
-      return Size(rect.width, rect.height);
-    }
-  } catch (_) {}
-
-  return null;
 }
 
 Rect? _rectFromOffsets(List<Offset> offsets) {
@@ -486,31 +544,28 @@ bool _pointInOrientedRect(Offset point, _ScreenBounds bounds) {
 
 /// Hit-tests pointer events against gizmo handles and entity bodies.
 class GizmoHitTester {
-  static const double _arrowLength = 52.0;
-  static const double _arrowTipRadius = 14.0;
-  static const double _rotRadius = 60.0;
-  static const double _rotDotRadius = 10.0;
-  static const double _scaleHandle = 7.0;
-  static const double _rotSweep = math.pi * 0.75;
-  static const double _axisSquareOffset = 30.0;
-  static const double _axisSquareHitRadius = 9.0;
-  static const double _moveHandleHitRadius = 11.0;
+  static double get _rotRadius =>
+      GizmoConstants.rotRadius * ViewportLook.gizmoScale;
+  static double get _scaleHandle =>
+      GizmoConstants.scaleHandle * ViewportLook.gizmoScale;
 
   /// Returns the [GizmoHitResult] for [screenPos].
   ///
-  /// Tests handles on [selected] first, then falls back to body hit-test
-  /// against all [entities] (last-added wins for overlaps).
+  /// Tests [mode]'s handles on [selected] first, then falls back to body
+  /// hit-test against all [entities] (last-added wins for overlaps).
   GizmoHitResult hitTest(
     Offset screenPos,
     Entity? selected,
     List<Entity> entities,
-    Camera camera,
-    Size canvasSize,
-  ) {
+    EditorView camera,
+    Size canvasSize, {
+    TransformMode mode = TransformMode.all,
+    Set<TransformMode>? allows,
+  }) {
     camera.viewportSize = canvasSize;
 
     if (selected != null && selected.isActive) {
-      final result = _hitTestHandles(screenPos, selected, camera);
+      final result = _hitTestHandles(screenPos, selected, camera, mode, allows);
       if (!result.isNone) return result;
     }
 
@@ -529,61 +584,60 @@ class GizmoHitTester {
     return const GizmoHitResult(GizmoHandle.none, null);
   }
 
-  GizmoHitResult _hitTestHandles(Offset pos, Entity entity, Camera camera) {
-    final transform = entity.getComponent<TransformComponent>()!;
+  GizmoHitResult _hitTestHandles(
+    Offset pos,
+    Entity entity,
+    EditorView camera,
+    TransformMode mode,
+    Set<TransformMode>? allows,
+  ) {
+    final transform = entity.getComponent<TransformComponent>();
+    // A piece of interface is selected from the tree like anything else,
+    // but it is nowhere in the world: it has no transform, and the world's
+    // gizmo has nothing to take hold of. Before the tree listed UI
+    // entities this could not happen; once it could, the null check here
+    // threw on every pointer move over the viewport.
+    if (transform == null) return const GizmoHitResult(GizmoHandle.none, null);
     final center = camera.worldToScreen(transform.position.toOffset());
-    final bounds = _computeScreenBounds(entity, transform, camera);
 
-    // Center free-move handle
-    if ((pos - center).distance < _moveHandleHitRadius) {
-      return GizmoHitResult(GizmoHandle.translateXY, entity);
+    switch (mode) {
+      case TransformMode.all:
+        final handle = TransformGizmo.allHandleAt(
+          pos,
+          center,
+          corners: _computeScreenBounds(entity, transform, camera).corners,
+          rotation: transform.angle,
+          scale: allows?.contains(TransformMode.scale) ?? true,
+          rotate: allows?.contains(TransformMode.rotate) ?? true,
+        );
+        return handle == GizmoHandle.none
+            ? const GizmoHitResult(GizmoHandle.none, null)
+            : GizmoHitResult(handle, entity);
+      case TransformMode.move:
+        final handle = TransformGizmo.moveHandleAt(pos, center);
+        return handle == GizmoHandle.none
+            ? const GizmoHitResult(GizmoHandle.none, null)
+            : GizmoHitResult(handle, entity);
+      case TransformMode.scale:
+        final axis = TransformGizmo.scaleAxisAt(pos, center);
+        if (axis != GizmoHandle.none) return GizmoHitResult(axis, entity);
+        final bounds = _computeScreenBounds(entity, transform, camera);
+        final corners = <(Offset, GizmoHandle)>[
+          (bounds.corners[0], GizmoHandle.scaleNW),
+          (bounds.corners[1], GizmoHandle.scaleNE),
+          (bounds.corners[2], GizmoHandle.scaleSE),
+          (bounds.corners[3], GizmoHandle.scaleSW),
+        ];
+        for (final (corner, handle) in corners) {
+          if ((pos - corner).distance < _scaleHandle + 4) {
+            return GizmoHitResult(handle, entity);
+          }
+        }
+      case TransformMode.rotate:
+        if (TransformGizmo.onRing(pos, center, _rotRadius)) {
+          return GizmoHitResult(GizmoHandle.rotate, entity);
+        }
     }
-
-    // Scale corners
-    final corners = <(Offset, GizmoHandle)>[
-      (bounds.corners[0], GizmoHandle.scaleNW),
-      (bounds.corners[1], GizmoHandle.scaleNE),
-      (bounds.corners[2], GizmoHandle.scaleSE),
-      (bounds.corners[3], GizmoHandle.scaleSW),
-    ];
-    for (final (corner, handle) in corners) {
-      if ((pos - corner).distance < _scaleHandle + 4) {
-        return GizmoHitResult(handle, entity);
-      }
-    }
-
-    // Rotation arc dot
-    final rotSweepEnd = Offset(
-      center.dx + _rotRadius * math.cos(transform.rotation + _rotSweep),
-      center.dy + _rotRadius * math.sin(transform.rotation + _rotSweep),
-    );
-    if ((pos - rotSweepEnd).distance < _rotDotRadius) {
-      return GizmoHitResult(GizmoHandle.rotate, entity);
-    }
-
-    // Translate X tip
-    final xTip = center + const Offset(_arrowLength, 0);
-    if ((pos - xTip).distance < _arrowTipRadius) {
-      return GizmoHitResult(GizmoHandle.translateX, entity);
-    }
-
-    // Translate Y tip
-    final yTip = center + const Offset(0, -_arrowLength);
-    if ((pos - yTip).distance < _arrowTipRadius) {
-      return GizmoHitResult(GizmoHandle.translateY, entity);
-    }
-
-    // Axis-scale squares (test after tips so arrowhead wins over shaft overlap)
-    final xSquare = center + const Offset(_axisSquareOffset, 0);
-    if ((pos - xSquare).distance < _axisSquareHitRadius) {
-      return GizmoHitResult(GizmoHandle.scaleX, entity);
-    }
-
-    final ySquare = center + const Offset(0, -_axisSquareOffset);
-    if ((pos - ySquare).distance < _axisSquareHitRadius) {
-      return GizmoHitResult(GizmoHandle.scaleY, entity);
-    }
-
     return const GizmoHitResult(GizmoHandle.none, null);
   }
 }
