@@ -15,7 +15,7 @@ Press **F1** to show or hide the editor over the game.
 | ![The Timeline dock's curves and a motion path drawn in the level](assets/screenshots/editor_timeline.png) | ![A play-test running in the editor, with the Profiler dock](assets/screenshots/editor_play_test.png) |
 | ![A collider edited with handles, the rigid body's card and the Physics Layers dock](assets/screenshots/editor_physics.png) | ![Settings on the Accessibility page](assets/screenshots/editor_settings.png) |
 
-The levels are the templates' showcase scenes: `showcase_2d` and `showcase_2d_cave` (platformer) and `showcase_3d` (third person). The 3D Level Designer is shown with the World Builder kit (`just_world_builder_kit`), and the toolbar's extra buttons come from the modules the templates install (the Asset Store, Sprite Studio, the input and interface editors).
+The levels are the templates' showcase scenes: `showcase_2d` and `showcase_2d_cave` (platformer) and `showcase_3d` (third person). The 3D Level Designer is shown with the World Builder kit (`just_world_builder_kit`), and the toolbar's extra buttons come from the Asset Store and the modules the templates install (Sprite Studio, the input and interface editors).
 
 ## Documentation
 
@@ -103,7 +103,7 @@ flutter run -t lib/main_editor.dart -d windows   # or macos, linux
 - **2-D and 3-D scenes.** A 3-D scene gets an orbit-and-fly view, a 3-D gizmo, picking by ray, a grid on the working plane and placement on surfaces. The editor draws no models itself: the game's renderer does (`just_graphics_engine`). For a game with 3-D graphics (`EngineConfig(graphics3D:)`) the editor brings its 3-D graphics side itself: models in the Assets dock (pictured, dropped into 3-D scenes, imported and cooked), picking by triangles, light and camera aids, and Model, Light and Environment inspector sections.
 - **Scenes are JSON** in `assets/scenes/`, the play order in `scenes.json`, and the game loads the same files. Autosave keeps backups and offers to recover unsaved changes.
 - **Play-testing** in place: Play, Pause, Step, Restart and speed, a preview of what the game camera sees, and the level put back exactly as authored on Stop.
-- **Transform tools**: All (Q), Move (W), Scale (E) and Rotate (R), from a floating toolbar at the top right of the viewport. Moving a parent carries its children.
+- **Transform tools**: All (Q), Move (W), Scale (E) and Rotate (R), from a floating toolbar at the top right of the viewport, with the Asset Store's shop button under it. Moving a parent carries its children.
 - **Snapping**: a move step, rotation and scale steps, smart snapping to other entities and guides, one switch for the whole editor. Ctrl (Cmd on macOS) suspends it mid-drag.
 - **Gizmos per mode**: markers, camera frames, light and sound reach, collider and selection outlines, shown or hidden for the editor, the Level Designer and a play-test, each on its own.
 - **Scene tree**: re-parent, reorder, group, rename, enable, hide, lock, isolate, colour labels, and filters by component, tag, layer or problem.
@@ -117,6 +117,7 @@ flutter run -t lib/main_editor.dart -d windows   # or macos, linux
 - **Problems** lists what is wrong with the open scene, many with a one-click fix.
 - **Settings** (the gear at the foot of the viewport, or Ctrl+,): appearance, accessibility, editing, snapping, viewport, saving, play-testing, the Console, performance and every command's keys, searchable, exported and imported as one file.
 - **Accessibility**: text size, bolder text, high contrast, colour-blind safe colours, reduced motion, longer timings, bigger targets and a visible focus ring.
+- **Asset Store**, built in: plugins, kits, art and sound installed from inside the editor (the shop button under the transform tools, Ctrl+Shift+G, or the Assets dock), each change previewed first ([Plugins and kits](#plugins-and-kits)).
 - **Modules**: a game, a kit or a tool adds to the editor through one class, `EditorModule` ([below](#extending-the-editor)).
 - **Hot reload**: **r** brings the registries, the modules, the component definitions and the docks up to the code; **R** starts clean.
 
@@ -158,6 +159,7 @@ Every command's keys can be changed in **Settings → Keyboard** (Ctrl+,); these
 | `F` / `Shift+F` | Frame the selection / everything (3-D) |
 | Numpad `1` `3` `7` (Ctrl for the other side) | Look from the front, right, above (3-D) |
 | `X` | World or local gizmo (3-D) |
+| `Ctrl+Shift+G` | Open the Asset Store |
 
 **In the Level Designer:**
 
@@ -235,7 +237,7 @@ A module can bring prefabs and tools, overlays, snap providers and a grid to the
 
 Everything a module contributes is rebuilt from the modules on every reload of the editor's registries, so nothing piles up across hot reloads. `onRegister` runs once; `onReassemble` after each hot reload.
 
-The editor's own tools arrive the same way: `BuiltInEditorModule` (field editors, commands, prefabs, workspaces and the rest), `BuiltInMaterialsModule` (materials, in `package:just_game_engine_editor/materials.dart`) and, for a game with 3-D graphics, `BuiltInGraphicsModule` (models, lights and the environment, in `package:just_game_engine_editor/graphics.dart`) are registered ahead of every other module, so a module replaces any of it by reusing an id. `JustGameEditorPlugin.builtInsFor(engine)` lists them for a game.
+The editor's own tools arrive the same way: `BuiltInEditorModule` (field editors, commands, prefabs, workspaces and the rest), `BuiltInMaterialsModule` (materials, in `package:just_game_engine_editor/materials.dart`), `BuiltInAssetStoreModule` (the Asset Store, in `package:just_game_engine_editor/asset_store.dart`) and, for a game with 3-D graphics, `BuiltInGraphicsModule` (models, lights and the environment, in `package:just_game_engine_editor/graphics.dart`) are registered ahead of every other module, so a module replaces any of it by reusing an id. `JustGameEditorPlugin.builtInsFor(engine)` lists them for a game.
 
 | First-party module | Package | What it adds |
 |--------|---------|--------------|
@@ -245,7 +247,6 @@ The editor's own tools arrive the same way: `BuiltInEditorModule` (field editors
 | `UiEditorModule` | `just_ui_editor` | The game's screens (`assets/ui/*.ui.json`) and themes |
 | `SpriteStudioModule` | `just_sprite_editor` | Sprite sheets, atlases and animator graphs |
 | `InputEditorModule` | `just_input_editor` | The input actions asset |
-| `AssetStoreModule` | `just_asset_store_editor` | The Asset Store window |
 | `MaterialEditorModule` | `just_material_editor` | Room for advanced material tools beside the built-in ones |
 
 ---
@@ -263,7 +264,7 @@ In the Asset Store, a plugin is an item of kind `editor-extension` and a kit an 
 
 ### Adding one
 
-**From the Asset Store.** Ctrl+Shift+G (Cmd+Shift+G on macOS) opens the store window, to browse, install, update and remove items. The same store runs from a terminal in the project folder:
+**From the Asset Store**, which is part of the editor. The shop button under the transform tools (top right of the viewport), Ctrl+Shift+G (Cmd+Shift+G on macOS), or *Get assets from the store* on `assets/` in the Assets dock opens the store window, to browse, install, update and remove items. The same store (`just_asset_store`) runs from a terminal in the project folder:
 
 ```bash
 just add just_sprite_editor      # just store install
@@ -271,7 +272,7 @@ just remove just_sprite_editor   # just store uninstall
 just store list
 ```
 
-The store puts the package in `packages/{category}/{name}/`, adds it to `pubspec.yaml` (a plugin under `dev_dependencies`) and rewrites two generated files:
+The store puts a plugin or a kit in `plugins/{category}/{name}/` (content, such as art and sound, in `packages/{category}/{name}/`), adds it to `pubspec.yaml` (a plugin under `dev_dependencies`) and rewrites two generated files:
 
 - `lib/editor/store_modules.g.dart`: `storeModules()`, the editor modules of every installed item, spread into the editor entry point's `modules`
 - `lib/game/store_extensions.g.dart`: `storeExtensions`, the engine extensions of every installed kit, spread into the game's `EngineConfig(extensions: …)`

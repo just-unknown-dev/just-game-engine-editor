@@ -145,16 +145,18 @@ void main() {
   ) async {
     final module = _EditedModule();
     final plugin = await pumpEditor(tester, modules: [module]);
-    expect(plugin.scope.toolbarButtons.map((b) => b.id), ['test.first']);
+    // The module's own, beside the editor's (the Asset Store's shop button).
+    List<String> moduleButtons() => [
+      for (final b in plugin.scope.toolbarButtons)
+        if (b.id.startsWith('test.')) b.id,
+    ];
+    expect(moduleButtons(), ['test.first']);
 
     module.buttons = ['test.first', 'test.second']; // the edit
     await hotReload(tester);
     await tester.pump();
 
-    expect(plugin.scope.toolbarButtons.map((b) => b.id), [
-      'test.first',
-      'test.second',
-    ]);
+    expect(moduleButtons(), ['test.first', 'test.second']);
   });
 
   testWidgets('onRegister runs once; onReassemble once per reload', (

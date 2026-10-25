@@ -41,7 +41,7 @@ A bug report should have:
 - for a keyboard bug, the keyboard layout, and whether you changed the key in Settings → Keyboard;
 - for a layout or drawing bug, a screenshot, the window size, and your Appearance and Accessibility settings.
 
-Some bugs belong elsewhere. If the scene misbehaves in the game too, outside the editor, the bug is in `just_game_engine` (or `just_physics_engine`, for the simulation). The scene format, its migrations and the starter scenes belong to `just_game_engine_formats`; parsing Tiled files to `just_tiled` (turning them into a Level Map is this package's job); the colour picker to `just_colours`. A module's tools belong to its package: the interface editor to `just_ui_editor`, the Sprite Studio to `just_sprite_editor`, the Input Actions editor to `just_input_editor`, the Asset Store window to `just_asset_store_editor`, and a kit's prefabs and tools to `just_platformer_kit` or `just_third_person_kit`. The `just` command is `just_core_cli`, and its game commands (`just game scene`, `just game build`) are `just_game_engine_cli`.
+Some bugs belong elsewhere. If the scene misbehaves in the game too, outside the editor, the bug is in `just_game_engine` (or `just_physics_engine`, for the simulation). The scene format, its migrations and the starter scenes belong to `just_game_engine_formats`; parsing Tiled files to `just_tiled` (turning them into a Level Map is this package's job); catalogs, install plans and installs to `just_asset_store` (the Asset Store window is this package's); the colour picker to `just_colours`. A module's tools belong to its package: the interface editor to `just_ui_editor`, the Sprite Studio to `just_sprite_editor`, the Input Actions editor to `just_input_editor`, and a kit's prefabs and tools to `just_platformer_kit` or `just_third_person_kit`. The `just` command is `just_core_cli`, and its game commands (`just game scene`, `just game build`) are `just_game_engine_cli`.
 
 For a feature, open an issue labelled **`enhancement`** that describes the problem it solves and how it should behave. The package's scope is editing a `just_game_engine` game's scenes from inside the running game: the overlay, the scene tree and inspector, the Level Designer and Level Map, play-testing, the docks and settings, and the `EditorModule` API that everything else plugs in through. A tool for one kind of asset or one genre belongs in a module of its own, as the sprite, interface and input editors are. A change to what the editor saves affects every game's levels, and a change to `EditorModule` affects every module, so open the issue first and agree the approach before you write it.
 
@@ -72,7 +72,7 @@ If `flutter pub get` cannot find a version of a `just_*` package, that version i
 To see a change running:
 
 - **The example app.** `example/` is a bare engine with the editor over it. Run it with `cd example` and `flutter run -d windows` (or `macos`, `linux`). Its `pubspec.yaml` takes the published `just_game_engine` and this checkout (`path: ../`); to run it against unreleased `just_*` versions, override them in a git-ignored `example/pubspec_overrides.yaml`, as below.
-- **A game.** Point the game's `pubspec_overrides.yaml` at your checkout; in a project made with `just create`, `just dev link <folder>` does that for every `just_*` checkout in `<folder>`. Then start the game's editor entry point in a debug build (see [QUICKSTART.md](QUICKSTART.md)).
+- **A game.** Point the game's `pubspec_overrides.yaml` at your checkout; in a project made with `just create`, `just dev link <folder>...` does that for every `just_*` checkout in the folders you name (in the template workspace, `packages` and `plugins`). Then start the game's editor entry point in a debug build (see [QUICKSTART.md](QUICKSTART.md)).
 
 The editor writes scenes, backups and logs relative to the working directory. Leave them out of your pull request.
 
@@ -97,7 +97,7 @@ List only what you have checked out. `just_game_engine` has `just_*` dependencie
 
 Do not change `pubspec.yaml` to a path dependency. If your pull request needs a version of a `just_*` package that is not published yet, say so in the pull request: this package can only be released after it.
 
-Eight packages build on `just_editor_core`, each with an `EditorModule` of its own: the modules `just_ui_editor`, `just_sprite_editor`, `just_input_editor`, `just_material_editor` and `just_asset_store_editor`, and the kits `just_platformer_kit`, `just_third_person_kit` and `just_world_builder_kit`; three of them (the interface and material editors and the World Builder kit) take this package too. If you change the public API, above all `EditorModule`, say in the pull request what they will need.
+Seven packages build on `just_editor_core`, each with an `EditorModule` of its own: the modules `just_ui_editor`, `just_sprite_editor`, `just_input_editor` and `just_material_editor`, and the kits `just_platformer_kit`, `just_third_person_kit` and `just_world_builder_kit`; three of them (the interface and material editors and the World Builder kit) take this package too. If you change the public API, above all `EditorModule`, say in the pull request what they will need.
 
 ---
 

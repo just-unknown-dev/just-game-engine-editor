@@ -47,6 +47,7 @@ import '../level_map/tile_commands.dart';
 import '../../ui/level_designer/tools/tiles/tile_tool_base.dart';
 import '../../extension/built_in_editor_module.dart';
 import '../../extension/built_in_lighting_2d_contributions.dart';
+import '../../asset_store/asset_store.dart';
 import '../../graphics/built_in_graphics_module.dart';
 import '../../materials/built_in_materials_module.dart';
 import '../../ui/overlay/camera_rig_painter.dart';
@@ -187,15 +188,17 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   /// The editor's own modules for [engine]'s game, as a scope takes them
-  /// (`EditorScope(builtIns: …)`): the editor's tools and materials always,
-  /// and 3-D graphics — models, lights, the environment — for a game that
-  /// has them ([BuiltInGraphicsModule.isFor]).
+  /// (`EditorScope(builtIns: …)`): the editor's tools, materials and the
+  /// Asset Store ([BuiltInAssetStoreModule], for plugins, kits and assets)
+  /// always, and 3-D graphics — models, lights, the environment — for a
+  /// game that has them ([BuiltInGraphicsModule.isFor]).
   static List<EditorModule Function(EditorScope scope)> builtInsFor(
     Engine engine,
   ) => [
     BuiltInEditorModule.new,
     BuiltInMaterialsModule.make,
     if (BuiltInGraphicsModule.isFor(engine)) BuiltInGraphicsModule.make,
+    BuiltInAssetStoreModule.make,
   ];
 
   /// The game's engine: the editor edits its world and draws over it.

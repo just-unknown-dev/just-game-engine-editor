@@ -35,6 +35,8 @@ just_editor_core/lib/
 
 just_game_engine_editor/lib/
 ├── just_game_engine_editor.dart   ← the public library (and the core's, re-exported)
+├── asset_store.dart               ← BuiltInAssetStoreModule: the Asset Store
+├── graphics.dart                  ← BuiltInGraphicsModule, model cooking and model pictures
 ├── materials.dart                 ← BuiltInMaterialsModule and the normal map maker
 └── src/
     ├── core/
@@ -61,6 +63,9 @@ just_game_engine_editor/lib/
     │                          tags, tiles, 3-D physics, row decorations
     ├── integration/         ← JustGameEngineEditor
     ├── debugger/            ← the engine's debugger, attached to the plugin
+    ├── asset_store/         ← BuiltInAssetStoreModule: the store window, its controller, settings and checks,
+    │                          and its web stand-in (see The Asset Store)
+    ├── graphics/            ← BuiltInGraphicsModule: models, lights and the environment, for 3-D games
     ├── materials/           ← BuiltInMaterialsModule: the 2-D and 3-D Material windows, their pictures,
     │                          presets, checks, inspector editors and importers (see Materials)
     └── ui/
@@ -116,7 +121,7 @@ Each is added only if the world has none. What runs depends on whether the edito
 
 ### `EditorScope`
 
-Everything one editor owns, in a `just_di` container (`just_editor_core/lib/src/scope/editor_scope.dart`): the component definitions, the `SceneCodec`, the scene store (`scenes`), the field-editor, extras, prefab, layer, command and module registries, the undo stack (`history`), the preferences (`prefs`), the theme, the chrome state, the log, the `EditorSceneState`, hide and lock (`view`), the project's tags, physics layers and colours, and the editor's view and camera brain (`editorView`, `cameraBrain`). The services only the editor uses — the dock controller, `EntityOps` (`entities`), the Level Map's (`mapDocs`, `tiles`, `mapProvision`) — are this package's: `EditorScopeServices` (`lib/src/core/scope/editor_scope_services.dart`) puts them on the scope as getters, each registered in its container the first time it is asked for. The scope holds no built-ins of its own either: the editor makes it with `builtIns: [BuiltInEditorModule.new, BuiltInMaterialsModule.make]` (the plugin adds both to a scope it is handed), modules registered ahead of every other whose Level Designer contributions are live whichever designer is chosen; `modules.all` lists the others, `modules.withBuiltIns` both. There are no process-wide registries: two scopes share nothing, and `reload()` rebuilds every registry from the built-in module and the registered `EditorModule`s, so nothing accumulates across hot reloads; a module's `onRegister` runs on its first pass only, and `reassemble()` (a hot reload) runs each module's `onReassemble` and remakes the theme presets before rebuilding. `EditorScopeProvider` makes it available to a widget subtree.
+Everything one editor owns, in a `just_di` container (`just_editor_core/lib/src/scope/editor_scope.dart`): the component definitions, the `SceneCodec`, the scene store (`scenes`), the field-editor, extras, prefab, layer, command and module registries, the undo stack (`history`), the preferences (`prefs`), the theme, the chrome state, the log, the `EditorSceneState`, hide and lock (`view`), the project's tags, physics layers and colours, and the editor's view and camera brain (`editorView`, `cameraBrain`). The services only the editor uses — the dock controller, `EntityOps` (`entities`), the Level Map's (`mapDocs`, `tiles`, `mapProvision`) — are this package's: `EditorScopeServices` (`lib/src/core/scope/editor_scope_services.dart`) puts them on the scope as getters, each registered in its container the first time it is asked for. The scope holds no built-ins of its own either: the editor makes it with `builtIns: JustGameEditorPlugin.builtInsFor(engine)` — `BuiltInEditorModule`, `BuiltInMaterialsModule`, `BuiltInAssetStoreModule`, and `BuiltInGraphicsModule` for a game with 3-D graphics — (the plugin adds them to a scope it is handed), modules registered ahead of every other whose Level Designer contributions are live whichever designer is chosen; `modules.all` lists the others, `modules.withBuiltIns` both. There are no process-wide registries: two scopes share nothing, and `reload()` rebuilds every registry from the built-in module and the registered `EditorModule`s, so nothing accumulates across hot reloads; a module's `onRegister` runs on its first pass only, and `reassemble()` (a hot reload) runs each module's `onReassemble` and remakes the theme presets before rebuilding. `EditorScopeProvider` makes it available to a widget subtree.
 
 The scope also holds what the editor is doing: `activeWorkspace`, `activeDesigner`, `isPlayTesting`, `spawners` (read at Play), `hiddenOverlays`, `highlightedLayer` and `highlightedTag`, and `authoredStateGuards` (below).
 
@@ -215,12 +220,16 @@ In 2-D, `GizmoPainter` draws one of Move, Scale or Rotate, as `scope.view.transf
 
 ## Materials
 
-Materials are the editor's own module, `BuiltInMaterialsModule` (`lib/src/materials/`, exported with the normal map maker by `lib/materials.dart`), one of the two built-ins every scope is made with (`BuiltInMaterialsModule.make`). The engine draws materials and reads a changed file again; the module is how they are made, seen and edited.
+Materials are the editor's own module, `BuiltInMaterialsModule` (`lib/src/materials/`, exported with the normal map maker by `lib/materials.dart`), one of the built-ins every editor's scope is made with (`BuiltInMaterialsModule.make`). The engine draws materials and reads a changed file again; the module is how they are made, seen and edited.
 
 - **Kinds and pictures.** It adds the asset kinds for 3-D (`.material.json`) and 2-D (`.material2d.json`) materials. `MaterialPictures` renders a 3-D material off screen with the 3-D renderer — no engine, no scene — one at a time, and keeps each picture in `.dart_tool/just_game_engine_editor/material_pictures` until the file, or a map, layer or parent it uses, changes; where there is no GPU (a test, the web, Flutter GPU off) a picture is null and the dock shows the icon. `Material2DPictures` draws a 2-D one on what fits it.
 - **The windows.** `MaterialWorkspace` (3-D) and `Material2DWorkspace` (2-D) are workspaces opened for the material files, built from one kit (`material_window_kit.dart`: `MaterialCard`, `MaterialCardFolds`, `PanelResizeHandle`, `PreviewChip`, `ZoomControls`, `ShortcutsHint`): the material's values in cards on the left, a preview under one toolbar, the same keys. The 2-D preview is drawn by the engine itself (`Material2DStage`). While a window is open the material is drawn live in the scene, and the level under the window is drawn four times a second (`JustGameEditorPlugin.drawIntervalUnderWorkspace`, through `RenderingEngine.drawInterval`) so the window keeps its frame rate.
 - **The rest of the module**: asset actions (New material, New 2D material, New screen material, New variant, materials from texture sets with `TextureSets`, a model's materials with `ModelMaterials`, normal maps with `NormalMaps`), drops of a material on what it draws (one undo step), the inspector's editors for an entity's own material values (`MaterialOverridesEditor`), and the checks (`MaterialChecks`).
 - **Adding to the windows.** Another module adds tools, sections and preview overlays through the workspace contributions (*Workspaces*), by `WorkspaceIds.material` and `WorkspaceIds.material2D`; `just_material_editor` is such a module.
+
+## The Asset Store
+
+The store is the editor's own module too, `BuiltInAssetStoreModule` (`lib/src/asset_store/`, exported by `lib/asset_store.dart`), in every game's editor: plugins and kits are added to a project through it. It drives `just_asset_store` — the planner, installer and checks `just store …` runs — through `StoreController` (one per session: the catalogs, the project's lock, the filters, the running install), shows `StoreWindow` as a workspace (`asset_store`), and adds the shop button in the column under the transform tools (`ToolbarSlot.toolColumn`, drawn by `ToolColumnButtons`) with its start-card tile and tip, the Ctrl+Shift+G command, the Assets dock's two actions, a settings page and `StoreChecks` for Problems. `onRegister` rolls back an install a crash left half done. What it installs registers through the project's generated `lib/editor/store_modules.g.dart` and `lib/game/store_extensions.g.dart`, never by editing the entry point, so a broken generated file can't take the store down, and the store can always repair it. The store works on files and runs pub, which the web lacks: `just_asset_store` leaves that part out there, and `src/asset_store/asset_store.dart` exports an empty module of the same name on the web (`built_in_asset_store_module_web.dart`), so nothing the web compiles reaches `dart:io`.
 
 ## The inspector: definitions, field editors, extras
 

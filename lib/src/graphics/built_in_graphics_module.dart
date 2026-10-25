@@ -1,8 +1,8 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
+import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart';
 import 'package:just_game_engine/graphics_3d.dart';
 import 'package:just_game_engine/just_game_engine.dart';

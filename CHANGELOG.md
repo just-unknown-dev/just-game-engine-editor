@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-dev.2
+
+- **The Asset Store is part of the editor.** `BuiltInAssetStoreModule` (in `asset_store.dart`) comes with every game's editor, as the materials do, so plugins, kits, art and sound can always be added from inside it: the shop button under the transform tools (always shown, with its tile and tip on the start card), Ctrl+Shift+G (Cmd+Shift+G on macOS), or *Get assets from the store* in the Assets dock. It takes the place of the `just_asset_store_editor` package, which is retired. The editor now depends on `just_asset_store` ^0.1.1, the store's core: plugins and kits it installs go into `plugins/{category}/{name}/`, content into `packages/{category}/{name}/`.
+- **WebAssembly again.** The 3-D graphics files reach files through `package:just_editor_core/io.dart` instead of `dart:io`, so the package is wasm-ready again; the store's own files never compile on the web (an empty module stands in for it there).
+
 ## 0.1.0-dev.1
 
 First release: a level editor that runs inside a `just_game_engine` game in a debug build. The package compiles on every Flutter platform (web and wasm too); editing runs on Windows, macOS and Linux. Elsewhere, and in a profile or release build, `JustGameEditorPlugin.register` returns null (`supportsPlatform` says why) and the game runs on its own. Needs `just_game_engine` ^2.0.0-dev.2, Flutter 3.47.1 and Dart 3.11.

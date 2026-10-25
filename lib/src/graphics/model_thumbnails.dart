@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:just_editor_core/io.dart';
 import 'package:just_game_engine/graphics_3d.dart';
 
 /// Pictures of model files for the Assets dock and the palettes, rendered

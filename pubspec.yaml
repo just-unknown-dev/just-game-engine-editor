@@ -1,6 +1,6 @@
 name: just_game_engine_editor
-description: "A level editor that runs inside your just_game_engine game while you develop it: scenes, inspector, 2D and 3D level design, timelines, tilesets, materials."
-version: 0.1.0-dev.1
+description: "A level editor that runs inside your just_game_engine game while you develop it: scenes, inspector, 2D and 3D level design, timelines, tilesets, materials, an Asset Store."
+version: 0.1.0-dev.2
 homepage: https://justunknown.com
 repository: https://github.com/just-unknown-dev/just-game-engine-editor
 issue_tracker: https://github.com/just-unknown-dev/just-game-engine-editor/issues
@@ -59,6 +59,10 @@ dependencies:
   just_tiled: ^0.4.1
   just_signals: ^1.0.2
   just_debugger: ^0.0.1
+  # The Asset Store's core: catalogs, downloads, checks and installs, the
+  # same code `just store …` runs. The editor's store window drives it to
+  # add plugins, kits and assets to a project.
+  just_asset_store: ^0.1.1
 
 dev_dependencies:
   # GPU checks and pixel reads for the material tests that render.

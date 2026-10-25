@@ -1,8 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:just_editor_core/io.dart';
 import 'package:just_game_engine/graphics_3d.dart';
+
+import 'cooked_head.dart' if (dart.library.js_interop) 'cooked_head_web.dart';
 
 /// Import settings and cooking for the project's models, on disk.
 ///
@@ -63,22 +64,8 @@ final class ModelCooking {
     if (!source.existsSync()) return false;
     final cooked = _file(ModelImportSettings.cookedOf(path));
     if (!cooked.existsSync()) return true;
-    final stamp = CookedModel.stampOf(_head(cooked));
+    final stamp = CookedModel.stampOf(readCookedHead(cooked.path));
     return stamp != cookStamp(source.readAsBytesSync(), settingsOf(path));
-  }
-
-  // The header holds the stamp: no need to read the textures behind it.
-  static Uint8List _head(File file) {
-    final raf = file.openSync();
-    try {
-      final first = raf.readSync(12);
-      if (first.length < 12) return first;
-      final n = ByteData.sublistView(first).getUint32(8, Endian.little);
-      raf.setPositionSync(0);
-      return raf.readSync(12 + n);
-    } finally {
-      raf.closeSync();
-    }
   }
 
   /// Cooks the model at [path] with its settings, writing its cooked copy.
