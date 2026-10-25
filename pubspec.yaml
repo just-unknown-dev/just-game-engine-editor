@@ -62,7 +62,7 @@ dependencies:
   # The Asset Store's core: catalogs, downloads, checks and installs, the
   # same code `just store …` runs. The editor's store window drives it to
   # add plugins, kits and assets to a project.
-  just_asset_store: ^0.1.1
+  just_asset_store: ^0.2.0
 
 dev_dependencies:
   # GPU checks and pixel reads for the material tests that render.

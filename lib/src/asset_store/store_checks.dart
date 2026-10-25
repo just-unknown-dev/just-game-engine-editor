@@ -115,7 +115,32 @@ class StoreChecks {
     final catalog = controller.catalog?.catalog;
     if (catalog != null) {
       for (final e in lock.items.entries) {
+        final removal = catalog.removal(e.key, source: e.value.source);
+        if (removal != null) {
+          out.add(
+            SceneProblem(
+              severity: ProblemSeverity.error,
+              message: '${e.key} was taken down by the store: '
+                  '${removal.reason}',
+              hint: 'Uninstall it in the Asset Store.',
+            ),
+          );
+          continue;
+        }
         final item = catalog.entry(e.key)?.item;
+        if (item != null && item.stage == ItemStage.deprecated) {
+          final by = item.replacedBy;
+          out.add(
+            SceneProblem(
+              message: '${item.name} is deprecated: it is no longer '
+                  'developed.',
+              hint: by == null
+                  ? 'Look for another in the Asset Store.'
+                  : 'Install ${catalog.entry(by)?.item.name ?? by} instead, '
+                        'in the Asset Store.',
+            ),
+          );
+        }
         final version = Version.tryParse(e.value.version);
         final listed = version == null ? null : item?.versionOf(version);
         if (listed != null && listed.blocked) {

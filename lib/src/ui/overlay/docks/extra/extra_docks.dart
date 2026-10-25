@@ -479,6 +479,10 @@ class _AnimatorMonitorDockState extends State<AnimatorMonitorDock> {
     }
     final graph = _system?.graphOf(entity);
     final sprite = entity.getComponent<jge.SpriteAnimationComponent>();
+    // The clip its state plays, from the graph: the sprite's own clip field
+    // is what was authored, not what the animator chose.
+    final clip =
+        graph?.stateNamed(animator.currentState)?.clipName ?? sprite?.clip;
     final bound = {
       for (final p in graph?.parameters ?? const <jge.AnimatorParameter>[])
         if (p.binding != null) p.name: p.binding!,
@@ -510,7 +514,7 @@ class _AnimatorMonitorDockState extends State<AnimatorMonitorDock> {
                         'from ${animator.previousState}',
                       '${animator.stateTime.toStringAsFixed(2)} s',
                       if (sprite != null)
-                        'clip ${sprite.clip} · frame ${sprite.frameIndex + 1}',
+                        'clip $clip · frame ${sprite.frameIndex + 1}',
                     ].join('  ·  '),
                     style: TextStyle(
                       color: EditorTheme.textMuted,

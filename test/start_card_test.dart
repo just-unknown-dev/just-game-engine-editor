@@ -127,6 +127,8 @@ void main() {
 
       expect(find.byType(EditorStartCover), findsOneWidget);
       expect(find.text('Just Game Engine Editor'), findsOneWidget);
+      // The editor says how finished it is, as store plugins do.
+      expect(find.text('BETA'), findsOneWidget);
       expect(find.byTooltip('Play  (F5)'), findsNothing);
       expect(find.byType(QuickSnapBar), findsNothing);
       expect(find.byTooltip('Move  (W)'), findsNothing);

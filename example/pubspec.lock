@@ -200,10 +200,10 @@ packages:
   just_asset_store:
     dependency: "direct overridden"
     description:
-      path: "../../../../../JustAssetStore/just_asset_store_site/packages/just_asset_store"
+      path: "../../just_asset_store"
       relative: true
     source: path
-    version: "0.1.1"
+    version: "0.2.0"
   just_audio_engine:
     dependency: "direct overridden"
     description:
@@ -226,13 +226,12 @@ packages:
     source: path
     version: "0.1.0"
   just_core_cli:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: just_core_cli
-      sha256: "32d8435c53cba740316066b160f24d542000198ec8f95dce6b1f8728c02df431"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.1.1"
+      path: "../../just_core_cli"
+      relative: true
+    source: path
+    version: "0.1.2"
   just_dart:
     dependency: "direct overridden"
     description:

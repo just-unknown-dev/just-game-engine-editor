@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:just_asset_store/just_asset_store.dart';
 import 'package:just_editor_core/io.dart';
@@ -117,14 +119,18 @@ class _StoreWindowState extends State<StoreWindow> {
         colour: EditorTheme.error,
         text: 'The store cannot read this project: ${c.projectError}',
       ),
-    for (final s in c.troubledSources)
-      _Banner(
-        icon: s.loaded ? Icons.cloud_off_rounded : Icons.error_outline_rounded,
-        colour: s.loaded ? EditorTheme.info : EditorTheme.warning,
-        text: s.loaded
-            ? 'Offline: showing the ${s.name} catalog as last downloaded.'
-            : 'Could not read ${s.name}: ${s.error}',
-      ),
+    // When no catalog could be read, the page itself says so.
+    if (!c.unreachable)
+      for (final s in c.troubledSources)
+        _Banner(
+          icon: s.loaded
+              ? Icons.cloud_off_rounded
+              : Icons.error_outline_rounded,
+          colour: s.loaded ? EditorTheme.info : EditorTheme.warning,
+          text: s.loaded
+              ? 'Offline: showing the ${s.name} catalog as last downloaded.'
+              : 'Could not read ${s.name}. ${s.problem}',
+        ),
   ];
 
   Widget _page() {
@@ -139,7 +145,11 @@ class _StoreWindowState extends State<StoreWindow> {
               onAction: () => c.load(refresh: true),
             );
     }
+    if (c.tab != StoreTab.installed && (c.unreachable || c.noSources)) {
+      return _Unreachable(controller: c);
+    }
     final items = c.shown;
+    final kinds = c.kindCounts;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -152,16 +162,40 @@ class _StoreWindowState extends State<StoreWindow> {
               (ItemKind.kit, 'Kits'),
               (ItemKind.runtimeLibrary, 'Libraries'),
             ])
+              // A kind with nothing to show here is left out.
+              if (kind == null || c.kind == kind || (kinds[kind] ?? 0) > 0)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: EditorChip(
+                    label: label,
+                    selected: c.kind == kind,
+                    onTap: () => c.filterKind(kind),
+                  ),
+                ),
+            const Spacer(),
+            if (c.tab == StoreTab.browse)
               Padding(
-                padding: const EdgeInsets.only(right: 4),
+                padding: const EdgeInsets.only(right: 6),
                 child: EditorChip(
-                  label: label,
-                  selected: c.kind == kind,
-                  onTap: () => c.filterKind(kind),
+                  label: 'Show experimental',
+                  selected: c.showExperimental,
+                  onTap: () => c.showExperimental = !c.showExperimental,
                 ),
               ),
-            const Spacer(),
-            if (c.tab == StoreTab.updates && items.isNotEmpty)
+            SizedBox(
+              width: 150,
+              child: EditorDropdown<StoreSort>(
+                value: c.sort,
+                tooltip: 'Sort by',
+                options: [
+                  for (final s in StoreSort.values)
+                    EditorDropdownOption(value: s, label: s.label),
+                ],
+                onChanged: c.sortBy,
+              ),
+            ),
+            if (c.tab == StoreTab.updates && items.isNotEmpty) ...[
+              const SizedBox(width: 6),
               EditorButton(
                 label: 'Update all',
                 icon: Icons.system_update_alt_rounded,
@@ -176,6 +210,7 @@ class _StoreWindowState extends State<StoreWindow> {
                         subject: 'every item',
                       ),
               ),
+            ],
           ],
         ),
         Expanded(
@@ -195,20 +230,125 @@ class _StoreWindowState extends State<StoreWindow> {
                       ? 'Try other words, or every category.'
                       : null,
                 )
-              : GridView.builder(
-                  padding: const EdgeInsets.all(12),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 220,
-                    mainAxisExtent: 214,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemCount: items.length,
-                  itemBuilder: (context, i) =>
-                      ItemCard(controller: c, entry: items[i]),
-                ),
+              : _grid(items),
         ),
       ],
+    );
+  }
+
+  /// Cards with a 16:9 picture: each row's height follows the cards' width,
+  /// so every picture keeps its shape at any window size.
+  Widget _grid(List<CatalogEntry> items) => LayoutBuilder(
+    builder: (context, box) {
+      const pad = 12.0, gap = 10.0, widest = 250.0;
+      final width = box.maxWidth - pad * 2;
+      final columns = math.max(1, (width / (widest + gap)).ceil());
+      final cardWidth = (width - gap * (columns - 1)) / columns;
+      return GridView.builder(
+        padding: const EdgeInsets.all(pad),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: columns,
+          mainAxisExtent: (cardWidth - 2) * 9 / 16 + ItemCard.infoHeight,
+          crossAxisSpacing: gap,
+          mainAxisSpacing: gap,
+        ),
+        itemCount: items.length,
+        itemBuilder: (context, i) => ItemCard(controller: c, entry: items[i]),
+      );
+    },
+  );
+}
+
+/// The page when no catalog can be read: why, what still works, and what
+/// to try.
+class _Unreachable extends StatelessWidget {
+  const _Unreachable({required this.controller});
+
+  final StoreController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    final installed = c.listedInstalled.length;
+    final problems = {
+      for (final s in c.catalog?.sources ?? const <SourceStatus>[]) ?s.problem,
+    };
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                c.noSources ? Icons.dns_outlined : Icons.cloud_off_rounded,
+                size: 44,
+                color: EditorTheme.textMuted,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                c.noSources
+                    ? 'No catalogs are turned on'
+                    : "Can't reach the Asset Store",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: EditorTheme.textPrimary,
+                  fontSize: EditorMetrics.fontHeading,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                [
+                  if (c.noSources)
+                    'Turn one on, or add one, in Sources.'
+                  else ...[
+                    ...problems,
+                    'Everything you have installed still works.',
+                  ],
+                ].join('\n'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: EditorTheme.textSecondary,
+                  fontSize: EditorMetrics.fontBody,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  if (!c.noSources)
+                    EditorButton(
+                      label: c.loading ? 'Trying…' : 'Try again',
+                      icon: Icons.refresh_rounded,
+                      kind: EditorButtonKind.primary,
+                      onPressed: c.loading ? null : () => c.load(refresh: true),
+                    ),
+                  if (installed > 0)
+                    EditorButton(
+                      label: 'See what is installed ($installed)',
+                      icon: Icons.inventory_2_outlined,
+                      kind: EditorButtonKind.ghost,
+                      onPressed: () => c.show(StoreTab.installed),
+                    ),
+                  EditorButton(
+                    label: 'Sources',
+                    icon: Icons.dns_outlined,
+                    kind: c.noSources
+                        ? EditorButtonKind.primary
+                        : EditorButtonKind.ghost,
+                    onPressed: () => c.show(StoreTab.sources),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -267,7 +407,7 @@ class _Sidebar extends StatelessWidget {
             'Installed',
             Icons.inventory_2_outlined,
             selected: c.tab == StoreTab.installed,
-            count: c.lock.items.length,
+            count: c.listedInstalled.length,
             onTap: () => c.show(StoreTab.installed),
           ),
           row(
@@ -362,12 +502,16 @@ class _SidebarRow extends StatelessWidget {
   );
 }
 
-/// One item in the grid: its picture, name, maker and state.
+/// One item in the grid: its picture (with whether it is installed), name,
+/// maker, a line about it, and where it comes from and how finished it is.
 class ItemCard extends StatelessWidget {
   const ItemCard({super.key, required this.controller, required this.entry});
 
   final StoreController controller;
   final CatalogEntry entry;
+
+  /// The height of everything under the picture.
+  static const double infoHeight = 112;
 
   @override
   Widget build(BuildContext context) {
@@ -375,7 +519,10 @@ class ItemCard extends StatelessWidget {
     final item = entry.item;
     final selected = c.selected == item.id;
     final installed = c.installed(item.id);
-    final update = installed == null ? null : c.updateFor(item.id);
+    // A checkout of your own says Local, which is installed already.
+    final linked = installed?.origin == ItemOrigin.linked;
+    final update = installed == null || linked ? null : c.updateFor(item.id);
+    final stage = item.stage;
     return Material(
       color: EditorTheme.surfaceBg,
       borderRadius: BorderRadius.circular(EditorMetrics.radiusMd),
@@ -395,62 +542,86 @@ class ItemCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: ItemPicture(controller: c, entry: entry),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Text(
-                      item.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: EditorTheme.textPrimary,
-                        fontSize: EditorMetrics.fontBody + 1,
-                        fontWeight: FontWeight.w600,
+                    ItemPicture(controller: c, entry: entry),
+                    if (update != null)
+                      _StatePill(
+                        icon: Icons.system_update_alt_rounded,
+                        label: 'Update ${update.version}',
+                        colour: EditorTheme.accent,
+                      )
+                    else if (installed != null && !linked)
+                      _StatePill(
+                        icon: Icons.check_rounded,
+                        label: 'Installed',
+                        colour: EditorTheme.success,
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      [
-                        item.author?.name ?? item.publisher,
-                        kindLabel(item.kind),
-                      ].join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: EditorTheme.textMuted,
-                        fontSize: EditorMetrics.fontLabel,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: [
-                        if (update != null)
-                          EditorBadge(
-                            label: 'UPDATE ${update.version}',
-                            accent: EditorTheme.accent,
-                            showDot: true,
-                          )
-                        else if (installed != null)
-                          EditorBadge(
-                            label: 'INSTALLED',
-                            accent: EditorTheme.success,
-                          ),
-                        TrustBadge(trust: item.trust),
-                        if (item.pricing.isFree)
-                          EditorBadge(
-                            label: 'FREE',
-                            accent: EditorTheme.textMuted,
-                          ),
-                      ],
-                    ),
                   ],
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: EditorTheme.textPrimary,
+                          fontSize: EditorMetrics.fontBody + 1,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        [
+                          item.author?.name ?? item.publisher,
+                          kindLabel(item.kind),
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: EditorTheme.textMuted,
+                          fontSize: EditorMetrics.fontLabel,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        item.summary,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: EditorTheme.textSecondary,
+                          fontSize: EditorMetrics.fontLabel,
+                          height: 1.35,
+                        ),
+                      ),
+                      const Spacer(),
+                      // One row: where it comes from, and its stage unless
+                      // stable; on a narrow card it shrinks to fit.
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SourceBadge(source: c.sourceOf(entry)),
+                            if (stage != null && stage != ItemStage.stable) ...[
+                              const SizedBox(width: 4),
+                              StageBadge(stage: stage),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -492,8 +663,8 @@ class ItemPicture extends StatelessWidget {
         }
         return Image.file(
           file,
-          fit: BoxFit.contain,
-          filterQuality: FilterQuality.none,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.medium,
           errorBuilder: (_, _, _) => Center(
             child: Icon(
               Icons.broken_image_outlined,
@@ -503,6 +674,48 @@ class ItemPicture extends StatelessWidget {
           ),
         );
       },
+    ),
+  );
+}
+
+/// Whether a card's item is installed, on its picture's corner.
+class _StatePill extends StatelessWidget {
+  const _StatePill({
+    required this.icon,
+    required this.label,
+    required this.colour,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color colour;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.topLeft,
+    child: Container(
+      margin: const EdgeInsets.all(6),
+      padding: const EdgeInsets.fromLTRB(5, 2, 7, 2),
+      decoration: BoxDecoration(
+        color: EditorTheme.surfaceDarker.withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colour.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: colour),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(
+              color: colour,
+              fontSize: EditorMetrics.fontLabel,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -525,25 +738,41 @@ IconData kindIcon(ItemKind kind) => switch (kind) {
   ItemKind.template => Icons.dashboard_customize_outlined,
 };
 
-/// Who vouches for an item.
-class TrustBadge extends StatelessWidget {
-  const TrustBadge({super.key, required this.trust});
+/// Where an item comes from: Official, Third Party, Unlisted or Local.
+class SourceBadge extends StatelessWidget {
+  const SourceBadge({super.key, required this.source});
 
-  final TrustLevel trust;
+  final ItemSource source;
 
   @override
-  Widget build(BuildContext context) => switch (trust) {
-    TrustLevel.official => EditorBadge(
-      label: 'OFFICIAL',
-      accent: EditorTheme.primaryBright,
-    ),
-    TrustLevel.verified => EditorBadge(
-      label: 'VERIFIED',
-      accent: EditorTheme.info,
-    ),
-    TrustLevel.community => EditorBadge(
-      label: 'COMMUNITY',
+  Widget build(BuildContext context) => EditorBadge(
+    label: source.label.toUpperCase(),
+    accent: switch (source) {
+      ItemSource.official => EditorTheme.primaryBright,
+      ItemSource.thirdParty => EditorTheme.info,
+      ItemSource.unlisted => EditorTheme.warning,
+      ItemSource.local => EditorTheme.textMuted,
+    },
+  );
+}
+
+/// How finished an item (or the editor) is. Stable shows nothing.
+class StageBadge extends StatelessWidget {
+  const StageBadge({super.key, required this.stage});
+
+  final ItemStage stage;
+
+  @override
+  Widget build(BuildContext context) => switch (stage) {
+    ItemStage.stable => const SizedBox.shrink(),
+    ItemStage.beta => EditorBadge(label: 'BETA', accent: EditorTheme.info),
+    ItemStage.experimental => EditorBadge(
+      label: 'EXPERIMENTAL',
       accent: EditorTheme.warning,
+    ),
+    ItemStage.deprecated => EditorBadge(
+      label: 'DEPRECATED',
+      accent: EditorTheme.error,
     ),
   };
 }

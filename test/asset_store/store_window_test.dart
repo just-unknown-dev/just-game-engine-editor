@@ -2,7 +2,9 @@
 // install, install it, see it installed.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:just_editor_core/just_editor_core.dart' show EditorButton;
+import 'package:just_asset_store/just_asset_store.dart' show Version;
+import 'package:just_editor_core/just_editor_core.dart'
+    show EditorButton, EditorDropdown;
 import 'package:just_game_engine_editor/src/asset_store/store_controller.dart';
 import 'package:just_game_engine_editor/src/asset_store/ui/store_window.dart';
 
@@ -52,10 +54,22 @@ void main() {
     expect(find.text('Slime'), findsOneWidget);
     expect(find.text('Handy Tool'), findsOneWidget);
 
+    // Its card says what it is.
+    expect(find.text('A pixel knight'), findsOneWidget);
+
     await tester.tap(find.text('Knight'));
     await settle(tester);
-    expect(find.text('A pixel knight'), findsOneWidget);
-    expect(find.text('Latest 1.1.0'), findsOneWidget);
+    // The card and the details.
+    expect(find.text('A pixel knight'), findsNWidgets(2));
+    // Two versions: a menu to pick one, the newest first.
+    expect(find.byType(EditorDropdown<Version>), findsOneWidget);
+    expect(
+      tester
+          .widget<EditorDropdown<Version>>(find.byType(EditorDropdown<Version>))
+          .value
+          .toString(),
+      '1.1.0',
+    );
 
     await tester.tap(find.widgetWithText(EditorButton, 'Install'));
     await settle(tester);
@@ -73,10 +87,14 @@ void main() {
     expect(find.text('INSTALLED 1.1.0'), findsOneWidget);
     expect(find.text('Uninstall'), findsOneWidget);
 
-    // The Installed page lists it.
-    await tester.tap(find.text('Installed'));
+    // Its card says so, on its picture.
+    expect(find.text('Installed'), findsNWidgets(3)); // + sidebar, details
+
+    // The Installed page (the sidebar's) lists it.
+    await tester.tap(find.text('Installed').first);
     await settle(tester);
     expect(find.text('Slime'), findsNothing);
+    expect(find.text('Knight'), findsWidgets);
   });
 
   testWidgets('search narrows the grid; the Sources page shows the catalog', (

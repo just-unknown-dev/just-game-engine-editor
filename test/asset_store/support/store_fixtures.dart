@@ -8,6 +8,8 @@ import 'package:just_asset_store/just_asset_store.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_editor_core/just_editor_core.dart';
 
+import '../../support/memory_settings_store.dart';
+
 /// A pub runner that succeeds and records its calls.
 class FakePub implements PubRunner {
   final List<String> calls = [];
@@ -28,9 +30,13 @@ Directory tempDir(String prefix) {
   return dir;
 }
 
-/// An editor scope over a bare world, disposed with the test.
+/// An editor scope over a bare world, with settings in memory, disposed
+/// with the test.
 EditorScope storeScope() {
-  final scope = EditorScope(world: World()..initialize());
+  final scope = EditorScope(
+    world: World()..initialize(),
+    settingsStore: MemorySettingsStore(),
+  );
   addTearDown(scope.dispose);
   return scope;
 }
@@ -45,7 +51,21 @@ class Item {
     this.versions = const ['1.0.0'],
     this.modules = const [],
     this.summary = '',
-  });
+    ItemStage? stage,
+    this.replacedBy,
+    this.published,
+  }) : _stage = stage;
+
+  final ItemStage? _stage;
+
+  /// Its stage: beta for a plugin unless given (every plugin names one).
+  ItemStage? get stage => _stage ?? (kind.isPlugin ? ItemStage.beta : null);
+
+  /// What replaces it, when deprecated.
+  final String? replacedBy;
+
+  /// When every version was published (`2026-10-01`), when it says.
+  final String? published;
 
   final String id;
   final String? name;
@@ -82,6 +102,8 @@ SourceConfig buildCatalog(Directory dir, List<Item> items) {
               'version': v,
               'kind': item.kind.id,
               'category': item.category,
+              'stage': ?item.stage?.id,
+              'replacedBy': ?item.replacedBy,
               if (content)
                 'content': {
                   'assetFolders': ['sprites/'],
@@ -108,11 +130,14 @@ SourceConfig buildCatalog(Directory dir, List<Item> items) {
         ..writeAsBytesSync(bytes);
       versions.add({
         'version': v,
+        'published': ?item.published,
         'archive': {
           'url': name,
           'sha256': Sha256.hexOf(bytes),
           'size': bytes.length,
         },
+        'stage': ?item.stage?.id,
+        'replacedBy': ?item.replacedBy,
       });
     }
     out.add({
@@ -123,6 +148,8 @@ SourceConfig buildCatalog(Directory dir, List<Item> items) {
       'summary': item.summary,
       'author': {'name': 'Tester'},
       'license': {'spdx': 'CC0-1.0'},
+      // The store's own items, as a catalog in a folder here may say.
+      'trust': 'official',
       'versions': versions,
     });
   }

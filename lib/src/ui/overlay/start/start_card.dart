@@ -1,11 +1,13 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:just_asset_store/just_asset_store.dart' show ItemStage;
 import 'package:just_editor_core/io.dart' show FileSystemException;
 import 'package:just_signals/just_signals.dart';
 
 import 'package:just_editor_core/host.dart';
 import '../../../core/plugin/editor_plugin.dart';
+import '../../../editor_release.dart';
 import '../../../core/prefs/recent_scenes.dart';
 import '../../dialogs/create_scene_overlay.dart';
 
@@ -217,16 +219,34 @@ class EditorStartCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Semantics(
-              header: true,
-              child: Text(
-                'Just Game Engine Editor',
-                style: TextStyle(
-                  color: EditorTheme.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Semantics(
+                  header: true,
+                  child: Text(
+                    'Just Game Engine Editor',
+                    style: TextStyle(
+                      color: EditorTheme.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-              ),
+                // How finished the editor is, as store plugins say it.
+                if (EditorRelease.stage != ItemStage.stable)
+                  Tooltip(
+                    message:
+                        'Version ${EditorRelease.version}: '
+                        '${EditorRelease.stage.label.toLowerCase()}',
+                    child: EditorBadge(
+                      label: EditorRelease.stage.label.toUpperCase(),
+                      accent: EditorTheme.info,
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 4),
             Text(

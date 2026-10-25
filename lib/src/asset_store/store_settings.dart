@@ -17,6 +17,12 @@ abstract final class StoreSettings {
     '',
   );
 
+  /// Whether the store lists experimental items.
+  static final SettingPref<bool> showExperimental = SettingPref.boolean(
+    'editor.store.experimental',
+    false,
+  );
+
   /// The Flutter SDK folder; empty to use the project's.
   static final SettingPref<String> sdkPath = SettingPref.text(
     'editor.store.sdk',

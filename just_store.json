@@ -12,6 +12,7 @@
     "just_game_engine": "^2.0.0-dev.2"
   },
   "schema": 1,
+  "stage": "beta",
   "system": true,
   "version": "0.1.0-dev.2"
 }
