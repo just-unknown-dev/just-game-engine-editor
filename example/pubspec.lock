@@ -203,7 +203,7 @@ packages:
       path: "../../just_asset_store"
       relative: true
     source: path
-    version: "0.2.0"
+    version: "0.2.1"
   just_audio_engine:
     dependency: "direct overridden"
     description:
@@ -282,7 +282,7 @@ packages:
       path: "../../just_game_engine"
       relative: true
     source: path
-    version: "2.0.0-dev.2"
+    version: "2.0.0-dev.3"
   just_game_engine_editor:
     dependency: "direct main"
     description:

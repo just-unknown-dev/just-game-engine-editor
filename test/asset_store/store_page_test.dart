@@ -173,11 +173,11 @@ void main() {
     final official = CatalogEntry(SourceConfig.officialId, listed.item);
     expect(
       '${c.webPage(official)}',
-      'https://store.justunknown.com/items/just_art_knight',
+      'https://asset.justunknown.com/items/just_art_knight',
     );
     expect(
       '${c.reportPage(official)}',
-      'https://store.justunknown.com/report?item=just_art_knight',
+      'https://asset.justunknown.com/report?item=just_art_knight',
     );
     expect(await c.openLink(Uri.parse('http://example.com')), isFalse);
     expect(await c.openLink(Uri.parse('file:///C:/Windows')), isFalse);
