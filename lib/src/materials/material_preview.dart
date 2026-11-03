@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' show Color;
 
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 
 /// What a material is shown on in a preview.
 enum PreviewShape {
@@ -229,7 +229,7 @@ enum PreviewLighting {
   }
 
   static (double, double, double) _linear(int argb) =>
-      GraphicsShapes.linear(Color(argb));
+      LinearColor.of(Color(argb));
 }
 
 final class _Sky {

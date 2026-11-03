@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' show Color, Paint, PaintingStyle;
 
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_game_engine/physics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 
 import 'package:just_editor_core/host.dart';
 import 'hull_outline.dart';

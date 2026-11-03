@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart' show compute;
 import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart'
     show PackageAssetPaths, ProjectFiles;
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 
 import 'image_pixels.dart';
 import 'normal_maps.dart';

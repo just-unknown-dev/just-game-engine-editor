@@ -1,7 +1,7 @@
 // The Asset Store is one of the editor's own modules: every game's editor
 // has it, 2-D or 3-D, with nothing to add to the modules list.
 import 'package:flutter_test/flutter_test.dart';
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/asset_store.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';

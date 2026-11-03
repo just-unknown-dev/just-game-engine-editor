@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart'
     show PackageAssetPaths, ProjectFiles;
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 
 /// A model's own materials, written out as material files of the project:
 /// what an artist painted in the modelling tool, to be changed, shared and

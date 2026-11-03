@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart'
     show PackageAssetPaths, ProjectFiles;
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 
 import 'material_preview.dart';
 import 'texture_cache.dart';
@@ -344,7 +344,7 @@ final class MaterialPictures {
       stage.environment
         ..sky = false
         ..skybox = false
-        ..clearColor = GraphicsShapes.linear(ui.Color(background));
+        ..clearColor = LinearColor.of(ui.Color(background));
     }
     final w = width ?? size, h = height ?? size;
     final view = framePreview(
@@ -405,7 +405,7 @@ final class MaterialPictures {
             await map(file.emissionMap, srgb: true),
           ];
     return gpu.uploader.material(
-      MaterialLibrary.dataOf(file, layers: layers),
+      Material3DLibrary.dataOf(file, layers: layers),
       maps: maps,
     );
   }

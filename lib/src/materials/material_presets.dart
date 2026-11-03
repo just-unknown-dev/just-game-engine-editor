@@ -1,4 +1,4 @@
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 
 /// A starting look for a material: a few of its values set at once, as
 /// one undo step. Its maps, layers and layout stay as they are.

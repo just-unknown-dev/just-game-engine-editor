@@ -1,7 +1,7 @@
 import 'dart:ui' show Offset;
 
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 
 import 'package:just_editor_core/host.dart';
 import 'face_handles.dart';

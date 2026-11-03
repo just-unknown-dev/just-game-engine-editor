@@ -3,7 +3,7 @@ import 'dart:ui' show Color;
 
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_editor_core/just_editor_core.dart';
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 
 /// One entity a model expands into.
 final class ModelPart {

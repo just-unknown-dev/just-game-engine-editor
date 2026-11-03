@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart';
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 
 import 'map_pictures.dart';
 import 'material_pictures.dart';
@@ -409,7 +409,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
 
   /// The materials the open scene is drawn with, when its 3-D renderer is
   /// running.
-  MaterialLibrary? get sceneMaterials {
+  Material3DLibrary? get sceneMaterials {
     final graphics = widget.workspace.scope.engine?.graphics3D;
     if (graphics == null || !graphics.isStarted) return null;
     return graphics.sceneRenderer.materials;

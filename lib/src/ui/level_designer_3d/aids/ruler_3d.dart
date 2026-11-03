@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:just_game_engine/just_game_engine.dart' as jge;
-import 'package:just_game_engine/graphics_3d.dart' show Graphics3D;
+import 'package:just_game_engine/just_game_engine_3d.dart' show Graphics3D;
 import 'package:just_signals/just_signals.dart';
 
 import 'package:just_editor_core/host.dart';

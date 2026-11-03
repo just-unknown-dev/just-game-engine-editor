@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:just_editor_core/io.dart';
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 
 import 'cooked_head.dart' if (dart.library.js_interop) 'cooked_head_web.dart';
 

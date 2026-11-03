@@ -11,7 +11,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/materials.dart';
 import 'package:just_game_engine_editor/src/graphics/graphics.dart';
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 import 'package:just_graphics_engine/testing.dart';
 
 import '../support/real_io.dart';

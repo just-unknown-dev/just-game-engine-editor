@@ -6,7 +6,7 @@ import 'package:just_editor_core/just_editor_core.dart'
         EntityVertexSource,
         RayTriangleHit,
         RayTriangles;
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 
 /// Picks a model by its triangles, not its box: a click through the arch
 /// of a doorway picks what is behind it. Knows which way its surface faces

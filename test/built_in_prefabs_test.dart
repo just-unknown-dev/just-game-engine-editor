@@ -6,7 +6,7 @@
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
-import 'package:just_game_engine/graphics_3d.dart' show Graphics3D;
+import 'package:just_game_engine/just_game_engine_3d.dart' show Graphics3D;
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/extension/built_in_audio_contributions.dart';
 import 'package:just_game_engine_editor/src/extension/built_in_lighting_2d_contributions.dart';

@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:just_game_engine/just_game_engine.dart' as jge;
-import 'package:just_game_engine/graphics_3d.dart' as g3;
+import 'package:just_game_engine/just_game_engine_3d.dart' as g3;
 import 'package:just_signals/just_signals.dart';
 
 import 'package:just_editor_core/host.dart';

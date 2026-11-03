@@ -5,7 +5,7 @@ import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/painting.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_editor_core/just_editor_core.dart';
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 
 /// Draws the 3-D line from [a] to [b] in [context], in pieces so a line
 /// passing behind the viewer keeps the part in front.

@@ -9,7 +9,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_editor_core/host.dart';
 import 'package:just_game_engine_editor/src/ui/level_designer_3d/panels/view_3d_panel.dart';

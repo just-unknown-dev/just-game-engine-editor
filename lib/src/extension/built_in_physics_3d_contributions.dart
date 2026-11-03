@@ -1,5 +1,5 @@
 import 'package:just_game_engine/just_game_engine.dart' as jge;
-import 'package:just_game_engine/physics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 
 import '../core/physics/collider_overlay_3d.dart';
 import 'package:just_editor_core/host.dart';

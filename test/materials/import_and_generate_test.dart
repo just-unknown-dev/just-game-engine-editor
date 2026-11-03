@@ -6,7 +6,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_editor_core/just_editor_core.dart';
-import 'package:just_game_engine/graphics_3d.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_graphics_engine/testing.dart';
 import 'package:just_game_engine_editor/src/materials/materials.dart';

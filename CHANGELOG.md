@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Converts colours for the 3-D material previews with the engine's `LinearColor.of` (was `GraphicsShapes.linear`).
 - Follows the engine's feature layout: the 2-D material stage's world has the built-in components, and 3-D graphics is given as a service (`EngineConfig(services: [Graphics3D()])`).
 - Uses the engine's new component names (`RigidBody2DComponent`, `Light3DComponent`, `Circle2DComponent`, …), in the inspector, the viewport handles and the material users.
 

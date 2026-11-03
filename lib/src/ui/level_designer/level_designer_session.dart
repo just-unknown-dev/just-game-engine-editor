@@ -35,7 +35,7 @@ import '../level_designer_3d/tools/material_paint_3d_tool.dart';
 import '../level_designer_3d/tools/place_3d_tool.dart';
 import '../../core/view/orbit_fly_editor_view.dart';
 import '../level_designer_3d/split/split_views.dart';
-import 'package:just_game_engine/graphics_3d.dart' as g3;
+import 'package:just_game_engine/just_game_engine_3d.dart' as g3;
 import '../level_designer_3d/tools/select_3d_tool.dart';
 import '../../core/scope/editor_scope_services.dart';
 import '../../extension/built_in_3d_designer_contributions.dart';

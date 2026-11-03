@@ -13,7 +13,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import '../../debugger/engine_debugger.dart';
 import '../../ui/inspector/physics/collider_edit_session.dart';
 import 'package:just_editor_core/host.dart';
-import 'package:just_game_engine/graphics_3d.dart' as g3;
+import 'package:just_game_engine/just_game_engine_3d.dart' as g3;
 import '../physics/collider_overlay_3d.dart';
 import '../input/selection_pivot.dart';
 import '../input/translate_snaps_3d.dart';
