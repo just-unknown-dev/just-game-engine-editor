@@ -13,7 +13,7 @@ void main() {
 
   test('the editor brings it to every game, 2-D and 3-D', () {
     final flat = Engine();
-    final deep = Engine(config: EngineConfig(graphics3D: Graphics3D()));
+    final deep = Engine(config: EngineConfig(services: [Graphics3D()]));
     for (final engine in [flat, deep]) {
       expect(
         JustGameEditorPlugin.builtInsFor(engine),

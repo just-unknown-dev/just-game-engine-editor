@@ -30,13 +30,13 @@ const _transform = {
 
 void main() {
   group('the codec', () {
-    final codec = SceneCodec(ComponentDefinitionRegistry.core());
+    final codec = SceneCodec(BuiltInComponents.registry());
 
     test('keeps every unknown component in one holder', () {
       final components = codec.decodeAll([_stranger, _transform, _other]);
 
       expect(components.whereType<TransformComponent>(), hasLength(1));
-      final unknown = components.whereType<UnknownComponentsComponent>().single;
+      final unknown = components.whereType<UnknownTypesComponent>().single;
       expect(unknown.types, ['SomeoneElsesComponent', 'AnotherUnknown']);
     });
 
@@ -50,7 +50,7 @@ void main() {
     });
 
     test('counts them as saved, so an edit that drops them removes them', () {
-      expect(codec.canEncode(UnknownComponentsComponent([_stranger])), isTrue);
+      expect(codec.canEncode(UnknownTypesComponent([_stranger])), isTrue);
     });
   });
 
@@ -104,7 +104,7 @@ void main() {
 
       final mixed = scope.world.findEntityByName('Mixed')!;
       final stranger = scope.world.findEntityByName('Stranger')!;
-      expect(mixed.getComponent<UnknownComponentsComponent>()!.types, [
+      expect(mixed.getComponent<UnknownTypesComponent>()!.types, [
         'SomeoneElsesComponent',
       ]);
       expect(mixed.hasComponent<TransformComponent>(), isTrue);
@@ -144,9 +144,7 @@ void main() {
       scope.history.undo();
 
       final back = scope.world.findEntityByName('Mixed')!;
-      expect(back.getComponent<UnknownComponentsComponent>()!.entries, [
-        _stranger,
-      ]);
+      expect(back.getComponent<UnknownTypesComponent>()!.entries, [_stranger]);
     });
 
     test('each one is reported as a problem', () async {

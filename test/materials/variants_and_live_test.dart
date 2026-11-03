@@ -292,7 +292,7 @@ void main() {
       'closed', (tester) async {
     bigView(tester);
     write('a.material.json', const MaterialFile(roughness: 0.5).encode());
-    final engine = Engine(config: EngineConfig(graphics3D: Graphics3D()));
+    final engine = Engine(config: EngineConfig(services: [Graphics3D()]));
     await tester.runAsync(engine.initialize);
     addTearDown(engine.dispose);
     final game = engine.service<Graphics3D>().sceneRenderer.materials;

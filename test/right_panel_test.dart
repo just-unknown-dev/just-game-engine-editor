@@ -112,7 +112,7 @@ void main() {
     if (!kDebugMode) return;
     final store = SceneStore(
       root: root.path,
-      codec: SceneCodec(ComponentDefinitionRegistry.core()),
+      codec: SceneCodec(BuiltInComponents.registry()),
     );
     await tester.runAsync(() async {
       await store.writeInitialFiles('level_01');

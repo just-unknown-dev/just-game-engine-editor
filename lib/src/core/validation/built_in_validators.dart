@@ -642,7 +642,7 @@ abstract final class BuiltInValidators {
   /// until whatever defines them is registered there too.
   static List<SceneProblem> unknownComponents(ValidationContext context) => [
     for (final e in context.world.entities)
-      if (e.getComponent<UnknownComponentsComponent>() case final unknown?)
+      if (e.getComponent<UnknownTypesComponent>() case final unknown?)
         SceneProblem(
           entity: e,
           severity: ProblemSeverity.error,

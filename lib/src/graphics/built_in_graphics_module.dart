@@ -52,7 +52,7 @@ class BuiltInGraphicsModule extends EditorModule {
   static EditorModule make(EditorScope scope) => BuiltInGraphicsModule();
 
   /// Whether the editor has this module for [engine]'s game: when it has
-  /// 3-D graphics (`EngineConfig(graphics3D: Graphics3D())`).
+  /// 3-D graphics (`EngineConfig(services: [Graphics3D()])`).
   static bool isFor(Engine engine) => engine.graphics3D != null;
 
   /// Its id.

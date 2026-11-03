@@ -23,7 +23,7 @@ void main() {
     root = Directory.systemTemp.createTempSync('open_scene_guard_');
     final store = SceneStore(
       root: root.path,
-      codec: SceneCodec(ComponentDefinitionRegistry.core()),
+      codec: SceneCodec(BuiltInComponents.registry()),
     );
     for (final name in ['level_01', 'level_02']) {
       await store.writeInitialFiles(name);

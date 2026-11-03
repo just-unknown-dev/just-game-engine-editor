@@ -173,7 +173,7 @@ The editor edits the project on disk, under the working directory, so it runs on
 
 ### Unknown components
 
-A scene can name a component no registered definition can read — a module not registered this session, or one that moved to another package (the interface components did, to `just_ui_editor`). `SceneCodec.decodeAll` collects every such entry on an entity into one `UnknownComponentsComponent` (`just_editor_core/lib/src/model/unknown_components.dart`), exactly as the file had it, and `encodeAll` writes them back unchanged. `BuiltInValidators.unknownComponents` lists each entity that holds one as an error in Problems — the game will not load the scene until the module is registered — and the inspector shows a card for it. `SceneCodec.inTreeOrder` (parents first, the order a file wants) and `encodeInOrder` are public for callers that need records paired with entities, such as the play-test snapshot.
+A scene can name a component no registered definition can read — a module not registered this session, or one that moved to another package (the interface components did, to `just_ui_editor`). `SceneCodec.decodeAll` collects every such entry on an entity into one `UnknownTypesComponent` (`just_editor_core/lib/src/model/unknown_types_component.dart`), exactly as the file had it, and `encodeAll` writes them back unchanged. `BuiltInValidators.unknownComponents` lists each entity that holds one as an error in Problems — the game will not load the scene until the module is registered — and the inspector shows a card for it. `SceneCodec.inTreeOrder` (parents first, the order a file wants) and `encodeInOrder` are public for callers that need records paired with entities, such as the play-test snapshot.
 
 ## Play-testing
 

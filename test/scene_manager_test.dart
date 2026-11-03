@@ -17,7 +17,7 @@ void main() {
     root = Directory.systemTemp.createTempSync('scenes_');
     store = SceneStore(
       root: root.path,
-      codec: SceneCodec(ComponentDefinitionRegistry.core()),
+      codec: SceneCodec(BuiltInComponents.registry()),
     );
   });
 

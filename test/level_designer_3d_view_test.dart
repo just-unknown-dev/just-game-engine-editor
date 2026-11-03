@@ -235,7 +235,7 @@ void main() {
 
     setUp(() async {
       graphics = Graphics3D(device: NullGpuDevice(shaders: rendererNullShaders), keepEdges: true);
-      engine = Engine(config: EngineConfig(graphics3D: graphics));
+      engine = Engine(config: EngineConfig(services: [graphics]));
       await engine.initialize();
       plugin = JustGameEditorPlugin(engine: engine, startVisible: false);
       await plugin.attach(plugin.engine);

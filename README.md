@@ -100,7 +100,7 @@ flutter run -t lib/main_editor.dart -d windows   # or macos, linux
 
 ## Features
 
-- **2-D and 3-D scenes.** A 3-D scene gets an orbit-and-fly view, a 3-D gizmo, picking by ray, a grid on the working plane and placement on surfaces. The editor draws no models itself: the game's renderer does (`just_graphics_engine`). For a game with 3-D graphics (`EngineConfig(graphics3D:)`) the editor brings its 3-D graphics side itself: models in the Assets dock (pictured, dropped into 3-D scenes, imported and cooked), picking by triangles, light and camera aids, and Model, Light and Environment inspector sections.
+- **2-D and 3-D scenes.** A 3-D scene gets an orbit-and-fly view, a 3-D gizmo, picking by ray, a grid on the working plane and placement on surfaces. The editor draws no models itself: the game's renderer does (`just_graphics_engine`). For a game with 3-D graphics (a `Graphics3D` in `EngineConfig.services`) the editor brings its 3-D graphics side itself: models in the Assets dock (pictured, dropped into 3-D scenes, imported and cooked), picking by triangles, light and camera aids, and Model, Light and Environment inspector sections.
 - **Scenes are JSON** in `assets/scenes/`, the play order in `scenes.json`, and the game loads the same files. Autosave keeps backups and offers to recover unsaved changes.
 - **Play-testing** in place: Play, Pause, Step, Restart and speed, a preview of what the game camera sees, and the level put back exactly as authored on Stop.
 - **Transform tools**: All (Q), Move (W), Scale (E) and Rotate (R), from a floating toolbar at the top right of the viewport, with the Asset Store's shop button under it. Moving a parent carries its children.

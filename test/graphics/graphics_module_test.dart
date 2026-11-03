@@ -30,7 +30,7 @@ void main() {
   group('only for a game with 3-D graphics', () {
     test('the editor brings it to a 3-D game, not to a 2-D one', () {
       final flat = Engine();
-      final deep = Engine(config: EngineConfig(graphics3D: Graphics3D()));
+      final deep = Engine(config: EngineConfig(services: [Graphics3D()]));
       expect(BuiltInGraphicsModule.isFor(flat), isFalse);
       expect(BuiltInGraphicsModule.isFor(deep), isTrue);
       expect(
@@ -55,7 +55,7 @@ void main() {
             : 'a 2-D game: no models, no 3-D aids',
         () async {
           final engine = threeD
-              ? Engine(config: EngineConfig(graphics3D: Graphics3D()))
+              ? Engine(config: EngineConfig(services: [Graphics3D()]))
               : Engine();
           addTearDown(engine.dispose);
           await engine.initialize();
@@ -127,7 +127,7 @@ void main() {
 
     test('a model dropped in a 2-D scene makes nothing; in a 3-D one, an '
         'entity showing it', () async {
-      final engine = Engine(config: EngineConfig(graphics3D: Graphics3D()));
+      final engine = Engine(config: EngineConfig(services: [Graphics3D()]));
       addTearDown(engine.dispose);
       await engine.initialize();
       final plugin = JustGameEditorPlugin(engine: engine);

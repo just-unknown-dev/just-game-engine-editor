@@ -50,7 +50,7 @@ void main() {
     root = Directory.systemTemp.createTempSync('scene_list_');
     store = SceneStore(
       root: root.path,
-      codec: SceneCodec(ComponentDefinitionRegistry.core()),
+      codec: SceneCodec(BuiltInComponents.registry()),
     );
     for (final name in ['level_01', 'level_02', 'level_03']) {
       await store.writeInitialFiles(name);

@@ -20,7 +20,7 @@ void main() {
     root = Directory.systemTemp.createTempSync('new_scene_');
     store = SceneStore(
       root: root.path,
-      codec: SceneCodec(ComponentDefinitionRegistry.core()),
+      codec: SceneCodec(BuiltInComponents.registry()),
     );
   });
   tearDown(() => deleteWhenFree(root));
@@ -124,7 +124,8 @@ void main() {
 
       // Load it and look through the camera: the middle of the view is the
       // origin, where the spawn point is.
-      final world = World()..initialize();
+      final world = World(extensions: [BuiltInComponents.extension])
+        ..initialize();
       addTearDown(world.dispose);
       final entities = SceneLoader.load(world, scene);
       final cam = entities.firstWhere((e) => e.name == 'MainCamera');

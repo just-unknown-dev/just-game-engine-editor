@@ -95,7 +95,8 @@ final class Material2DStage {
   File _fileOf(String path) => File(PackageAssetPaths.of(root).absolute(path));
 
   /// The stage's own world.
-  final World world = World()..initialize();
+  final World world = World(extensions: [BuiltInComponents.extension])
+    ..initialize();
 
   late final RenderSystem _render = RenderSystem(
     passes: const [],

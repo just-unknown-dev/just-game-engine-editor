@@ -35,7 +35,7 @@ void main() {
   late SceneStore store;
   late SceneManager manager;
 
-  SceneCodec codec() => SceneCodec(ComponentDefinitionRegistry.core());
+  SceneCodec codec() => SceneCodec(BuiltInComponents.registry());
 
   setUp(() async {
     root = Directory.systemTemp.createTempSync('scene_safety_');

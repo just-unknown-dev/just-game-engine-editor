@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Follows the engine's feature layout: the 2-D material stage's world has the built-in components, and 3-D graphics is given as a service (`EngineConfig(services: [Graphics3D()])`).
 - Uses the engine's new component names (`RigidBody2DComponent`, `Light3DComponent`, `Circle2DComponent`, …), in the inspector, the viewport handles and the material users.
 
 ## 0.1.0-dev.2

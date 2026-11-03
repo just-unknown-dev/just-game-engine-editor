@@ -10,7 +10,8 @@ void main() {
   // boot and an EditorScope registers for itself; these helpers run bare.
   group('geometry', () {
     test('a quarter-turned platform is bounded by the space it occupies', () {
-      final world = World()..initialize();
+      final world = World(extensions: [BuiltInComponents.extension])
+        ..initialize();
       addTearDown(world.dispose);
       final e = world.createEntityWithComponents([
         TransformComponent(position: Vector3(0, 0, 0), angle: math.pi / 2),
@@ -94,7 +95,8 @@ void main() {
 
   group('resizer', () {
     test('keeps the visual and the collider the same size', () {
-      final world = World()..initialize();
+      final world = World(extensions: [BuiltInComponents.extension])
+        ..initialize();
       addTearDown(world.dispose);
       final e = world.createEntityWithComponents([
         TransformComponent(),
@@ -111,7 +113,8 @@ void main() {
     });
 
     test('a quarter-turned entity is resized along its own axes', () {
-      final world = World()..initialize();
+      final world = World(extensions: [BuiltInComponents.extension])
+        ..initialize();
       addTearDown(world.dispose);
       final e = world.createEntityWithComponents([
         TransformComponent(angle: math.pi / 2),
@@ -124,7 +127,8 @@ void main() {
     });
 
     test('a polygon is measured by its vertices and resized with them', () {
-      final world = World()..initialize();
+      final world = World(extensions: [BuiltInComponents.extension])
+        ..initialize();
       addTearDown(world.dispose);
       final e = world.createEntityWithComponents([
         TransformComponent(),
@@ -138,7 +142,8 @@ void main() {
     });
 
     test('never shrinks to nothing', () {
-      final world = World()..initialize();
+      final world = World(extensions: [BuiltInComponents.extension])
+        ..initialize();
       addTearDown(world.dispose);
       final e = world.createEntityWithComponents([
         TransformComponent(),
