@@ -268,8 +268,8 @@ void main() {
     final scope = testScope(world: world);
     final entity = world.createEntityWithComponents([
       jge.TransformComponent(position: jge.Vector3(100, 100, 0)),
-      jge.RigidBody2D(),
-      jge.Collider2D(shape: jge.ColliderShape2D.circle, radius: 10),
+      jge.RigidBody2DComponent(),
+      jge.Collider2DComponent(shape: jge.ColliderShape2D.circle, radius: 10),
     ], name: 'Ball');
     await tester.binding.setSurfaceSize(const Size(420, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -305,7 +305,7 @@ void main() {
     await tester.tapAt(const Offset(400, 1590), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
-    expect(entity.getComponent<jge.Collider2D>()!.radius, 25);
+    expect(entity.getComponent<jge.Collider2DComponent>()!.radius, 25);
   }, variant: _desktop);
 
   group("the Timeline's fields", () {

@@ -57,7 +57,7 @@ OrbitFlyEditorView _above() {
 Entity _cube(EditorScope scope, String name, double x, double z) =>
     scope.world.createEntityWithComponents([
       TransformComponent(position: Vector3(x, -0.5, z)),
-      Cube3D(),
+      Cube3DComponent(),
     ], name: name);
 
 void main() {
@@ -115,7 +115,7 @@ void main() {
     final session = _open(scope, modifiers: () => const ModifierKeys(shift: true));
     final one = _cube(scope, 'Cube_1', 0, 0);
     final two = _cube(scope, 'Cube_2', 3, 0);
-    final ball = scope.world.createEntityWithComponents([TransformComponent(), Sphere3D()], name: 'Ball');
+    final ball = scope.world.createEntityWithComponents([TransformComponent(), Sphere3DComponent()], name: 'Ball');
     scope.sceneState.selectEntity(one);
     expect(session.handleKey(LogicalKeyboardKey.keyG, gridSize: 32), isTrue);
     final state = scope.sceneState;
@@ -220,7 +220,7 @@ void main() {
     final group = scope.world.createEntityWithComponents([TransformComponent()], name: 'group');
     final child = scope.world.createEntityWithComponents([
       TransformComponent(),
-      Cube3D(),
+      Cube3DComponent(),
       ParentComponent(parentId: group.id),
     ], name: 'child');
     scope.view.setHidden([group.id], hidden: true);

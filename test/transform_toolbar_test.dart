@@ -26,7 +26,7 @@ final int b = TileCell.make(0, 2);
 Entity _block(World world, String name, double x, double y) =>
     world.createEntityWithComponents([
       TransformComponent(position: Vector3(x, y, 0)),
-      RectangleComponent(width: 64, height: 32),
+      Rectangle2DComponent(width: 64, height: 32),
       LayerComponent(),
     ], name: name);
 
@@ -112,7 +112,7 @@ void main() {
     test('shows, and answers to, one mode at a time', () {
       final box = world.createEntityWithComponents([
         TransformComponent(),
-        RectangleComponent(width: 64, height: 32),
+        Rectangle2DComponent(width: 64, height: 32),
       ], name: 'Box');
       final camera = GameCameraEditorView.of(
         Camera()..viewportSize = const Size(400, 300),
@@ -152,7 +152,7 @@ void main() {
         'take', () {
       final box = world.createEntityWithComponents([
         TransformComponent(),
-        RectangleComponent(width: 64, height: 32),
+        Rectangle2DComponent(width: 64, height: 32),
       ], name: 'Box');
       final camera = GameCameraEditorView.of(
         Camera()..viewportSize = const Size(400, 300),
@@ -245,7 +245,10 @@ void main() {
       final box = _block(world, 'Box', 32, 16); // bounds 0,0 → 64,32
       session.sceneState.selectEntity(box);
       drag(const Offset(64, 32), const Offset(128, 64));
-      expect(box.components.whereType<RectangleComponent>().single.width, 128);
+      expect(
+        box.components.whereType<Rectangle2DComponent>().single.width,
+        128,
+      );
 
       final bounds = DesignerGeometry.worldBounds(box)!;
       final knob = scope.handleLayout.rotateKnobAt(bounds, 1);

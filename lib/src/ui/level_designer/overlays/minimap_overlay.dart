@@ -155,7 +155,7 @@ class MinimapOverlay extends DesignerOverlay with InteractiveOverlay {
   /// else the accent colour of the first definition that declares one.
   static Color _colourOf(jge.Entity entity) {
     for (final c in entity.components) {
-      if (c is jge.RectangleComponent) return c.fillStyle.color;
+      if (c is jge.Rectangle2DComponent) return c.fillStyle.color;
     }
     final definitions = DesignerGeometry.definitionsFor(entity);
     for (final c in entity.components) {

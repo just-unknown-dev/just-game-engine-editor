@@ -418,33 +418,33 @@ Size? _sizeFromComponent(
   final extent = definitions.definitionFor(component)?.extent;
   if (extent != null) return extent.sizeOf(component);
 
-  if (component is RectangleComponent) {
+  if (component is Rectangle2DComponent) {
     final inset = component.strokeWidth * 2;
     return Size(component.width + inset, component.height + inset);
   }
-  if (component is CapsuleComponent) {
+  if (component is Capsule2DComponent) {
     final inset = component.strokeWidth * 2;
     return Size(component.width + inset, component.height + inset);
   }
-  if (component is CircleComponent) {
+  if (component is Circle2DComponent) {
     final d = (component.radius + component.strokeWidth) * 2;
     return Size(d, d);
   }
-  if (component is PolygonComponent) {
+  if (component is Polygon2DComponent) {
     if (component.vertices.isEmpty) return null;
     final rect = _rectFromOffsets(component.vertices);
     if (rect == null) return null;
     final inset = component.strokeWidth * 2;
     return Size(rect.width + inset, rect.height + inset);
   }
-  if (component is LineComponent) {
+  if (component is Line2DComponent) {
     final rect = Rect.fromPoints(
       component.start - Offset(component.strokeWidth, component.strokeWidth),
       component.end + Offset(component.strokeWidth, component.strokeWidth),
     );
     return Size(rect.width, rect.height);
   }
-  if (component is Collider2D) {
+  if (component is Collider2DComponent) {
     final shape = ColliderGeometry.of(component);
     if (shape == null) return null;
     final rect = ColliderGeometry.boundsOf(shape);

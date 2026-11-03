@@ -64,7 +64,7 @@ void main() {
         DesignerGeometry.worldBounds(solid),
         const Rect.fromLTWH(0, 0, 128, 32),
       );
-      expect(solid.hasComponent<Collider2D>(), isTrue);
+      expect(solid.hasComponent<Collider2DComponent>(), isTrue);
       expect(
         scope.sceneState.selectedEntity.value,
         same(solid),

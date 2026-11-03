@@ -39,8 +39,8 @@ void main() {
   jge.Entity body({int layer = 0, int? collidesWith, String name = 'Thing'}) =>
       world.createEntityWithComponents([
         jge.TransformComponent(),
-        jge.RigidBody2D(layer: layer, collidesWith: collidesWith),
-        jge.Collider2D(size: jge.Vector2(20, 20)),
+        jge.RigidBody2DComponent(layer: layer, collidesWith: collidesWith),
+        jge.Collider2DComponent(size: jge.Vector2(20, 20)),
       ], name: name);
 
   group('the layer store', () {
@@ -100,11 +100,11 @@ void main() {
       final found = refactor.plan(coins);
       expect([for (final u in found.openUses) u.owner], ['A', 'B']);
       await refactor.apply(found.movingTo(2));
-      expect(a.getComponent<jge.RigidBody2D>()!.layer, 2);
-      expect(b.getComponent<jge.RigidBody2D>()!.layer, 2);
+      expect(a.getComponent<jge.RigidBody2DComponent>()!.layer, 2);
+      expect(b.getComponent<jge.RigidBody2DComponent>()!.layer, 2);
       expect(store.value.isNamed(coins), isFalse);
       scope.history.undo();
-      expect(a.getComponent<jge.RigidBody2D>()!.layer, coins);
+      expect(a.getComponent<jge.RigidBody2DComponent>()!.layer, coins);
     });
 
     test('rewrites the other scenes on disk, after a backup', () async {
@@ -119,11 +119,11 @@ void main() {
               'name': 'Spook',
               'components': [
                 {
-                  'type': 'RigidBody2D',
+                  'type': 'RigidBody2DComponent',
                   'fields': {'layer': ghost},
                 },
                 {
-                  'type': 'Collider2D',
+                  'type': 'Collider2DComponent',
                   'fields': {'shape': 'circle', 'radius': 5.0},
                 },
               ],
@@ -179,7 +179,7 @@ void main() {
       final player = store.create('Player')!;
       final coins = store.create('Coins')!;
       final e = body(layer: player);
-      final b = e.getComponent<jge.RigidBody2D>()!;
+      final b = e.getComponent<jge.RigidBody2DComponent>()!;
       await pump(tester, e);
       expect(find.text('As the grid says for Player'), findsOneWidget);
       expect(find.textContaining('unnamed'), findsNothing);
@@ -212,7 +212,7 @@ void main() {
       tester,
     ) async {
       final e = body();
-      final b = e.getComponent<jge.RigidBody2D>()!;
+      final b = e.getComponent<jge.RigidBody2DComponent>()!;
       await pump(tester, e);
       await tester.tap(
         find.descendant(
@@ -277,7 +277,7 @@ void main() {
     expect(problem.message, contains('never touch'));
     // Take Coins off its list: what is left is what the grid says.
     problem.fixes.last.apply();
-    expect(e.getComponent<jge.RigidBody2D>()!.collidesWith, isNull);
+    expect(e.getComponent<jge.RigidBody2DComponent>()!.collidesWith, isNull);
     expect(check(), isEmpty);
   });
 }

@@ -42,7 +42,7 @@ abstract final class PrefabInspector {
 
   static Widget? _mark(FieldAccessoryContext c) {
     final top = PrefabInstances.topOf(c.entity);
-    final link = c.entity.getComponent<jge.PrefabLink>();
+    final link = c.entity.getComponent<jge.PrefabLinkComponent>();
     if (top == null || link == null) return null;
     final type = c.definition.type;
     // Where the top stands is where the instance is, not a change.

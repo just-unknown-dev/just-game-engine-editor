@@ -102,10 +102,10 @@ final class LightReachOverlay extends ViewportOverlay {
   void paint(ViewportOverlayContext context) {
     for (final entity in context.world.query([
       TransformComponent,
-      LightComponent,
+      Light3DComponent,
     ])) {
       if (!context.isShown(entity) || !context.isSelected(entity)) continue;
-      final light = entity.getComponent<LightComponent>()!;
+      final light = entity.getComponent<Light3DComponent>()!;
       final transform = entity.getComponent<TransformComponent>()!;
       final at = Vector3.copy(transform.position);
       final colour = light.color.withValues(alpha: 1);
@@ -253,10 +253,10 @@ final class CameraFrustumOverlay extends ViewportOverlay {
 /// Lights, marked where they are so a light can be found and picked.
 final EditorMarker lightMarker = EditorMarker(
   id: 'light',
-  components: const [LightComponent],
+  components: const [Light3DComponent],
   icon: Icons.lightbulb_outline,
   color: const Color(0xFFFFD54F),
-  label: (entity) => switch (entity.getComponent<LightComponent>()?.kind) {
+  label: (entity) => switch (entity.getComponent<Light3DComponent>()?.kind) {
     LightKind.directional => 'sun',
     LightKind.spot => 'spot',
     _ => null,

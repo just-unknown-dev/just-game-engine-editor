@@ -437,13 +437,15 @@ class BuiltInMaterialsModule extends EditorModule {
       return null;
     }
     if (kind == Material2DKind.screen) {
-      ScreenMaterial? current;
-      for (final e in scope.world.query(const [ScreenMaterial])) {
-        final s = e.getComponent<ScreenMaterial>()!;
+      ScreenMaterialComponent? current;
+      for (final e in scope.world.query(const [ScreenMaterialComponent])) {
+        final s = e.getComponent<ScreenMaterialComponent>()!;
         if (current == null || s.order > current.order) current = s;
       }
       if (current == null) {
-        return drop.place([ScreenMaterial(material: path)], name: 'Screen');
+        return drop.place([
+          ScreenMaterialComponent(material: path),
+        ], name: 'Screen');
       }
       final edit = ComponentEdit.begin(scope, current);
       current
@@ -470,7 +472,7 @@ class BuiltInMaterialsModule extends EditorModule {
       return null;
     }
     final label = 'Paint ${onto.name ?? 'entity'}';
-    final had = onto.getComponent<Material2D>();
+    final had = onto.getComponent<Material2DComponent>();
     if (had != null) {
       final edit = ComponentEdit.begin(scope, had);
       had.material = path;
@@ -482,7 +484,7 @@ class BuiltInMaterialsModule extends EditorModule {
           commands: [
             AddComponentCommand(
               entity: onto,
-              component: Material2D(material: path),
+              component: Material2DComponent(material: path),
               sceneState: scope.sceneState,
             ),
           ],

@@ -43,7 +43,7 @@ void main() {
   Entity node(String name, {Entity? under, double x = 0, double y = 0}) {
     final entity = world.createEntityWithComponents([
       TransformComponent(position: Vector3(x, y, 0)),
-      RectangleComponent(width: 10, height: 10),
+      Rectangle2DComponent(width: 10, height: 10),
     ], name: name);
     scope.sceneState.registerEntity(entity);
     if (under != null) ops.reparentEntity(entity, under);
@@ -115,7 +115,8 @@ void main() {
 
     void rewrite(Entity e) {
       final before = EntitySpec.of(e, scope.codec);
-      (e.getComponent<RenderableComponent>()! as RectangleComponent).width = 40;
+      (e.getComponent<RenderableComponent>()! as Rectangle2DComponent).width =
+          40;
       scope.history.pushApplied(
         EntityStateCommand(
           label: 'Resize',

@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:just_editor_core/io.dart';
 
 /// Something in the project drawn with a 2-D material: an entity of a scene
-/// or prefab file with a `Material2D` naming it — what the material is shown
+/// or prefab file with a `Material2DComponent` naming it — what the material is shown
 /// on when its preview picks the game's own ([Material2DUsers.find]).
 final class Material2DUser {
   const Material2DUser({
@@ -59,9 +59,9 @@ abstract final class Material2DUsers {
   // What a user's own drawing is not.
   static const Set<String> _notDrawn = {
     'TransformComponent',
-    'Material2D',
+    'Material2DComponent',
     'LayerComponent',
-    'ShadowCaster2D',
+    'ShadowCaster2DComponent',
   };
 
   /// The first sprite, or else the first shape, drawn with the material at
@@ -140,7 +140,7 @@ abstract final class Material2DUsers {
     try {
       final text = await file.readAsString();
       // Most files draw nothing with a 2-D material: not decoded.
-      if (text.contains('Material2D')) {
+      if (text.contains('Material2DComponent')) {
         for (final entity in _entities(jsonDecode(text))) {
           for (final material in _materialsOf(entity)) {
             final user = _userOf(entity, material, relative);
@@ -160,7 +160,9 @@ abstract final class Material2DUsers {
     final raw = entity['components'];
     final out = <String>{};
     for (final c in [if (raw is List) ...raw, if (raw is Map) ...raw.values]) {
-      if (c is! Map<String, dynamic> || c['type'] != 'Material2D') continue;
+      if (c is! Map<String, dynamic> || c['type'] != 'Material2DComponent') {
+        continue;
+      }
       final fields = c['fields'];
       final material = fields is Map ? fields['material'] : null;
       if (material is String && material.isNotEmpty) out.add(material);
@@ -210,7 +212,9 @@ abstract final class Material2DUsers {
     }
 
     final usesIt = components.any(
-      (c) => c['type'] == 'Material2D' && fieldsOf(c)?['material'] == path,
+      (c) =>
+          c['type'] == 'Material2DComponent' &&
+          fieldsOf(c)?['material'] == path,
     );
     if (!usesIt) return null;
     final name = entity['name'] is String ? entity['name'] as String : '';

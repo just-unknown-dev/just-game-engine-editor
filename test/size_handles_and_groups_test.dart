@@ -73,12 +73,12 @@ void main() {
   group('a shape\'s faces', () {
     test('pulled out, the face opposite stays; one undo step of both', () {
       final scope = _scope();
-      final cube = _make(scope, [TransformComponent(), Cube3D()], 'Box');
+      final cube = _make(scope, [TransformComponent(), Cube3DComponent()], 'Box');
       final view = _above();
       final handles = ShapeSizeHandles().handlesOf(cube, scope);
       expect(handles, hasLength(6));
       drag(scope, handles, view, Vector3(0.5, 0, 0), Vector3(1.5, 0, 0));
-      final shape = cube.getComponent<Primitive3D>()! as Cube3D;
+      final shape = cube.getComponent<Primitive3DComponent>()! as Cube3DComponent;
       expect(shape.width, closeTo(2, 1e-6));
       expect(_at(cube).x, closeTo(0.5, 1e-6), reason: 'the -X face stays at -0.5');
       expect(scope.history.undoEntries, hasLength(1));
@@ -89,20 +89,20 @@ void main() {
 
     test('Ctrl snaps the size to the move step, in metres however it is scaled', () {
       final scope = _scope();
-      final cube = _make(scope, [TransformComponent(scale: Vector3(2, 1, 1)), Cube3D()], 'Box');
+      final cube = _make(scope, [TransformComponent(scale: Vector3(2, 1, 1)), Cube3DComponent()], 'Box');
       final view = _above();
       // Its +X face is at 1 m: scaled twice along X.
       drag(scope, ShapeSizeHandles().handlesOf(cube, scope), view, Vector3(1, 0, 0), Vector3(2.4, 0, 0), snap: true, grid: 0.5);
-      final shape = cube.getComponent<Primitive3D>()! as Cube3D;
+      final shape = cube.getComponent<Primitive3DComponent>()! as Cube3DComponent;
       expect(shape.width * 2, closeTo(3.5, 1e-6), reason: '3.4 m snapped to 3.5 m');
       expect(_at(cube).x - shape.width, closeTo(-1, 1e-6), reason: 'the far face still at -1 m');
     });
 
     test('a cylinder\'s side sets its radius; its top its height', () {
       final scope = _scope();
-      final cylinder = _make(scope, [TransformComponent(), Cylinder3D()], 'Can');
+      final cylinder = _make(scope, [TransformComponent(), Cylinder3DComponent()], 'Can');
       drag(scope, ShapeSizeHandles().handlesOf(cylinder, scope), _above(), Vector3(0.5, 0, 0), Vector3(1, 0, 0));
-      final shape = cylinder.getComponent<Primitive3D>()! as Cylinder3D;
+      final shape = cylinder.getComponent<Primitive3DComponent>()! as Cylinder3DComponent;
       expect(shape.radius, closeTo(0.75, 1e-6));
       expect(_at(cylinder).x, closeTo(0.25, 1e-6));
       // From the side: its top (up is -Y) pulled up a metre.
@@ -113,7 +113,7 @@ void main() {
 
     test('none in the Collision view, where the collider\'s are', () {
       final scope = _scope();
-      final cube = _make(scope, [TransformComponent(), Cube3D(), Collider3D()], 'Box');
+      final cube = _make(scope, [TransformComponent(), Cube3DComponent(), Collider3DComponent()], 'Box');
       expect(ShapeSizeHandles().handlesOf(cube, scope), hasLength(6));
       expect(ColliderSizeHandles().handlesOf(cube, scope), isEmpty, reason: 'the shape is what is seen');
       scope.designer3D.viewMode.value = ViewMode3D.collision;
@@ -127,13 +127,13 @@ void main() {
       final scope = _scope();
       final trigger = _make(scope, [
         TransformComponent(position: Vector3(3, 0, 0)),
-        Collider3D(),
-        RigidBody3D(isSensor: true),
+        Collider3DComponent(),
+        RigidBody3DComponent(isSensor: true),
       ], 'Trigger');
       final handles = ColliderSizeHandles().handlesOf(trigger, scope);
       expect(handles, hasLength(6));
       drag(scope, handles, _above(), Vector3(3.5, 0, 0), Vector3(4.5, 0, 0));
-      final c = trigger.getComponent<Collider3D>()!;
+      final c = trigger.getComponent<Collider3DComponent>()!;
       expect(c.size.x, closeTo(2, 1e-6));
       expect(c.offset.x, closeTo(0.5, 1e-6));
       expect(_at(trigger).x, 3, reason: 'the entity stays; the collider moves in it');
@@ -142,10 +142,10 @@ void main() {
 
     test('a sphere by its radius; a matched shape has none', () {
       final scope = _scope();
-      final ball = _make(scope, [TransformComponent(), Collider3D(shape: ColliderShape3D.sphere)], 'Ball');
+      final ball = _make(scope, [TransformComponent(), Collider3DComponent(shape: ColliderShape3D.sphere)], 'Ball');
       drag(scope, ColliderSizeHandles().handlesOf(ball, scope), _above(), Vector3(0.5, 0, 0), Vector3(1.5, 0, 0));
-      expect(ball.getComponent<Collider3D>()!.radius, closeTo(1, 1e-6));
-      final matched = _make(scope, [TransformComponent(), Collider3D(shape: ColliderShape3D.matchShape)], 'Matched');
+      expect(ball.getComponent<Collider3DComponent>()!.radius, closeTo(1, 1e-6));
+      final matched = _make(scope, [TransformComponent(), Collider3DComponent(shape: ColliderShape3D.matchShape)], 'Matched');
       expect(ColliderSizeHandles().handlesOf(matched, scope), isEmpty);
     });
   });
@@ -153,8 +153,8 @@ void main() {
   group('groups', () {
     test('made at the middle of the base of what they hold', () {
       final scope = _scope();
-      final a = _make(scope, [TransformComponent(position: Vector3(0, -0.5, 0)), Cube3D()], 'A');
-      final b = _make(scope, [TransformComponent(position: Vector3(4, -2.5, 2)), Cube3D()], 'B');
+      final a = _make(scope, [TransformComponent(position: Vector3(0, -0.5, 0)), Cube3DComponent()], 'A');
+      final b = _make(scope, [TransformComponent(position: Vector3(4, -2.5, 2)), Cube3DComponent()], 'B');
       scope.sceneState
         ..selectEntity(a)
         ..toggleMultiSelect(b);
@@ -167,8 +167,8 @@ void main() {
 
     test('copied whole: a duplicate of a group holds copies of its things', () {
       final scope = _scope();
-      final a = _make(scope, [TransformComponent(position: Vector3(0, -0.5, 0)), Cube3D()], 'A');
-      final b = _make(scope, [TransformComponent(position: Vector3(2, -0.5, 0)), Cube3D()], 'B');
+      final a = _make(scope, [TransformComponent(position: Vector3(0, -0.5, 0)), Cube3DComponent()], 'A');
+      final b = _make(scope, [TransformComponent(position: Vector3(2, -0.5, 0)), Cube3DComponent()], 'B');
       scope.sceneState
         ..selectEntity(a)
         ..toggleMultiSelect(b);
@@ -189,7 +189,7 @@ void main() {
 
     testWidgets('GROUPS lists them; the eye hides one', (tester) async {
       final scope = _scope();
-      final a = _make(scope, [TransformComponent(), Cube3D()], 'A');
+      final a = _make(scope, [TransformComponent(), Cube3DComponent()], 'A');
       scope.sceneState.selectEntity(a);
       final group = scope.entities.groupSelection()!;
       await tester.pumpWidget(

@@ -90,8 +90,10 @@ void main() {
     return e;
   }
 
-  Entity cube(double x, String name) =>
-      make(name, [TransformComponent(position: Vector3(x, -0.5, 0)), Cube3D()]);
+  Entity cube(double x, String name) => make(name, [
+    TransformComponent(position: Vector3(x, -0.5, 0)),
+    Cube3DComponent(),
+  ]);
 
   Offset at(double x) => view.projectToScreen(Vector3(x, -1, 0))!;
   bool press(double x) =>
@@ -126,7 +128,7 @@ void main() {
     setUp(() {
       floor = make('Floor', [
         TransformComponent(position: Vector3(0, 0.5, 0)),
-        Cube3D(width: 40, depth: 40),
+        Cube3DComponent(width: 40, depth: 40),
       ]);
       session.setTool(BuiltInTools.select);
     });
@@ -208,7 +210,7 @@ void main() {
 
   test('Paint material: an Alt+click that drags paints nothing', () {
     final a = cube(0, 'A'), b = cube(2, 'B'), c = cube(4, 'C');
-    a.getComponent<Primitive3D>()!.material = _wood;
+    a.getComponent<Primitive3DComponent>()!.material = _wood;
     session.setTool(MaterialPaint3DTool.toolId);
     alt = true;
     press(0);
@@ -216,7 +218,8 @@ void main() {
     move(4);
     release(4);
     expect(scope.designer3D.materialInHand.value, _wood);
-    String materialOf(Entity e) => e.getComponent<Primitive3D>()!.material;
+    String materialOf(Entity e) =>
+        e.getComponent<Primitive3DComponent>()!.material;
     expect([materialOf(b), materialOf(c)], ['', '']);
     expect(scope.history.undoEntries, isEmpty);
   });
@@ -237,8 +240,8 @@ void main() {
     final killing = scope3D(modules: [_Kit()]);
     final ledge = killing.world.createEntityWithComponents([
       TransformComponent(position: Vector3(0, -5, 0)),
-      Cube3D(),
-      Collider3D(),
+      Cube3DComponent(),
+      Collider3DComponent(),
     ], name: 'Ledge');
     killing.sceneState.registerEntity(ledge);
     final problems = [
@@ -253,7 +256,7 @@ void main() {
         p.message,
     ];
     expect(plain, isEmpty, reason: 'nothing in this scene yet');
-    cube(0, 'Box').addComponent(Collider3D());
+    cube(0, 'Box').addComponent(Collider3DComponent());
     expect(
       [
         for (final p in LevelChecks3D.all(ValidationContext(scope: scope)))

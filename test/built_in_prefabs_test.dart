@@ -90,8 +90,8 @@ void main() {
       if (prefab.placement != PrefabPlacement.dragRect) continue;
       final components = prefab.build(position, size);
 
-      final rect = components.whereType<jge.RectangleComponent>().firstOrNull;
-      final circle = components.whereType<jge.CircleComponent>().firstOrNull;
+      final rect = components.whereType<jge.Rectangle2DComponent>().firstOrNull;
+      final circle = components.whereType<jge.Circle2DComponent>().firstOrNull;
       if (rect == null && circle == null) {
         // Not a shape: a camera zone or camera bounds, drawn by the camera
         // overlay from its extent — which must then be what was drawn.
@@ -119,7 +119,7 @@ void main() {
 
       // A body, if any, must match what was drawn — a collider that disagrees
       // with its own rectangle is invisible to the author and wrong in play.
-      final collider = components.whereType<jge.Collider2D>().firstOrNull;
+      final collider = components.whereType<jge.Collider2DComponent>().firstOrNull;
       if (collider != null) {
         expect(collider.shape, jge.ColliderShape2D.matchShape, reason: prefab.id);
         final world = jge.World()..initialize();
@@ -135,10 +135,10 @@ void main() {
   });
 
   test('the trigger is a sensor and the solid is not', () {
-    jge.RigidBody2D bodyOf(String id) => scope.prefabs
+    jge.RigidBody2DComponent bodyOf(String id) => scope.prefabs
         .byId(id)!
         .build(position, size)
-        .whereType<jge.RigidBody2D>()
+        .whereType<jge.RigidBody2DComponent>()
         .single;
 
     expect(bodyOf(BuiltInPrefabs.triggerId).isSensor, isTrue);

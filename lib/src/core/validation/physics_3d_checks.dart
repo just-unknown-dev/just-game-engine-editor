@@ -18,9 +18,9 @@ abstract final class Physics3DChecks {
     final problems = <SceneProblem>[];
     String name(Entity e) => e.name ?? 'entity ${e.id}';
 
-    for (final e in world.query([RigidBody3D])) {
-      final body = e.getComponent<RigidBody3D>()!;
-      final collider = e.getComponent<Collider3D>();
+    for (final e in world.query([RigidBody3DComponent])) {
+      final body = e.getComponent<RigidBody3DComponent>()!;
+      final collider = e.getComponent<Collider3DComponent>();
       if (collider == null) {
         problems.add(
           SceneProblem(
@@ -34,7 +34,7 @@ abstract final class Physics3DChecks {
                 apply: () => context.scope.history.push(
                   AddComponentCommand(
                     entity: e,
-                    component: Collider3D(),
+                    component: Collider3DComponent(),
                     sceneState: context.scope.sceneState,
                   ),
                 ),
@@ -67,8 +67,8 @@ abstract final class Physics3DChecks {
       }
     }
 
-    for (final e in world.query([CharacterBody3D])) {
-      if (e.hasComponent<RigidBody3D>()) {
+    for (final e in world.query([CharacterBody3DComponent])) {
+      if (e.hasComponent<RigidBody3DComponent>()) {
         problems.add(
           SceneProblem(
             message:
@@ -81,8 +81,8 @@ abstract final class Physics3DChecks {
       }
     }
 
-    for (final e in world.query([Collider3D])) {
-      final c = e.getComponent<Collider3D>()!;
+    for (final e in world.query([Collider3DComponent])) {
+      final c = e.getComponent<Collider3DComponent>()!;
       if (c.shape == ColliderShape3D.matchShape &&
           !e.components.any((x) => x is SolidShapeSource)) {
         problems.add(
@@ -127,7 +127,7 @@ abstract final class Physics3DChecks {
     }
 
     for (final e in world.entities) {
-      for (final joint in e.components.whereType<Joint3D>()) {
+      for (final joint in e.components.whereType<Joint3DComponent>()) {
         final target = joint.connectedBody;
         if (target.isNone) continue;
         if (target.resolve(world, e, includeInactive: true) == null) {
@@ -149,7 +149,7 @@ abstract final class Physics3DChecks {
   static void _setShape(
     ValidationContext context,
     Entity entity,
-    Collider3D collider,
+    Collider3DComponent collider,
     ColliderShape3D shape,
   ) {
     final field = context.scope.definitions

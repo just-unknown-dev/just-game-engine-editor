@@ -5,8 +5,8 @@ import 'package:just_game_engine/graphics_3d.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 
 /// The inspector's editors for an entity's own material values —
-/// `Material2D.overrides`, `ScreenMaterial.overrides`,
-/// `MaterialOverrides3D.values` — in place of the editor's JSON one.
+/// `Material2DComponent.overrides`, `ScreenMaterialComponent.overrides`,
+/// `MaterialOverrides3DComponent.values` — in place of the editor's JSON one.
 abstract final class MaterialOverrideEditors {
   /// By field type id, for the project in the working directory.
   static Map<String, FieldEditorBuilder> get all => forRoot(null);
@@ -77,8 +77,8 @@ class MaterialOverridesEditor extends StatelessWidget {
   // ── 2-D ─────────────────────────────────────────────────────────────
 
   String get _path2D => switch (context.component) {
-    final Material2D m => m.material.trim(),
-    final ScreenMaterial s => s.material.trim(),
+    final Material2DComponent m => m.material.trim(),
+    final ScreenMaterialComponent s => s.material.trim(),
     _ => '',
   };
 
@@ -108,11 +108,17 @@ class MaterialOverridesEditor extends StatelessWidget {
     Entity? owner;
     final selected = context.sceneState?.selectedEntity.value;
     if (selected != null &&
-        identical(selected.getComponent<MaterialOverrides3D>(), component)) {
+        identical(
+          selected.getComponent<MaterialOverrides3DComponent>(),
+          component,
+        )) {
       owner = selected;
     } else {
-      for (final e in world.query(const [MaterialOverrides3D])) {
-        if (identical(e.getComponent<MaterialOverrides3D>(), component)) {
+      for (final e in world.query(const [MaterialOverrides3DComponent])) {
+        if (identical(
+          e.getComponent<MaterialOverrides3DComponent>(),
+          component,
+        )) {
           owner = e;
           break;
         }
@@ -190,7 +196,7 @@ class MaterialOverridesEditor extends StatelessWidget {
     final have = values.keys.toSet();
     if (flat) {
       final file = material2D;
-      final kind = context.component is ScreenMaterial
+      final kind = context.component is ScreenMaterialComponent
           ? Material2DKind.screen
           : Material2DKind.sprite;
       return [

@@ -199,7 +199,7 @@ void main() {
         'for what is off its Level Map too', () {
       final solid = engine.world.createEntityWithComponents([
         TransformComponent(),
-        Collider2D(),
+        Collider2DComponent(),
       ], name: 'solid');
       tick();
       expect(physics().outlineFilter!(solid), isTrue);

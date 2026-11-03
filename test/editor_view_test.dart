@@ -70,7 +70,7 @@ void main() {
       addTearDown(world.dispose);
       final box = world.createEntityWithComponents([
         TransformComponent(),
-        RectangleComponent(width: 4, height: 4),
+        Rectangle2DComponent(width: 4, height: 4),
       ], name: 'Box');
       final picker = PlanarEntityPicker();
       final view = _deepView();
@@ -84,11 +84,11 @@ void main() {
     addTearDown(world.dispose);
     final inside = world.createEntityWithComponents([
       TransformComponent(position: Vector3(0, 0, 0)),
-      RectangleComponent(width: 4, height: 4),
+      Rectangle2DComponent(width: 4, height: 4),
     ]);
     final outside = world.createEntityWithComponents([
       TransformComponent(position: Vector3(1000, 0, 0)),
-      RectangleComponent(width: 4, height: 4),
+      Rectangle2DComponent(width: 4, height: 4),
     ]);
     final view = GameCameraEditorView.of(
       Camera(viewportSize: const Size(200, 200)),

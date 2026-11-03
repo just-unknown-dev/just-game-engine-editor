@@ -100,7 +100,7 @@ class EyedropperTool extends LevelToolHandler {
         ? shown
         : Size(shown.height, shown.width);
     final color = entity.components
-        .whereType<jge.RectangleComponent>()
+        .whereType<jge.Rectangle2DComponent>()
         .firstOrNull
         ?.fillStyle
         .color;

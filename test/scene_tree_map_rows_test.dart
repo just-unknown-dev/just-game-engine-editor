@@ -322,7 +322,7 @@ void main() {
         'its class names a prefab by id, name or alias', () async {
       List<Component> marked(double width) => [
         TransformComponent(),
-        RectangleComponent(width: width, height: 1),
+        Rectangle2DComponent(width: width, height: 1),
       ];
       final prefabs = PrefabRegistry()
         ..register(
@@ -372,7 +372,7 @@ void main() {
       double? widthOf(String name) => specs
           .firstWhere((s) => s.name == name)
           .decode()
-          .whereType<RectangleComponent>()
+          .whereType<Rectangle2DComponent>()
           .firstOrNull
           ?.width;
       expect(widthOf('Door'), 7, reason: 'the class, an alias');

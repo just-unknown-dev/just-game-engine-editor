@@ -371,12 +371,12 @@ void main() {
     addTearDown(scope.dispose);
     write('fx/flash.material2d.json', {'flash': {}});
     write('fx/crt.material2d.json', {'kind': 'screen'});
-    final screen = ScreenMaterial(material: 'fx/crt.material2d.json')
+    final screen = ScreenMaterialComponent(material: 'fx/crt.material2d.json')
       ..set('nothing.here', 1.0);
     world.createEntityWithComponents([
       TransformComponent(position: Vector3(100, 100, 0)),
-      RectangleComponent(width: 40, height: 40),
-      Material2D(material: 'fx/flash.material2d.json'),
+      Rectangle2DComponent(width: 40, height: 40),
+      Material2DComponent(material: 'fx/flash.material2d.json'),
       screen,
     ], name: 'Both');
     final problems = [
@@ -404,7 +404,7 @@ void main() {
               'fields': {'spritePath': sprite},
             },
             {
-              'type': 'Material2D',
+              'type': 'Material2DComponent',
               'fields': {'material': material},
             },
           ],

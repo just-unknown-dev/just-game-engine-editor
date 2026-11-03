@@ -23,15 +23,16 @@ abstract final class PhysicsChecks {
   ];
 
   /// The colliders an author placed: not the level map's, not the game's.
-  static Iterable<(jge.Entity, jge.Collider2D, jge.RigidBody2D?)> _colliders(
-    ValidationContext context,
-  ) sync* {
-    for (final e in context.world.query([jge.Collider2D])) {
+  static Iterable<
+    (jge.Entity, jge.Collider2DComponent, jge.RigidBody2DComponent?)
+  >
+  _colliders(ValidationContext context) sync* {
+    for (final e in context.world.query([jge.Collider2DComponent])) {
       if (!PhysicsBodies.isAuthored(e)) continue;
       yield (
         e,
-        e.getComponent<jge.Collider2D>()!,
-        e.getComponent<jge.RigidBody2D>(),
+        e.getComponent<jge.Collider2DComponent>()!,
+        e.getComponent<jge.RigidBody2DComponent>(),
       );
     }
   }
@@ -43,8 +44,9 @@ abstract final class PhysicsChecks {
   static List<SceneProblem> shapes(ValidationContext context) {
     final scope = context.scope;
     final out = <SceneProblem>[];
-    for (final e in context.world.query([jge.RigidBody2D])) {
-      if (!PhysicsBodies.isAuthored(e) || e.hasComponent<jge.Collider2D>()) {
+    for (final e in context.world.query([jge.RigidBody2DComponent])) {
+      if (!PhysicsBodies.isAuthored(e) ||
+          e.hasComponent<jge.Collider2DComponent>()) {
         continue;
       }
       out.add(
@@ -59,7 +61,7 @@ abstract final class PhysicsChecks {
               apply: () => scope.history.push(
                 AddComponentCommand(
                   entity: e,
-                  component: jge.Collider2D(
+                  component: jge.Collider2DComponent(
                     shape: jge.ColliderShape2D.matchShape,
                   ),
                   sceneState: scope.sceneState,
@@ -108,10 +110,10 @@ abstract final class PhysicsChecks {
   static List<SceneProblem> characters(ValidationContext context) {
     final scope = context.scope;
     final out = <SceneProblem>[];
-    for (final e in context.world.query([jge.CharacterBody2D])) {
+    for (final e in context.world.query([jge.CharacterBody2DComponent])) {
       if (!PhysicsBodies.isAuthored(e)) continue;
-      final rigid = e.getComponent<jge.RigidBody2D>();
-      final collider = e.getComponent<jge.Collider2D>();
+      final rigid = e.getComponent<jge.RigidBody2DComponent>();
+      final collider = e.getComponent<jge.Collider2DComponent>();
       if (rigid == null && collider == null) continue;
       out.add(
         SceneProblem(
@@ -159,10 +161,10 @@ abstract final class PhysicsChecks {
       if (collider.shape == jge.ColliderShape2D.matchShape) continue;
       final drawn = entity.components.any(
         (c) =>
-            c is jge.CircleComponent ||
-            c is jge.RectangleComponent ||
-            c is jge.CapsuleComponent ||
-            c is jge.PolygonComponent,
+            c is jge.Circle2DComponent ||
+            c is jge.Rectangle2DComponent ||
+            c is jge.Capsule2DComponent ||
+            c is jge.Polygon2DComponent,
       );
       if (!drawn) continue;
       final visual = jge.ColliderGeometry.visualShapeOf(entity);
@@ -410,17 +412,17 @@ abstract final class PhysicsChecks {
   static void _set<T>(
     EditorScope scope,
     jge.Entity entity,
-    jge.RigidBody2D body,
+    jge.RigidBody2DComponent body,
     String label,
-    T Function(jge.RigidBody2D) read,
-    void Function(jge.RigidBody2D, Object?) write,
+    T Function(jge.RigidBody2DComponent) read,
+    void Function(jge.RigidBody2DComponent, Object?) write,
     T value,
   ) {
     scope.history.push(
       ComponentFieldCommand(
         label: 'Change $label',
         component: body,
-        write: (c, v) => write(c as jge.RigidBody2D, v),
+        write: (c, v) => write(c as jge.RigidBody2DComponent, v),
         before: read(body),
         after: value,
         sceneState: scope.sceneState,

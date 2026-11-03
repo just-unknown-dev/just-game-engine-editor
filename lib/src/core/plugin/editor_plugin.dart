@@ -530,7 +530,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (bindPhysicsBodies) {
       // No bridge system here — PhysicsSystem (core engine) owns
       // syncing PhysicsBody results back to TransformComponent itself, for
-      // every entity with a Collider2D, not just editor-authored ones.
+      // every entity with a Collider2DComponent, not just editor-authored ones.
       if (!engine.world.systems.any(
         (system) => system is PhysicsBodyBindingSystem,
       )) {

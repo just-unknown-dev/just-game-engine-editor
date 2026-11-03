@@ -56,13 +56,13 @@ OrbitFlyEditorView _above() {
 
 List<Entity> _cubes(EditorScope scope) => [
   for (final e in scope.world.entities)
-    if (e.getComponent<Primitive3D>() is Cube3D) e,
+    if (e.getComponent<Primitive3DComponent>() is Cube3DComponent) e,
 ];
 
 Vector3 _at(Entity e) => e.getComponent<TransformComponent>()!.position;
 
 Entity _cube(EditorScope scope, Vector3 at, String name) {
-  final e = scope.world.createEntityWithComponents([TransformComponent(position: at), Cube3D()], name: name);
+  final e = scope.world.createEntityWithComponents([TransformComponent(position: at), Cube3DComponent()], name: name);
   scope.sceneState.registerEntity(e);
   return e;
 }

@@ -252,7 +252,7 @@ final class Material2DStage {
 
   void _applyLight() {
     final size = _laidOut;
-    final light = _light?.getComponent<Light2D>();
+    final light = _light?.getComponent<Light2DComponent>();
     if (size == null || light == null) return;
     light
       ..colour = _lightColour
@@ -457,7 +457,7 @@ final class Material2DStage {
           )..filterQuality = quality,
         ),
         LayerComponent(zOrder: z),
-        if (material && !_plain) Material2D(material: _path),
+        if (material && !_plain) Material2DComponent(material: _path),
       ]);
       _entities.add(e);
       return e;
@@ -501,7 +501,9 @@ final class Material2DStage {
       }
       if (!_plain) {
         _entities.add(
-          world.createEntityWithComponents([ScreenMaterial(material: _path)]),
+          world.createEntityWithComponents([
+            ScreenMaterialComponent(material: _path),
+          ]),
         );
       }
       return;
@@ -513,14 +515,14 @@ final class Material2DStage {
     if (_lit || _showNormals) {
       _entities.add(
         world.createEntityWithComponents([
-          Lighting2D(ambient: const Color(0xFF30303A)),
+          Lighting2DComponent(ambient: const Color(0xFF30303A)),
         ]),
       );
       _light = world.createEntityWithComponents([
         TransformComponent(
           position: Vector3(_lightAt.dx * w, _lightAt.dy * h, 0),
         ),
-        Light2D(castsShadows: false),
+        Light2DComponent(castsShadows: false),
       ]);
       _entities.add(_light!);
       _applyLight();
@@ -684,7 +686,7 @@ final class Material2DStage {
               scale: Vector3(scale, scale, 1),
             ),
             ...components,
-            if (!_plain) Material2D(material: _path),
+            if (!_plain) Material2DComponent(material: _path),
           ]),
         );
       }

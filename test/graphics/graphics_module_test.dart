@@ -327,20 +327,20 @@ void main() {
     test('a light says what it does', () {
       expect(
         GraphicsInspectors.lightNote(
-          LightComponent(kind: LightKind.directional),
+          Light3DComponent(kind: LightKind.directional),
         ),
         contains('shadows'),
       );
       expect(
-        GraphicsInspectors.lightNote(LightComponent(range: 4)),
+        GraphicsInspectors.lightNote(Light3DComponent(range: 4)),
         contains('4.0 m'),
       );
       expect(
-        GraphicsInspectors.lightNote(LightComponent()),
+        GraphicsInspectors.lightNote(Light3DComponent()),
         contains('no limit'),
       );
       expect(
-        GraphicsInspectors.lightNote(LightComponent(kind: LightKind.spot)),
+        GraphicsInspectors.lightNote(Light3DComponent(kind: LightKind.spot)),
         contains('cone'),
       );
     });

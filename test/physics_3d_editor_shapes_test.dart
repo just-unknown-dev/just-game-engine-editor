@@ -71,11 +71,11 @@ void main() {
     expect(solid.offersFor(stairs), isTrue);
     expect(solid.offersFor(plain), isFalse);
     final parts = solid.of(stairs).build(Offset.zero, Size.zero);
-    expect(parts.whereType<RigidBody3D>().single.bodyType, BodyType3D.static);
-    expect(parts.whereType<Collider3D>().single.shape, ColliderShape3D.matchShape);
+    expect(parts.whereType<RigidBody3DComponent>().single.bodyType, BodyType3D.static);
+    expect(parts.whereType<Collider3DComponent>().single.shape, ColliderShape3D.matchShape);
     final trigger = BuiltInPhysics3DContributions.trigger.of(stairs);
     expect(trigger.name, 'Trigger Stairs');
-    expect(trigger.build(Offset.zero, Size.zero).whereType<RigidBody3D>().single.isSensor, isTrue);
+    expect(trigger.build(Offset.zero, Size.zero).whereType<RigidBody3DComponent>().single.isSensor, isTrue);
   });
 
   group('hull outlines', () {
@@ -115,7 +115,7 @@ void main() {
 
   test('a collider matching a shape that is not there is an error; its fix makes it a box', () {
     final s = scope();
-    final c = Collider3D(shape: ColliderShape3D.matchShape);
+    final c = Collider3DComponent(shape: ColliderShape3D.matchShape);
     s.world.createEntityWithComponents([TransformComponent(), c], name: 'Ghost');
     final problems = Physics3DChecks.all(ValidationContext(scope: s, projectRoot: Directory.systemTemp.path));
     expect(problems.single.message, contains('no 3-D shape'));
@@ -124,7 +124,7 @@ void main() {
     s.world.createEntityWithComponents([
       TransformComponent(),
       _Steps(2),
-      Collider3D(shape: ColliderShape3D.matchShape),
+      Collider3DComponent(shape: ColliderShape3D.matchShape),
     ]);
     expect(Physics3DChecks.all(ValidationContext(scope: s, projectRoot: Directory.systemTemp.path)), isEmpty);
   });

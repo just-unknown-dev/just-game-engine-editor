@@ -40,11 +40,15 @@ final class ColliderOverlay3D extends ViewportOverlay {
   void paint(ViewportOverlayContext context) {
     final world = context.world;
     final matrix = Matrix4.identity();
-    for (final entity in world.query([TransformComponent, Collider3D])) {
+    for (final entity in world.query([
+      TransformComponent,
+      Collider3DComponent,
+    ])) {
       if (!context.isShown(entity)) continue;
-      final c = entity.getComponent<Collider3D>()!;
+      final c = entity.getComponent<Collider3DComponent>()!;
       final selected = context.isSelected(entity);
-      final sensor = entity.getComponent<RigidBody3D>()?.isSensor ?? false;
+      final sensor =
+          entity.getComponent<RigidBody3DComponent>()?.isSensor ?? false;
       final paint = _paint(
         sensor ? const Color(0xFFFFD54F) : const Color(0xFF7CFC9A),
         selected,
@@ -75,9 +79,12 @@ final class ColliderOverlay3D extends ViewportOverlay {
         _line(context, place(Vector3.copy(a)), place(Vector3.copy(b)), paint);
       }
     }
-    for (final entity in world.query([TransformComponent, CharacterBody3D])) {
+    for (final entity in world.query([
+      TransformComponent,
+      CharacterBody3DComponent,
+    ])) {
       if (!context.isShown(entity)) continue;
-      final ch = entity.getComponent<CharacterBody3D>()!;
+      final ch = entity.getComponent<CharacterBody3DComponent>()!;
       final paint = _paint(const Color(0xFF64B5F6), context.isSelected(entity));
       // Its feet are its position; the capsule stands up from them (-Y).
       final feet = entity.getComponent<TransformComponent>()!.position;
@@ -106,14 +113,11 @@ final class ColliderOverlay3D extends ViewportOverlay {
   }
 
   /// [c]'s outline, made once for its shape and size.
-  List<(Vector3, Vector3)> _plainLines(Collider3D c) => _cached(_plain, (
-    c.shape,
-    c.size.x,
-    c.size.y,
-    c.size.z,
-    c.radius,
-    c.height,
-  ), () => shapeLines(c));
+  List<(Vector3, Vector3)> _plainLines(Collider3DComponent c) => _cached(
+    _plain,
+    (c.shape, c.size.x, c.size.y, c.size.z, c.radius, c.height),
+    () => shapeLines(c),
+  );
 
   /// [key]'s lines in [cache], made by [make] when missing; the cache keeps
   /// the [cacheSize] drawn most recently.
@@ -289,7 +293,9 @@ final class ColliderOverlay3D extends ViewportOverlay {
   /// [c]'s outline as line segments in its own space (before its offset,
   /// rotation and scale). A mesh, hull or height field shows the box its
   /// model or heights fill — here a metre cube, until the shape is built.
-  static List<(Vector3, Vector3)> shapeLines(Collider3D c) => switch (c.shape) {
+  static List<(Vector3, Vector3)> shapeLines(
+    Collider3DComponent c,
+  ) => switch (c.shape) {
     ColliderShape3D.box => boxLines(c.size * 0.5),
     ColliderShape3D.sphere => [
       ..._ring(Vector3.zero(), Vector3(1, 0, 0), Vector3(0, 1, 0), c.radius),

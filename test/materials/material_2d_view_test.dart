@@ -71,10 +71,10 @@ void main() {
           .position;
       expect((at.x, at.y), (170.0, 140.0), reason: 'the middle, moved');
 
-      expect(stage.world.query(const [Material2D]), hasLength(1));
+      expect(stage.world.query(const [Material2DComponent]), hasLength(1));
       stage.plain = true;
       await stage.picture(300, 300);
-      expect(stage.world.query(const [Material2D]), isEmpty);
+      expect(stage.world.query(const [Material2DComponent]), isEmpty);
     });
 
     test("the light's settings; the normals view lights it", () async {
@@ -85,8 +85,8 @@ void main() {
         ..lightReach = 1
         ..lightStrength = 2;
       await stage.picture(200, 100);
-      final light = stage.world.query(const [Light2D]).single;
-      final l = light.getComponent<Light2D>()!;
+      final light = stage.world.query(const [Light2DComponent]).single;
+      final l = light.getComponent<Light2DComponent>()!;
       expect(
         [l.colour, l.intensity, l.radius, l.height],
         [const Color(0xFFFFAA00), 2.0, 200.0, 50.0],
@@ -98,7 +98,7 @@ void main() {
       await stage.picture(200, 100);
       expect(stage.lighting.showNormals, isTrue);
       expect(
-        stage.world.query(const [Lighting2D]),
+        stage.world.query(const [Lighting2DComponent]),
         hasLength(1),
         reason: 'only the lighting has them',
       );
@@ -423,7 +423,7 @@ void main() {
             'fields': {'spritePath': image, 'atlasPath': ''},
           },
           {
-            'type': 'Material2D',
+            'type': 'Material2DComponent',
             'fields': {'material': path},
           },
         ],

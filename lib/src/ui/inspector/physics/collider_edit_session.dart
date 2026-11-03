@@ -108,10 +108,10 @@ class ColliderEditSession {
 
   /// The collider being edited, while its entity is alive and has one with
   /// a shape of its own — one matching what is drawn has none to edit.
-  jge.Collider2D? get body {
+  jge.Collider2DComponent? get body {
     final e = target.value;
     if (e == null || !e.isAlive) return null;
-    final c = e.getComponent<jge.Collider2D>();
+    final c = e.getComponent<jge.Collider2DComponent>();
     return c == null || c.shape == jge.ColliderShape2D.matchShape ? null : c;
   }
 
@@ -123,7 +123,7 @@ class ColliderEditSession {
   void toggle(jge.Entity entity) {
     if (isEditing(entity)) {
       stop();
-    } else if (entity.getComponent<jge.Collider2D>()?.shape ==
+    } else if (entity.getComponent<jge.Collider2DComponent>()?.shape ==
         jge.ColliderShape2D.matchShape) {
       scope.log.log(
         'Its collider matches what is drawn: change what is drawn, or pick a shape for the collider to edit it.',
@@ -170,7 +170,7 @@ class ColliderEditSession {
   }
 
   /// [c]'s own scale, as its shape is built with it.
-  static (double, double) _ownScale(jge.Collider2D c) {
+  static (double, double) _ownScale(jge.Collider2DComponent c) {
     double clean(double v) => v.abs() < jge.ColliderGeometry.minScale
         ? (v.isNegative
               ? -jge.ColliderGeometry.minScale
@@ -218,13 +218,13 @@ class ColliderEditSession {
   }
 
   /// [c]'s points in its own space: its saved points with its own scale.
-  static List<Offset> _ownPoints(jge.Collider2D c) {
+  static List<Offset> _ownPoints(jge.Collider2DComponent c) {
     final (cx, cy) = _ownScale(c);
     return [for (final p in c.points) Offset(p.dx * cx, p.dy * cy)];
   }
 
   /// [c]'s capsule in its own space: upright about its middle.
-  static jge.CapsuleShape _capsuleOf(jge.Collider2D c) {
+  static jge.CapsuleShape _capsuleOf(jge.Collider2DComponent c) {
     final (cx, cy) = _ownScale(c);
     final r = math.max(c.radius.abs() * cx.abs(), 1e-3);
     final h = math.max(c.height.abs() * cy.abs(), 2 * r);
@@ -232,7 +232,7 @@ class ColliderEditSession {
   }
 
   /// [c]'s box in its own space, rounded corners and all: (width, height).
-  static (double, double) _boxOf(jge.Collider2D c) {
+  static (double, double) _boxOf(jge.Collider2DComponent c) {
     final (cx, cy) = _ownScale(c);
     return (
       math.max(c.size.x.abs() * cx.abs(), 1e-3),
@@ -484,7 +484,7 @@ class ColliderEditSession {
   /// Sets [c]'s fields to what dragging [h] to [p] (entity space) from
   /// where the drag began makes — only those the handle stands for.
   void _dragged(
-    jge.Collider2D c,
+    jge.Collider2DComponent c,
     ColliderHandle h,
     Offset p, {
     required bool symmetric,
@@ -592,7 +592,7 @@ class ColliderEditSession {
     }
   }
 
-  void _insertPoint(jge.Collider2D b, int edge) {
+  void _insertPoint(jge.Collider2DComponent b, int edge) {
     if (!_canInsert) return;
     final v = b.points;
     if (edge < 0 || edge >= v.length) return;
@@ -602,7 +602,7 @@ class ColliderEditSession {
     });
   }
 
-  void _removePoint(jge.Collider2D b, int i) {
+  void _removePoint(jge.Collider2DComponent b, int i) {
     final least = switch (b.shape) {
       jge.ColliderShape2D.polygon => 4,
       jge.ColliderShape2D.chain => 3,
@@ -623,7 +623,10 @@ class ColliderEditSession {
   }
 
   /// Makes [change] to [b] as part of this gesture's one undo step.
-  void _push(jge.Collider2D b, void Function(jge.Collider2D) change) {
+  void _push(
+    jge.Collider2DComponent b,
+    void Function(jge.Collider2DComponent) change,
+  ) {
     final definition = scope.definitions.definitionFor(b);
     final before = ComponentEdit.snapshot(scope, b);
     if (definition == null || before == null) return;
@@ -751,7 +754,7 @@ class ColliderEditSession {
 /// What a drag of a collider handle is measured from: the fields as they
 /// were when it began.
 class _ColliderFields {
-  _ColliderFields.of(jge.Collider2D c)
+  _ColliderFields.of(jge.Collider2DComponent c)
     : offset = c.offset,
       rotation = c.rotation,
       size = jge.Vector2(c.size.x, c.size.y),
@@ -780,7 +783,7 @@ class ColliderEditCommand extends EditorCommand {
     required this.gesture,
   });
 
-  final jge.Collider2D collider;
+  final jge.Collider2DComponent collider;
 
   /// How [collider]'s fields are read and written.
   final jge.ComponentDefinition definition;

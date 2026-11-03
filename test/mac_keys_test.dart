@@ -63,7 +63,7 @@ void main() {
   Entity block(String name) {
     final entity = plugin.engine.world.createEntityWithComponents([
       TransformComponent(position: Vector3(0, 0, 0)),
-      RectangleComponent(width: 64, height: 32),
+      Rectangle2DComponent(width: 64, height: 32),
     ], name: name);
     plugin.sceneState.selectEntity(entity);
     return entity;
@@ -79,7 +79,7 @@ void main() {
     ], name: LevelMaps.primaryName);
     final crate = world.createEntityWithComponents([
       TransformComponent(position: Vector3(0, 0, 0)),
-      RectangleComponent(width: 64, height: 32),
+      Rectangle2DComponent(width: 64, height: 32),
     ], name: 'Crate');
     placeEntity(
       crate,

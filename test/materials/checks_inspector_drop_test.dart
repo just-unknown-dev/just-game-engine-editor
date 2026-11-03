@@ -40,8 +40,8 @@ void main() {
       scope.world.createEntityWithComponents([
         TransformComponent(position: Vector3(100, 100, 0)),
         // As the editor places a rectangle: a renderable with a size.
-        if (drawn) RectangleComponent(width: 40, height: 40),
-        if (material != null) Material2D(material: material),
+        if (drawn) Rectangle2DComponent(width: 40, height: 40),
+        if (material != null) Material2DComponent(material: material),
       ], name: name);
 
   group('the checks', () {
@@ -62,15 +62,15 @@ void main() {
       final problem = check().single;
       expect(problem.message, contains('a screen material'));
       problem.fixes.single.apply();
-      expect(hero.hasComponent<Material2D>(), isFalse);
+      expect(hero.hasComponent<Material2DComponent>(), isFalse);
       expect(
-        hero.getComponent<ScreenMaterial>()!.material,
+        hero.getComponent<ScreenMaterialComponent>()!.material,
         'fx/crt.material2d.json',
       );
       expect(scope.history.undoEntries, hasLength(1));
       scope.history.undo();
-      expect(hero.hasComponent<Material2D>(), isTrue);
-      expect(hero.hasComponent<ScreenMaterial>(), isFalse);
+      expect(hero.hasComponent<Material2DComponent>(), isTrue);
+      expect(hero.hasComponent<ScreenMaterialComponent>(), isFalse);
     });
 
     test('a 2D material on something that draws nothing: removed', () {
@@ -83,7 +83,7 @@ void main() {
       final problem = check().single;
       expect(problem.message, contains('draws nothing'));
       problem.fixes.single.apply();
-      expect(ghost.hasComponent<Material2D>(), isFalse);
+      expect(ghost.hasComponent<Material2DComponent>(), isFalse);
     });
 
     test('a normal map with no Scene lighting: lighting added', () {
@@ -95,7 +95,7 @@ void main() {
       final problem = check().single;
       expect(problem.message, contains('Scene lighting'));
       problem.fixes.single.apply();
-      expect(scope.world.query(const [Lighting2D]), hasLength(1));
+      expect(scope.world.query(const [Lighting2DComponent]), hasLength(1));
       expect(check(), isEmpty);
     });
 
@@ -111,10 +111,10 @@ void main() {
     test('two screen materials on: the lower one is said', () {
       write('fx/a.material2d.json', {'kind': 'screen'});
       final low = scope.world.createEntityWithComponents([
-        ScreenMaterial(material: 'fx/a.material2d.json'),
+        ScreenMaterialComponent(material: 'fx/a.material2d.json'),
       ], name: 'Low');
       scope.world.createEntityWithComponents([
-        ScreenMaterial(material: 'fx/a.material2d.json', order: 2),
+        ScreenMaterialComponent(material: 'fx/a.material2d.json', order: 2),
       ], name: 'High');
       final problem = check().single;
       expect(problem.entity, low);
@@ -124,13 +124,15 @@ void main() {
     test('own values no effect has: removed', () {
       write('fx/flash.material2d.json', {'flash': {}});
       final hero = sprite('Hero', material: 'fx/flash.material2d.json');
-      hero.getComponent<Material2D>()!
+      hero.getComponent<Material2DComponent>()!
         ..set('flash.amount', 0.5)
         ..set('nothing.here', 1.0);
       final problem = check().single;
       expect(problem.message, contains('nothing.here'));
       problem.fixes.single.apply();
-      expect(hero.getComponent<Material2D>()!.overrides, {'flash.amount': 0.5});
+      expect(hero.getComponent<Material2DComponent>()!.overrides, {
+        'flash.amount': 0.5,
+      });
     });
 
     test("a Level Map layer's missing material", () {
@@ -153,7 +155,9 @@ void main() {
       final lamp = scope.world.createEntityWithComponents([
         TransformComponent(),
         model,
-        MaterialOverrides3D(values: {'roughness': 0.2, 'colourMap': 'x'}),
+        MaterialOverrides3DComponent(
+          values: {'roughness': 0.2, 'colourMap': 'x'},
+        ),
       ], name: 'Lamp');
       final problems = check();
       expect(problems, hasLength(2));
@@ -166,7 +170,7 @@ void main() {
         (p) => p.message.contains('colourMap'),
       );
       unknown.fixes.single.apply();
-      expect(lamp.getComponent<MaterialOverrides3D>()!.values, {
+      expect(lamp.getComponent<MaterialOverrides3DComponent>()!.values, {
         'roughness': 0.2,
       });
     });
@@ -235,7 +239,7 @@ void main() {
       write('fx/hit.material2d.json', {
         'flash': {'colour': 0xFFFF0000, 'amount': 0.25},
       });
-      final m = Material2D(material: 'fx/hit.material2d.json');
+      final m = Material2DComponent(material: 'fx/hit.material2d.json');
       final editor = MaterialOverridesEditor(
         flat: true,
         context: FieldEditorContext(
@@ -271,7 +275,7 @@ void main() {
       tester,
     ) async {
       write('fx/hit.material2d.json', {'flash': {}});
-      final m = Material2D(material: 'fx/hit.material2d.json');
+      final m = Material2DComponent(material: 'fx/hit.material2d.json');
       final changes = await pump(tester, m, {
         'flash.amount': 0.5,
         'flash.colour': 0xFF00FF00,
@@ -289,8 +293,8 @@ void main() {
         'stone.material.json',
         const MaterialFile(roughness: 0.7, tilingX: 2).encode(),
       );
-      final overrides = MaterialOverrides3D();
-      final cube = Cube3D(material: 'stone.material.json');
+      final overrides = MaterialOverrides3DComponent();
+      final cube = Cube3DComponent(material: 'stone.material.json');
       final e = scope.world.createEntityWithComponents([
         TransformComponent(),
         cube,
@@ -355,13 +359,19 @@ void main() {
         module.dropMaterial2D(drop('fx/a.material2d.json', 105, 95)),
         isNull,
       );
-      expect(hero.getComponent<Material2D>()!.material, 'fx/a.material2d.json');
+      expect(
+        hero.getComponent<Material2DComponent>()!.material,
+        'fx/a.material2d.json',
+      );
       expect(scope.history.undoEntries.single.label, 'Paint Hero');
       module.dropMaterial2D(drop('fx/b.material2d.json', 100, 100));
-      expect(hero.getComponent<Material2D>()!.material, 'fx/b.material2d.json');
+      expect(
+        hero.getComponent<Material2DComponent>()!.material,
+        'fx/b.material2d.json',
+      );
       scope.history.undo();
       scope.history.undo();
-      expect(hero.hasComponent<Material2D>(), isFalse);
+      expect(hero.hasComponent<Material2DComponent>(), isFalse);
       expect(placed, isEmpty);
     });
 
@@ -379,9 +389,9 @@ void main() {
       module.dropMaterial2D(drop('fx/crt.material2d.json', 0, 0));
       expect(placed, ['Screen']);
       final screen = scope.world
-          .query(const [ScreenMaterial])
+          .query(const [ScreenMaterialComponent])
           .single
-          .getComponent<ScreenMaterial>()!;
+          .getComponent<ScreenMaterialComponent>()!;
       expect(screen.material, 'fx/crt.material2d.json');
       module.dropMaterial2D(drop('fx/night.material2d.json', 0, 0));
       expect(placed, ['Screen'], reason: 'not another');

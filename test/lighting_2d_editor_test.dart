@@ -61,11 +61,11 @@ void main() {
     final spot = s.prefabs
         .byId(BuiltInLighting2DContributions.spotId)!
         .build(const Offset(10, 20), const Size(48, 48));
-    expect(spot.whereType<Light2D>().single.kind, Light2DKind.spot);
+    expect(spot.whereType<Light2DComponent>().single.kind, Light2DKind.spot);
     final lighting = s.prefabs
         .byId(BuiltInLighting2DContributions.lightingId)!
         .build(Offset.zero, const Size(48, 48));
-    expect(lighting.whereType<Lighting2D>(), hasLength(1));
+    expect(lighting.whereType<Lighting2DComponent>(), hasLength(1));
   });
 
   group('Shift+L', () {
@@ -106,7 +106,7 @@ void main() {
       final s = scope();
       final lamp = s.world.createEntityWithComponents([
         TransformComponent(),
-        Light2D(),
+        Light2DComponent(),
       ], name: 'Lamp');
       List<SceneProblem> check() =>
           BuiltInLighting2DContributions.lightsWithoutLighting(
@@ -117,12 +117,12 @@ void main() {
       expect(problem.message, contains('Lamp'));
       expect(problem.fixes.single.label, 'Add Scene lighting');
       problem.fixes.single.apply();
-      expect(s.world.query(const [Lighting2D]), hasLength(1));
+      expect(s.world.query(const [Lighting2DComponent]), hasLength(1));
       expect(check(), isEmpty);
       s.history.undo();
       expect(check(), hasLength(1), reason: 'the fix is one undo step');
 
-      final off = Lighting2D(enabled: false);
+      final off = Lighting2DComponent(enabled: false);
       s.world.createEntityWithComponents([off]);
       final again = check().single;
       expect(again.fixes.single.label, 'Turn the Scene lighting on');
@@ -135,7 +135,7 @@ void main() {
   group('the reach of a selected light', () {
     late EditorScope s;
     late Entity entity;
-    late Light2D light;
+    late Light2DComponent light;
     final view = GameCameraEditorView.of(
       Camera(viewportSize: const Size(800, 600)),
     );
@@ -156,7 +156,7 @@ void main() {
 
     setUp(() {
       s = scope();
-      light = Light2D(radius: 100);
+      light = Light2DComponent(radius: 100);
       entity = s.world.createEntityWithComponents([
         TransformComponent(position: Vector3(400, 300, 0)),
         light,
@@ -186,7 +186,7 @@ void main() {
             fillColor: const Color(0xFF795548),
           ),
         ),
-        ShadowCaster2D(),
+        ShadowCaster2DComponent(),
       ]);
       s.sceneState.selectedEntity.value = caster;
       expect(paint(), 4);

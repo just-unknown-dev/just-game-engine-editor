@@ -19,8 +19,8 @@ import 'package:just_game_engine_editor/src/core/scene/scene_io.dart';
 Entity _generated(World world, String name) =>
     world.createEntityWithComponents([
       TransformComponent(),
-      RigidBody2D(bodyType: BodyType.static),
-      Collider2D(size: Vector2(32, 32)),
+      RigidBody2DComponent(bodyType: BodyType.static),
+      Collider2DComponent(size: Vector2(32, 32)),
       GeneratedEntityComponent(source: 'test'),
     ], name: name);
 

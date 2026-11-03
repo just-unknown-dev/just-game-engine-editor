@@ -165,7 +165,7 @@ void main() {
       );
 
       final bulb = parts[1].components;
-      final light = bulb.whereType<LightComponent>().single;
+      final light = bulb.whereType<Light3DComponent>().single;
       expect(light.kind, LightKind.point);
       expect(light.range, 3);
       expect(light.color, const Color(0xFFFF0000));
@@ -209,7 +209,7 @@ void main() {
       expect(scope.world.entities.where((e) => e.isAlive), isEmpty);
       scope.history.redo();
       expect(
-        scope.world.entities.where((e) => e.hasComponent<LightComponent>()),
+        scope.world.entities.where((e) => e.hasComponent<Light3DComponent>()),
         hasLength(2),
       );
     });

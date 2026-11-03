@@ -20,77 +20,77 @@ abstract final class ShapePrefabs {
       'cube',
       'Cube',
       Icons.view_in_ar_outlined,
-      Cube3D.new,
+      Cube3DComponent.new,
       'A box, 1 m each way.',
     ),
     _prefab(
       'sphere',
       'Sphere',
       Icons.circle_outlined,
-      Sphere3D.new,
+      Sphere3DComponent.new,
       'A ball, 1 m across.',
     ),
     _prefab(
       'plane',
       'Plane',
       Icons.crop_landscape_outlined,
-      Plane3D.new,
+      Plane3DComponent.new,
       'A flat 10 m square: a floor.',
     ),
     _prefab(
       'cylinder',
       'Cylinder',
       Icons.storage_outlined,
-      Cylinder3D.new,
+      Cylinder3DComponent.new,
       'An upright cylinder.',
     ),
     _prefab(
       'capsule',
       'Capsule',
       Icons.medication_outlined,
-      Capsule3D.new,
+      Capsule3DComponent.new,
       'A cylinder with round ends.',
     ),
     _prefab(
       'cone',
       'Cone',
       Icons.change_history,
-      Cone3D.new,
+      Cone3DComponent.new,
       'A cone, its tip up.',
     ),
     _prefab(
       'torus',
       'Torus',
       Icons.donut_large,
-      Torus3D.new,
+      Torus3DComponent.new,
       'A ring lying flat.',
     ),
     _prefab(
       'ramp',
       'Ramp',
       Icons.trending_up,
-      Ramp3D.new,
+      Ramp3DComponent.new,
       'A wedge to walk up, rising towards +Z.',
     ),
     _prefab(
       'stairs',
       'Stairs',
       Icons.stairs_outlined,
-      Stairs3D.new,
+      Stairs3DComponent.new,
       'Five steps rising towards +Z.',
     ),
     _prefab(
       'arch',
       'Arch',
       Icons.architecture,
-      Arch3D.new,
+      Arch3DComponent.new,
       'A half-round arch on two feet.',
     ),
     _prefab(
       'polygon',
       'Polygon',
       Icons.hexagon_outlined,
-      Polygon3D.new,
+      Polygon3DComponent.new,
       'An outline raised to a height: drag its corners.',
     ),
   ];
@@ -99,7 +99,7 @@ abstract final class ShapePrefabs {
     String id,
     String name,
     IconData icon,
-    Primitive3D Function() make,
+    Primitive3DComponent Function() make,
     String description,
   ) => PrefabDefinition(
     id: 'shape.$id',
@@ -124,7 +124,7 @@ abstract final class ShapePrefabs {
   /// Where [shape]'s entity goes so that it rests on [at]'s surface: its
   /// middle moved off the surface along its normal by half its size that
   /// way (a hair more for a flat one, so it does not fight the surface).
-  static Vector3 restingOn(Primitive3D shape, SurfacePoint at) {
+  static Vector3 restingOn(Primitive3DComponent shape, SurfacePoint at) {
     final b = Aabb3();
     shape.boundsInto(b);
     final n = at.normal;

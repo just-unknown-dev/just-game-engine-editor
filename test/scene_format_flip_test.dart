@@ -26,7 +26,7 @@ final _v0 = {
           'rotation': 0.5,
           'scale': 2.0,
         },
-        {'type': 'RectangleComponent', 'width': 64.0, 'height': 16.0},
+        {'type': 'Rectangle2DComponent', 'width': 64.0, 'height': 16.0},
         {
           'type': 'TagComponent',
           'customComponentId': 'tag_8a41b7f8',
@@ -79,7 +79,7 @@ void main() {
     final t2 = again.getComponent<TransformComponent>()!;
     expect((t2.position.x, t2.position.y), (96.0, 32.0));
     expect(t2.angle, 0.5);
-    expect(again.components.whereType<RectangleComponent>().single.width, 64);
+    expect(again.components.whereType<Rectangle2DComponent>().single.width, 64);
     expect(again.getComponent<TagComponent>()!.tags, ['ground']);
   });
 }

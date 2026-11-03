@@ -39,9 +39,9 @@ Entity _block(
   double h = 32,
 }) => world.createEntityWithComponents([
   TransformComponent(position: Vector3(x, y, 0)),
-  RectangleComponent(width: w, height: h),
-  RigidBody2D(bodyType: BodyType.static),
-  Collider2D(size: Vector2(w, h)),
+  Rectangle2DComponent(width: w, height: h),
+  RigidBody2DComponent(bodyType: BodyType.static),
+  Collider2DComponent(size: Vector2(w, h)),
   LayerComponent(),
 ], name: name);
 
@@ -239,14 +239,14 @@ void main() {
       session.scope.view.transformMode.value = TransformMode.scale;
       drag(const Offset(64, 32), const Offset(128, 64));
 
-      final rect = a.components.whereType<RectangleComponent>().single;
-      final collider = a.getComponent<Collider2D>()!;
+      final rect = a.components.whereType<Rectangle2DComponent>().single;
+      final collider = a.getComponent<Collider2DComponent>()!;
       expect((rect.width, rect.height), (128.0, 64.0));
       expect((collider.size.x, collider.size.y), (128.0, 64.0));
       expect(_pos(a), const Offset(64, 32), reason: 'top-left stays put');
 
       session.history.undo();
-      expect(a.components.whereType<RectangleComponent>().single.width, 64);
+      expect(a.components.whereType<Rectangle2DComponent>().single.width, 64);
       expect(_pos(a), const Offset(32, 16));
     });
 
@@ -335,7 +335,7 @@ void main() {
         DesignerGeometry.worldBounds(filled.single),
         const Rect.fromLTWH(32, 32, 64, 32),
       );
-      expect(filled.single.hasComponent<Collider2D>(), isTrue);
+      expect(filled.single.hasComponent<Collider2DComponent>(), isTrue);
     });
 
     test('bucket fill refuses an open region', () {
@@ -375,7 +375,7 @@ void main() {
     final copy = world
         .query([TransformComponent])
         .firstWhere((e) => e.id != a.id);
-    expect(copy.hasComponent<Collider2D>(), isTrue);
+    expect(copy.hasComponent<Collider2DComponent>(), isTrue);
     expect(DesignerGeometry.worldBounds(copy)!.size, const Size(128, 32));
   });
 

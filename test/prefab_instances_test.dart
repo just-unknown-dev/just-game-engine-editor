@@ -111,7 +111,7 @@ void main() {
     expect(file.byId('box')!.components.first['fields'], isNot(contains('nothing')));
     // The coin is now the instance's own, and the instance changes nothing.
     final coinNow = named('Coin');
-    expect(coinNow.getComponent<PrefabLink>()?.instance, top.id);
+    expect(coinNow.getComponent<PrefabLinkComponent>()?.instance, top.id);
     expect([at(coinNow).x, at(coinNow).y], [100, 30]);
     final block = PrefabInstance.fromJson(saved().single['prefab'] as Map);
     expect(block.overrides.map((o) => o.field), ['position']);
@@ -196,6 +196,6 @@ void main() {
     snapshot.restoreInto(scope2.world);
     final restored = scope2.world.entities.firstWhere((e) => e.name == 'Lid');
     expect(restored.getComponent<TransformComponent>()!.position.y, closeTo(40, 1e-6));
-    expect(restored.getComponent<PrefabLink>(), isNotNull, reason: 'still part of it');
+    expect(restored.getComponent<PrefabLinkComponent>(), isNotNull, reason: 'still part of it');
   });
 }

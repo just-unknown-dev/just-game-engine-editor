@@ -23,8 +23,8 @@ class _UnlitView {
 /// caster, a Lighting group in the Add menu, and a command (Shift+L) to see
 /// the scene unlit while it is worked on.
 ///
-/// Lighting is the engine's own (`Light2D`, `Lighting2D`,
-/// `ShadowCaster2D`), so every 2-D project has it.
+/// Lighting is the engine's own (`Light2DComponent`, `Lighting2DComponent`,
+/// `ShadowCaster2DComponent`), so every 2-D project has it.
 abstract final class BuiltInLighting2DContributions {
   /// The colour lights are drawn in.
   static const Color color = Color(0xFFFFCA28);
@@ -32,7 +32,7 @@ abstract final class BuiltInLighting2DContributions {
   /// A marker on every 2-D light.
   static const EditorMarker lights = EditorMarker(
     id: 'lighting.light2D',
-    components: [jge.Light2D],
+    components: [jge.Light2DComponent],
     icon: Icons.lightbulb_outline,
     color: color,
   );
@@ -40,7 +40,7 @@ abstract final class BuiltInLighting2DContributions {
   /// A marker on the scene's lighting.
   static const EditorMarker lighting = EditorMarker(
     id: 'lighting.lighting2D',
-    components: [jge.Lighting2D],
+    components: [jge.Lighting2DComponent],
     icon: Icons.wb_twilight,
     color: color,
   );
@@ -77,7 +77,7 @@ abstract final class BuiltInLighting2DContributions {
         'Light all round it, fading to nothing at its radius. Needs Scene '
         'lighting in the scene.',
     namePrefix: 'Light',
-    build: (position, _) => [..._at(position), jge.Light2D()],
+    build: (position, _) => [..._at(position), jge.Light2DComponent()],
   );
 
   static PrefabDefinition get _spot => PrefabDefinition(
@@ -94,7 +94,7 @@ abstract final class BuiltInLighting2DContributions {
     namePrefix: 'Spot',
     build: (position, _) => [
       ..._at(position),
-      jge.Light2D(kind: jge.Light2DKind.spot, radius: 320),
+      jge.Light2DComponent(kind: jge.Light2DKind.spot, radius: 320),
     ],
   );
 
@@ -110,7 +110,7 @@ abstract final class BuiltInLighting2DContributions {
         'Turns 2-D lighting on: the scene is drawn in its ambient light, lit '
         'by its lights. One per scene.',
     namePrefix: 'Lighting',
-    build: (position, _) => [..._at(position), jge.Lighting2D()],
+    build: (position, _) => [..._at(position), jge.Lighting2DComponent()],
   );
 
   static List<jge.Component> _at(Offset position) => [
@@ -188,11 +188,11 @@ abstract final class BuiltInLighting2DContributions {
   /// with Scene lighting added (or the one there turned on) as the fix.
   static List<SceneProblem> lightsWithoutLighting(ValidationContext context) {
     final world = context.world;
-    final lights = world.query(const [jge.Light2D]);
+    final lights = world.query(const [jge.Light2DComponent]);
     if (lights.isEmpty) return const [];
     final lightings = world
-        .query(const [jge.Lighting2D])
-        .map((e) => e.getComponent<jge.Lighting2D>()!)
+        .query(const [jge.Lighting2DComponent])
+        .map((e) => e.getComponent<jge.Lighting2DComponent>()!)
         .toList();
     if (lightings.any((l) => l.enabled)) return const [];
     final scope = context.scope;
@@ -232,7 +232,7 @@ abstract final class BuiltInLighting2DContributions {
                         for (final c in <jge.Component>[
                           jge.TransformComponent(),
                           jge.LayerComponent(),
-                          jge.Lighting2D(),
+                          jge.Lighting2DComponent(),
                         ])
                           ?scope.codec.encode(c),
                       ],
@@ -279,10 +279,10 @@ class Light2DOverlay extends ViewportOverlay {
       ..color = BuiltInLighting2DContributions.color.withValues(alpha: 0.45);
     for (final entity in context.world.query([
       jge.TransformComponent,
-      jge.Light2D,
+      jge.Light2DComponent,
     ])) {
       if (!context.isShown(entity) || !context.isSelected(entity)) continue;
-      final light = entity.getComponent<jge.Light2D>()!;
+      final light = entity.getComponent<jge.Light2DComponent>()!;
       final t = entity.getComponent<jge.TransformComponent>()!;
       final centre = t.position;
       if (light.kind == jge.Light2DKind.spot) {
@@ -308,7 +308,7 @@ class Light2DOverlay extends ViewportOverlay {
       ..strokeWidth = 1
       ..color = const Color(0xFF90A4AE);
     for (final entity in context.world.query([
-      jge.ShadowCaster2D,
+      jge.ShadowCaster2DComponent,
       jge.RenderableComponent,
     ])) {
       if (!context.isShown(entity) || !context.isSelected(entity)) continue;

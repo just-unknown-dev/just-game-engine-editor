@@ -18,7 +18,7 @@ final class ShapeSizeHandles extends ViewportHandles {
 
   @override
   List<ViewportHandle> handlesOf(Entity entity, EditorScope scope) {
-    final shape = entity.getComponent<Primitive3D>();
+    final shape = entity.getComponent<Primitive3DComponent>();
     final transform = entity.getComponent<TransformComponent>();
     if (shape == null || transform == null) return const [];
     if (scope.designer3D.viewMode.value == ViewMode3D.collision) {
@@ -40,46 +40,49 @@ final class ShapeSizeHandles extends ViewportHandles {
 
   /// How [shape]'s size is set along each of its axes; empty for a shape
   /// it does not know.
-  static List<FaceAxis> axesOf(Primitive3D shape) {
+  static List<FaceAxis> axesOf(Primitive3DComponent shape) {
     FaceAxis axis(int a, void Function(double v) set) => FaceAxis(a, set);
     // A round shape's radius, from its size across.
     List<FaceAxis> across(void Function(double r) set) => [
       for (final a in const [0, 2]) axis(a, (v) => set(v / 2)),
     ];
     return switch (shape) {
-      Cube3D s => [
+      Cube3DComponent s => [
         axis(0, (v) => s.width = v),
         axis(1, (v) => s.height = v),
         axis(2, (v) => s.depth = v),
       ],
-      Ramp3D s => [
+      Ramp3DComponent s => [
         axis(0, (v) => s.width = v),
         axis(1, (v) => s.height = v),
         axis(2, (v) => s.depth = v),
       ],
-      Stairs3D s => [
+      Stairs3DComponent s => [
         axis(0, (v) => s.width = v),
         axis(1, (v) => s.height = v),
         axis(2, (v) => s.depth = v),
       ],
-      Plane3D s => [axis(0, (v) => s.width = v), axis(2, (v) => s.depth = v)],
-      Sphere3D s => [
+      Plane3DComponent s => [
+        axis(0, (v) => s.width = v),
+        axis(2, (v) => s.depth = v),
+      ],
+      Sphere3DComponent s => [
         for (final a in const [0, 1, 2]) axis(a, (v) => s.radius = v / 2),
       ],
-      Cylinder3D s => [
+      Cylinder3DComponent s => [
         ...across((r) => s.radius = r),
         axis(1, (v) => s.height = v),
       ],
-      Cone3D s => [
+      Cone3DComponent s => [
         ...across((r) => s.radius = r),
         axis(1, (v) => s.height = v),
       ],
-      Capsule3D s => [
+      Capsule3DComponent s => [
         ...across((r) => s.radius = r),
         axis(1, (v) => s.height = v),
       ],
       // Across: the ring's size, its tube kept; up: the tube.
-      Torus3D s => [
+      Torus3DComponent s => [
         for (final a in const [0, 2])
           axis(
             a,
@@ -89,7 +92,7 @@ final class ShapeSizeHandles extends ViewportHandles {
         axis(1, (v) => s.tubeRadius = v / 2),
       ],
       // Across and up: the whole arch, in proportion; along: its depth.
-      Arch3D s => [
+      Arch3DComponent s => [
         for (final a in const [0, 1])
           axis(a, (v) {
             final ratio = v / _extentOf(s, a);
@@ -100,7 +103,7 @@ final class ShapeSizeHandles extends ViewportHandles {
         axis(2, (v) => s.depth = v),
       ],
       // Across: its outline spread or drawn in; up: its height.
-      Polygon3D s => [
+      Polygon3DComponent s => [
         for (final a in const [0, 2])
           axis(a, (v) {
             final ratio = v / _extentOf(s, a);
@@ -121,7 +124,7 @@ final class ShapeSizeHandles extends ViewportHandles {
     };
   }
 
-  static double _extentOf(Primitive3D shape, int axis) {
+  static double _extentOf(Primitive3DComponent shape, int axis) {
     final box = Aabb3()..also(shape.boundsInto);
     final e = switch (axis) {
       0 => box.max.x - box.min.x,

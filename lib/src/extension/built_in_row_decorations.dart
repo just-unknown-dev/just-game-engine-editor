@@ -25,7 +25,9 @@ abstract final class BuiltInRowDecorations {
   /// Part of a prefab instance: a box on its top, a dot on the rest.
   static Widget? _prefab(BuildContext context, jge.Entity entity) {
     final instance = entity.getComponent<jge.PrefabInstanceComponent>();
-    if (instance == null && !entity.hasComponent<jge.PrefabLink>()) return null;
+    if (instance == null && !entity.hasComponent<jge.PrefabLinkComponent>()) {
+      return null;
+    }
     final colour = instance?.missing ?? false
         ? EditorTheme.warning
         : EditorTheme.primaryBright;

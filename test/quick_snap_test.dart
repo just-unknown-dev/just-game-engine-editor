@@ -182,8 +182,8 @@ void main() {
       plugin.engine.world.addSystem(physics);
       final solid = plugin.engine.world.createEntityWithComponents([
         TransformComponent(),
-        RigidBody2D(),
-        Collider2D(),
+        RigidBody2DComponent(),
+        Collider2DComponent(),
       ], name: 'Floor_solid');
       plugin.openLevelDesigner();
       await tester.pump();

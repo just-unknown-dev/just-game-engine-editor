@@ -320,10 +320,10 @@ void main() {
       session = ColliderEditSession.of(scope);
     });
 
-    jge.Entity body(jge.Collider2D collider) =>
+    jge.Entity body(jge.Collider2DComponent collider) =>
         scope.world.createEntityWithComponents([
           jge.TransformComponent(position: jge.Vector3(100, 100, 0)),
-          jge.RigidBody2D(),
+          jge.RigidBody2DComponent(),
           collider,
         ], name: 'Thing');
 
@@ -340,7 +340,7 @@ void main() {
     }
 
     test('a turned box moved and resized is still that box, turned', () {
-      final c = jge.Collider2D(shape: jge.ColliderShape2D.box)
+      final c = jge.Collider2DComponent(shape: jge.ColliderShape2D.box)
         ..size = jge.Vector2(40, 20)
         ..rotation = math.pi / 6;
       final e = body(c);
@@ -359,7 +359,7 @@ void main() {
     });
 
     test('a rounded polygon keeps its points and its corners', () {
-      final c = jge.Collider2D(shape: jge.ColliderShape2D.polygon)
+      final c = jge.Collider2DComponent(shape: jge.ColliderShape2D.polygon)
         ..points = const [
           Offset(-10, -10),
           Offset(10, -10),

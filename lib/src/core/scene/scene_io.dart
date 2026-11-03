@@ -483,7 +483,7 @@ class SceneIO {
         if (instance < 0 || instance >= madeAt.length) continue;
         final top = madeAt[instance];
         if (top == null) continue;
-        entity.addComponent(PrefabLink(instance: top.id, path: path));
+        entity.addComponent(PrefabLinkComponent(instance: top.id, path: path));
         if (ref['block'] case final Map block) {
           entity.addComponent(
             PrefabInstanceComponent(

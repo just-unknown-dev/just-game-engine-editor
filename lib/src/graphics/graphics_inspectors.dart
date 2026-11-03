@@ -23,9 +23,9 @@ abstract final class GraphicsInspectors {
     InspectorSection(
       id: 'graphics.light',
       order: 61,
-      appliesTo: (e) => e.hasComponent<LightComponent>(),
+      appliesTo: (e) => e.hasComponent<Light3DComponent>(),
       build: (context, entity, scope) =>
-          _Note(lightNote(entity.getComponent<LightComponent>()!)),
+          _Note(lightNote(entity.getComponent<Light3DComponent>()!)),
     ),
     InspectorSection(
       id: 'graphics.environment',
@@ -37,7 +37,7 @@ abstract final class GraphicsInspectors {
   ];
 
   /// What a light of [light]'s kind does, in a line.
-  static String lightNote(LightComponent light) => switch (light.kind) {
+  static String lightNote(Light3DComponent light) => switch (light.kind) {
     LightKind.directional =>
       'Lights the whole scene from far away, along the entity\'s forward (+Z) axis, and casts the shadows. Turn the entity to aim it.',
     LightKind.point =>

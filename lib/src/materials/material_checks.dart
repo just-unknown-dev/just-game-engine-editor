@@ -28,12 +28,12 @@ abstract final class MaterialChecks {
     final out = <SceneProblem>[];
     final files = _Files(context);
     final lit = world
-        .query(const [Lighting2D])
-        .any((e) => e.getComponent<Lighting2D>()!.enabled);
+        .query(const [Lighting2DComponent])
+        .any((e) => e.getComponent<Lighting2DComponent>()!.enabled);
     Entity? needsLight;
 
-    for (final e in world.query(const [Material2D])) {
-      final m = e.getComponent<Material2D>()!;
+    for (final e in world.query(const [Material2DComponent])) {
+      final m = e.getComponent<Material2DComponent>()!;
       final path = m.material.trim();
       if (path.isEmpty || !context.fileExists(path)) continue;
       final file = files.resolved2D(path, e, out);
@@ -47,7 +47,7 @@ abstract final class MaterialChecks {
                 'over the whole frame, not on a sprite.',
             hint: 'Put it in a Screen material instead.',
             fixes: [
-              if (!e.hasComponent<ScreenMaterial>())
+              if (!e.hasComponent<ScreenMaterialComponent>())
                 ProblemFix(
                   label: 'Make it the screen material',
                   apply: () => scope.history.push(
@@ -61,7 +61,7 @@ abstract final class MaterialChecks {
                         ),
                         AddComponentCommand(
                           entity: e,
-                          component: ScreenMaterial(material: path),
+                          component: ScreenMaterialComponent(material: path),
                           sceneState: scope.sceneState,
                         ),
                       ],
@@ -102,11 +102,11 @@ abstract final class MaterialChecks {
     }
 
     final screens = [
-      for (final e in world.query(const [ScreenMaterial]))
-        if (e.getComponent<ScreenMaterial>()!.enabled) e,
+      for (final e in world.query(const [ScreenMaterialComponent]))
+        if (e.getComponent<ScreenMaterialComponent>()!.enabled) e,
     ];
     for (final e in screens) {
-      final s = e.getComponent<ScreenMaterial>()!;
+      final s = e.getComponent<ScreenMaterialComponent>()!;
       final path = s.material.trim();
       if (path.isEmpty || !context.fileExists(path)) continue;
       final file = files.resolved2D(path, e, out);
@@ -126,8 +126,8 @@ abstract final class MaterialChecks {
     if (screens.length > 1) {
       final top = screens.reduce(
         (a, b) =>
-            a.getComponent<ScreenMaterial>()!.order >=
-                b.getComponent<ScreenMaterial>()!.order
+            a.getComponent<ScreenMaterialComponent>()!.order >=
+                b.getComponent<ScreenMaterialComponent>()!.order
             ? a
             : b,
       );
@@ -238,13 +238,13 @@ abstract final class MaterialChecks {
         files.resolved3D(path.trim(), e, out);
       }
     }
-    for (final e in world.query(const [Primitive3D])) {
-      final path = e.getComponent<Primitive3D>()!.material.trim();
+    for (final e in world.query(const [Primitive3DComponent])) {
+      final path = e.getComponent<Primitive3DComponent>()!.material.trim();
       if (path.isEmpty || !context.fileExists(path)) continue;
       files.resolved3D(path, e, out);
     }
-    for (final e in world.query(const [MaterialOverrides3D])) {
-      final overrides = e.getComponent<MaterialOverrides3D>()!;
+    for (final e in world.query(const [MaterialOverrides3DComponent])) {
+      final overrides = e.getComponent<MaterialOverrides3DComponent>()!;
       final unknown = [
         for (final key in overrides.values.keys)
           if (!_known3D(key)) key,
@@ -285,7 +285,7 @@ abstract final class MaterialChecks {
 
   // The problem with [component]'s own values ([overrides], taken out by
   // [remove]) that change nothing. The undo step is [component]'s own: an
-  // entity can have a Material2D and a ScreenMaterial both.
+  // entity can have a Material2DComponent and a ScreenMaterialComponent both.
   static List<SceneProblem> _unknown2D(
     EditorScope scope,
     Entity e,
@@ -361,7 +361,7 @@ abstract final class MaterialChecks {
               for (final c in <Component>[
                 TransformComponent(),
                 LayerComponent(),
-                Lighting2D(),
+                Lighting2DComponent(),
               ])
                 ?scope.codec.encode(c),
             ],

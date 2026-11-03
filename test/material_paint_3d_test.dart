@@ -55,13 +55,13 @@ void main() {
   Entity cube(double x, String name) {
     final e = scope.world.createEntityWithComponents([
       TransformComponent(position: Vector3(x, -0.5, 0)),
-      Cube3D(),
+      Cube3DComponent(),
     ], name: name);
     scope.sceneState.registerEntity(e);
     return e;
   }
 
-  String materialOf(Entity e) => e.getComponent<Primitive3D>()!.material;
+  String materialOf(Entity e) => e.getComponent<Primitive3DComponent>()!.material;
 
   Offset at(double x) => view.projectToScreen(Vector3(x, -1, 0))!;
   void press(double x) => session.onPointerDown(Offset.zero, 32, screen: at(x), canvasSize: const Size(400, 400));
@@ -97,7 +97,7 @@ void main() {
 
   test('Alt+click picks a material up', () {
     final a = cube(0, 'A');
-    a.getComponent<Primitive3D>()!.material = _wood;
+    a.getComponent<Primitive3DComponent>()!.material = _wood;
     alt = true;
     press(0);
     release(0);

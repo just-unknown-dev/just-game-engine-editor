@@ -121,11 +121,11 @@ abstract final class BuiltInPrefabs {
     jge.LayerComponent(),
   ];
 
-  static jge.RectangleComponent _rect(
+  static jge.Rectangle2DComponent _rect(
     Size size,
     Color color, {
     bool filled = true,
-  }) => jge.RectangleComponent(
+  }) => jge.Rectangle2DComponent(
     width: size.width,
     height: size.height,
     filled: filled,
@@ -164,7 +164,7 @@ abstract final class BuiltInPrefabs {
       ..._base(position),
       // Sized by the smaller axis, so a drag that is not square still gives a
       // circle that fits inside what was drawn.
-      jge.CircleComponent(
+      jge.Circle2DComponent(
         radius: (size.width < size.height ? size.width : size.height) / 2,
         fillStyle: const jge.ShapePaintStyle(color: shapeColor),
         strokeWidth: 2,
@@ -204,12 +204,12 @@ abstract final class BuiltInPrefabs {
     build: (position, size) => [
       ..._base(position),
       _rect(size, solidColor),
-      jge.RigidBody2D(
+      jge.RigidBody2DComponent(
         bodyType: jge.BodyType.static,
         lockRotation: true,
         restitution: 0,
       ),
-      jge.Collider2D(shape: jge.ColliderShape2D.matchShape),
+      jge.Collider2DComponent(shape: jge.ColliderShape2D.matchShape),
     ],
   );
 
@@ -226,12 +226,12 @@ abstract final class BuiltInPrefabs {
       // Outline only: a solid fill would read as geometry. The outline
       // draws in the game too.
       _rect(size, triggerColor, filled: false),
-      jge.RigidBody2D(
+      jge.RigidBody2DComponent(
         bodyType: jge.BodyType.static,
         isSensor: true,
         lockRotation: true,
       ),
-      jge.Collider2D(shape: jge.ColliderShape2D.matchShape),
+      jge.Collider2DComponent(shape: jge.ColliderShape2D.matchShape),
     ],
   );
 

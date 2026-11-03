@@ -22,7 +22,7 @@ Map<String, Object?> _entity(String name, List<Map<String, Object?>> c) => {
   'components': [
     _component('TransformComponent', {}),
     ...c,
-    _component('Material2D', {'material': _material, 'overrides': {}}),
+    _component('Material2DComponent', {'material': _material, 'overrides': {}}),
   ],
 };
 
@@ -31,7 +31,7 @@ Map<String, Object?> _sprite(String image, {String atlas = ''}) => _component(
   {'spritePath': image, 'atlasPath': atlas, 'region': ''},
 );
 
-final _circle = _component('CircleComponent', {
+final _circle = _component('Circle2DComponent', {
   'radius': 6.0,
   'fillStyle': {'color': 0xFFFFC107, 'blendMode': 'modulate'},
   'strokeStyle': {'color': 0xFF000000, 'blendMode': 'modulate'},
@@ -96,7 +96,7 @@ void main() {
         expect(shape.spritePath, isNull);
         expect(
           [for (final c in shape.shape!) c['type']],
-          ['CircleComponent'],
+          ['Circle2DComponent'],
           reason: 'its place and its material left out',
         );
         expect(shape.file, 'assets/scenes/a.scene.json');
@@ -224,10 +224,10 @@ void main() {
       final (r, g, b) = await middle(80, 80);
       expect((r > 200, g > 150, b < 80), (true, true, true), reason: 'amber');
       final drawn = [
-        for (final e in stage.world.query(const [Material2D]))
+        for (final e in stage.world.query(const [Material2DComponent]))
           e.getComponent<RenderableComponent>(),
       ];
-      expect(drawn, [isA<CircleComponent>()], reason: 'the circle, decoded');
+      expect(drawn, [isA<Circle2DComponent>()], reason: 'the circle, decoded');
     });
   });
 }

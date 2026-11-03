@@ -27,7 +27,7 @@ void main() {
   Entity platform(String name, {double x = 0}) =>
       scope.world.createEntityWithComponents([
         TransformComponent(position: Vector3(x, 0, 0)),
-        RectangleComponent(width: 32, height: 32),
+        Rectangle2DComponent(width: 32, height: 32),
       ], name: name);
 
   group('the scope owns it', () {
@@ -140,7 +140,7 @@ void main() {
       // Every renderable is keyed under RenderableComponent — one drawn
       // thing per entity is this engine's rule.
       final rect =
-          entity.getComponent<RenderableComponent>()! as RectangleComponent;
+          entity.getComponent<RenderableComponent>()! as Rectangle2DComponent;
       await pumpInspector(tester, entity);
 
       // Width and height share one "Size" row, W then H.
@@ -170,7 +170,7 @@ void main() {
       // Every renderable is keyed under RenderableComponent — one drawn
       // thing per entity is this engine's rule.
       final rect =
-          entity.getComponent<RenderableComponent>()! as RectangleComponent;
+          entity.getComponent<RenderableComponent>()! as Rectangle2DComponent;
       await pumpInspector(tester, entity);
 
       // Width and height share one "Size" row, W then H.

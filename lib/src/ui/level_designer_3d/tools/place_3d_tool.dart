@@ -345,7 +345,7 @@ class Place3DTool extends LevelToolHandler {
     transform.localToWorldInto(matrix);
     final box = jge.Aabb3();
     RayEntityPicker.localBoundsOf(components, world.context.definitions, box);
-    final shape = components.whereType<g3.Primitive3D>().firstOrNull;
+    final shape = components.whereType<g3.Primitive3DComponent>().firstOrNull;
     ghost.value = PlacementGhost(
       prefab: prefab,
       at: at,
@@ -360,7 +360,7 @@ class Place3DTool extends LevelToolHandler {
 
   /// [shape]'s edges, once each, for the preview: none for a shape too
   /// detailed to draw them all.
-  List<jge.Vector3>? _edgesOf(g3.Primitive3D shape) {
+  List<jge.Vector3>? _edgesOf(g3.Primitive3DComponent shape) {
     final key = shape.shapeKey;
     final cached = _edgeCache[key];
     if (cached != null) return cached.isEmpty ? null : cached;

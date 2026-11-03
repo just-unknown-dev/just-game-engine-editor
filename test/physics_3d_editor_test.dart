@@ -44,12 +44,12 @@ void main() {
 
   test('its checks find nothing in a 2-D scene', () {
     final s = scope(mode: SceneMode.twoD);
-    s.world.createEntityWithComponents([TransformComponent(), RigidBody3D()], name: 'Crate');
+    s.world.createEntityWithComponents([TransformComponent(), RigidBody3DComponent()], name: 'Crate');
     expect(check(s), isEmpty);
   });
 
   test('outlines: a box has twelve edges, rounder shapes their rings', () {
-    expect(ColliderOverlay3D.shapeLines(Collider3D()), hasLength(12));
+    expect(ColliderOverlay3D.shapeLines(Collider3DComponent()), hasLength(12));
     final box = ColliderOverlay3D.boxLines(Vector3(1, 2, 3));
     expect(box.every((l) => l.$1.distanceTo(l.$2) > 0), isTrue);
     expect(box.map((l) => l.$1.distanceTo(l.$2)).toSet(), {2, 4, 6});
@@ -62,20 +62,20 @@ void main() {
   group('checks', () {
     test('a body with no collider; its fix adds one, undoably', () {
       final s = scope();
-      final e = s.world.createEntityWithComponents([TransformComponent(), RigidBody3D()], name: 'Crate');
+      final e = s.world.createEntityWithComponents([TransformComponent(), RigidBody3DComponent()], name: 'Crate');
       final problems = check(s);
       expect(problems.single.message, contains('no collider'));
       problems.single.fixes.single.apply();
-      expect(e.hasComponent<Collider3D>(), isTrue);
+      expect(e.hasComponent<Collider3DComponent>(), isTrue);
       expect(check(s), isEmpty);
       s.history.undo();
-      expect(e.hasComponent<Collider3D>(), isFalse);
+      expect(e.hasComponent<Collider3DComponent>(), isFalse);
     });
 
     test('a moving body with a mesh shape is an error; the fix makes it a hull', () {
       final s = scope();
-      final c = Collider3D(shape: ColliderShape3D.mesh, model: 'missing.glb');
-      s.world.createEntityWithComponents([TransformComponent(), RigidBody3D(), c], name: 'Rock');
+      final c = Collider3DComponent(shape: ColliderShape3D.mesh, model: 'missing.glb');
+      s.world.createEntityWithComponents([TransformComponent(), RigidBody3DComponent(), c], name: 'Rock');
       final problems = check(s);
       final moving = problems.firstWhere((p) => p.message.contains('dynamic body'));
       expect(moving.severity, ProblemSeverity.error);
@@ -86,13 +86,13 @@ void main() {
 
     test('a character with a body too, a hull with no model, a joint to nobody', () {
       final s = scope();
-      s.world.createEntityWithComponents([TransformComponent(), CharacterBody3D(), RigidBody3D(), Collider3D()], name: 'Hero');
-      s.world.createEntityWithComponents([TransformComponent(), Collider3D(shape: ColliderShape3D.convexHull)], name: 'Hull');
+      s.world.createEntityWithComponents([TransformComponent(), CharacterBody3DComponent(), RigidBody3DComponent(), Collider3DComponent()], name: 'Hero');
+      s.world.createEntityWithComponents([TransformComponent(), Collider3DComponent(shape: ColliderShape3D.convexHull)], name: 'Hull');
       s.world.createEntityWithComponents([
         TransformComponent(),
-        Collider3D(),
-        RigidBody3D(),
-        HingeJoint3D(connectedBody: const EntityTarget.name('Nobody')),
+        Collider3DComponent(),
+        RigidBody3DComponent(),
+        HingeJoint3DComponent(connectedBody: const EntityTarget.name('Nobody')),
       ], name: 'Door');
       final messages = check(s).map((p) => p.message).toList();
       expect(messages, contains(contains('a character and a rigid body')));

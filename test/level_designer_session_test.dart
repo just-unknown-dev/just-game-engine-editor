@@ -41,9 +41,9 @@ class _TestExtension extends EditorModule {
         jge.TransformComponent(
           position: jge.Vector3(position.dx, position.dy, 0),
         ),
-        jge.RectangleComponent(width: size.width, height: size.height),
-        jge.RigidBody2D(bodyType: jge.BodyType.static),
-        jge.Collider2D(size: jge.Vector2(size.width, size.height)),
+        jge.Rectangle2DComponent(width: size.width, height: size.height),
+        jge.RigidBody2DComponent(bodyType: jge.BodyType.static),
+        jge.Collider2DComponent(size: jge.Vector2(size.width, size.height)),
         jge.TagComponent(kBlockTag),
         jge.LayerComponent(),
       ],
@@ -98,7 +98,7 @@ void main() {
 
       // Read the size through DesignerGeometry, not getComponent: shape
       // components override componentType to RenderableComponent, so
-      // getComponent<RectangleComponent>() is always null.
+      // getComponent<Rectangle2DComponent>() is always null.
       final placed = _blocks(world).single;
       final size = DesignerGeometry.componentSize(placed)!;
       expect(size.width, closeTo(256, 1));

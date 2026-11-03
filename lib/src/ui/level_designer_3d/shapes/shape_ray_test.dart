@@ -3,7 +3,7 @@ import 'package:just_game_engine/graphics_3d.dart';
 
 import 'package:just_editor_core/host.dart';
 
-/// Picks a 3-D shape ([Primitive3D]) by its triangles, not its box: a click
+/// Picks a 3-D shape ([Primitive3DComponent]) by its triangles, not its box: a click
 /// through an arch or a ring's hole picks what is behind it. Knows its
 /// corners too, for a move that puts one on another (V held), and which
 /// way its surface faces, for placing on a slope or a ball.
@@ -18,7 +18,7 @@ final class ShapeRayTest
   /// How many shapes' triangles are kept.
   static const int keep = 256;
 
-  ModelGeometry _geometryOf(Primitive3D shape) {
+  ModelGeometry _geometryOf(Primitive3DComponent shape) {
     final key = shape.shapeKey;
     var geometry = _meshes[key];
     if (geometry == null) {
@@ -30,7 +30,7 @@ final class ShapeRayTest
 
   @override
   List<Vector3>? verticesOf(Entity entity) {
-    final shape = entity.getComponent<Primitive3D>();
+    final shape = entity.getComponent<Primitive3DComponent>();
     final transform = entity.getComponent<TransformComponent>();
     if (shape == null || transform == null) return null;
     final p = _geometryOf(shape).positions;
@@ -48,7 +48,7 @@ final class ShapeRayTest
 
   @override
   RayTriangleHit? surfaceHit(Entity entity, Ray3 ray) {
-    final shape = entity.getComponent<Primitive3D>();
+    final shape = entity.getComponent<Primitive3DComponent>();
     final transform = entity.getComponent<TransformComponent>();
     if (shape == null || transform == null) return null;
     final geometry = _geometryOf(shape);
@@ -59,7 +59,7 @@ final class ShapeRayTest
 
   @override
   double? distanceTo(Entity entity, Ray3 ray) {
-    final shape = entity.getComponent<Primitive3D>();
+    final shape = entity.getComponent<Primitive3DComponent>();
     final transform = entity.getComponent<TransformComponent>();
     if (shape == null || transform == null) return null;
     final geometry = _geometryOf(shape);

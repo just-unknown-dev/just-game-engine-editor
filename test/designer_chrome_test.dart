@@ -85,7 +85,7 @@ void main() {
       ];
       final a = world.createEntityWithComponents([
         TransformComponent(position: Vector3(100, 16, 0)),
-        RectangleComponent(width: 64, height: 32),
+        Rectangle2DComponent(width: 64, height: 32),
       ], name: 'A');
       session.sceneState.selectEntity(a);
       session
@@ -100,7 +100,7 @@ void main() {
   test('clicking the minimap centres the visible viewport there', () {
     world.createEntityWithComponents([
       TransformComponent(position: Vector3(3000, 0, 0)),
-      RectangleComponent(width: 100, height: 100),
+      Rectangle2DComponent(width: 100, height: 100),
     ]);
     final area = session.controller.visibleViewport(canvas);
     final panel = MinimapLayout.panelFor(
@@ -130,22 +130,22 @@ void main() {
   test('typing a width resizes the selection as one step', () {
     final a = world.createEntityWithComponents([
       TransformComponent(position: Vector3(32, 16, 0)),
-      RectangleComponent(width: 64, height: 32),
+      Rectangle2DComponent(width: 64, height: 32),
     ], name: 'A');
     for (final w in [70.0, 90.0, 128.0]) {
       // A scrub commits on every step; they fold into one undo.
       session.ops.resizeTo([a], Rect.fromLTWH(0, 0, w, 32), mergeKey: 'w');
     }
-    expect(a.components.whereType<RectangleComponent>().single.width, 128);
+    expect(a.components.whereType<Rectangle2DComponent>().single.width, 128);
     session.history.undo();
-    expect(a.components.whereType<RectangleComponent>().single.width, 64);
+    expect(a.components.whereType<Rectangle2DComponent>().single.width, 64);
     expect(session.history.undoDepth, 0);
   });
 
   test('hidden entities are what the render filter skips', () {
     final a = world.createEntityWithComponents([
       TransformComponent(),
-      RectangleComponent(width: 10, height: 10),
+      Rectangle2DComponent(width: 10, height: 10),
       LayerComponent(layerId: 'background'),
     ]);
     final c = session.controller;

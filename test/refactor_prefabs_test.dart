@@ -30,7 +30,7 @@ Map<String, dynamic> _tags(List<String> tags) => {
 };
 
 Map<String, dynamic> _body(int layer) => {
-  'type': 'RigidBody2D',
+  'type': 'RigidBody2DComponent',
   'fields': {'layer': layer},
 };
 
@@ -84,7 +84,7 @@ void main() {
                     if (layer != null)
                       {
                         'target': 'body',
-                        'component': 'RigidBody2D',
+                        'component': 'RigidBody2DComponent',
                         'field': 'layer',
                         'value': layer,
                       },

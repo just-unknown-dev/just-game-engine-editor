@@ -24,7 +24,7 @@ void main() {
       ], name: 'PlayerStart')
       ..createEntityWithComponents([
         TransformComponent(),
-        RectangleComponent(width: 10, height: 10),
+        Rectangle2DComponent(width: 10, height: 10),
       ], name: 'Ledge')
       ..createEntityWithComponents([TransformComponent()], name: 'Marker');
 

@@ -74,7 +74,7 @@ abstract final class ModelExpansion {
         parts.add(
           ModelPart(unique(light.name ?? node.name ?? 'light'), [
             transform,
-            LightComponent(
+            Light3DComponent(
               kind: switch (light.type) {
                 LightType.directional => LightKind.directional,
                 LightType.point => LightKind.point,

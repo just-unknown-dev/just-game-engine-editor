@@ -52,9 +52,9 @@ Entity _block(
   double h = 32,
 }) => world.createEntityWithComponents([
   TransformComponent(position: Vector3(x, y, 0)),
-  RectangleComponent(width: w, height: h),
-  RigidBody2D(bodyType: BodyType.static),
-  Collider2D(size: Vector2(w, h)),
+  Rectangle2DComponent(width: w, height: h),
+  RigidBody2DComponent(bodyType: BodyType.static),
+  Collider2DComponent(size: Vector2(w, h)),
   LayerComponent(),
 ], name: name);
 
@@ -345,14 +345,14 @@ void main() {
     final a = _block(world, 'A', 32, 16); // bounds 0,0 -> 64,32
     session.sceneState.selectEntity(a);
     session.scope.view.transformMode.value = TransformMode.scale;
-    final collider = a.getComponent<Collider2D>();
-    final rect = a.components.whereType<RectangleComponent>().single;
+    final collider = a.getComponent<Collider2DComponent>();
+    final rect = a.components.whereType<Rectangle2DComponent>().single;
     session
       ..onPointerDown(const Offset(64, 32), 32)
       ..onPointerMove(const Offset(96, 48), 32);
-    expect(identical(a.getComponent<Collider2D>(), collider), isTrue);
+    expect(identical(a.getComponent<Collider2DComponent>(), collider), isTrue);
     expect(
-      identical(a.components.whereType<RectangleComponent>().single, rect),
+      identical(a.components.whereType<Rectangle2DComponent>().single, rect),
       isTrue,
     );
     session
@@ -361,7 +361,7 @@ void main() {
       ..onPointerUp(const Offset(128, 64), 32);
     expect((rect.width, rect.height), (128.0, 64.0));
     session.history.undo();
-    expect(a.components.whereType<RectangleComponent>().single.width, 64);
+    expect(a.components.whereType<Rectangle2DComponent>().single.width, 64);
   });
 
   group('Paint Fill (LD-11)', () {
@@ -384,7 +384,7 @@ void main() {
       // What a camera's bounds or a region looks like: a box round it all.
       world.createEntityWithComponents([
         TransformComponent(position: Vector3(64, 48, 0)),
-        RectangleComponent(width: 2000, height: 2000),
+        Rectangle2DComponent(width: 2000, height: 2000),
       ], name: 'Camera bounds');
       fillAt(const Offset(50, 48));
       final filled = [

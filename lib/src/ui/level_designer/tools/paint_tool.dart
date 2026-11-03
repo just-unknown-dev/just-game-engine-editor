@@ -272,8 +272,8 @@ class PaintTool extends LevelToolHandler {
   /// Whether [entity] blocks movement: a collider on a body that is not a
   /// sensor. What a fill cannot start inside.
   static bool _isSolid(jge.Entity entity) =>
-      entity.hasComponent<jge.Collider2D>() &&
-      !(entity.getComponent<jge.RigidBody2D>()?.isSensor ?? false);
+      entity.hasComponent<jge.Collider2DComponent>() &&
+      !(entity.getComponent<jge.RigidBody2DComponent>()?.isSensor ?? false);
 
   void _commitPaint(ToolContext context) {
     final prefab = context.controller.activePrefab;

@@ -465,7 +465,7 @@ void main() {
         'never in the game', (tester) async {
       final hill = world.createEntityWithComponents([
         TransformComponent(),
-        RectangleComponent(width: 10, height: 10),
+        Rectangle2DComponent(width: 10, height: 10),
         LayerComponent(layerId: 'background'),
       ], name: 'Hill');
       await pump(tester);
@@ -481,7 +481,7 @@ void main() {
       expect(hill.getComponent<LayerComponent>()!.visible, isTrue);
       expect(
         hill.components
-            .whereType<RectangleComponent>()
+            .whereType<Rectangle2DComponent>()
             .single
             .renderable
             .visible,

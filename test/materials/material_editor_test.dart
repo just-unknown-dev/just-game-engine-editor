@@ -139,16 +139,16 @@ void main() {
     test('on a shape: its material file, one undo step', () {
       final cube = scope.world.createEntityWithComponents([
         TransformComponent(),
-        Cube3D(),
+        Cube3DComponent(),
       ], name: 'Crate');
       expect(BuiltInMaterialsModule.dropMaterial(drop(cube)), isNull);
       expect(
-        cube.getComponent<Primitive3D>()!.material,
+        cube.getComponent<Primitive3DComponent>()!.material,
         'assets/materials/stone.material.json',
       );
       expect(scope.history.undoEntries, hasLength(1));
       scope.history.undo();
-      expect(cube.getComponent<Primitive3D>()!.material, isEmpty);
+      expect(cube.getComponent<Primitive3DComponent>()!.material, isEmpty);
     });
 
     test('on a model: drawn with it all over; on nothing: nothing', () {

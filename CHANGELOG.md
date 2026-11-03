@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Uses the engine's new component names (`RigidBody2DComponent`, `Light3DComponent`, `Circle2DComponent`, …), in the inspector, the viewport handles and the material users.
+
 ## 0.1.0-dev.2
 
 - **Tags.** The Asset Store shows where each item comes from (Official, Third Party, Unlisted, Local) and how finished it is (Beta, Experimental, Deprecated; stable shows none). Experimental items are listed once "Show experimental" is on, deprecated ones only to a search; installing either says so first, and an installed deprecated item is a warning in the Problems dock, naming what replaces it. The editor shows its own stage, Beta, on its start card (`EditorRelease`).

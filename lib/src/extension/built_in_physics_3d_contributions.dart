@@ -18,14 +18,14 @@ import '../ui/inspector/physics/physics_body_extras.dart';
 abstract final class BuiltInPhysics3DContributions {
   /// Whether [context]'s engine has 3-D physics: its components are known.
   static bool appliesTo(jge.EngineContext context) =>
-      context.definitions.definitionByType('RigidBody3D') != null;
+      context.definitions.definitionByType('RigidBody3DComponent') != null;
 
   /// The 3-D collider outlines.
   static List<ViewportOverlay> get viewportOverlays => [ColliderOverlay3D()];
 
   /// The rigid body's material presets.
   static List<ComponentEditorExtras> get extras => [
-    PhysicsBodyExtras.materialsFor('RigidBody3D'),
+    PhysicsBodyExtras.materialsFor('RigidBody3DComponent'),
   ];
 
   /// A Solid and a Trigger of every 3-D shape.
@@ -43,8 +43,8 @@ abstract final class BuiltInPhysics3DContributions {
         'Something to stand on and bump into: a static body matching the shape.',
     appliesTo: _hasShape,
     extra: () => [
-      RigidBody3D(bodyType: BodyType3D.static),
-      Collider3D(shape: ColliderShape3D.matchShape),
+      RigidBody3DComponent(bodyType: BodyType3D.static),
+      Collider3DComponent(shape: ColliderShape3D.matchShape),
     ],
   );
 
@@ -57,8 +57,8 @@ abstract final class BuiltInPhysics3DContributions {
         'Reports what enters and leaves it: a sensor matching the shape.',
     appliesTo: _hasShape,
     extra: () => [
-      RigidBody3D(bodyType: BodyType3D.static, isSensor: true),
-      Collider3D(shape: ColliderShape3D.matchShape),
+      RigidBody3DComponent(bodyType: BodyType3D.static, isSensor: true),
+      Collider3DComponent(shape: ColliderShape3D.matchShape),
     ],
   );
 }

@@ -843,7 +843,7 @@ class LevelDesignerSession implements DesignerSession {
   String _kindOf(jge.Entity entity) {
     final model = entity.getComponent<g3.ModelComponent>()?.model;
     if (model != null && model.isNotEmpty) return 'model:$model';
-    final shape = entity.getComponent<g3.Primitive3D>();
+    final shape = entity.getComponent<g3.Primitive3DComponent>();
     if (shape != null) return 'shape:${shape.shapeName}';
     final name = entity.name ?? '';
     return 'name:${name.replaceFirst(RegExp(r'[ _]?\d+$'), '')}';

@@ -89,7 +89,7 @@ void main() {
     scope.history.redo();
     final again = scope.world.entities.firstWhere((e) => e.isAlive && e.hasComponent<PrefabInstanceComponent>());
     expect(again.getComponent<TransformComponent>()!.position.x, closeTo(4, 1e-6));
-    expect(named('Lid').getComponent<PrefabLink>()!.instance, again.id);
+    expect(named('Lid').getComponent<PrefabLinkComponent>()!.instance, again.id);
   });
 
   test('dropped from the Assets dock where it landed', () {

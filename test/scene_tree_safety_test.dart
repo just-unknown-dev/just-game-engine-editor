@@ -171,7 +171,7 @@ void main() {
       player = make('Player', [
         TransformComponent(),
         ChildrenComponent(),
-        CircleComponent(radius: 4),
+        Circle2DComponent(radius: 4),
       ]);
       weapon = make('Weapon', [TransformComponent(), ChildrenComponent()]);
       ops.reparentEntity(weapon, player);

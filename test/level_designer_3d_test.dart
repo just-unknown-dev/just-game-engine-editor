@@ -202,7 +202,7 @@ void main() {
       final view = _above();
       final scope = _scope();
       final session = _open(scope, view: view);
-      scope.world.createEntityWithComponents([TransformComponent(position: Vector3(0, -0.5, 0)), Cube3D()]);
+      scope.world.createEntityWithComponents([TransformComponent(position: Vector3(0, -0.5, 0)), Cube3DComponent()]);
       expect(
         session.onPointerDown(
           Offset.zero,
@@ -228,7 +228,7 @@ void main() {
       );
       session.onPointerUp(Offset.zero, 32);
       expect(claimed, isTrue);
-      final cube = scope.world.entities.singleWhere((e) => e.getComponent<Primitive3D>() is Cube3D);
+      final cube = scope.world.entities.singleWhere((e) => e.getComponent<Primitive3DComponent>() is Cube3DComponent);
       final p = cube.getComponent<TransformComponent>()!.position;
       expect(p.x, closeTo(2, 1e-6));
       expect(p.y, closeTo(-0.5, 1e-6), reason: 'resting on the ground: up is -Y');
@@ -283,7 +283,7 @@ void main() {
       for (final prefab in prefabs) {
         expect(prefab.dimensions, Dimensions.threeD);
         final parts = prefab.buildAt!(SurfacePoint(Vector3.zero(), Vector3(0, -1, 0)));
-        expect(parts.whereType<Primitive3D>(), hasLength(1), reason: prefab.name);
+        expect(parts.whereType<Primitive3DComponent>(), hasLength(1), reason: prefab.name);
         expect(parts.whereType<SolidShapeSource>(), hasLength(1), reason: 'a Solid variant can take it');
       }
     });
@@ -307,7 +307,7 @@ void main() {
     test('picks a shape by its triangles: a ray through a ring\'s hole misses it', () {
       final world = World()..initialize();
       addTearDown(world.dispose);
-      final ring = world.createEntityWithComponents([TransformComponent(), Torus3D(radius: 1, tubeRadius: 0.2)]);
+      final ring = world.createEntityWithComponents([TransformComponent(), Torus3DComponent(radius: 1, tubeRadius: 0.2)]);
       final other = world.createEntityWithComponents([TransformComponent()]);
       final test = ShapeRayTest();
       Ray3 down(double x) => Ray3.originDirection(Vector3(x, -5, 0), Vector3(0, 1, 0));
@@ -325,11 +325,11 @@ void main() {
     group('a polygon\'s corners', () {
       late EditorScope scope;
       late Entity entity;
-      late Polygon3D polygon;
+      late Polygon3DComponent polygon;
 
       setUp(() {
         scope = _scope();
-        polygon = Polygon3D(points: const [Offset(-1, -1), Offset(1, -1), Offset(1, 1), Offset(-1, 1)]);
+        polygon = Polygon3DComponent(points: const [Offset(-1, -1), Offset(1, -1), Offset(1, 1), Offset(-1, 1)]);
         entity = scope.world.createEntityWithComponents([TransformComponent(), polygon], name: 'floor');
         scope.sceneState.selectEntity(entity);
       });
@@ -342,7 +342,7 @@ void main() {
         expect(all.where((h) => h.style == ViewportHandleStyle.add), hasLength(4));
         final first = all.first.position;
         expect([first.x, first.y, first.z], [-1, -0.5, -1], reason: 'on top: up is -Y');
-        expect(PolygonHandles().handlesOf(scope.world.createEntityWithComponents([TransformComponent(), Cube3D()]), scope), isEmpty);
+        expect(PolygonHandles().handlesOf(scope.world.createEntityWithComponents([TransformComponent(), Cube3DComponent()]), scope), isEmpty);
       });
 
       test('dragging one in the viewport moves that corner, one undo step', () {
@@ -494,7 +494,7 @@ void main() {
       );
       // Made on release: a press may be dragged to aim it first.
       session.onPointerUp(Offset.zero, 32);
-      final cube = scope.world.entities.singleWhere((e) => e.getComponent<Primitive3D>() is Cube3D);
+      final cube = scope.world.entities.singleWhere((e) => e.getComponent<Primitive3DComponent>() is Cube3DComponent);
       final p = cube.getComponent<TransformComponent>()!.position;
       expect(p.y, closeTo(-2.5, 1e-6), reason: 'standing on the plane 2 m up');
       expect([p.x, p.z], [closeTo(1, 1e-6), closeTo(1, 1e-6)], reason: 'on the move step');
@@ -515,7 +515,7 @@ void main() {
     test('a handle dragged in space snaps in the move step', () {
       final view = _above();
       final scope = _scope();
-      final polygon = Polygon3D(points: const [Offset(-1, -1), Offset(1, -1), Offset(1, 1), Offset(-1, 1)]);
+      final polygon = Polygon3DComponent(points: const [Offset(-1, -1), Offset(1, -1), Offset(1, 1), Offset(-1, 1)]);
       final entity = scope.world.createEntityWithComponents([TransformComponent(), polygon]);
       scope.sceneState.selectEntity(entity);
       final input = ViewportInput(

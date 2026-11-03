@@ -41,19 +41,19 @@ void main() {
     List<jge.Component> more = const [],
     Offset offset = Offset.zero,
   }) {
-    final collider = jge.Collider2D();
+    final collider = jge.Collider2DComponent();
     PhysicsBodyExtras.setFrom(collider, shape ?? jge.RectangleShape(40, 20));
     collider.offset += offset;
     return world.createEntityWithComponents([
       jge.TransformComponent(position: jge.Vector3(100, 100, 0)),
       ...more,
-      jge.RigidBody2D(bodyType: type),
+      jge.RigidBody2DComponent(bodyType: type),
       collider,
     ], name: 'Thing');
   }
 
-  jge.RigidBody2D rigidOf(jge.Entity e) => e.getComponent<jge.RigidBody2D>()!;
-  jge.Collider2D colliderOf(jge.Entity e) => e.getComponent<jge.Collider2D>()!;
+  jge.RigidBody2DComponent rigidOf(jge.Entity e) => e.getComponent<jge.RigidBody2DComponent>()!;
+  jge.Collider2DComponent colliderOf(jge.Entity e) => e.getComponent<jge.Collider2DComponent>()!;
 
   group('the project layer file', () {
     test('a change is written and reaches the engine', () {
@@ -163,7 +163,7 @@ void main() {
     final e = body(
       shape: jge.CircleShape(17.4),
       offset: const Offset(3, 0),
-      more: [jge.CircleComponent(radius: 16.3)],
+      more: [jge.Circle2DComponent(radius: 16.3)],
     );
     final c = colliderOf(e);
     scope.sceneState.selectEntity(e);
@@ -251,7 +251,7 @@ void main() {
     });
 
     test('a collider matching what is drawn has nothing to edit', () {
-      final e = body(more: [jge.RectangleComponent(width: 40, height: 20)]);
+      final e = body(more: [jge.Rectangle2DComponent(width: 40, height: 20)]);
       colliderOf(e).shape = jge.ColliderShape2D.matchShape;
       session.toggle(e);
       expect(session.isActive, isFalse);
@@ -278,7 +278,7 @@ void main() {
     test('a collider bigger than the circle drawn, with Fit as the fix', () {
       final e = body(
         shape: jge.CircleShape(17.4),
-        more: [jge.CircleComponent(radius: 16.3)],
+        more: [jge.Circle2DComponent(radius: 16.3)],
       );
       scope.sceneState.selectEntity(e);
       final problems = check();
@@ -314,36 +314,36 @@ void main() {
     });
 
     test('a body with no collider, and a collider matching nothing drawn', () {
-      final lone = world.createEntityWithComponents([jge.TransformComponent(), jge.RigidBody2D()], name: 'Lone');
+      final lone = world.createEntityWithComponents([jge.TransformComponent(), jge.RigidBody2DComponent()], name: 'Lone');
       final ghost = world.createEntityWithComponents([
         jge.TransformComponent(),
-        jge.Collider2D(shape: jge.ColliderShape2D.matchShape),
+        jge.Collider2DComponent(shape: jge.ColliderShape2D.matchShape),
       ], name: 'Ghost');
       final problems = check();
       expect(problems.map((p) => p.entity), [lone, ghost]);
       for (final p in problems) {
         p.fixes.first.apply();
       }
-      expect(lone.hasComponent<jge.Collider2D>(), isTrue);
-      expect(ghost.getComponent<jge.Collider2D>()!.shape, jge.ColliderShape2D.box);
+      expect(lone.hasComponent<jge.Collider2DComponent>(), isTrue);
+      expect(ghost.getComponent<jge.Collider2DComponent>()!.shape, jge.ColliderShape2D.box);
     });
 
     test('a character that is also a body, kept a character in one step', () {
       final hero = world.createEntityWithComponents([
         jge.TransformComponent(),
-        jge.CharacterBody2D(),
-        jge.RigidBody2D(),
-        jge.Collider2D(),
+        jge.CharacterBody2DComponent(),
+        jge.RigidBody2DComponent(),
+        jge.Collider2DComponent(),
       ], name: 'Hero');
       final problem = check().single;
       expect(problem.entity, hero);
       expect(problem.message, contains('a character and a rigid body at once'));
       problem.fixes.single.apply();
-      expect(hero.hasComponent<jge.RigidBody2D>(), isFalse);
-      expect(hero.hasComponent<jge.Collider2D>(), isFalse);
+      expect(hero.hasComponent<jge.RigidBody2DComponent>(), isFalse);
+      expect(hero.hasComponent<jge.Collider2DComponent>(), isFalse);
       expect(check(), isEmpty);
       scope.history.undo();
-      expect(hero.hasComponent<jge.RigidBody2D>() && hero.hasComponent<jge.Collider2D>(), isTrue);
+      expect(hero.hasComponent<jge.RigidBody2DComponent>() && hero.hasComponent<jge.Collider2DComponent>(), isTrue);
     });
 
     test('a layer file the game would not ship', () {

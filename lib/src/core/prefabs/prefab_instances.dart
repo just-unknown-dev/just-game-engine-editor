@@ -11,7 +11,7 @@ import '../scope/editor_scope_services.dart';
 /// into the prefab (Apply) — or takes them away (Revert).
 ///
 /// An instance is its top entity (with a [PrefabInstanceComponent]) and the
-/// entities it made (each with a [PrefabLink]); entities of the scene's own
+/// entities it made (each with a [PrefabLinkComponent]); entities of the scene's own
 /// may sit inside it. What an instance changes is not kept as it is edited
 /// but worked out when asked ([changesOf]), as a save does.
 final class PrefabInstances {
@@ -41,7 +41,7 @@ final class PrefabInstances {
   /// null for an entity of the scene's own.
   static Entity? topOf(Entity entity) {
     if (entity.hasComponent<PrefabInstanceComponent>()) return entity;
-    final link = entity.getComponent<PrefabLink>();
+    final link = entity.getComponent<PrefabLinkComponent>();
     if (link == null) return null;
     final top = entity.world?.getEntity(link.instance);
     return top != null && top.hasComponent<PrefabInstanceComponent>()
@@ -59,7 +59,7 @@ final class PrefabInstances {
   Map<String, Entity> membersOf(Entity top) => {
     for (final e in world.entities)
       if (e.isAlive)
-        if (e.getComponent<PrefabLink>() case final link?
+        if (e.getComponent<PrefabLinkComponent>() case final link?
             when link.instance == top.id)
           link.path: e,
   };
@@ -159,7 +159,7 @@ final class PrefabInstances {
       final top = made[ref['instance'] as int];
       if (top == null) continue;
       entity.addComponent(
-        PrefabLink(instance: top.id, path: ref['path'] as String),
+        PrefabLinkComponent(instance: top.id, path: ref['path'] as String),
       );
       if (ref['block'] case final Map block) {
         entity.addComponent(
@@ -328,7 +328,7 @@ final class PrefabInstances {
         e = world.createEntityWithComponents(
           scope.codec.decodeAll(json),
           name: node.name,
-        )..addComponent(PrefabLink(instance: top.id, path: node.path));
+        )..addComponent(PrefabLinkComponent(instance: top.id, path: node.path));
         sceneState.registerEntity(e);
       } else {
         EntitySpec(
@@ -338,8 +338,10 @@ final class PrefabInstances {
         ).applyTo(e);
       }
       if (isTop) {
-        e.getComponent<PrefabLink>() ??
-            e.addComponent(PrefabLink(instance: top.id, path: node.path));
+        e.getComponent<PrefabLinkComponent>() ??
+            e.addComponent(
+              PrefabLinkComponent(instance: top.id, path: node.path),
+            );
       } else {
         e.isActive = node.enabled;
         final parent = byPath[node.parent];
@@ -588,7 +590,7 @@ final class PrefabInstances {
   List<Entity> _insideEntities(Entity top) {
     final out = <Entity>[];
     for (final e in subtreeOf(top)) {
-      if (e.hasComponent<PrefabLink>() ||
+      if (e.hasComponent<PrefabLinkComponent>() ||
           e.hasComponent<PrefabInstanceComponent>()) {
         continue;
       }
@@ -634,7 +636,7 @@ final class PrefabInstances {
       ids[e.id] = id;
       final parentId = e.getComponent<ParentComponent>()?.parentId;
       final parent = parentId == null ? null : world.getEntity(parentId);
-      final link = parent?.getComponent<PrefabLink>();
+      final link = parent?.getComponent<PrefabLinkComponent>();
       final String? parentPrefabId =
           ids[parentId] ??
           (link != null && link.instance == top.id ? link.path : null);
@@ -719,7 +721,8 @@ final class PrefabInstances {
     final instance = top.getComponent<PrefabInstanceComponent>();
     if (instance == null) return;
     final links = {
-      for (final e in membersOf(top).values) e: e.getComponent<PrefabLink>()!,
+      for (final e in membersOf(top).values)
+        e: e.getComponent<PrefabLinkComponent>()!,
     };
     scope.history.push(
       CallbackCommand(
@@ -727,7 +730,7 @@ final class PrefabInstances {
         onRedo: () {
           top.removeComponent<PrefabInstanceComponent>();
           for (final e in links.keys) {
-            e.removeComponent<PrefabLink>();
+            e.removeComponent<PrefabLinkComponent>();
           }
           // What a save writes changed: the instance is plain entities.
           sceneState

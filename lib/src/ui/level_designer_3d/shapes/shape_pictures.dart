@@ -10,7 +10,7 @@ import 'package:just_editor_core/host.dart';
 /// seen from above at an angle, its faces lit from one side, in the
 /// prefab's colour (a [PrefabPicture]).
 abstract final class ShapePictures {
-  /// The meshes drawn so far, by the shape's own key ([Primitive3D.
+  /// The meshes drawn so far, by the shape's own key ([Primitive3DComponent.
   /// shapeKey]: its kind and sizes), so a prefab file whose shape changes
   /// is drawn anew, and two prefabs of one shape share one mesh.
   static final Map<Object, ModelGeometry?> _geometry = {};
@@ -43,12 +43,12 @@ abstract final class ShapePictures {
 
   /// The shape [prefab] makes, as it makes it now; null when it makes
   /// none.
-  static Primitive3D? _shapeOf(PrefabDefinition prefab) {
+  static Primitive3DComponent? _shapeOf(PrefabDefinition prefab) {
     if (!prefab.dimensions.allows(SceneMode.threeD)) return null;
     final buildAt = prefab.buildAt;
     if (buildAt == null) return null;
     final components = buildAt(SurfacePoint(Vector3.zero(), Placement3D.up));
-    return components.whereType<Primitive3D>().firstOrNull;
+    return components.whereType<Primitive3DComponent>().firstOrNull;
   }
 }
 

@@ -28,7 +28,7 @@ void main() {
     final spy = _Spy();
     final box = world.createEntityWithComponents([
       TransformComponent(),
-      RectangleComponent(width: 64, height: 32),
+      Rectangle2DComponent(width: 64, height: 32),
       spy,
     ], name: 'Box');
     final camera = GameCameraEditorView.of(

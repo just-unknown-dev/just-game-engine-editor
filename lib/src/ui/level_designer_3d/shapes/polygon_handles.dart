@@ -5,7 +5,7 @@ import 'package:just_game_engine/graphics_3d.dart';
 
 import 'package:just_editor_core/host.dart';
 
-/// A selected [Polygon3D]'s corners, on its top face, to drag along it —
+/// A selected [Polygon3DComponent]'s corners, on its top face, to drag along it —
 /// Ctrl snaps to the grid. Between each two a "+": click it for a corner
 /// there, or drag it to place one. Alt-click a corner to remove it (three
 /// always stay).
@@ -15,14 +15,14 @@ final class PolygonHandles extends ViewportHandles {
 
   @override
   List<ViewportHandle> handlesOf(Entity entity, EditorScope scope) {
-    final polygon = entity.getComponent<Primitive3D>();
+    final polygon = entity.getComponent<Primitive3DComponent>();
     final transform = entity.getComponent<TransformComponent>();
-    if (polygon is! Polygon3D || transform == null) return const [];
+    if (polygon is! Polygon3DComponent || transform == null) return const [];
     final world = Matrix4.identity();
     transform.localToWorldInto(world);
     final inverse = Matrix4.identity();
     if (inverse.copyInverse(world) == 0) return const [];
-    final top = -Primitive3D.size(polygon.height) / 2;
+    final top = -Primitive3DComponent.size(polygon.height) / 2;
 
     Vector3 toWorld(Offset p) {
       final out = Vector3.zero();
@@ -75,7 +75,7 @@ final class PolygonHandles extends ViewportHandles {
   /// The "+" between corner [i] and the next: it becomes a corner when
   /// clicked or dragged.
   static ViewportHandle _between(
-    Polygon3D polygon,
+    Polygon3DComponent polygon,
     int i,
     Vector3 Function(Offset p) toWorld,
     Offset? Function(HandleDrag drag) onOutline,

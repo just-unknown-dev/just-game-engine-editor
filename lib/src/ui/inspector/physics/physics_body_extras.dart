@@ -38,10 +38,10 @@ class PhysicsMaterialPreset {
 ///   Edit in the viewport.
 abstract final class PhysicsBodyExtras {
   /// The rigid body's saved type.
-  static const String rigidBodyType = 'RigidBody2D';
+  static const String rigidBodyType = 'RigidBody2DComponent';
 
   /// The collider's saved type.
-  static const String colliderType = 'Collider2D';
+  static const String colliderType = 'Collider2DComponent';
 
   static const List<PhysicsMaterialPreset> materials = [
     PhysicsMaterialPreset('Default', 0.5, 0, 'What a new body starts as.'),
@@ -66,16 +66,16 @@ abstract final class PhysicsBodyExtras {
     collider(scope),
   ];
 
-  /// What [RigidBody2D]'s inspector adds.
+  /// What [RigidBody2DComponent]'s inspector adds.
   static ComponentEditorExtras rigidBody(EditorScope scope) =>
       ComponentEditorExtras(
         type: rigidBodyType,
-        summary: (c) => summaryOf(c as jge.RigidBody2D, scope),
+        summary: (c) => summaryOf(c as jge.RigidBody2DComponent, scope),
         groupLeading: {
           'Surface': (context, c) => _MaterialPresetRow(scope: scope, body: c),
         },
         section: (context, c) =>
-            _BodyNotes(scope: scope, body: c as jge.RigidBody2D),
+            _BodyNotes(scope: scope, body: c as jge.RigidBody2DComponent),
       );
 
   /// The material presets on any body of [type] with `friction` and
@@ -98,17 +98,18 @@ abstract final class PhysicsBodyExtras {
     },
   );
 
-  /// What [Collider2D]'s inspector adds.
+  /// What [Collider2DComponent]'s inspector adds.
   static ComponentEditorExtras collider(EditorScope scope) =>
       ComponentEditorExtras(
         type: colliderType,
-        summary: (c) => shapeLabel(c as jge.Collider2D),
+        summary: (c) => shapeLabel(c as jge.Collider2DComponent),
         actions: [
           InspectorAction(
             id: 'physics.fitToVisual',
             label: 'Fit the collider to what is drawn',
             icon: Icons.fit_screen_rounded,
-            run: (context, c) async => fitToVisual(scope, c as jge.Collider2D),
+            run: (context, c) async =>
+                fitToVisual(scope, c as jge.Collider2DComponent),
           ),
           InspectorAction(
             id: 'physics.editCollider',
@@ -124,7 +125,7 @@ abstract final class PhysicsBodyExtras {
       );
 
   /// `Dynamic body · Sensor · Player`.
-  static String summaryOf(jge.RigidBody2D b, EditorScope scope) {
+  static String summaryOf(jge.RigidBody2DComponent b, EditorScope scope) {
     final layers = scope.physicsLayers.layers.value;
     return [
       switch (b.bodyType) {
@@ -141,7 +142,7 @@ abstract final class PhysicsBodyExtras {
       v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 
   /// A collider in a few words: `Circle r 17.4`, `Box 64 × 20 · One-way`.
-  static String shapeLabel(jge.Collider2D c) {
+  static String shapeLabel(jge.Collider2DComponent c) {
     final shape = switch (c.shape) {
       jge.ColliderShape2D.box => 'Box ${_n(c.size.x)} × ${_n(c.size.y)}',
       jge.ColliderShape2D.circle => 'Circle r ${_n(c.radius)}',
@@ -184,7 +185,7 @@ abstract final class PhysicsBodyExtras {
   /// unturned, as one undo step — set once; a collider matching the shape
   /// ([jge.ColliderShape2D.matchShape]) follows it instead. Says so in the
   /// log when there is nothing to fit to.
-  static bool fitToVisual(EditorScope scope, jge.Collider2D collider) {
+  static bool fitToVisual(EditorScope scope, jge.Collider2DComponent collider) {
     final entity = ownerOf(scope, collider);
     final shape = entity == null
         ? null
@@ -208,7 +209,10 @@ abstract final class PhysicsBodyExtras {
 
   /// Sets [collider]'s fields to stand for [shape] (in its own space),
   /// centred and unturned, its own scale 1.
-  static void setFrom(jge.Collider2D collider, jge.CollisionShape shape) {
+  static void setFrom(
+    jge.Collider2DComponent collider,
+    jge.CollisionShape shape,
+  ) {
     collider
       ..offset = Offset.zero
       ..rotation = 0
@@ -339,7 +343,7 @@ class _BodyNotes extends StatelessWidget {
   const _BodyNotes({required this.scope, required this.body});
 
   final EditorScope scope;
-  final jge.RigidBody2D body;
+  final jge.RigidBody2DComponent body;
 
   @override
   Widget build(BuildContext context) => SignalBuilder<bool>(
@@ -347,7 +351,7 @@ class _BodyNotes extends StatelessWidget {
     builder: (context, playing, _) {
       final entity = PhysicsBodyExtras.ownerOf(scope, body);
       final notes = <String>[
-        if (entity != null && !entity.hasComponent<jge.Collider2D>())
+        if (entity != null && !entity.hasComponent<jge.Collider2DComponent>())
           'It has no Collider 2D, so it has no shape and touches nothing.',
         if (body.isDynamic &&
             !body.isSensor &&
@@ -396,7 +400,7 @@ class _LiveReadout extends StatefulWidget {
   const _LiveReadout({required this.scope, required this.body});
 
   final EditorScope scope;
-  final jge.RigidBody2D body;
+  final jge.RigidBody2DComponent body;
 
   @override
   State<_LiveReadout> createState() => _LiveReadoutState();

@@ -8,7 +8,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_game_engine/graphics_3d.dart' show Cube3D, Graphics3D;
+import 'package:just_game_engine/graphics_3d.dart' show Cube3DComponent, Graphics3D;
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 
 import 'support/test_scope.dart';
@@ -63,8 +63,8 @@ void main() {
     scope = testScope(world: world);
     scope.sceneState.openScene(EditorScene(name: 'deep', mode: SceneMode.threeD));
     view = _above();
-    a = world.createEntityWithComponents([TransformComponent(position: Vector3(0, -0.5, 0)), Cube3D()], name: 'a');
-    b = world.createEntityWithComponents([TransformComponent(position: Vector3(4, -0.5, 0)), Cube3D()], name: 'b');
+    a = world.createEntityWithComponents([TransformComponent(position: Vector3(0, -0.5, 0)), Cube3DComponent()], name: 'a');
+    b = world.createEntityWithComponents([TransformComponent(position: Vector3(4, -0.5, 0)), Cube3DComponent()], name: 'b');
     commits.clear();
   });
 

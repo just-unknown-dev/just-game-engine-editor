@@ -14,7 +14,7 @@ void main() {
       addTearDown(world.dispose);
       final e = world.createEntityWithComponents([
         TransformComponent(position: Vector3(0, 0, 0), angle: math.pi / 2),
-        RectangleComponent(width: 200, height: 20),
+        Rectangle2DComponent(width: 200, height: 20),
       ]);
       final b = DesignerGeometry.worldBounds(e)!;
       expect(b.width, closeTo(20, 1e-6));
@@ -98,14 +98,14 @@ void main() {
       addTearDown(world.dispose);
       final e = world.createEntityWithComponents([
         TransformComponent(),
-        RectangleComponent(width: 100, height: 20),
-        RigidBody2D(bodyType: BodyType.static),
-        Collider2D(size: Vector2(100, 20)),
+        Rectangle2DComponent(width: 100, height: 20),
+        RigidBody2DComponent(bodyType: BodyType.static),
+        Collider2DComponent(size: Vector2(100, 20)),
       ]);
       ComponentResizer.scale(e, 2, 3);
 
-      final rect = e.components.whereType<RectangleComponent>().single;
-      final collider = e.getComponent<Collider2D>()!;
+      final rect = e.components.whereType<Rectangle2DComponent>().single;
+      final collider = e.getComponent<Collider2DComponent>()!;
       expect((rect.width, rect.height), (200.0, 60.0));
       expect((collider.size.x, collider.size.y), (200.0, 60.0));
     });
@@ -115,11 +115,11 @@ void main() {
       addTearDown(world.dispose);
       final e = world.createEntityWithComponents([
         TransformComponent(angle: math.pi / 2),
-        RectangleComponent(width: 100, height: 20),
+        Rectangle2DComponent(width: 100, height: 20),
       ]);
       // Stretching in world X is stretching its local height.
       ComponentResizer.scale(e, 2, 1);
-      final rect = e.components.whereType<RectangleComponent>().single;
+      final rect = e.components.whereType<Rectangle2DComponent>().single;
       expect((rect.width, rect.height), (100.0, 40.0));
     });
 
@@ -128,7 +128,7 @@ void main() {
       addTearDown(world.dispose);
       final e = world.createEntityWithComponents([
         TransformComponent(),
-        PolygonComponent(
+        Polygon2DComponent(
           vertices: const [Offset(-10, -5), Offset(10, -5), Offset(0, 5)],
         ),
       ]);
@@ -142,10 +142,10 @@ void main() {
       addTearDown(world.dispose);
       final e = world.createEntityWithComponents([
         TransformComponent(),
-        RectangleComponent(width: 10, height: 10),
+        Rectangle2DComponent(width: 10, height: 10),
       ]);
       ComponentResizer.scale(e, 0, 0);
-      final rect = e.components.whereType<RectangleComponent>().single;
+      final rect = e.components.whereType<Rectangle2DComponent>().single;
       expect(rect.width, ComponentResizer.minimumExtent);
     });
   });

@@ -79,26 +79,26 @@ void main() {
       final scope = _scope();
       _make(scope, [TransformComponent(position: Vector3(0, -2, 0)), SpawnComponent()], 'Over');
       expect(_problems(scope), [contains('Nothing under the spawn point Over')]);
-      _make(scope, [TransformComponent(position: Vector3(0, 0.5, 0)), Cube3D(width: 10, depth: 10)], 'Ground');
+      _make(scope, [TransformComponent(position: Vector3(0, 0.5, 0)), Cube3DComponent(width: 10, depth: 10)], 'Ground');
       expect(_problems(scope), isEmpty, reason: 'the ground is under it now');
     });
 
     test('a solid over the void; over a kill zone it is not', () {
       final scope = _scope();
-      _make(scope, [TransformComponent(position: Vector3(0, -5, 0)), Cube3D(), Collider3D()], 'Ledge');
+      _make(scope, [TransformComponent(position: Vector3(0, -5, 0)), Cube3DComponent(), Collider3DComponent()], 'Ledge');
       expect(_problems(scope), [contains('Nothing at all under Ledge')]);
       _make(scope, [
         TransformComponent(position: Vector3(0, 20, 0)),
-        Collider3D(size: Vector3(20, 2, 20)),
-        RigidBody3D(bodyType: BodyType3D.static, isSensor: true),
+        Collider3DComponent(size: Vector3(20, 2, 20)),
+        RigidBody3DComponent(bodyType: BodyType3D.static, isSensor: true),
       ], 'Pit');
       expect(_problems(scope), isEmpty);
     });
 
     test('below the kill height: lost as play starts', () {
       final scope = _scope(modules: [_Kit()]);
-      _make(scope, [TransformComponent(position: Vector3(0, 30, 0)), Cube3D(width: 50, depth: 50), Collider3D()], 'Deep');
-      _make(scope, [TransformComponent(position: Vector3(0, 0, 0)), Cube3D(width: 50, depth: 50), Collider3D()], 'Floor');
+      _make(scope, [TransformComponent(position: Vector3(0, 30, 0)), Cube3DComponent(width: 50, depth: 50), Collider3DComponent()], 'Deep');
+      _make(scope, [TransformComponent(position: Vector3(0, 0, 0)), Cube3DComponent(width: 50, depth: 50), Collider3DComponent()], 'Floor');
       final problems = _problems(scope);
       expect(problems, contains(contains('Deep is below the kill height (-10.0 m)')));
       expect(problems.where((p) => p.contains('Floor')), isEmpty, reason: 'above it, and over Deep');

@@ -105,7 +105,7 @@ void main() {
               TransformComponent(
                 position: Vector3(position.dx, position.dy, 0),
               ),
-              RectangleComponent(width: size.width, height: size.height),
+              Rectangle2DComponent(width: size.width, height: size.height),
             ],
           ),
         );
@@ -159,7 +159,7 @@ void main() {
 
       final zone = specs.firstWhere((s) => s.name == 'Zone').decode();
       expect(
-        zone.whereType<RectangleComponent>().single.width,
+        zone.whereType<Rectangle2DComponent>().single.width,
         32,
         reason: 'the Trigger prefab',
       );

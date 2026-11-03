@@ -30,20 +30,28 @@ enum PreviewShape {
 
   /// Its mesh, its coordinates laid out as [uv] says.
   ShapeMesh mesh(ShapeUv uv) => switch (this) {
-    ball => Sphere3D(radius: 0.5, segments: 48, rings: 24).buildMesh(uv),
-    cube => Cube3D(width: 0.75, height: 0.75, depth: 0.75).buildMesh(uv),
-    cylinder => Cylinder3D(
+    ball => Sphere3DComponent(
+      radius: 0.5,
+      segments: 48,
+      rings: 24,
+    ).buildMesh(uv),
+    cube => Cube3DComponent(
+      width: 0.75,
+      height: 0.75,
+      depth: 0.75,
+    ).buildMesh(uv),
+    cylinder => Cylinder3DComponent(
       radius: 0.4,
       height: 0.9,
       segments: 48,
     ).buildMesh(uv),
-    torus => Torus3D(
+    torus => Torus3DComponent(
       radius: 0.38,
       tubeRadius: 0.16,
       segments: 48,
       sides: 24,
     ).buildMesh(uv),
-    plane => Plane3D(width: 1, depth: 1).buildMesh(uv),
+    plane => Plane3DComponent(width: 1, depth: 1).buildMesh(uv),
   };
 }
 
