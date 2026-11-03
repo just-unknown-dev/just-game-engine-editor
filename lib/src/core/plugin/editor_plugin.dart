@@ -233,7 +233,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// Whether to enable gizmo-drag-to-move for physics bodies (registers
   /// [PhysicsBodyBindingSystem]/[PhysicsJointBindingSystem]).
   ///
-  /// [PhysicsSystem] (core engine) always owns physics-body lifecycle and
+  /// [Physics2DSystem] (core engine) always owns physics-body lifecycle and
   /// [Engine.physics] stepping when it's present in the game's `World` —
   /// this flag doesn't affect that. It only gates the thin override that
   /// makes a body dragged during a play-test feel immediate (zeroing its
@@ -528,7 +528,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     // what runs in a play-test is what the game's boot registered, or an
     // entity would move in the editor and stand still in the shipped game.
     if (bindPhysicsBodies) {
-      // No bridge system here — PhysicsSystem (core engine) owns
+      // No bridge system here — Physics2DSystem (core engine) owns
       // syncing PhysicsBody results back to TransformComponent itself, for
       // every entity with a Collider2DComponent, not just editor-authored ones.
       if (!engine.world.systems.any(
@@ -1836,7 +1836,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// layer hid.
   void _syncColliderOutlines() {
     if (!engine.isInitialized) return;
-    final physics = engine.world.getSystem<PhysicsSystem>();
+    final physics = engine.world.getSystem<Physics2DSystem>();
     if (physics == null) return;
     physics
       ..drawsOutlines = showsGizmo(GizmoKind.colliders)
@@ -3311,7 +3311,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     scope.viewOverride = null;
     if (!engine.isInitialized) return;
     _syncRuntimeSystems(0);
-    final physics = engine.world.getSystem<PhysicsSystem>();
+    final physics = engine.world.getSystem<Physics2DSystem>();
     if (physics != null) {
       physics.drawsOutlines = false;
       if (physics.outlineFilter == _gizmosShownFor) {

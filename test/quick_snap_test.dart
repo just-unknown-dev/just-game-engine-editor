@@ -178,7 +178,7 @@ void main() {
         'outlines of what is off the Level Map', (tester) async {
       if (!kDebugMode) return;
       await start(tester);
-      final physics = PhysicsSystem(plugin.engine.physics);
+      final physics = Physics2DSystem(plugin.engine.physics);
       plugin.engine.world.addSystem(physics);
       final solid = plugin.engine.world.createEntityWithComponents([
         TransformComponent(),

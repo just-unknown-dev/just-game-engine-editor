@@ -148,14 +148,14 @@ void main() {
   });
 
   group("the engine's collider outlines", () {
-    PhysicsSystem physics() => engine.world.getSystem<PhysicsSystem>()!;
+    Physics2DSystem physics() => engine.world.getSystem<Physics2DSystem>()!;
     void tick() => plugin.update(1 / 60);
 
     // A bare engine has none: a game adds it, or asks for the defaults.
-    setUp(() => engine.world.addSystem(PhysicsSystem(engine.physics)));
+    setUp(() => engine.world.addSystem(Physics2DSystem(engine.physics)));
 
     test('a game is drawn without them unless it asks', () {
-      expect(PhysicsSystem(engine.physics).drawsOutlines, isFalse);
+      expect(Physics2DSystem(engine.physics).drawsOutlines, isFalse);
     });
 
     test('drawn while the mode shows colliders: editing as it starts; a '

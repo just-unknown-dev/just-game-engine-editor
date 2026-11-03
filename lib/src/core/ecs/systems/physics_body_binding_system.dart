@@ -6,7 +6,7 @@ import 'package:just_editor_core/host.dart';
 ///
 /// Body lifecycle (creation, property sync, stepping, and syncing results
 /// back to [TransformComponent]) is entirely owned by the core
-/// [PhysicsSystem] — this system's only job is making a dragged entity
+/// [Physics2DSystem] — this system's only job is making a dragged entity
 /// feel immediate during a play-test, when bodies move: while a gizmo drag
 /// is under way it zeroes the dragged bodies' velocity and angular velocity
 /// and wakes them, so momentum and gravity do not fight the drag. While
@@ -15,7 +15,7 @@ import 'package:just_editor_core/host.dart';
 ///
 /// The actual position push happens for free: [EditorSceneState]'s
 /// translate/rotate/scale operations mutate [TransformComponent] directly,
-/// and [PhysicsSystem] already pushes `TransformComponent -> PhysicsBody`
+/// and [Physics2DSystem] already pushes `TransformComponent -> PhysicsBody`
 /// unconditionally at the start of every step (that's how spawns/teleports
 /// take effect) — dragging is just another such write.
 class PhysicsBodyBindingSystem extends System {
@@ -37,7 +37,7 @@ class PhysicsBodyBindingSystem extends System {
   /// mid-fall/roll for as long as it stays selected.
   final bool Function()? isDraggingActive;
 
-  // Runs after PhysicsSystem (priority 90) in the same frame, so every
+  // Runs after Physics2DSystem (priority 90) in the same frame, so every
   // dragged entity's PhysicsBodyRefComponent already exists by the time
   // this reads it.
   @override
