@@ -16,10 +16,11 @@ import 'support/test_scope.dart';
 import 'package:just_game_engine_editor/src/core/scope/editor_scope_services.dart';
 import 'package:just_game_engine_editor/src/ui/level_designer_3d/panels/view_3d_panel.dart';
 import 'package:just_game_engine_editor/src/ui/level_designer_3d/panels/view_cube.dart';
+import 'package:just_graphics_engine/just_graphics_engine.dart' show NullGpuDevice, rendererNullShaders;
 
 EditorScope _scope({SceneMode mode = SceneMode.threeD}) {
   final world = World()..initialize();
-  Graphics3D.registerSchemas(world.context);
+  Graphics3D.registerDefinitions(world.context);
   final scope = testScope(world: world);
   scope.sceneState.openScene(EditorScene(name: 'level', mode: mode));
   return scope;
@@ -45,7 +46,7 @@ LevelDesignerSession _open(
 
 /// A view from 20 m above the origin, looking down.
 OrbitFlyEditorView _above() {
-  final view = OrbitFlyEditorView.of(Camera(viewportSize: const Size(200, 200)))
+  final view = OrbitFlyEditorView.of(OutputCamera(viewportSize: const Size(200, 200)))
     ..viewportSize = const Size(200, 200)
     ..pivot.setValues(0, 0, 0)
     ..distance = 20

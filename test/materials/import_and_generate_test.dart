@@ -123,7 +123,7 @@ void main() {
       final result = await TextureSets.make(root, set);
 
       expect(result.material, 'assets/t/brick.material.json');
-      final m = MaterialFile.parse(read(root, result.material));
+      final m = Material3DFile.parse(read(root, result.material));
       expect(m.colorMap, 'assets/t/brick_albedo.png');
       expect(m.metalRoughMap, 'assets/t/brick_orm.png');
       expect(m.occlusionMap, 'assets/t/brick_orm.png');
@@ -161,11 +161,11 @@ void main() {
         final packed = await Pixels.read('$root/t/a_orm.png');
         expect(packed.at(0, 0, 1), 0, reason: 'fully glossy: smooth');
         expect(packed.at(0, 0, 2), 0, reason: 'no metal map: not metal');
-        final ma = MaterialFile.parse(read(root, a.material));
+        final ma = Material3DFile.parse(read(root, a.material));
         expect((ma.metallic, ma.roughness), (0.0, 1.0));
         expect(ma.occlusionMap, isEmpty);
         final b = await TextureSets.make(root, sets.last);
-        final mb = MaterialFile.parse(read(root, b.material));
+        final mb = Material3DFile.parse(read(root, b.material));
         expect(
           (mb.metalRoughMap, mb.occlusionMap),
           ('t/b_orm.png', 't/b_orm.png'),
@@ -303,14 +303,14 @@ void main() {
 
     final made = await ModelMaterials.extract(root, 'assets/models/lamp.glb');
     expect(made, ['assets/models/lamp_Brass_Trim.material.json']);
-    final m = MaterialFile.parse(read(root, made.single));
+    final m = Material3DFile.parse(read(root, made.single));
     expect(m.colorMap, 'assets/models/lamp_textures/image_0.png');
     expect(
       File('$root/${m.colorMap}').readAsBytesSync(),
       Uint8List.fromList(image),
     );
     expect((m.metallic, m.roughness), (1.0, 0.3));
-    expect(m.alpha, MaterialAlpha.cutout);
+    expect(m.alpha, Material3DAlpha.cutout);
     expect(m.alphaCutoff, closeTo(0.4, 1e-9));
     // Linear 0.5 is sRGB 188.
     expect((m.color >> 8) & 0xFF, closeTo(188, 1));

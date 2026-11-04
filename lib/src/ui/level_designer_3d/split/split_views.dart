@@ -81,7 +81,7 @@ class SplitViews {
   static OrbitFlyEditorView _ortho({
     required double yaw,
     required double pitch,
-  }) => OrbitFlyEditorView.of(jge.Camera())
+  }) => OrbitFlyEditorView.of(jge.OutputCamera())
     ..yaw = yaw
     ..pitch = pitch
     ..orthographic = true;

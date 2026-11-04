@@ -606,7 +606,7 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   /// The 2-D materials the open scene is drawn with.
   Material2DLibrary? get sceneMaterials {
     final engine = widget.workspace.scope.engine;
-    return engine == null ? null : Material2DLibrary.of(engine.context);
+    return engine?.context.material2DLibrary;
   }
 
   // The open scene draws what is edited — a value being dragged too —
@@ -1229,7 +1229,7 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
       path.substring(path.lastIndexOf('/') + 1);
 
   static const Map<String, String> _groups = {
-    'colour': 'Colour',
+    'color': 'Colour',
     'edges': 'Edges',
     'motion': 'Motion',
     'light': 'Light',
@@ -1239,8 +1239,8 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
   /// The groups [kind]'s effects are shown in, in order.
   static List<String> groupsOf(Material2DKind kind) =>
       kind == Material2DKind.screen
-      ? const ['screen', 'colour']
-      : const ['colour', 'edges', 'motion', 'light'];
+      ? const ['screen', 'color']
+      : const ['color', 'edges', 'motion', 'light'];
 
   Widget _variant() {
     final m = material;
@@ -1575,8 +1575,8 @@ class Material2DWorkspaceState extends State<Material2DWorkspace>
           indent: indent,
           key: key,
         );
-      case Material2DValue.colour:
-        final argb = m.colour(key);
+      case Material2DValue.color:
+        final argb = m.color(key);
         return _row(
           p.label,
           Align(

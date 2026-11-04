@@ -51,7 +51,7 @@ void main() {
       ..writeAsBytesSync(png!.buffer.asUint8List());
   }
 
-  void writeMaterial(String path, MaterialFile file) =>
+  void writeMaterial(String path, Material3DFile file) =>
       File('${dir.path}/$path')
         ..parent.createSync(recursive: true)
         ..writeAsStringSync(file.encode());
@@ -68,7 +68,7 @@ void main() {
     await writePng('big.png', const ui.Color(0xFFFF0000), size: 1024);
     writeMaterial(
       'm.material.json',
-      const MaterialFile(colorMap: 'big.png', unlit: true),
+      const Material3DFile(colorMap: 'big.png', unlit: true),
     );
     final pictures = session();
     expect(await pictures.of('m.material.json'), isNotNull);
@@ -76,7 +76,7 @@ void main() {
     expect(pictures.keptMapBytes, lessThanOrEqualTo(128 * 128 * 4 * 4 ~/ 3));
 
     final full = await pictures.render(
-      MaterialFile.parse(
+      Material3DFile.parse(
         File('${dir.path}/m.material.json').readAsStringSync(),
       ),
     );
@@ -94,7 +94,7 @@ void main() {
     await writePng('tint.png', const ui.Color(0xFFFF0000));
     writeMaterial(
       'm.material.json',
-      const MaterialFile(colorMap: 'tint.png', unlit: true),
+      const Material3DFile(colorMap: 'tint.png', unlit: true),
     );
     final modified = File('${dir.path}/m.material.json').lastModifiedSync();
     final red = await centre(
@@ -113,7 +113,7 @@ void main() {
   }, skip: skip);
 
   test('a picture cut short is drawn again; old kinds are let go', () async {
-    writeMaterial('m.material.json', const MaterialFile(color: 0xFF20A040));
+    writeMaterial('m.material.json', const Material3DFile(color: 0xFF20A040));
     final modified = File('${dir.path}/m.material.json').lastModifiedSync();
     await session(folder: cache).of('m.material.json', modified: modified);
     final kept = File('$cache/${cached().single}');
@@ -131,8 +131,8 @@ void main() {
   }, skip: skip);
 
   test('names that look alike keep a picture each', () async {
-    writeMaterial('a/b.material.json', const MaterialFile(color: 0xFFFF0000));
-    writeMaterial('a_b.material.json', const MaterialFile(color: 0xFF0000FF));
+    writeMaterial('a/b.material.json', const Material3DFile(color: 0xFFFF0000));
+    writeMaterial('a_b.material.json', const Material3DFile(color: 0xFF0000FF));
     final pictures = session(folder: cache);
     final t = DateTime(2026);
     await pictures.of('a/b.material.json', modified: t);
@@ -149,7 +149,7 @@ void main() {
     final pictures = session();
     writeMaterial(
       'm.material.json',
-      const MaterialFile(color: 0xFFFF0000, unlit: true),
+      const Material3DFile(color: 0xFFFF0000, unlit: true),
     );
     final red = await centre(
       await pictures.of('m.material.json', modified: DateTime(2026, 1, 1)),
@@ -158,7 +158,7 @@ void main() {
     // Changed by another tool: the dock asks for it as it is now.
     writeMaterial(
       'm.material.json',
-      const MaterialFile(color: 0xFF0000FF, unlit: true, roughness: 0.4),
+      const Material3DFile(color: 0xFF0000FF, unlit: true, roughness: 0.4),
     );
     final blue = await centre(
       await pictures.of('m.material.json', modified: DateTime(2026, 1, 2)),

@@ -19,7 +19,7 @@ import 'package:just_game_engine_editor/src/ui/level_designer_3d/tools/place_3d_
 
 EditorScope _scope() {
   final world = World()..initialize();
-  Graphics3D.registerSchemas(world.context);
+  Graphics3D.registerDefinitions(world.context);
   final scope = testScope(world: world);
   scope.sceneState.openScene(EditorScene(name: 'level', mode: SceneMode.threeD));
   return scope;
@@ -45,7 +45,7 @@ LevelDesignerSession _open(
 
 /// A view from 20 m above the origin, looking down.
 OrbitFlyEditorView _above() {
-  final view = OrbitFlyEditorView.of(Camera(viewportSize: const Size(400, 400)))
+  final view = OrbitFlyEditorView.of(OutputCamera(viewportSize: const Size(400, 400)))
     ..viewportSize = const Size(400, 400)
     ..pivot.setValues(0, 0, 0)
     ..distance = 20

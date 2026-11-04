@@ -282,7 +282,7 @@ packages:
       path: "../../just_game_engine"
       relative: true
     source: path
-    version: "2.0.0-dev.3"
+    version: "2.0.0-dev.4"
   just_game_engine_editor:
     dependency: "direct main"
     description:
@@ -296,7 +296,7 @@ packages:
       path: "../../just_game_engine_formats"
       relative: true
     source: path
-    version: "0.2.0"
+    version: "0.3.0"
   just_gamepads:
     dependency: "direct overridden"
     description:
@@ -339,7 +339,7 @@ packages:
       path: "../../just_physics_engine"
       relative: true
     source: path
-    version: "1.4.1"
+    version: "2.0.0"
   just_signals:
     dependency: transitive
     description:

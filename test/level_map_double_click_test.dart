@@ -131,7 +131,7 @@ void main() {
       expect(plugin.sceneState.selectedEntity.value, same(map));
       // Cells 10..12 and 2..4 of 32px: centred on cell (11, 3).
       expect(
-        plugin.engine.cameraSystem.mainCamera.position,
+        plugin.engine.camera.mainCamera.position,
         const Offset(11 * 32 + 16, 3 * 32 + 16),
       );
 
@@ -147,10 +147,7 @@ void main() {
       ], name: 'Crate');
       plugin.focusOn(crate);
       expect(plugin.isLevelDesignerOpen, isFalse);
-      expect(
-        plugin.engine.cameraSystem.mainCamera.position,
-        const Offset(300, 200),
-      );
+      expect(plugin.engine.camera.mainCamera.position, const Offset(300, 200));
     });
   });
 }

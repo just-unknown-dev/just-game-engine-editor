@@ -25,7 +25,7 @@ abstract final class PhysicsBodies {
         body = true;
       }
       for (final f in definition.fields) {
-        if (f.kind == jge.FieldTypes.physicsLayer) {
+        if (f.kind == jge.PhysicsDefinitions.layerType) {
           layer ??= (f.read(c) as num?)?.toInt();
           body = true;
         }

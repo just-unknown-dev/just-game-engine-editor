@@ -204,12 +204,12 @@ void main() {
     final maps = <String, LevelMapData Function()>{
       'orthogonal': () => LevelMapData(tileWidth: 16, tileHeight: 16),
       'isometric': () => LevelMapData(
-        orientation: MapOrientation.isometric,
+        orientation: LevelMapOrientation.isometric,
         tileWidth: 32,
         tileHeight: 16,
       ),
       'staggered': () => LevelMapData(
-        orientation: MapOrientation.staggered,
+        orientation: LevelMapOrientation.staggered,
         tileWidth: 32,
         tileHeight: 16,
       ),
@@ -324,7 +324,7 @@ void main() {
     test('a hexagonal map is refused, with the reason', () {
       useMap(
         LevelMapData(
-          orientation: MapOrientation.hexagonal,
+          orientation: LevelMapOrientation.hexagonal,
           tileWidth: 32,
           tileHeight: 28,
           hexSideLength: 16,

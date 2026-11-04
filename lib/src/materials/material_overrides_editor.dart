@@ -14,9 +14,9 @@ abstract final class MaterialOverrideEditors {
   /// By field type id, for the project at [root] (the working directory
   /// when null).
   static Map<String, FieldEditorBuilder> forRoot(String? root) => {
-    MaterialOverridesFieldType.material2D.id: (c) =>
+    Material2DDefinitions.overridesType.id: (c) =>
         MaterialOverridesEditor(context: c, flat: true, root: root),
-    MaterialOverridesFieldType.material3D.id: (c) =>
+    Material3DDefinitions.overridesType.id: (c) =>
         MaterialOverridesEditor(context: c, flat: false, root: root),
   };
 }
@@ -101,7 +101,7 @@ class MaterialOverridesEditor extends StatelessWidget {
 
   /// The 3-D material the entity draws with, resolved; null when it has
   /// none or it can't be read.
-  MaterialFile? get material3D {
+  Material3DFile? get material3D {
     final world = context.world ?? context.scope?.world;
     final component = context.component;
     if (world == null) return null;
@@ -129,7 +129,7 @@ class MaterialOverridesEditor extends StatelessWidget {
     try {
       return MaterialChain.resolve3D(
         path,
-        (p) => _file(p, MaterialFile.parse),
+        (p) => _file(p, Material3DFile.parse),
       ).value;
     } on Object {
       return null;
@@ -172,7 +172,7 @@ class MaterialOverridesEditor extends StatelessWidget {
     final label = _labels3D[base];
     if (label == null) return null;
     final type = switch (base) {
-      'color' || 'emission' => Material2DValue.colour,
+      'color' || 'emission' => Material2DValue.color,
       'tiling' || 'offset' when hash < 0 => Material2DValue.pair,
       _ => Material2DValue.number,
     };
@@ -208,7 +208,7 @@ class MaterialOverridesEditor extends StatelessWidget {
       ];
     }
     return [
-      for (final k in MaterialFile.animatableKeys)
+      for (final k in Material3DFile.animatableKeys)
         if (!have.contains(k)) k,
     ];
   }
@@ -219,7 +219,7 @@ class MaterialOverridesEditor extends StatelessWidget {
       final file = material2D ?? const Material2DFile();
       return file.valueOf(key);
     }
-    final m = material3D ?? const MaterialFile();
+    final m = material3D ?? const Material3DFile();
     return switch (key) {
       'color' => m.color,
       'metallic' => m.metallic,
@@ -300,7 +300,7 @@ class MaterialOverridesEditor extends StatelessWidget {
       );
     } else {
       field = switch (about.type) {
-        Material2DValue.colour when value is num => Align(
+        Material2DValue.color when value is num => Align(
           alignment: Alignment.centerLeft,
           child: MiniColorField(
             key: ValueKey('$key:$value'),

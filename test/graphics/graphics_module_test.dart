@@ -13,12 +13,14 @@ import 'package:just_game_engine_editor/materials.dart';
 import 'package:just_game_engine_editor/src/graphics/graphics.dart';
 import 'package:just_game_engine/just_game_engine_3d.dart';
 import 'package:just_graphics_engine/testing.dart';
+import 'package:just_graphics_engine/just_graphics_engine.dart'
+    show gltfToEngine;
 
 import '../support/real_io.dart';
 
 EditorScope _scope(List<EditorModule> modules) {
   final world = World()..initialize();
-  Graphics3D.registerSchemas(world.context);
+  Graphics3D.registerDefinitions(world.context);
   final scope = EditorScope(world: world, modules: modules);
   addTearDown(scope.dispose);
   return scope;
@@ -327,7 +329,7 @@ void main() {
     test('a light says what it does', () {
       expect(
         GraphicsInspectors.lightNote(
-          Light3DComponent(kind: LightKind.directional),
+          Light3DComponent(kind: Light3DKind.directional),
         ),
         contains('shadows'),
       );
@@ -340,7 +342,7 @@ void main() {
         contains('no limit'),
       );
       expect(
-        GraphicsInspectors.lightNote(Light3DComponent(kind: LightKind.spot)),
+        GraphicsInspectors.lightNote(Light3DComponent(kind: Light3DKind.spot)),
         contains('cone'),
       );
     });

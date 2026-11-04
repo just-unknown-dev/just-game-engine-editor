@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_editor_core/just_editor_core.dart';
 import 'package:just_game_engine/just_game_engine_3d.dart';
+import 'package:just_graphics_engine/just_graphics_engine.dart'
+    show gltfToEngine;
 
 /// The parsed model at a path once loaded, or null.
 typedef ModelDataOf = ModelData? Function(String path);
@@ -38,13 +40,13 @@ abstract final class GraphicsInspectors {
 
   /// What a light of [light]'s kind does, in a line.
   static String lightNote(Light3DComponent light) => switch (light.kind) {
-    LightKind.directional =>
+    Light3DKind.directional =>
       'Lights the whole scene from far away, along the entity\'s forward (+Z) axis, and casts the shadows. Turn the entity to aim it.',
-    LightKind.point =>
+    Light3DKind.point =>
       light.range > 0
           ? 'Shines every way from the entity, fading out by ${light.range.toStringAsFixed(1)} m.'
           : 'Shines every way from the entity, with no limit to its reach: give it a range to keep it local.',
-    LightKind.spot =>
+    Light3DKind.spot =>
       'A cone along the entity\'s forward (+Z) axis${light.range > 0 ? ', reaching ${light.range.toStringAsFixed(1)} m' : ''}. Full brightness inside the inner angle, none outside the outer.',
   };
 
@@ -98,7 +100,10 @@ abstract final class GraphicsInspectors {
     final label = 'Sky: $name';
     final commands = <EditorCommand>[
       for (final MapEntry(:key, :value) in preset.entries)
-        if (definition.field(key) case SchemaField(:final write?, :final read))
+        if (definition.field(key) case FieldDefinition(
+          :final write?,
+          :final read,
+        ))
           ComponentFieldCommand(
             label: label,
             component: environment,

@@ -6,6 +6,8 @@ import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart'
     show PackageAssetPaths, ProjectFiles;
 import 'package:just_game_engine/just_game_engine_3d.dart';
+import 'package:just_graphics_engine/just_graphics_engine.dart'
+    show GpuSampler, GpuSurface;
 
 import 'material_preview.dart';
 import 'texture_cache.dart';
@@ -73,7 +75,7 @@ final class MaterialPictures {
   final Map<PreviewLighting, Future<GpuEnvironmentMap?>> _maps = {};
   // Each material file read, with its stamp then (when it changed and how
   // big it is): read again once the stamp is another.
-  final Map<String, (String, MaterialFile)> _files = {};
+  final Map<String, (String, Material3DFile)> _files = {};
   // The names of the pictures kept on disk, listed once a session.
   Future<Set<String>>? _cacheNames;
   bool _disposed = false;
@@ -190,18 +192,18 @@ final class MaterialPictures {
 
   /// [file] with its parents laid under it, read from the project (a
   /// parent that can't be read is passed over: the defaults show).
-  Future<MaterialFile> resolve(MaterialFile file) async =>
+  Future<Material3DFile> resolve(Material3DFile file) async =>
       (await _resolve(file)).$1;
 
   // [file] resolved, and the parents it was resolved over.
-  Future<(MaterialFile, List<String>)> _resolve(MaterialFile file) async {
+  Future<(Material3DFile, List<String>)> _resolve(Material3DFile file) async {
     if (!file.isVariant) return (file, const <String>[]);
-    final parents = <String, MaterialFile>{};
+    final parents = <String, Material3DFile>{};
     var at = file.parent;
     while (at.isNotEmpty &&
         !parents.containsKey(at) &&
         parents.length < MaterialChain.maxDepth) {
-      final MaterialFile parent;
+      final Material3DFile parent;
       try {
         parent = await _read(at);
       } on Object {
@@ -221,14 +223,14 @@ final class MaterialPictures {
   // [file] (at [path]) resolved, and everything its picture is drawn from:
   // it, its parents, its maps and layers, and each layer's own parents and
   // maps.
-  Future<(MaterialFile, Set<String>)> _resolveWithUses(
+  Future<(Material3DFile, Set<String>)> _resolveWithUses(
     String path,
-    MaterialFile file,
+    Material3DFile file,
   ) async {
     final (resolved, parents) = await _resolve(file);
     final uses = {path, ...file.paths, ...parents, ...resolved.paths};
-    if (resolved.kind == MaterialKind.layered) {
-      for (final l in resolved.layers.take(MaterialFile.maxLayers)) {
+    if (resolved.kind == Material3DKind.layered) {
+      for (final l in resolved.layers.take(Material3DFile.maxLayers)) {
         if (l.isEmpty) continue;
         try {
           final layer = await _read(l);
@@ -248,12 +250,12 @@ final class MaterialPictures {
   // The file at [path], a project path or a package's asset key.
   File _fileOf(String path) => File(PackageAssetPaths.of(root).absolute(path));
 
-  Future<MaterialFile> _read(String path) async {
+  Future<Material3DFile> _read(String path) async {
     final file = _fileOf(path);
     final stamp = await _stampOf(file.path);
     final known = _files[path];
     if (known != null && known.$1 == stamp) return known.$2;
-    final read = MaterialFile.parse(await file.readAsString());
+    final read = Material3DFile.parse(await file.readAsString());
     _files[path] = (stamp, read);
     return read;
   }
@@ -283,7 +285,7 @@ final class MaterialPictures {
   /// frame, to dispose once it is not shown — held, it keeps that frame's
   /// texture.
   Future<ui.Image?> render(
-    MaterialFile file, {
+    Material3DFile file, {
     int? width,
     int? height,
     double yaw = -0.6,
@@ -310,7 +312,7 @@ final class MaterialPictures {
 
   // [render], its maps made at most [fit] pixels across when given.
   Future<ui.Image?> _render(
-    MaterialFile file, {
+    Material3DFile file, {
     int? width,
     int? height,
     double yaw = -0.6,
@@ -326,7 +328,7 @@ final class MaterialPictures {
     final gpu = await renderer();
     if (gpu == null) return null;
     final resolved = await resolve(file);
-    final metres = resolved.uv == MaterialUv.metres;
+    final metres = resolved.uv == Material3DUv.metres;
     final mesh = _meshes[(shape, metres)] ??= gpu.uploader.uploadPrimitive(
       shape
           .mesh(metres ? const ShapeUv.metresAt(1, 1, 1) : ShapeUv.natural)
@@ -364,7 +366,7 @@ final class MaterialPictures {
   // [file] (resolved) for the GPU, its maps read once and kept.
   Future<GpuMaterial> _materialOf(
     Renderer3D gpu,
-    MaterialFile file,
+    Material3DFile file,
     int? fit,
   ) async {
     // This drawing's maps: none is let go to make room for another.
@@ -384,10 +386,10 @@ final class MaterialPictures {
       return texture == null ? null : (texture, GpuSampler.linearRepeat);
     }
 
-    final layered = file.kind == MaterialKind.layered;
+    final layered = file.kind == Material3DKind.layered;
     final layers = [
       if (layered)
-        for (final l in file.layers.take(MaterialFile.maxLayers))
+        for (final l in file.layers.take(Material3DFile.maxLayers))
           await resolve(await _read(l)),
     ];
     final maps = layered

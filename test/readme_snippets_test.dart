@@ -75,14 +75,14 @@ ComponentDefinition<MyHealthComponent> get myHealthDefinition =>
       type: 'MyHealthComponent',
       create: MyHealthComponent.new,
       fields: [
-        SchemaField(
+        FieldDefinition(
           name: 'maxHp',
           kind: FieldTypes.integer,
           min: 0,
           read: (c) => (c as MyHealthComponent).maxHp,
           write: (c, v) => (c as MyHealthComponent).maxHp = v as int,
         ),
-        SchemaField(
+        FieldDefinition(
           name: 'invincible',
           kind: FieldTypes.boolean,
           read: (c) => (c as MyHealthComponent).invincible,

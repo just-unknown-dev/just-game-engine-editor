@@ -40,7 +40,7 @@ void main() {
       ..setGridSnapping(enabled: false, gridSize: 32)
       ..selectEntity(entity);
     final view = GameCameraEditorView.of(
-      Camera(viewportSize: const Size(200, 200)),
+      OutputCamera(viewportSize: const Size(200, 200)),
     );
     return ViewportInput(
       world: () => world,

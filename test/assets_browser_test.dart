@@ -614,7 +614,7 @@ void main() {
         reason: 'no scene',
       );
       plugin.sceneState.openScene(EditorScene(name: 'level'));
-      final camera = plugin.engine.cameraSystem.mainCamera
+      final camera = plugin.engine.camera.mainCamera
         ..viewportSize = const Size(800, 600);
       final where = camera.screenToWorld(const Offset(200, 150));
 
@@ -650,7 +650,7 @@ void main() {
       expect(sound.name, 'wind');
       final source = sound.getComponent<AudioSourceComponent>()!;
       expect(
-        (source.clipPath, source.loop, source.is3d),
+        (source.clipPath, source.loop, source.is3D),
         ('assets/audio/wind.wav', true, false),
       );
     }, timeout: bootTimeout);

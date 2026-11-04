@@ -155,7 +155,7 @@ class AudioRangeOverlay extends ViewportOverlay {
     ])) {
       if (!context.isShown(entity) || !context.isSelected(entity)) continue;
       final source = entity.getComponent<jge.AudioSourceComponent>()!;
-      if (!source.is3d) continue;
+      if (!source.is3D) continue;
       final centre = entity.getComponent<jge.TransformComponent>()!.position;
       final spatial = source.spatial;
       _rings(context, centre, spatial.minDistance, near);

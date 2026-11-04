@@ -10,7 +10,7 @@ import 'tile_commands.dart';
 abstract final class TileTurn {
   /// Steps in a whole turn on [g]: quarters, or sixths on a hexagonal map.
   static int stepsPerTurn(MapGeometry g) =>
-      g.orientation == MapOrientation.hexagonal ? 6 : 4;
+      g.orientation == LevelMapOrientation.hexagonal ? 6 : 4;
 
   /// One step, in radians.
   static double stepAngle(MapGeometry g) => 2 * math.pi / stepsPerTurn(g);

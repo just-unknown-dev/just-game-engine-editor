@@ -143,7 +143,7 @@ void main() {
         scope: scope,
         world: () => scope.world,
         sceneState: scope.sceneState,
-        camera: () => GameCameraEditorView.of(Camera()),
+        camera: () => GameCameraEditorView.of(OutputCamera()),
       );
       controller = SceneTreeController(world: () => scope.world);
       addTearDown(controller.dispose);

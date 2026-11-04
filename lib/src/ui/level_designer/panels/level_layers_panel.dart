@@ -578,8 +578,8 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
   Widget _settings(LevelMapTarget target) {
     final m = target.data;
     final staggers =
-        m.orientation == jge.MapOrientation.staggered ||
-        m.orientation == jge.MapOrientation.hexagonal;
+        m.orientation == jge.LevelMapOrientation.staggered ||
+        m.orientation == jge.LevelMapOrientation.hexagonal;
     const whole = NumberScrubConfig(integer: true, fractionDigits: 0, min: 1);
     Widget body = Column(
       mainAxisSize: MainAxisSize.min,
@@ -588,11 +588,11 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
         DropdownEditorRow(
           label: 'Grid',
           value: m.orientation.name,
-          options: [for (final o in jge.MapOrientation.values) o.name],
+          options: [for (final o in jge.LevelMapOrientation.values) o.name],
           onChanged: (v) => _edit(
             target,
             'Map orientation',
-            (map) => map.orientation = jge.MapOrientation.fromName(v),
+            (map) => map.orientation = jge.LevelMapOrientation.fromName(v),
           ),
         ),
         ScrubFieldRow(
@@ -639,7 +639,7 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
             ),
           ),
         ],
-        if (m.orientation == jge.MapOrientation.hexagonal)
+        if (m.orientation == jge.LevelMapOrientation.hexagonal)
           ScrubFieldRow(
             label: 'Hex side',
             value: m.hexSideLength.toDouble(),
@@ -805,11 +805,11 @@ class _LevelLayersPanelState extends State<LevelLayersPanel> {
         ),
         BoolEditorRow(
           label: 'Casts shadows',
-          value: layer.castsShadows,
+          value: layer.castShadows,
           onChanged: (v) =>
-              _edit(target, 'Layer shadows', (_) => layer.castsShadows = v),
+              _edit(target, 'Layer shadows', (_) => layer.castShadows = v),
         ),
-        if (layer.castsShadows)
+        if (layer.castShadows)
           ScrubFieldRow(
             label: 'Shadow depth',
             value: layer.shadowDepth,

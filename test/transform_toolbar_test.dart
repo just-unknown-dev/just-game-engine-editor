@@ -115,7 +115,7 @@ void main() {
         Rectangle2DComponent(width: 64, height: 32),
       ], name: 'Box');
       final camera = GameCameraEditorView.of(
-        Camera()..viewportSize = const Size(400, 300),
+        OutputCamera()..viewportSize = const Size(400, 300),
       );
       final middle = camera.worldToScreen(Offset.zero);
       GizmoHandle at(Offset offset, TransformMode mode) => GizmoHitTester()
@@ -155,7 +155,7 @@ void main() {
         Rectangle2DComponent(width: 64, height: 32),
       ], name: 'Box');
       final camera = GameCameraEditorView.of(
-        Camera()..viewportSize = const Size(400, 300),
+        OutputCamera()..viewportSize = const Size(400, 300),
       );
       final middle = camera.worldToScreen(Offset.zero);
       GizmoHandle at(Offset offset, {Set<TransformMode>? allows}) =>

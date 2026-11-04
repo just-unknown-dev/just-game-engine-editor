@@ -47,7 +47,7 @@ void main() {
 
   test('the sample sprite drawn through the material', () async {
     write('flash.material2d.json', {
-      'flash': {'colour': 0xFFFF0000, 'amount': 1},
+      'flash': {'color': 0xFFFF0000, 'amount': 1},
     });
     stage.show('flash.material2d.json', kind: Material2DKind.sprite);
     final d = await frame(80, 80);
@@ -62,7 +62,7 @@ void main() {
 
   test('an unsaved edit shown in place of the file', () async {
     write('flash.material2d.json', {
-      'flash': {'colour': 0xFFFF0000, 'amount': 1},
+      'flash': {'color': 0xFFFF0000, 'amount': 1},
     });
     stage.show('flash.material2d.json', kind: Material2DKind.sprite);
     await frame(80, 80);
@@ -70,7 +70,7 @@ void main() {
       'flash.material2d.json',
       const Material2DFile(
         effects: {'flash': true},
-        values: {'flash.colour': 0xFF0000FF, 'flash.amount': 1.0},
+        values: {'flash.color': 0xFF0000FF, 'flash.amount': 1.0},
       ),
     );
     final (r, _, b, _) = at(await frame(80, 80), 80, 34, 34);
@@ -80,7 +80,7 @@ void main() {
 
   test('tiles, and a screen material over a scene', () async {
     write('flash.material2d.json', {
-      'flash': {'colour': 0xFFFF0000, 'amount': 1},
+      'flash': {'color': 0xFFFF0000, 'amount': 1},
     });
     stage.show(
       'flash.material2d.json',
@@ -109,7 +109,7 @@ void main() {
 
   test('lit: brighter near the light than far from it', () async {
     write('plain.material2d.json', {
-      'tint': {'colour': 0xFFFFFFFF},
+      'tint': {'color': 0xFFFFFFFF},
     });
     stage
       ..show('plain.material2d.json', kind: Material2DKind.sprite, lit: true)

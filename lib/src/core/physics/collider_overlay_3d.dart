@@ -70,7 +70,7 @@ final class ColliderOverlay3D extends ViewportOverlay {
         return p;
       }
 
-      final lines = c.shape == ColliderShape3D.matchShape
+      final lines = c.shape == Collider3DShape.matchShape
           ? _matchedLines(
               entity.components.whereType<SolidShapeSource>().firstOrNull,
             )
@@ -296,14 +296,14 @@ final class ColliderOverlay3D extends ViewportOverlay {
   static List<(Vector3, Vector3)> shapeLines(
     Collider3DComponent c,
   ) => switch (c.shape) {
-    ColliderShape3D.box => boxLines(c.size * 0.5),
-    ColliderShape3D.sphere => [
+    Collider3DShape.box => boxLines(c.size * 0.5),
+    Collider3DShape.sphere => [
       ..._ring(Vector3.zero(), Vector3(1, 0, 0), Vector3(0, 1, 0), c.radius),
       ..._ring(Vector3.zero(), Vector3(1, 0, 0), Vector3(0, 0, 1), c.radius),
       ..._ring(Vector3.zero(), Vector3(0, 1, 0), Vector3(0, 0, 1), c.radius),
     ],
-    ColliderShape3D.capsule => capsuleLines(c.radius, c.height),
-    ColliderShape3D.cylinder => [
+    Collider3DShape.capsule => capsuleLines(c.radius, c.height),
+    Collider3DShape.cylinder => [
       ..._ring(
         Vector3(0, -c.height / 2, 0),
         Vector3(1, 0, 0),

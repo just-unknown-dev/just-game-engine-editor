@@ -16,7 +16,7 @@ void main() {
 
   EditorScope scope({bool physics3D = true, SceneMode mode = SceneMode.threeD}) {
     final world = World()..initialize();
-    if (physics3D) Physics3D.registerSchemas(world.context);
+    if (physics3D) Physics3D.registerDefinitions(world.context);
     final s = EditorScope(
       builtIns: const [BuiltInEditorModule.new],
       world: world,
@@ -74,20 +74,20 @@ void main() {
 
     test('a moving body with a mesh shape is an error; the fix makes it a hull', () {
       final s = scope();
-      final c = Collider3DComponent(shape: ColliderShape3D.mesh, model: 'missing.glb');
+      final c = Collider3DComponent(shape: Collider3DShape.mesh, model: 'missing.glb');
       s.world.createEntityWithComponents([TransformComponent(), RigidBody3DComponent(), c], name: 'Rock');
       final problems = check(s);
       final moving = problems.firstWhere((p) => p.message.contains('dynamic body'));
       expect(moving.severity, ProblemSeverity.error);
       expect(problems.any((p) => p.message.contains("isn't there")), isTrue);
       moving.fixes.single.apply();
-      expect(c.shape, ColliderShape3D.convexHull);
+      expect(c.shape, Collider3DShape.convexHull);
     });
 
     test('a character with a body too, a hull with no model, a joint to nobody', () {
       final s = scope();
       s.world.createEntityWithComponents([TransformComponent(), CharacterBody3DComponent(), RigidBody3DComponent(), Collider3DComponent()], name: 'Hero');
-      s.world.createEntityWithComponents([TransformComponent(), Collider3DComponent(shape: ColliderShape3D.convexHull)], name: 'Hull');
+      s.world.createEntityWithComponents([TransformComponent(), Collider3DComponent(shape: Collider3DShape.convexHull)], name: 'Hull');
       s.world.createEntityWithComponents([
         TransformComponent(),
         Collider3DComponent(),

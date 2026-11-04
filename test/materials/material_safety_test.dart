@@ -152,7 +152,7 @@ void main() {
         expect(read('m.material.json'), text, reason: 'left as it was');
 
         // Put right, it reads, and edits again.
-        write('m.material.json', const MaterialFile(metallic: 0.5).encode());
+        write('m.material.json', const Material3DFile(metallic: 0.5).encode());
         await tester.runAsync(state.load);
         await tester.pump();
         expect(find.text('Surface'), findsOneWidget);
@@ -180,7 +180,7 @@ void main() {
         tester.widget<ListView>(find.byType(ListView).first);
 
     testWidgets('3-D: as the compare line is dragged', (tester) async {
-      write('m.material.json', const MaterialFile().encode());
+      write('m.material.json', const Material3DFile().encode());
       final state = await open3D(tester, 'm.material.json');
       state.setCompare(0.5);
       await tester.pump();
@@ -229,7 +229,7 @@ void main() {
       package();
       write(
         'elsewhere/stone_pack/rock.material.json',
-        const MaterialFile(color: 0xFF112233).encode(),
+        const Material3DFile(color: 0xFF112233).encode(),
       );
       final state = await open3D(
         tester,
@@ -341,7 +341,7 @@ void main() {
       File('$root/assets/models/lamp.glb').writeAsBytesSync(w.toGlb());
 
       final made = await ModelMaterials.extract(root, 'assets/models/lamp.glb');
-      final m = MaterialFile.parse(read(made.single));
+      final m = Material3DFile.parse(read(made.single));
       expect(m.colorMap, startsWith('assets/models/lamp_textures/'));
       expect(ProjectFiles.isContained(m.colorMap), isTrue);
       expect(File('$root/${m.colorMap}').readAsBytesSync(), image);
@@ -525,7 +525,7 @@ void main() {
     addTearDown(pictures.dispose);
     Future<(int, int, int)> centreOf(int argb, DateTime modified) async {
       write('flash.material2d.json', {
-        'flash': {'colour': argb, 'amount': 1},
+        'flash': {'color': argb, 'amount': 1},
       });
       final image = (await pictures.of(
         'flash.material2d.json',

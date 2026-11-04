@@ -347,7 +347,10 @@ void main() {
 
     test('a hexagonal eraser is a hexagon', () {
       final hex = MapGeometry.of(
-        LevelMapData(orientation: MapOrientation.hexagonal, hexSideLength: 16),
+        LevelMapData(
+          orientation: LevelMapOrientation.hexagonal,
+          hexSideLength: 16,
+        ),
       );
       expect(
         TileEraseTool.brushCells(hex, const TileCoord(4, 4), 3),
@@ -592,17 +595,17 @@ void main() {
     final maps = <String, LevelMapData Function()>{
       'orthogonal': () => LevelMapData(),
       'isometric': () => LevelMapData(
-        orientation: MapOrientation.isometric,
+        orientation: LevelMapOrientation.isometric,
         tileWidth: 64,
         tileHeight: 32,
       ),
       'staggered': () => LevelMapData(
-        orientation: MapOrientation.staggered,
+        orientation: LevelMapOrientation.staggered,
         tileWidth: 64,
         tileHeight: 32,
       ),
       'hexagonal': () => LevelMapData(
-        orientation: MapOrientation.hexagonal,
+        orientation: LevelMapOrientation.hexagonal,
         tileWidth: 32,
         tileHeight: 28,
         hexSideLength: 16,

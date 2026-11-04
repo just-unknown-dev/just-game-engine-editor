@@ -160,7 +160,7 @@ void main() {
 
     test("on the game's own sprite", () async {
       write(_material, {
-        'tint': {'colour': 0xFFFFFFFF},
+        'tint': {'color': 0xFFFFFFFF},
       });
       await png('assets/rock.png', 16, 16, const Color(0xFFFF0000));
       final user = Material2DUser(
@@ -209,7 +209,7 @@ void main() {
 
     test('on a shape drawn with it', () async {
       write(_material, {
-        'tint': {'colour': 0xFFFFFFFF},
+        'tint': {'color': 0xFFFFFFFF},
       });
       stage.show(
         _material,

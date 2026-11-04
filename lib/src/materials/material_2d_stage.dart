@@ -121,7 +121,7 @@ final class Material2DStage {
   Material2DLibrary get library => _filesFrom?.library ?? _own;
 
   // The library of the stage's own world: the shaders it draws through.
-  Material2DLibrary get _own => Material2DLibrary.of(world.context);
+  Material2DLibrary get _own => world.context.material2DLibrary;
 
   /// Seconds into the preview: what moves in a material (a wave, a
   /// shine) moves with it.
@@ -256,7 +256,7 @@ final class Material2DStage {
     final light = _light?.getComponent<Light2DComponent>();
     if (size == null || light == null) return;
     light
-      ..colour = _lightColour
+      ..color = _lightColour
       ..intensity = _lightStrength
       ..radius = math.max(size.width, size.height) * _lightReach
       ..height = math.min(size.width, size.height) * _lightHeight;
@@ -523,7 +523,7 @@ final class Material2DStage {
         TransformComponent(
           position: Vector3(_lightAt.dx * w, _lightAt.dy * h, 0),
         ),
-        Light2DComponent(castsShadows: false),
+        Light2DComponent(castShadows: false),
       ]);
       _entities.add(_light!);
       _applyLight();
@@ -642,11 +642,7 @@ final class Material2DStage {
     Rect? bounds;
     if (subject.shape != null) {
       final first = decode();
-      bounds = first
-          ?.whereType<RenderableComponent>()
-          .first
-          .renderable
-          .getBounds();
+      bounds = first?.whereType<RenderableComponent>().first.renderable.bounds;
       if (bounds == null || bounds.isEmpty) return;
     }
     final unit = bounds?.size ?? subject.unit;
@@ -812,9 +808,7 @@ final class Material2DStage {
     lighting.dispose();
     screen.dispose();
     _letGoOfImages();
-    // The images its materials name: the world's own dispose leaves its
-    // library's to the garbage collector.
-    _own.clear();
+    // Its library, and the images its materials name, go with the world.
     world.dispose();
   }
 }
@@ -828,6 +822,11 @@ final class _ProjectImages extends SpriteAssetLoader {
 
   /// The paths that could not be read; one read again leaves it.
   final Set<String> failed;
+
+  /// True: each image is read afresh and handed over, kept by no one else —
+  /// the stage's library disposes the maps it reads, as it lets them go.
+  @override
+  bool get callerDisposesImages => true;
 
   @override
   Future<ui.Image> loadImage(String path) async {

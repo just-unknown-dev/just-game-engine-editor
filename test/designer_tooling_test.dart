@@ -101,7 +101,7 @@ void main() {
       final e = world.createEntityWithComponents([
         TransformComponent(),
         Rectangle2DComponent(width: 100, height: 20),
-        RigidBody2DComponent(bodyType: BodyType.static),
+        RigidBody2DComponent(bodyType: Body2DType.static),
         Collider2DComponent(size: Vector2(100, 20)),
       ]);
       ComponentResizer.scale(e, 2, 3);

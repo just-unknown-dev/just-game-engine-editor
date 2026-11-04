@@ -30,7 +30,7 @@ final class PrefabInstances {
   EditorSceneState get sceneState => scope.sceneState;
 
   /// The prefab files the edited engine has read.
-  PrefabLibrary get library => PrefabLibrary.of(scope.context);
+  PrefabLibrary get library => scope.context.prefabLibrary;
 
   /// Where prefabs made from a selection go.
   static const String folder = 'assets/prefabs';

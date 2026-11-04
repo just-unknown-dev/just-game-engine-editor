@@ -186,7 +186,7 @@ class BuiltInMaterialsModule extends EditorModule {
 
   @override
   List<String> get dataFileSuffixes => const [
-    MaterialFile.ending,
+    Material3DFile.ending,
     Material2DFile.ending,
   ];
 
@@ -225,7 +225,7 @@ class BuiltInMaterialsModule extends EditorModule {
       appliesTo: (path, {required isDirectory}) =>
           !isDirectory &&
           _ownFile(path) &&
-          (MaterialFile.isMaterialPath(path) ||
+          (Material3DFile.isMaterialPath(path) ||
               Material2DFile.isMaterial2DPath(path)),
       run: (scope, path) => _made(scope, newVariant(path)),
     ),
@@ -368,7 +368,7 @@ class BuiltInMaterialsModule extends EditorModule {
     'Materials',
     icon: Icons.texture,
     color: color,
-    endings: const [MaterialFile.ending],
+    endings: const [Material3DFile.ending],
     filterable: true,
     preview: (context, index, entry, size) => _Picture(
       revision: pictures.revision,
@@ -517,8 +517,8 @@ class BuiltInMaterialsModule extends EditorModule {
   Future<String> newMaterial(String folder) => _newFile(
     folder,
     'material',
-    MaterialFile.ending,
-    const MaterialFile(color: 0xFFD5D9DF).encode(),
+    Material3DFile.ending,
+    const Material3DFile(color: 0xFFD5D9DF).encode(),
   );
 
   /// Makes a new 2-D material of [kind] in [folder] — `material` (or
@@ -544,7 +544,7 @@ class BuiltInMaterialsModule extends EditorModule {
     final dir = slash < 0 ? '' : path.substring(0, slash);
     final name = path.substring(slash + 1);
     final flat = Material2DFile.isMaterial2DPath(path);
-    final ending = flat ? Material2DFile.ending : MaterialFile.ending;
+    final ending = flat ? Material2DFile.ending : Material3DFile.ending;
     final stem = name.substring(0, name.length - ending.length);
     return _newFile(
       dir,
@@ -552,7 +552,7 @@ class BuiltInMaterialsModule extends EditorModule {
       ending,
       flat
           ? Material2DFile(parent: path).encode()
-          : MaterialFile(parent: path).encode(),
+          : Material3DFile(parent: path).encode(),
     );
   }
 

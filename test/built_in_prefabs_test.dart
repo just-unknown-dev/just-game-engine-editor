@@ -17,7 +17,7 @@ void main() {
   // A world that knows the 3-D shapes, as a 3-D project's does: the default
   // kit's 3-D palette places them.
   final world = jge.World()..initialize();
-  Graphics3D.registerSchemas(world.context);
+  Graphics3D.registerDefinitions(world.context);
   final scope = EditorScope(
     builtIns: const [BuiltInEditorModule.new],
     world: world,
@@ -121,12 +121,12 @@ void main() {
       // with its own rectangle is invisible to the author and wrong in play.
       final collider = components.whereType<jge.Collider2DComponent>().firstOrNull;
       if (collider != null) {
-        expect(collider.shape, jge.ColliderShape2D.matchShape, reason: prefab.id);
+        expect(collider.shape, jge.Collider2DShape.matchShape, reason: prefab.id);
         final world = jge.World()..initialize();
         final e = world.createEntityWithComponents(components);
-        final shape = jge.ColliderGeometry.shapeOf(collider, entity: e);
-        expect(shape, isA<jge.RectangleShape>(), reason: prefab.id);
-        final box = shape! as jge.RectangleShape;
+        final shape = jge.Collider2DGeometry.shapeOf(collider, entity: e);
+        expect(shape, isA<jge.Rectangle2DShape>(), reason: prefab.id);
+        final box = shape! as jge.Rectangle2DShape;
         expect(box.width, size.width, reason: prefab.id);
         expect(box.height, size.height, reason: prefab.id);
         world.dispose();

@@ -93,23 +93,23 @@ void main() {
   group('on every kind of map, every tile stays where it was', () {
     final kinds = {
       'isometric': LevelMapData(
-        orientation: MapOrientation.isometric,
+        orientation: LevelMapOrientation.isometric,
         tileWidth: 64,
         tileHeight: 32,
       ),
       'staggered, rows': LevelMapData(
-        orientation: MapOrientation.staggered,
+        orientation: LevelMapOrientation.staggered,
         tileWidth: 64,
         tileHeight: 32,
       ),
       'staggered, even rows shifted': LevelMapData(
-        orientation: MapOrientation.staggered,
+        orientation: LevelMapOrientation.staggered,
         staggerIndex: TileStaggerIndex.even,
         tileWidth: 64,
         tileHeight: 32,
       ),
       'hexagonal, columns': LevelMapData(
-        orientation: MapOrientation.hexagonal,
+        orientation: LevelMapOrientation.hexagonal,
         staggerAxis: TileStaggerAxis.x,
         hexSideLength: 16,
         tileWidth: 32,

@@ -137,7 +137,7 @@ void main() {
     late Entity entity;
     late Light2DComponent light;
     final view = GameCameraEditorView.of(
-      Camera(viewportSize: const Size(800, 600)),
+      OutputCamera(viewportSize: const Size(800, 600)),
     );
 
     int paint() {
@@ -181,9 +181,9 @@ void main() {
       final caster = s.world.createEntityWithComponents([
         TransformComponent(position: Vector3(100, 100, 0)),
         RenderableComponent(
-          renderable: RectangleRenderable(
-            size: const Size(40, 20),
-            fillColor: const Color(0xFF795548),
+          renderable: CustomRenderable(
+            onRender: (canvas, size) {},
+            boundsOf: () => const Rect.fromLTWH(0, 0, 40, 20),
           ),
         ),
         ShadowCaster2DComponent(),

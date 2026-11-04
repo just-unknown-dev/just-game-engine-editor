@@ -9,7 +9,7 @@ import 'package:just_game_engine_editor/src/core/view/planar_entity_picker.dart'
 import 'package:just_game_engine_editor/src/ui/overlay/gizmo_painter.dart';
 
 GameCameraEditorView _flatView() => GameCameraEditorView.of(
-  Camera(
+  OutputCamera(
     position: const Offset(40, -20),
     zoom: 2,
     rotation: 0.3,
@@ -19,7 +19,7 @@ GameCameraEditorView _flatView() => GameCameraEditorView.of(
 
 /// A camera in space: 20 units in front of the world plane, looking at it.
 GameCameraEditorView _deepView() => GameCameraEditorView.of(
-  Camera(
+  OutputCamera(
     viewportSize: const Size(400, 400),
     z: -20,
     lens: const CameraLens.perspective(fieldOfView: math.pi / 2),
@@ -91,7 +91,7 @@ void main() {
       Rectangle2DComponent(width: 4, height: 4),
     ]);
     final view = GameCameraEditorView.of(
-      Camera(viewportSize: const Size(200, 200)),
+      OutputCamera(viewportSize: const Size(200, 200)),
     );
     final picked = PlanarEntityPicker().pickInRect(
       view,
@@ -120,7 +120,7 @@ void main() {
       final state = EditorSceneState()
         ..setGridSnapping(enabled: false, gridSize: 32);
       final view = GameCameraEditorView.of(
-        Camera(viewportSize: const Size(200, 200)),
+        OutputCamera(viewportSize: const Size(200, 200)),
       );
       final solver = PlanarGizmoDragSolver(state)
         ..begin(entity, const Offset(100, 100));

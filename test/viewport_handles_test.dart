@@ -117,12 +117,13 @@ class _Solids extends EditorModule {
 
 /// A view from 10 m above the origin, looking down.
 OrbitFlyEditorView _above() {
-  final view = OrbitFlyEditorView.of(Camera(viewportSize: const Size(200, 200)))
-    ..viewportSize = const Size(200, 200)
-    ..pivot.setValues(0, 0, 0)
-    ..distance = 10
-    ..yaw = 0
-    ..pitch = -math.pi / 2;
+  final view =
+      OrbitFlyEditorView.of(OutputCamera(viewportSize: const Size(200, 200)))
+        ..viewportSize = const Size(200, 200)
+        ..pivot.setValues(0, 0, 0)
+        ..distance = 10
+        ..yaw = 0
+        ..pitch = -math.pi / 2;
   return view..sync();
 }
 

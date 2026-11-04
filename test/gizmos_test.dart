@@ -148,36 +148,61 @@ void main() {
   });
 
   group("the engine's collider outlines", () {
-    Physics2DSystem physics() => engine.world.getSystem<Physics2DSystem>()!;
+    // The engine's collider drawer the editor puts in the game's world
+    // while it shows colliders.
+    Collider2DDebuggerSystem? outlines() =>
+        engine.world.systems.whereType<Collider2DDebuggerSystem>().firstOrNull;
+    bool drawn() => outlines() != null;
     void tick() => plugin.update(1 / 60);
 
-    // A bare engine has none: a game adds it, or asks for the defaults.
+    // A bare engine has no 2-D physics: a game adds it, or asks for the
+    // defaults.
     setUp(() => engine.world.addSystem(Physics2DSystem(engine.physics)));
 
-    test('a game is drawn without them unless it asks', () {
-      expect(Physics2DSystem(engine.physics).drawsOutlines, isFalse);
+    test('only for a game with 2-D physics, through the camera it is drawn '
+        'with', () {
+      engine.world.removeSystem(engine.world.getSystem<Physics2DSystem>()!);
+      tick();
+      expect(drawn(), isFalse, reason: 'no 2-D physics');
+
+      engine.world.addSystem(Physics2DSystem(engine.physics));
+      tick();
+      expect(drawn(), isTrue);
+      expect(
+        outlines()!.camera,
+        same(
+          engine.world.getSystem<RenderSystem>()?.camera ??
+              engine.camera.mainCamera,
+        ),
+      );
+      tick();
+      expect(
+        engine.world.systems.whereType<Collider2DDebuggerSystem>(),
+        hasLength(1),
+        reason: 'added once',
+      );
     });
 
     test('drawn while the mode shows colliders: editing as it starts; a '
         'play-test or the Level Designer once asked', () {
       tick();
-      expect(physics().drawsOutlines, isTrue);
+      expect(drawn(), isTrue);
 
       plugin.play();
       tick();
-      expect(physics().drawsOutlines, isFalse, reason: 'a play-test');
+      expect(drawn(), isFalse, reason: 'a play-test');
       gizmos(shown(GizmoMode.play, on: true));
       tick();
-      expect(physics().drawsOutlines, isTrue, reason: 'asked for');
+      expect(drawn(), isTrue, reason: 'asked for');
       plugin.stop();
       gizmos(defaults);
 
       plugin.openLevelDesigner();
       tick();
-      expect(physics().drawsOutlines, isFalse, reason: 'the designer');
+      expect(drawn(), isFalse, reason: 'the designer');
       gizmos(shown(GizmoMode.designer, on: true));
       tick();
-      expect(physics().drawsOutlines, isTrue);
+      expect(drawn(), isTrue);
       plugin.closeLevelDesigner();
 
       gizmos(
@@ -187,12 +212,12 @@ void main() {
         ),
       );
       tick();
-      expect(physics().drawsOutlines, isFalse, reason: 'that kind off');
+      expect(drawn(), isFalse, reason: 'that kind off');
 
       gizmos(defaults);
       plugin.setVisible(false);
       tick();
-      expect(physics().drawsOutlines, isFalse, reason: 'the editor closed');
+      expect(drawn(), isFalse, reason: 'the editor closed');
     });
 
     test('not for what the eye hid; in the Level Designer, once asked for, '
@@ -202,9 +227,9 @@ void main() {
         Collider2DComponent(),
       ], name: 'solid');
       tick();
-      expect(physics().outlineFilter!(solid), isTrue);
+      expect(outlines()!.outlineFilter!(solid), isTrue);
       plugin.scope.view.setHidden([solid.id], hidden: true);
-      expect(physics().outlineFilter!(solid), isFalse);
+      expect(outlines()!.outlineFilter!(solid), isFalse);
       plugin.scope.view.setHidden([solid.id], hidden: false);
 
       // Off the Level Map: out of reach and out of sight while designing,
@@ -214,10 +239,17 @@ void main() {
       tick();
       expect(plugin.keepsToLevelMap.value, isTrue);
       expect(plugin.designer.value!.controller.isShownInViewport(solid), isFalse);
-      expect(physics().drawsOutlines, isTrue);
-      expect(physics().outlineFilter!(solid), isTrue);
+      expect(drawn(), isTrue);
+      expect(outlines()!.outlineFilter!(solid), isTrue);
       plugin.scope.view.setHidden([solid.id], hidden: true);
-      expect(physics().outlineFilter!(solid), isFalse, reason: 'the eye');
+      expect(outlines()!.outlineFilter!(solid), isFalse, reason: 'the eye');
+    });
+
+    test('taken off the game when the editor is taken off the engine', () {
+      tick();
+      expect(drawn(), isTrue);
+      plugin.detach();
+      expect(drawn(), isFalse);
     });
   });
 

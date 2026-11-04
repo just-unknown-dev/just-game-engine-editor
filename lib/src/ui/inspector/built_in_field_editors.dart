@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
+import 'package:just_game_engine/just_game_engine_3d.dart'
+    show Material3DDefinitions;
 
 import 'package:just_editor_core/host.dart';
 import 'physics_shape_editor.dart';
@@ -26,7 +28,8 @@ abstract final class BuiltInFieldEditors {
     jge.FieldTypes.map.id: _json,
     // A material's overrides, as JSON until a material editor brings its
     // own (`override: true`).
-    for (final t in jge.MaterialOverridesFieldType.all) t.id: _json,
+    jge.Material2DDefinitions.overridesType.id: _json,
+    Material3DDefinitions.overridesType.id: _json,
     jge.FieldTypes.vector2.id: _vector2,
     jge.FieldTypes.vector3.id: _vector3,
     jge.FieldTypes.euler.id: _euler,
@@ -34,7 +37,7 @@ abstract final class BuiltInFieldEditors {
     jge.FieldTypes.offsetList.id: _offsetList,
     jge.FieldTypes.color.id: _color,
     jge.FieldTypes.shapePaintStyle.id: _shapePaintStyle,
-    jge.FieldTypes.physicsShape.id: (c) => PhysicsShapeEditor(ctx: c),
+    jge.PhysicsDefinitions.shapeType.id: (c) => PhysicsShapeEditor(ctx: c),
     jge.FieldTypes.edgeInsets.id: _edgeInsets,
     jge.FieldTypes.unknown.id: _readonly,
     ...TagFieldEditors.all,
@@ -189,7 +192,7 @@ abstract final class BuiltInFieldEditors {
             // saves, so the item stays the JSON the component reads.
             return c.editors.build(
               FieldEditorContext(
-                field: jge.SchemaField(
+                field: jge.FieldDefinition(
                   name: key,
                   kind: kind,
                   read: (_) => null,

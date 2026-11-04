@@ -315,7 +315,7 @@ class Light2DOverlay extends ViewportOverlay {
       final renderable = entity
           .getComponent<jge.RenderableComponent>()!
           .renderable;
-      var bounds = renderable.getBounds();
+      var bounds = renderable.bounds;
       if (bounds == null) continue;
       if (!renderable.boundsAreWorldSpace) {
         bounds = bounds.shift(

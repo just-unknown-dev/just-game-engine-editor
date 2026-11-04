@@ -12,6 +12,8 @@ import 'package:just_editor_core/just_editor_core.dart';
 import 'package:just_game_engine_editor/src/graphics/graphics.dart';
 import 'package:just_game_engine/just_game_engine_3d.dart';
 import 'package:just_graphics_engine/testing.dart';
+import 'package:just_graphics_engine/just_graphics_engine.dart'
+    show CookedModel;
 
 /// A box with a sun pointing down, a red point light 2 m up, and a socket.
 GlbWriter _lamp() {
@@ -166,7 +168,7 @@ void main() {
 
       final bulb = parts[1].components;
       final light = bulb.whereType<Light3DComponent>().single;
-      expect(light.kind, LightKind.point);
+      expect(light.kind, Light3DKind.point);
       expect(light.range, 3);
       expect(light.color, const Color(0xFFFF0000));
       final p = bulb.whereType<TransformComponent>().single.position;
@@ -189,7 +191,7 @@ void main() {
 
     test('placed, they are one undo step, the parts under the model', () async {
       final world = World()..initialize();
-      Graphics3D.registerSchemas(world.context);
+      Graphics3D.registerDefinitions(world.context);
       final scope = EditorScope(world: world, modules: const []);
       addTearDown(scope.dispose);
       scope.sceneState.openScene(

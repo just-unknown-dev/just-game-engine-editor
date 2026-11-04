@@ -176,18 +176,18 @@ void main() {
           ref: ref,
           change: (m) => m.layerById(id)!
             ..material = 'assets/fx/water.material2d.json'
-            ..castsShadows = true
+            ..castShadows = true
             ..shadowDepth = 30,
         )!,
       );
       scope.history.undo();
       final layer = data.layers.single;
       expect(layer.material, isEmpty);
-      expect(layer.castsShadows, isFalse);
+      expect(layer.castShadows, isFalse);
       expect(layer.shadowDepth, isNot(30));
       scope.history.redo();
       expect(data.layers.single.material, 'assets/fx/water.material2d.json');
-      expect(data.layers.single.castsShadows, isTrue);
+      expect(data.layers.single.castShadows, isTrue);
     });
 
     test('a renamed material is renamed on the layers drawn with it', () {

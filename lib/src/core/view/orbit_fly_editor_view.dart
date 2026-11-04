@@ -19,12 +19,12 @@ class OrbitFlyEditorView implements CameraSyncingView {
   OrbitFlyEditorView(this._cameraOf);
 
   /// A view on a camera that never changes — a test's, say.
-  OrbitFlyEditorView.of(jge.Camera camera) : _cameraOf = (() => camera);
+  OrbitFlyEditorView.of(jge.OutputCamera camera) : _cameraOf = (() => camera);
 
-  final jge.Camera Function() _cameraOf;
+  final jge.OutputCamera Function() _cameraOf;
 
   /// The camera underneath.
-  jge.Camera get camera => _cameraOf();
+  jge.OutputCamera get camera => _cameraOf();
 
   /// The point it orbits.
   final jge.Vector3 pivot = jge.Vector3(0, -1, 0);
@@ -303,7 +303,7 @@ class OrbitFlyEditorView implements CameraSyncingView {
       camera.applyTransform(canvas, size);
 
   @override
-  Rect get visibleWorldRect => camera.getVisibleBounds();
+  Rect get visibleWorldRect => camera.visibleBounds;
 
   @override
   void setPosition(Offset world) => position = world;

@@ -87,7 +87,7 @@ abstract final class LevelChecks3D {
       final sensor = e.getComponent<RigidBody3DComponent>()?.isSensor ?? false;
       final dynamicBody =
           e.getComponent<RigidBody3DComponent>()?.bodyType ==
-          BodyType3D.dynamic;
+          Body3DType.dynamic;
       // With a kill height every fall is caught there; what is below it
       // is said below.
       if (kill == null &&

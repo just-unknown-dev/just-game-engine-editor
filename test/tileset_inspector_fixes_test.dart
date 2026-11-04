@@ -315,7 +315,7 @@ void main() {
 
     setUp(() {
       scope = testScope();
-      final camera = jge.Camera()..viewportSize = const Size(800, 600);
+      final camera = jge.OutputCamera()..viewportSize = const Size(800, 600);
       view = GameCameraEditorView.of(camera);
       session = ColliderEditSession.of(scope);
     });
@@ -340,26 +340,26 @@ void main() {
     }
 
     test('a turned box moved and resized is still that box, turned', () {
-      final c = jge.Collider2DComponent(shape: jge.ColliderShape2D.box)
+      final c = jge.Collider2DComponent(shape: jge.Collider2DShape.box)
         ..size = jge.Vector2(40, 20)
         ..rotation = math.pi / 6;
       final e = body(c);
       session.toggle(e);
       drag(handle(ColliderHandleKind.center, 0), const Offset(10, 0));
-      expect(c.shape, jge.ColliderShape2D.box);
+      expect(c.shape, jge.Collider2DShape.box);
       expect(c.rotation, closeTo(math.pi / 6, 1e-9));
       expect((c.size.x, c.size.y), (40, 20));
       expect(c.offset.dx, closeTo(10, 0.5));
 
       drag(handle(ColliderHandleKind.side, 1), const Offset(20, 0));
-      expect(c.shape, jge.ColliderShape2D.box);
+      expect(c.shape, jge.Collider2DShape.box);
       expect(c.rotation, closeTo(math.pi / 6, 1e-9));
       expect(c.size.x, greaterThan(40));
       expect(c.size.y, 20);
     });
 
     test('a rounded polygon keeps its points and its corners', () {
-      final c = jge.Collider2DComponent(shape: jge.ColliderShape2D.polygon)
+      final c = jge.Collider2DComponent(shape: jge.Collider2DShape.polygon)
         ..points = const [
           Offset(-10, -10),
           Offset(10, -10),
@@ -370,7 +370,7 @@ void main() {
       final e = body(c);
       session.toggle(e);
       drag(handle(ColliderHandleKind.vertex, 2), const Offset(4, 4));
-      expect(c.shape, jge.ColliderShape2D.polygon);
+      expect(c.shape, jge.Collider2DShape.polygon);
       expect(c.cornerRadius, 4);
       expect(c.points, hasLength(4));
       expect(c.points[2], const Offset(14, 14));
@@ -379,7 +379,7 @@ void main() {
         session.handles().any((h) => h.kind == ColliderHandleKind.insert),
         isTrue,
       );
-      c.shape = jge.ColliderShape2D.box;
+      c.shape = jge.Collider2DShape.box;
       expect(
         session.handles().any((h) => h.kind == ColliderHandleKind.insert),
         isFalse,

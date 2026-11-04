@@ -445,9 +445,9 @@ Size? _sizeFromComponent(
     return Size(rect.width, rect.height);
   }
   if (component is Collider2DComponent) {
-    final shape = ColliderGeometry.of(component);
+    final shape = Collider2DGeometry.of(component);
     if (shape == null) return null;
-    final rect = ColliderGeometry.boundsOf(shape);
+    final rect = Collider2DGeometry.boundsOf(shape);
     return Size(rect.width, rect.height);
   }
   if (component is RenderableComponent) {
@@ -472,27 +472,13 @@ Size? _sizeFromRenderable(Renderable renderable) {
         ((srcW != null && srcH != null) ? Size(srcW, srcH) : null);
     return size;
   }
-  if (renderable is RectangleRenderable) {
-    return renderable.size;
-  }
-  if (renderable is CircleRenderable) {
-    final d = renderable.radius * 2;
-    return Size(d, d);
-  }
-  if (renderable is LineRenderable) {
-    final rect = Rect.fromPoints(
-      Offset.zero,
-      renderable.endPoint,
-    ).inflate(renderable.width);
-    return Size(rect.width, rect.height);
-  }
   if (renderable is CustomRenderable) {
-    final rect = renderable.getBounds();
+    final rect = renderable.bounds;
     if (rect == null) return null;
     return Size(rect.width, rect.height);
   }
 
-  final rect = renderable.getBounds();
+  final rect = renderable.bounds;
   if (rect == null) return null;
   final sx = renderable.scale.x.abs();
   final sy = renderable.scale.y.abs();

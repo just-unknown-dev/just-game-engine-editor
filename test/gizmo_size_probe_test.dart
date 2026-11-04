@@ -32,7 +32,7 @@ void main() {
       spy,
     ], name: 'Box');
     final camera = GameCameraEditorView.of(
-      Camera()..viewportSize = const Size(400, 300),
+      OutputCamera()..viewportSize = const Size(400, 300),
     );
     final middle = camera.worldToScreen(Offset.zero);
 

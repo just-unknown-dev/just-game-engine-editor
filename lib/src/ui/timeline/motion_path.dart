@@ -85,7 +85,7 @@ class MotionPath {
       // While previewing, the transform is wherever the timeline put it; the
       // path hangs off where the scene has it.
       final definition = session.scope.definitions.definitionFor(transform);
-      for (final f in definition?.fields ?? const <jge.SchemaField>[]) {
+      for (final f in definition?.fields ?? const <jge.FieldDefinition>[]) {
         if (f.name != 'position') continue;
         final authored = session.authoredValue(transform, f);
         if (authored is Map) {

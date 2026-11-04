@@ -127,8 +127,8 @@ class LayerRefactor {
 
   String? get _openScene => scope.sceneState.activeScene.value?.name;
 
-  static bool _isLayerField(jge.SchemaField field) =>
-      field.kind.id == jge.FieldTypes.physicsLayer.id;
+  static bool _isLayerField(jge.FieldDefinition field) =>
+      field.kind.id == jge.PhysicsDefinitions.layerType.id;
 
   /// What deleting [layer], its contents going to [moveTo], would change.
   LayerChangePlan plan(int layer, {int moveTo = 0}) {
@@ -193,7 +193,7 @@ class LayerRefactor {
   static LayerUse _use(
     String owner,
     jge.ComponentDefinition definition,
-    jge.SchemaField field,
+    jge.FieldDefinition field,
   ) => LayerUse(
     owner: owner,
     where:

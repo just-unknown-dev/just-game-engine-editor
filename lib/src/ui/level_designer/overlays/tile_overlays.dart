@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:just_game_engine/just_game_engine.dart' as jge;
 import 'package:just_game_engine/just_game_engine.dart'
-    show TileCell, TileCoord, MapGeometry, MapOrientation, LevelMapRuntime;
+    show TileCell, TileCoord, MapGeometry, LevelMapOrientation, LevelMapRuntime;
 
 import 'package:just_editor_core/host.dart';
 import '../../../core/level_map/tile_edit_state.dart';
@@ -148,7 +148,7 @@ void _paintTile(
   if (ts == null || image == null || !ts.contains(id)) return;
   final t = TileCell.drawTransform(
     cell,
-    hexagonal: g.orientation == MapOrientation.hexagonal,
+    hexagonal: g.orientation == LevelMapOrientation.hexagonal,
   );
   final tw = ts.tileWidth.toDouble();
   final th = ts.tileHeight.toDouble();
@@ -235,7 +235,7 @@ class TileGridOverlay extends DesignerOverlay {
       ..strokeWidth = 0
       ..color = TileOverlayColors.grid;
     _inWorld(draw, (canvas, _) {
-      if (g.orientation == MapOrientation.orthogonal) {
+      if (g.orientation == LevelMapOrientation.orthogonal) {
         final path = Path();
         final tw = g.tileWidth.toDouble();
         final th = g.tileHeight.toDouble();

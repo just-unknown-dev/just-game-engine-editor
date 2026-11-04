@@ -22,14 +22,14 @@ void main() {
     late Engine engine;
     late JustGameEditorPlugin plugin;
 
-    Camera output() => engine.cameraSystem.mainCamera;
-    CameraBrain brain() => engine.cameraSystem.brain;
+    OutputCamera output() => engine.camera.mainCamera;
+    CameraBrain brain() => engine.camera.brain;
 
     setUp(() async {
       engine = Engine();
       addTearDown(engine.dispose);
       await engine.initialize();
-      registerCameraSystems(engine.world, engine.cameraSystem);
+      registerCameraSystems(engine.world, engine.camera);
       brain().defaultBlend = CameraBlend.cut;
 
       // Closed to begin with, so the hand-over can be watched from the start.
@@ -299,7 +299,7 @@ void main() {
   testWidgets('an entity reference is picked from the scene', (tester) async {
     final scope = testScope();
     Object? written;
-    final field = CameraDefinitions.trigger.fields.firstWhere(
+    final field = CameraTargetDefinitions.trigger.fields.firstWhere(
       (f) => f.name == 'cameraName',
     );
     await tester.pumpWidget(

@@ -146,8 +146,8 @@ abstract final class TilesToEntity {
       if (c.y < sy) sy = c.y;
     }
     final staggered =
-        map.orientation == jge.MapOrientation.staggered ||
-        map.orientation == jge.MapOrientation.hexagonal;
+        map.orientation == jge.LevelMapOrientation.staggered ||
+        map.orientation == jge.LevelMapOrientation.hexagonal;
     if (staggered) {
       if (map.staggerAxis == jge.TileStaggerAxis.x) {
         sx -= sx & 1;

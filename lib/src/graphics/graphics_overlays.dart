@@ -118,12 +118,12 @@ final class LightReachOverlay extends ViewportOverlay {
         ..strokeWidth = 1.2
         ..style = PaintingStyle.stroke;
       switch (light.kind) {
-        case LightKind.point:
+        case Light3DKind.point:
           final r = light.range > 0 ? light.range : 1.0;
           _circle(context, at, Vector3(1, 0, 0), Vector3(0, 0, 1), r, paint);
           _circle(context, at, Vector3(1, 0, 0), Vector3(0, 1, 0), r, paint);
           _circle(context, at, Vector3(0, 1, 0), Vector3(0, 0, 1), r, paint);
-        case LightKind.spot:
+        case Light3DKind.spot:
           final f = _forwardOf(transform);
           final reach = light.range > 0 ? light.range : 5.0;
           final (u, v) = _across(f);
@@ -144,7 +144,7 @@ final class LightReachOverlay extends ViewportOverlay {
               _line(context, at, end + side * radius, ring);
             }
           }
-        case LightKind.directional:
+        case Light3DKind.directional:
           final f = _forwardOf(transform);
           final (u, v) = _across(f);
           for (final offset in [
@@ -234,7 +234,7 @@ final class CameraFrustumOverlay extends ViewportOverlay {
     double depth = 3,
     double aspect = 16 / 9,
   }) {
-    final f = cameraForward(state.pitch, state.yaw);
+    final f = state.forward;
     final r = Vector3(math.cos(state.yaw), 0, -math.sin(state.yaw));
     final u = r.cross(f)..normalize();
     final h = depth * math.tan(state.lens.safeFieldOfView / 2);
@@ -257,8 +257,8 @@ final EditorMarker lightMarker = EditorMarker(
   icon: Icons.lightbulb_outline,
   color: const Color(0xFFFFD54F),
   label: (entity) => switch (entity.getComponent<Light3DComponent>()?.kind) {
-    LightKind.directional => 'sun',
-    LightKind.spot => 'spot',
+    Light3DKind.directional => 'sun',
+    Light3DKind.spot => 'spot',
     _ => null,
   },
 );

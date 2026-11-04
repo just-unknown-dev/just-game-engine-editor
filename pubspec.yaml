@@ -54,7 +54,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  just_game_engine: ^2.0.0-dev.2
+  just_game_engine: ^2.0.0-dev.4
   just_editor_core: ^0.1.0-dev.1
   just_tiled: ^0.4.1
   just_signals: ^1.0.2
@@ -63,10 +63,12 @@ dependencies:
   # same code `just store …` runs. The editor's store window drives it to
   # add plugins, kits and assets to a project.
   just_asset_store: ^0.2.0
+  # The renderer itself, past what the engine's 3-D library shows a game:
+  # model cooking and glTF import, thumbnails and previews drawn into
+  # views of their own (and, in the tests, GPU checks and pixel reads).
+  just_graphics_engine: ^0.1.0-dev.2
 
 dev_dependencies:
-  # GPU checks and pixel reads for the material tests that render.
-  just_graphics_engine: ^0.1.0-dev.2
   just_colours: ^0.1.0
   just_storage: ^1.2.1
   flutter_test:

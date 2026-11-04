@@ -98,7 +98,7 @@ class _OnHandle extends GizmoHitTester {
 
 EditorScope _scope({SceneMode mode = SceneMode.threeD, List<EditorModule> modules = const []}) {
   final world = World()..initialize();
-  Graphics3D.registerSchemas(world.context);
+  Graphics3D.registerDefinitions(world.context);
   final scope = testScope(world: world, modules: modules);
   scope.sceneState.openScene(EditorScene(name: 'level', mode: mode));
   return scope;
@@ -124,7 +124,7 @@ LevelDesignerSession _open(
 
 /// A view from 10 m above the origin, looking down.
 OrbitFlyEditorView _above() {
-  final view = OrbitFlyEditorView.of(Camera(viewportSize: const Size(200, 200)))
+  final view = OrbitFlyEditorView.of(OutputCamera(viewportSize: const Size(200, 200)))
     ..viewportSize = const Size(200, 200)
     ..pivot.setValues(0, 0, 0)
     ..distance = 10

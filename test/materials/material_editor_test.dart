@@ -45,7 +45,7 @@ void main() {
     final second = await module.newMaterial('assets/materials/');
     expect(first, 'assets/materials/material.material.json');
     expect(second, 'assets/materials/material_2.material.json');
-    final made = MaterialFile.parse(
+    final made = Material3DFile.parse(
       File('${dir.path}/$first').readAsStringSync(),
     );
     expect(made.validate(), isEmpty);
@@ -101,9 +101,9 @@ void main() {
     expect(state.dirty, isFalse);
 
     state.edit(state.material.copyWith(roughness: 0.1));
-    state.edit(state.material.copyWith(uv: MaterialUv.world));
+    state.edit(state.material.copyWith(uv: Material3DUv.world));
     state.undo();
-    expect(state.material.uv, MaterialUv.natural);
+    expect(state.material.uv, Material3DUv.natural);
     expect(state.material.roughness, 0.1);
     state.redo();
     expect(state.dirty, isTrue);
@@ -111,10 +111,10 @@ void main() {
     await tester.runAsync(state.save);
     expect(state.dirty, isFalse);
     expect(reloaded, [path]);
-    final saved = MaterialFile.parse(
+    final saved = Material3DFile.parse(
       File('${dir.path}/$path').readAsStringSync(),
     );
-    expect([saved.roughness, saved.uv], [0.1, MaterialUv.world]);
+    expect([saved.roughness, saved.uv], [0.1, Material3DUv.world]);
     expect(tester.takeException(), isNull);
   });
 
@@ -123,7 +123,7 @@ void main() {
 
     setUp(() {
       final world = World()..initialize();
-      Graphics3D.registerSchemas(world.context);
+      Graphics3D.registerDefinitions(world.context);
       scope = EditorScope(world: world, modules: const []);
       addTearDown(scope.dispose);
     });

@@ -17,8 +17,8 @@ import 'package:just_game_engine_editor/src/ui/level_designer_3d/shapes/shape_si
 
 EditorScope _scope() {
   final world = World()..initialize();
-  Graphics3D.registerSchemas(world.context);
-  Physics3D.registerSchemas(world.context);
+  Graphics3D.registerDefinitions(world.context);
+  Physics3D.registerDefinitions(world.context);
   final scope = testScope(world: world);
   scope.sceneState.openScene(EditorScene(name: 'level', mode: SceneMode.threeD));
   return scope;
@@ -26,7 +26,7 @@ EditorScope _scope() {
 
 /// A view from 20 m above the origin, looking down.
 OrbitFlyEditorView _above() {
-  final view = OrbitFlyEditorView.of(Camera(viewportSize: const Size(400, 400)))
+  final view = OrbitFlyEditorView.of(OutputCamera(viewportSize: const Size(400, 400)))
     ..viewportSize = const Size(400, 400)
     ..pivot.setValues(0, 0, 0)
     ..distance = 20
@@ -141,10 +141,10 @@ void main() {
 
     test('a sphere by its radius; a matched shape has none', () {
       final scope = _scope();
-      final ball = _make(scope, [TransformComponent(), Collider3DComponent(shape: ColliderShape3D.sphere)], 'Ball');
+      final ball = _make(scope, [TransformComponent(), Collider3DComponent(shape: Collider3DShape.sphere)], 'Ball');
       drag(scope, ColliderSizeHandles().handlesOf(ball, scope), _above(), Vector3(0.5, 0, 0), Vector3(1.5, 0, 0));
       expect(ball.getComponent<Collider3DComponent>()!.radius, closeTo(1, 1e-6));
-      final matched = _make(scope, [TransformComponent(), Collider3DComponent(shape: ColliderShape3D.matchShape)], 'Matched');
+      final matched = _make(scope, [TransformComponent(), Collider3DComponent(shape: Collider3DShape.matchShape)], 'Matched');
       expect(ColliderSizeHandles().handlesOf(matched, scope), isEmpty);
     });
   });

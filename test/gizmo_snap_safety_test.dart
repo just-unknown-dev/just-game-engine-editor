@@ -12,12 +12,13 @@ import 'package:just_game_engine_editor/src/core/input/ray_gizmo_drag_solver.dar
 import 'package:just_game_engine_editor/src/ui/overlay/gizmo_painter.dart';
 
 OrbitFlyEditorView _ahead() {
-  final view = OrbitFlyEditorView.of(Camera(viewportSize: const Size(200, 200)))
-    ..viewportSize = const Size(200, 200)
-    ..pivot.setValues(0, 0, 0)
-    ..distance = 10
-    ..yaw = 0
-    ..pitch = 0;
+  final view =
+      OrbitFlyEditorView.of(OutputCamera(viewportSize: const Size(200, 200)))
+        ..viewportSize = const Size(200, 200)
+        ..pivot.setValues(0, 0, 0)
+        ..distance = 10
+        ..yaw = 0
+        ..pitch = 0;
   return view..sync();
 }
 

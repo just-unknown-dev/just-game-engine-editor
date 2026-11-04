@@ -54,8 +54,8 @@ void main() {
 
   EditorScope scope3D({List<EditorModule> modules = const []}) {
     final world = World()..initialize();
-    Graphics3D.registerSchemas(world.context);
-    Physics3D.registerSchemas(world.context);
+    Graphics3D.registerDefinitions(world.context);
+    Physics3D.registerDefinitions(world.context);
     final s = testScope(world: world, modules: modules);
     s.sceneState.openScene(EditorScene(name: 'level', mode: SceneMode.threeD));
     return s;
@@ -63,7 +63,7 @@ void main() {
 
   setUp(() {
     scope = scope3D();
-    view = OrbitFlyEditorView.of(Camera(viewportSize: canvas))
+    view = OrbitFlyEditorView.of(OutputCamera(viewportSize: canvas))
       ..viewportSize = canvas
       ..pivot.setValues(0, 0, 0)
       ..distance = 20

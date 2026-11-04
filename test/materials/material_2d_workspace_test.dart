@@ -94,7 +94,7 @@ void main() {
     test('a picture drawn as the game draws it, drawn again when it '
         'changes', () async {
       write('hit.material2d.json', {
-        'flash': {'colour': 0xFFFF0000, 'amount': 1},
+        'flash': {'color': 0xFFFF0000, 'amount': 1},
       });
       final pictures = Material2DPictures(root: dir.path, size: 64);
       addTearDown(pictures.dispose);

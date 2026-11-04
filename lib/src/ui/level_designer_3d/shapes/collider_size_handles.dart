@@ -72,7 +72,7 @@ final class ColliderSizeHandles extends ViewportHandles {
   /// matching its entity's shape).
   static List<FaceAxis> axesOf(Collider3DComponent collider) =>
       switch (collider.shape) {
-        ColliderShape3D.box => [
+        Collider3DShape.box => [
           FaceAxis(
             0,
             (v) => collider.size = Vector3(v, collider.size.y, collider.size.z),
@@ -86,11 +86,11 @@ final class ColliderSizeHandles extends ViewportHandles {
             (v) => collider.size = Vector3(collider.size.x, collider.size.y, v),
           ),
         ],
-        ColliderShape3D.sphere => [
+        Collider3DShape.sphere => [
           for (final a in const [0, 1, 2])
             FaceAxis(a, (v) => collider.radius = v / 2),
         ],
-        ColliderShape3D.capsule || ColliderShape3D.cylinder => [
+        Collider3DShape.capsule || Collider3DShape.cylinder => [
           for (final a in const [0, 2])
             FaceAxis(a, (v) => collider.radius = v / 2),
           FaceAxis(1, (v) => collider.height = v),

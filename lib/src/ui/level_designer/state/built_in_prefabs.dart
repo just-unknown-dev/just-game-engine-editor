@@ -205,11 +205,11 @@ abstract final class BuiltInPrefabs {
       ..._base(position),
       _rect(size, solidColor),
       jge.RigidBody2DComponent(
-        bodyType: jge.BodyType.static,
+        bodyType: jge.Body2DType.static,
         lockRotation: true,
         restitution: 0,
       ),
-      jge.Collider2DComponent(shape: jge.ColliderShape2D.matchShape),
+      jge.Collider2DComponent(shape: jge.Collider2DShape.matchShape),
     ],
   );
 
@@ -227,11 +227,11 @@ abstract final class BuiltInPrefabs {
       // draws in the game too.
       _rect(size, triggerColor, filled: false),
       jge.RigidBody2DComponent(
-        bodyType: jge.BodyType.static,
+        bodyType: jge.Body2DType.static,
         isSensor: true,
         lockRotation: true,
       ),
-      jge.Collider2DComponent(shape: jge.ColliderShape2D.matchShape),
+      jge.Collider2DComponent(shape: jge.Collider2DShape.matchShape),
     ],
   );
 

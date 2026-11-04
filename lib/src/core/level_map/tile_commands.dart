@@ -181,7 +181,7 @@ class _MapSettings {
       properties = m.properties.copy(),
       tilesets = List.of(m.tilesets);
 
-  final MapOrientation orientation;
+  final LevelMapOrientation orientation;
   final int tileWidth;
   final int tileHeight;
   final TileStaggerAxis staggerAxis;
@@ -233,7 +233,7 @@ class _LayerSettings {
       className = l.className,
       properties = l.properties.copy(),
       material = l.material,
-      castsShadows = l.castsShadows,
+      castShadows = l.castShadows,
       shadowDepth = l.shadowDepth;
 
   final String name;
@@ -252,7 +252,7 @@ class _LayerSettings {
   final String className;
   final TileProperties properties;
   final String material;
-  final bool castsShadows;
+  final bool castShadows;
   final double shadowDepth;
 
   void applyTo(MapLayerData layer) {
@@ -273,7 +273,7 @@ class _LayerSettings {
       ..className = className
       ..properties = properties.copy()
       ..material = material
-      ..castsShadows = castsShadows
+      ..castShadows = castShadows
       ..shadowDepth = shadowDepth;
   }
 }

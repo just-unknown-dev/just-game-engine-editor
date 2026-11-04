@@ -151,8 +151,8 @@ void main() {
     tester,
   ) async {
     final scope = testScope();
-    final field = CameraDefinitions.targetGroup.fields.single;
-    final hint = CameraDefinitions.targetGroup.hints.fields[field.name]!;
+    final field = CameraTargetDefinitions.targetGroup.fields.single;
+    final hint = CameraTargetDefinitions.targetGroup.hints.fields[field.name]!;
     expect(hint.itemTemplate, isA<Map>());
     final component = CameraTargetGroupComponent();
     await _pump(

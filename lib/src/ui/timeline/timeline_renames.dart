@@ -35,7 +35,7 @@ abstract final class TimelineRenames {
     var changed = false;
     final tracks = [
       for (final track in asset.tracks)
-        if (track.binding.kind == TrackBindingKind.name &&
+        if (track.binding.kind == EntityTargetKind.name &&
             track.binding.value == from)
           () {
             changed = true;

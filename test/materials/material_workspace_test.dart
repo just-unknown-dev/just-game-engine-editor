@@ -25,7 +25,7 @@ void main() {
     addTearDown(() => dir.deleteSync(recursive: true));
   });
 
-  void write(String path, MaterialFile file) {
+  void write(String path, Material3DFile file) {
     File('${dir.path}/$path')
       ..parent.createSync(recursive: true)
       ..writeAsStringSync(file.encode());
@@ -72,20 +72,20 @@ void main() {
   testWidgets('its sections, and the Transparency fields its mode needs', (
     tester,
   ) async {
-    write('a.material.json', const MaterialFile());
+    write('a.material.json', const Material3DFile());
     final state = await open(tester, 'a.material.json');
     for (final card in ['Surface', 'Transparency', 'Maps']) {
       expect(find.text(card), findsOneWidget, reason: card);
     }
     expect(find.text('Cutoff'), findsNothing);
-    state.change((m) => m.copyWith(alpha: MaterialAlpha.cutout));
+    state.change((m) => m.copyWith(alpha: Material3DAlpha.cutout));
     await tester.pump();
     expect(find.text('Cutoff'), findsOneWidget);
-    state.change((m) => m.copyWith(alpha: MaterialAlpha.blend));
+    state.change((m) => m.copyWith(alpha: Material3DAlpha.blend));
     await tester.pump();
     expect(find.text('Cutoff'), findsNothing);
     expect(find.text('Opacity'), findsOneWidget);
-    state.change((m) => m.copyWith(kind: MaterialKind.layered));
+    state.change((m) => m.copyWith(kind: Material3DKind.layered));
     await tester.pump();
     expect(find.text('Layers'), findsOneWidget);
     expect(find.text('Transparency'), findsNothing);
@@ -100,7 +100,7 @@ void main() {
     addTearDown(MaterialCardFolds.clear);
     write(
       'a.material.json',
-      const MaterialFile(color: 0xFF336699, metallic: 0.8, tilingX: 2),
+      const Material3DFile(color: 0xFF336699, metallic: 0.8, tilingX: 2),
     );
     final state = await open(tester, 'a.material.json');
     expect(state.cardChanged('surface'), isTrue);
@@ -108,8 +108,8 @@ void main() {
     expect(state.cardChanged('layout'), isTrue);
     await tester.tap(find.byTooltip('Back to its defaults').first);
     await tester.pump();
-    expect(state.material.color, const MaterialFile().color);
-    expect(state.material.metallic, const MaterialFile().metallic);
+    expect(state.material.color, const Material3DFile().color);
+    expect(state.material.metallic, const Material3DFile().metallic);
     expect(state.material.tilingX, 2, reason: "another card's");
     state.undo();
     expect(state.material.metallic, 0.8, reason: 'one undo step');
@@ -128,11 +128,11 @@ void main() {
   ) async {
     write(
       'rock.material.json',
-      const MaterialFile(color: 0xFF808080, roughness: 0.9),
+      const Material3DFile(color: 0xFF808080, roughness: 0.9),
     );
     write(
       'mossy.material.json',
-      const MaterialFile(
+      const Material3DFile(
         parent: 'rock.material.json',
         color: 0xFF336633,
         tilingX: 3,
@@ -150,7 +150,7 @@ void main() {
 
   testWidgets('the toolbar: shapes, background, zoom and fit, compare; '
       'and their keys', (tester) async {
-    write('a.material.json', const MaterialFile());
+    write('a.material.json', const Material3DFile());
     final state = await open(tester, 'a.material.json');
     await tester.tap(find.text('Cube'));
     await tester.pump();
@@ -198,29 +198,29 @@ void main() {
   });
 
   testWidgets('a preset is one undo step', (tester) async {
-    write('a.material.json', const MaterialFile(color: 0xFF336699));
+    write('a.material.json', const Material3DFile(color: 0xFF336699));
     final state = await open(tester, 'a.material.json');
     state.change(MaterialPreset.byId('gold')!.apply);
     expect(state.material.metallic, 1);
     expect(state.material.color, 0xFFFFC356);
     state.change(MaterialPreset.byId('glass')!.apply);
-    expect(state.material.alpha, MaterialAlpha.blend);
+    expect(state.material.alpha, Material3DAlpha.blend);
     expect(state.material.validate(), isEmpty);
     state.undo();
-    expect(state.material.alpha, MaterialAlpha.opaque);
+    expect(state.material.alpha, Material3DAlpha.opaque);
     state.undo();
     expect(state.material.color, 0xFF336699);
     expect(state.dirty, isFalse);
     // Every preset makes a material that saves.
     for (final p in MaterialPreset.all) {
-      expect(p.apply(const MaterialFile()).validate(), isEmpty, reason: p.id);
+      expect(p.apply(const Material3DFile()).validate(), isEmpty, reason: p.id);
     }
   });
 
   testWidgets('a value being dragged is drawn, not an undo step', (
     tester,
   ) async {
-    write('a.material.json', const MaterialFile(roughness: 0.5));
+    write('a.material.json', const Material3DFile(roughness: 0.5));
     final state = await open(tester, 'a.material.json');
     state.preview((m) => m.copyWith(roughness: 0.2));
     expect(state.drawn.roughness, 0.2);
@@ -240,11 +240,11 @@ void main() {
     setUp(() {
       write(
         'rock.material.json',
-        const MaterialFile(color: 0xFF808080, metallic: 1, roughness: 0.8),
+        const Material3DFile(color: 0xFF808080, metallic: 1, roughness: 0.8),
       );
       write(
         'mossy.material.json',
-        const MaterialFile(
+        const Material3DFile(
           parent: 'rock.material.json',
           color: 0xFF4C7A3A,
           overrides: {'color'},
@@ -270,7 +270,7 @@ void main() {
       expect(state.shown.metallic, 0);
       expect(state.shown.roughness, 0.8, reason: 'still the parent\'s');
       await tester.runAsync(state.save);
-      final saved = MaterialFile.parse(
+      final saved = Material3DFile.parse(
         File('${dir.path}/mossy.material.json').readAsStringSync(),
       );
       expect(saved.parent, 'rock.material.json');
@@ -293,7 +293,7 @@ void main() {
       expect(state.shown.roughness, 0.8);
       write(
         'rock.material.json',
-        const MaterialFile(color: 0xFF808080, metallic: 1, roughness: 0.3),
+        const Material3DFile(color: 0xFF808080, metallic: 1, roughness: 0.3),
       );
       changes.add('rock.material.json');
       await tester.pump();
@@ -314,7 +314,7 @@ void main() {
   testWidgets("the preview's shape and light are kept for the next one", (
     tester,
   ) async {
-    write('a.material.json', const MaterialFile());
+    write('a.material.json', const Material3DFile());
     final state = await open(tester, 'a.material.json');
     expect(state.sceneLighting, isNull, reason: 'no engine, no scene');
     state.setShape(PreviewShape.torus);
@@ -340,7 +340,7 @@ void main() {
       return bytes!.buffer.asUint8List();
     });
     File('${dir.path}/brick.png').writeAsBytesSync(png!);
-    write('a.material.json', const MaterialFile(colorMap: 'brick.png'));
+    write('a.material.json', const Material3DFile(colorMap: 'brick.png'));
     final maps = MapPictures(root: dir.path);
     addTearDown(maps.dispose);
     // Read for real (a widget test's clock stands still).
@@ -363,7 +363,7 @@ void main() {
   });
 
   testWidgets('a map that cannot be read says so', (tester) async {
-    write('a.material.json', const MaterialFile(normalMap: 'gone.png'));
+    write('a.material.json', const Material3DFile(normalMap: 'gone.png'));
     final maps = MapPictures(root: dir.path);
     addTearDown(maps.dispose);
     await open(tester, 'a.material.json', maps: maps);

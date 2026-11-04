@@ -62,7 +62,7 @@ abstract final class PhysicsChecks {
                 AddComponentCommand(
                   entity: e,
                   component: jge.Collider2DComponent(
-                    shape: jge.ColliderShape2D.matchShape,
+                    shape: jge.Collider2DShape.matchShape,
                   ),
                   sceneState: scope.sceneState,
                 ),
@@ -73,8 +73,8 @@ abstract final class PhysicsChecks {
       );
     }
     for (final (entity, collider, _) in _colliders(context)) {
-      if (collider.shape != jge.ColliderShape2D.matchShape) continue;
-      if (jge.ColliderGeometry.visualShapeOf(
+      if (collider.shape != jge.Collider2DShape.matchShape) continue;
+      if (jge.Collider2DGeometry.visualShapeOf(
             entity,
             definitions: scope.definitions,
           ) !=
@@ -94,7 +94,7 @@ abstract final class PhysicsChecks {
               label: 'Make it a box',
               apply: () {
                 final edit = ComponentEdit.begin(scope, collider);
-                collider.shape = jge.ColliderShape2D.box;
+                collider.shape = jge.Collider2DShape.box;
                 edit.commit('Collider shape');
               },
             ),
@@ -158,7 +158,7 @@ abstract final class PhysicsChecks {
     final out = <SceneProblem>[];
     for (final (entity, collider, rigid) in _colliders(context)) {
       if (rigid?.isSensor ?? false) continue;
-      if (collider.shape == jge.ColliderShape2D.matchShape) continue;
+      if (collider.shape == jge.Collider2DShape.matchShape) continue;
       final drawn = entity.components.any(
         (c) =>
             c is jge.Circle2DComponent ||
@@ -167,11 +167,11 @@ abstract final class PhysicsChecks {
             c is jge.Polygon2DComponent,
       );
       if (!drawn) continue;
-      final visual = jge.ColliderGeometry.visualShapeOf(entity);
-      final placed = jge.ColliderGeometry.of(collider);
+      final visual = jge.Collider2DGeometry.visualShapeOf(entity);
+      final placed = jge.Collider2DGeometry.of(collider);
       if (visual == null || placed == null) continue;
-      final want = jge.ColliderGeometry.boundsOf(visual);
-      final have = jge.ColliderGeometry.boundsOf(placed);
+      final want = jge.Collider2DGeometry.boundsOf(visual);
+      final have = jge.Collider2DGeometry.boundsOf(placed);
       bool off(double a, double b) {
         final d = (a - b).abs();
         return d > 1 && d > 0.05 * b.abs().clamp(1, double.infinity);
@@ -191,7 +191,7 @@ abstract final class PhysicsChecks {
           message:
               "${_name(entity)}'s collider is "
               '${PhysicsBodyExtras.shapeLabel(collider)}$where, but what it '
-              'draws is ${PhysicsBodyExtras.collisionShapeLabel(visual)}: it rests '
+              'draws is ${PhysicsBodyExtras.shape2DLabel(visual)}: it rests '
               'above what it lands on, or sinks into it.',
           hint:
               'Make the collider match what is drawn, fit it once, or edit '
@@ -202,7 +202,7 @@ abstract final class PhysicsChecks {
               apply: () {
                 final edit = ComponentEdit.begin(context.scope, collider);
                 collider
-                  ..shape = jge.ColliderShape2D.matchShape
+                  ..shape = jge.Collider2DShape.matchShape
                   ..offset = Offset.zero
                   ..rotation = 0;
                 edit.commit('Match what is drawn');
@@ -340,7 +340,7 @@ abstract final class PhysicsChecks {
   static List<SceneProblem> polygons(ValidationContext context) {
     final out = <SceneProblem>[];
     for (final (entity, collider, _) in _colliders(context)) {
-      if (collider.shape != jge.ColliderShape2D.polygon) continue;
+      if (collider.shape != jge.Collider2DShape.polygon) continue;
       final v = collider.points;
       if (v.length > 8) {
         out.add(

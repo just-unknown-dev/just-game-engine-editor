@@ -40,7 +40,7 @@ Entity _block(
 }) => world.createEntityWithComponents([
   TransformComponent(position: Vector3(x, y, 0)),
   Rectangle2DComponent(width: w, height: h),
-  RigidBody2DComponent(bodyType: BodyType.static),
+  RigidBody2DComponent(bodyType: Body2DType.static),
   Collider2DComponent(size: Vector2(w, h)),
   LayerComponent(),
 ], name: name);

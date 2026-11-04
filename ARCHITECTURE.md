@@ -111,9 +111,9 @@ The editor adds no gameplay system of its own: what runs in a play-test is what 
 | System | From | Added |
 |--------|------|-------|
 | `EditorLogCaptureSystem` | `core/ecs/systems/` | always: logs changes in the entity and system counts |
-| `PhysicsBodyBindingSystem` | `core/ecs/systems/` | with `bindPhysicsBodies` (the default): while authoring, a body being dragged is held still and kept awake |
-| `PhysicsJointBindingSystem` | the engine | with `bindPhysicsBodies` |
-| the sprite, level-map and map-collision default systems | the engine (`registerDefaultSystems`) | always |
+| `Physics2DBodyBindingSystem` | `core/ecs/systems/` | with `bindPhysicsBodies` (the default): while authoring, a body being dragged is held still and kept awake |
+| `Collider2DDebuggerSystem` | the engine | while the mode shows colliders, in a game with `Physics2DSystem`: the collider outlines, through the render system's camera, leaving out what the editor hides |
+| the sprite, animator, timeline, level-map and map-collision default systems | the engine (`registerDefaultSystems`) | always |
 
 Each is added only if the world has none. What runs depends on whether the editor is authoring (`_syncRuntimeSystems`): `TimelineSystem` and `MapCollisionSystem` run only in a play-test (map collision is built at Play and its generated bodies cleared after), the Level Map's tile animation runs on wall time while authoring, and the render filter hides what the editor hides.
 

@@ -83,7 +83,7 @@ class _GroupRow extends StatelessWidget {
           Icon(
             binding.isSelf
                 ? Icons.person_pin_circle_outlined
-                : binding.kind == jge.TrackBindingKind.tag
+                : binding.kind == jge.EntityTargetKind.tag
                 ? Icons.sell_outlined
                 : Icons.category_outlined,
             size: 12,

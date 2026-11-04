@@ -138,7 +138,7 @@ class TileEraseTool extends TileTool {
     final r = (size - 1) ~/ 2;
     if (r <= 0) return [at];
     final centre = g.toStable(at);
-    final hex = g.orientation == MapOrientation.hexagonal;
+    final hex = g.orientation == LevelMapOrientation.hexagonal;
     return [
       for (var dy = -r; dy <= r; dy++)
         for (var dx = -r; dx <= r; dx++)

@@ -62,7 +62,7 @@ void main() {
       final memory = <String, String>{};
       final plan = await TiledImporter(_files(memory)).read('ortho_finite.tmx');
       final map = plan.map;
-      expect(map.orientation, MapOrientation.orthogonal);
+      expect(map.orientation, LevelMapOrientation.orthogonal);
       expect(map.tilesets, ['assets/tilesets/ortho_finite_grass.tileset.json']);
       // Groups are flattened: their names, opacity and offset carried in.
       // The object layer is a layer too, for its objects' entities.
@@ -265,11 +265,11 @@ void main() {
     );
 
     for (final (file, orientation) in const [
-      ('isometric.tmx', MapOrientation.isometric),
-      ('staggered.tmx', MapOrientation.staggered),
-      ('hexagonal.tmx', MapOrientation.hexagonal),
-      ('infinite.tmx', MapOrientation.orthogonal),
-      ('ortho.tmj', MapOrientation.orthogonal),
+      ('isometric.tmx', LevelMapOrientation.isometric),
+      ('staggered.tmx', LevelMapOrientation.staggered),
+      ('hexagonal.tmx', LevelMapOrientation.hexagonal),
+      ('infinite.tmx', LevelMapOrientation.orthogonal),
+      ('ortho.tmj', LevelMapOrientation.orthogonal),
     ]) {
       test('$file comes across as a ${orientation.name} map', () async {
         final plan = await TiledImporter(_files({})).read(file);
@@ -308,12 +308,12 @@ void main() {
   });
 
   group('exporting a map', () {
-    LevelMapData level(MapOrientation orientation) {
+    LevelMapData level(LevelMapOrientation orientation) {
       final map = LevelMapData(
         orientation: orientation,
-        tileWidth: orientation == MapOrientation.orthogonal ? 16 : 32,
+        tileWidth: orientation == LevelMapOrientation.orthogonal ? 16 : 32,
         tileHeight: 16,
-        hexSideLength: orientation == MapOrientation.hexagonal ? 8 : 0,
+        hexSideLength: orientation == LevelMapOrientation.hexagonal ? 8 : 0,
       )..addTileset('assets/tilesets/grass.tileset.json');
       final ground = map.addLayer(name: 'Ground')..collides = true;
       final deco = map.addLayer(name: 'Deco')..opacity = 0.5;
@@ -327,7 +327,7 @@ void main() {
     }
 
     for (final ending in const ['tmx', 'tmj']) {
-      for (final orientation in MapOrientation.values) {
+      for (final orientation in LevelMapOrientation.values) {
         test('as .$ending, ${orientation.name}: read back, it is the same '
             'map', () async {
           final memory = <String, String>{};
@@ -376,7 +376,7 @@ void main() {
       const tmx = 'assets/maps/level.tmx';
       final memory = <String, String>{tsx: "the project file", tmx: 'edited'};
       final written = await TiledExporter(_files(memory)).export(
-        level(MapOrientation.orthogonal),
+        level(LevelMapOrientation.orthogonal),
         to: tmx,
         tilesetAt: (_) => _grass(),
       );
@@ -500,7 +500,7 @@ void main() {
         final map = LevelMapData.fromJson(
           jsonDecode(memory[to]!) as Map<String, dynamic>,
         );
-        expect(map.orientation, MapOrientation.staggered);
+        expect(map.orientation, LevelMapOrientation.staggered);
       },
     );
 
@@ -592,7 +592,7 @@ void main() {
       plugin = JustGameEditorPlugin(engine: engine);
       await plugin.attach(plugin.engine);
       plugin.sceneState.openScene(EditorScene(name: 'level'));
-      plugin.engine.cameraSystem.mainCamera.viewportSize = const Size(800, 600);
+      plugin.engine.camera.mainCamera.viewportSize = const Size(800, 600);
     });
     tearDown(() {
       plugin.dispose();

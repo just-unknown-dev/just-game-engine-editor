@@ -90,7 +90,7 @@ class _Views extends EditorModule {
 
 /// A view from 10 m behind the origin, looking along +Z.
 OrbitFlyEditorView _ahead() {
-  final view = OrbitFlyEditorView.of(Camera(viewportSize: const Size(200, 200)))
+  final view = OrbitFlyEditorView.of(OutputCamera(viewportSize: const Size(200, 200)))
     ..viewportSize = const Size(200, 200)
     ..pivot.setValues(0, 0, 0)
     ..distance = 10
@@ -428,7 +428,7 @@ void main() {
 
     setUp(() {
       scope = testScope();
-      view = GameCameraEditorView.of(Camera());
+      view = GameCameraEditorView.of(OutputCamera());
       ops = EntityOps(
         scope: scope,
         world: () => scope.world,

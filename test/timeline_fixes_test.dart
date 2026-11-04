@@ -342,6 +342,34 @@ void main() {
     expect(s.asset.value, isNull);
   });
 
+  test('a colour key gets handles a third of the way to its neighbours, as '
+      'the engine blends colours', () async {
+    player.inline = TimelineAsset(
+      duration: 2,
+      fps: 10,
+      tracks: [
+        PropertyTrack(
+          component: 'SpriteComponent',
+          field: 'tint',
+          channel: '',
+          isColor: true,
+          curve: KeyCurve([
+            const TimelineKey(time: 0, value: 0xFFFF0000),
+            const TimelineKey(time: 2, value: 0xFF0000FF),
+          ]),
+        ),
+      ],
+    );
+    await s.follow(door);
+    s.setKey(0, 1, value: 0xFF00FF00);
+    final keys = (s.asset.value!.tracks[0] as PropertyTrack).curve.keys;
+    expect(keys, hasLength(3));
+    // A colour's handle values are fractions of the way to the next key,
+    // not ARGB numbers.
+    expect(keys[1].inTangent.dv, closeTo(-1 / 3, 1e-9));
+    expect(keys[1].outTangent.dv, closeTo(1 / 3, 1e-9));
+  });
+
   group('TI-6 paste', () {
     test('only onto a track of the same kind of value, and found again by '
         'what the track is', () async {

@@ -84,7 +84,7 @@ class BuiltInGraphicsModule extends EditorModule {
   /// dropped into, and where the Assets dock offers to place one.
   static const Dimensions modelScenes = Dimensions.threeD;
 
-  GraphicsModels? _models;
+  Graphics3DModels? _models;
   bool _cookedOnce = false;
 
   EditorScope? _scope;
@@ -175,14 +175,9 @@ class BuiltInGraphicsModule extends EditorModule {
     ),
   ];
 
-  /// A file changed: a picture a shape is drawn with is read again by the
-  /// game's renderer. (The editor has materials read again itself.)
-  @override
-  void onAssetChanged(String path) {
-    final service = _scope?.engine?.services.maybe<Graphics3D>();
-    if (service == null || !service.isStarted) return;
-    service.sceneRenderer.shapes.reloadTexture(path);
-  }
+  // A changed file — a material, a map, a shape's texture, the skybox — is
+  // read again by the editor itself, through the game's renderer
+  // (`Graphics3DSceneRenderer.reload`).
 
   @override
   List<AssetAction> get assetActions => [

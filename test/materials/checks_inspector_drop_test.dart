@@ -21,7 +21,7 @@ void main() {
     dir = Directory.systemTemp.createTempSync('jge_checks');
     root = dir.path.replaceAll(r'\', '/');
     final world = World()..initialize();
-    Graphics3D.registerSchemas(world.context);
+    Graphics3D.registerDefinitions(world.context);
     scope = EditorScope(world: world, modules: const []);
     addTearDown(scope.dispose);
     addTearDown(() => dir.deleteSync(recursive: true));
@@ -200,11 +200,11 @@ void main() {
               child: MaterialOverridesEditor(
                 flat: flat,
                 context: FieldEditorContext(
-                  field: SchemaField(
+                  field: FieldDefinition(
                     name: flat ? 'overrides' : 'values',
                     kind: flat
-                        ? MaterialOverridesFieldType.material2D
-                        : MaterialOverridesFieldType.material3D,
+                        ? Material2DDefinitions.overridesType
+                        : Material3DDefinitions.overridesType,
                     read: (_) => value,
                   ),
                   hint: const FieldHint(label: 'Own values'),
@@ -237,15 +237,15 @@ void main() {
       tester,
     ) async {
       write('fx/hit.material2d.json', {
-        'flash': {'colour': 0xFFFF0000, 'amount': 0.25},
+        'flash': {'color': 0xFFFF0000, 'amount': 0.25},
       });
       final m = Material2DComponent(material: 'fx/hit.material2d.json');
       final editor = MaterialOverridesEditor(
         flat: true,
         context: FieldEditorContext(
-          field: SchemaField(
+          field: FieldDefinition(
             name: 'overrides',
-            kind: MaterialOverridesFieldType.material2D,
+            kind: Material2DDefinitions.overridesType,
             read: (_) => null,
           ),
           hint: const FieldHint(),
@@ -255,7 +255,7 @@ void main() {
           editors: scope.fieldEditors,
         ),
       );
-      expect(editor.addable, ['flash.colour', 'flash.amount']);
+      expect(editor.addable, ['flash.color', 'flash.amount']);
       expect(editor.startOf('flash.amount'), 0.25, reason: "the material's");
       final changes = await pump(
         tester,
@@ -278,20 +278,20 @@ void main() {
       final m = Material2DComponent(material: 'fx/hit.material2d.json');
       final changes = await pump(tester, m, {
         'flash.amount': 0.5,
-        'flash.colour': 0xFF00FF00,
+        'flash.color': 0xFF00FF00,
       }, flat: true);
       expect(find.text('Flash: Amount'), findsOneWidget);
       expect(find.text('Flash: Colour'), findsOneWidget);
       expect(find.byType(EditorSlider), findsOneWidget);
       await tester.tap(find.byTooltip("Use the material's own").first);
       await tester.pump();
-      expect(changes.single, {'flash.colour': 0xFF00FF00});
+      expect(changes.single, {'flash.color': 0xFF00FF00});
     });
 
     testWidgets("3-D: its shape's material starts the values", (tester) async {
       write(
         'stone.material.json',
-        const MaterialFile(roughness: 0.7, tilingX: 2).encode(),
+        const Material3DFile(roughness: 0.7, tilingX: 2).encode(),
       );
       final overrides = MaterialOverrides3DComponent();
       final cube = Cube3DComponent(material: 'stone.material.json');
@@ -304,9 +304,9 @@ void main() {
       final editor = MaterialOverridesEditor(
         flat: false,
         context: FieldEditorContext(
-          field: SchemaField(
+          field: FieldDefinition(
             name: 'values',
-            kind: MaterialOverridesFieldType.material3D,
+            kind: Material3DDefinitions.overridesType,
             read: (_) => null,
           ),
           hint: const FieldHint(),
@@ -320,7 +320,7 @@ void main() {
       );
       expect(editor.startOf('roughness'), 0.7);
       expect(editor.startOf('tiling'), [2.0, 1.0]);
-      expect(editor.addable, MaterialFile.animatableKeys);
+      expect(editor.addable, Material3DFile.animatableKeys);
       await pump(tester, overrides, {
         'tiling#0': 3.0,
         'color': 0xFF112233,

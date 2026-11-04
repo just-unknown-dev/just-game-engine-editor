@@ -78,14 +78,14 @@ final class GemKit implements RefreshableExtension {
     type: 'GemComponent',
     create: () => Gem()..shine = 0.25,
     fields: [
-      SchemaField(
+      FieldDefinition(
         name: 'value',
         kind: FieldTypes.integer,
         read: (c) => (c as Gem).value,
         write: (c, v) => (c as Gem).value = v as int,
       ),
       if (withShine)
-        SchemaField(
+        FieldDefinition(
           name: 'shine',
           kind: FieldTypes.decimal,
           read: (c) => (c as Gem).shine,

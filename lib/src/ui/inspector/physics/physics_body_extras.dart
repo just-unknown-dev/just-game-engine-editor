@@ -129,9 +129,9 @@ abstract final class PhysicsBodyExtras {
     final layers = scope.physicsLayers.layers.value;
     return [
       switch (b.bodyType) {
-        jge.BodyType.static => 'Static body',
-        jge.BodyType.kinematic => 'Kinematic body',
-        jge.BodyType.dynamic => 'Dynamic body',
+        jge.Body2DType.static => 'Static body',
+        jge.Body2DType.kinematic => 'Kinematic body',
+        jge.Body2DType.dynamic => 'Dynamic body',
       },
       if (b.isSensor) 'Sensor',
       if (b.layer != 0) layers.labelOf(b.layer),
@@ -144,27 +144,27 @@ abstract final class PhysicsBodyExtras {
   /// A collider in a few words: `Circle r 17.4`, `Box 64 × 20 · One-way`.
   static String shapeLabel(jge.Collider2DComponent c) {
     final shape = switch (c.shape) {
-      jge.ColliderShape2D.box => 'Box ${_n(c.size.x)} × ${_n(c.size.y)}',
-      jge.ColliderShape2D.circle => 'Circle r ${_n(c.radius)}',
-      jge.ColliderShape2D.capsule =>
+      jge.Collider2DShape.box => 'Box ${_n(c.size.x)} × ${_n(c.size.y)}',
+      jge.Collider2DShape.circle => 'Circle r ${_n(c.radius)}',
+      jge.Collider2DShape.capsule =>
         'Capsule r ${_n(c.radius)} × ${_n(c.height)}',
-      jge.ColliderShape2D.polygon => '${c.points.length}-gon',
-      jge.ColliderShape2D.segment => 'Segment',
-      jge.ColliderShape2D.chain => 'Chain of ${c.points.length}',
-      jge.ColliderShape2D.matchShape => 'Matches what is drawn',
+      jge.Collider2DShape.polygon => '${c.points.length}-gon',
+      jge.Collider2DShape.segment => 'Segment',
+      jge.Collider2DShape.chain => 'Chain of ${c.points.length}',
+      jge.Collider2DShape.matchShape => 'Matches what is drawn',
     };
     return [shape, if (c.oneWay) 'One-way'].join(' · ');
   }
 
   /// A simulated shape in a few words, for messages.
-  static String collisionShapeLabel(jge.CollisionShape s) => switch (s) {
-    jge.CircleShape c => 'Circle r ${_n(c.radius)}',
-    jge.RoundedPolygonShape p => 'Rounded ${p.vertices.length}-gon',
-    jge.RectangleShape r => 'Box ${_n(r.width)} × ${_n(r.height)}',
-    jge.PolygonShape p => '${p.vertices.length}-gon',
-    jge.CapsuleShape c => 'Capsule r ${_n(c.radius)}',
-    jge.SegmentShape _ => 'Segment',
-    jge.ChainShape c => 'Chain of ${c.vertices.length}',
+  static String shape2DLabel(jge.Shape2D s) => switch (s) {
+    jge.Circle2DShape c => 'Circle r ${_n(c.radius)}',
+    jge.RoundedPolygon2DShape p => 'Rounded ${p.vertices.length}-gon',
+    jge.Rectangle2DShape r => 'Box ${_n(r.width)} × ${_n(r.height)}',
+    jge.Polygon2DShape p => '${p.vertices.length}-gon',
+    jge.Capsule2DShape c => 'Capsule r ${_n(c.radius)}',
+    jge.Segment2DShape _ => 'Segment',
+    jge.Chain2DShape c => 'Chain of ${c.vertices.length}',
     _ => 'Shape',
   };
 
@@ -183,13 +183,13 @@ abstract final class PhysicsBodyExtras {
 
   /// Gives [collider] the shape of what its entity draws, centred and
   /// unturned, as one undo step — set once; a collider matching the shape
-  /// ([jge.ColliderShape2D.matchShape]) follows it instead. Says so in the
+  /// ([jge.Collider2DShape.matchShape]) follows it instead. Says so in the
   /// log when there is nothing to fit to.
   static bool fitToVisual(EditorScope scope, jge.Collider2DComponent collider) {
     final entity = ownerOf(scope, collider);
     final shape = entity == null
         ? null
-        : jge.ColliderGeometry.visualShapeOf(
+        : jge.Collider2DGeometry.visualShapeOf(
             entity,
             definitions: scope.definitions,
           );
@@ -209,55 +209,54 @@ abstract final class PhysicsBodyExtras {
 
   /// Sets [collider]'s fields to stand for [shape] (in its own space),
   /// centred and unturned, its own scale 1.
-  static void setFrom(
-    jge.Collider2DComponent collider,
-    jge.CollisionShape shape,
-  ) {
+  static void setFrom(jge.Collider2DComponent collider, jge.Shape2D shape) {
     collider
       ..offset = Offset.zero
       ..rotation = 0
       ..scale = jge.Vector2(1, 1)
       ..cornerRadius = 0;
     switch (shape) {
-      case jge.CircleShape s:
+      case jge.Circle2DShape s:
         collider
-          ..shape = jge.ColliderShape2D.circle
+          ..shape = jge.Collider2DShape.circle
           ..radius = s.radius
           ..offset = s.center;
-      case jge.CapsuleShape s:
+      case jge.Capsule2DShape s:
         final d = s.center2 - s.center1;
         collider
-          ..shape = jge.ColliderShape2D.capsule
+          ..shape = jge.Collider2DShape.capsule
           ..radius = s.radius
           ..height = d.distance + 2 * s.radius
           ..rotation = d.distance < 1e-9 ? 0 : math.atan2(-d.dx, d.dy)
           ..offset = (s.center1 + s.center2) / 2;
-      case jge.RectangleShape s:
+      case jge.Rectangle2DShape s:
         collider
-          ..shape = jge.ColliderShape2D.box
+          ..shape = jge.Collider2DShape.box
           ..size = jge.Vector2(s.width, s.height);
-      case jge.RoundedPolygonShape s:
-        final r = jge.ColliderGeometry.boundsOf(jge.PolygonShape(s.vertices));
+      case jge.RoundedPolygon2DShape s:
+        final r = jge.Collider2DGeometry.boundsOf(
+          jge.Polygon2DShape(s.vertices),
+        );
         collider
-          ..shape = jge.ColliderShape2D.box
+          ..shape = jge.Collider2DShape.box
           ..size = jge.Vector2(
             r.width + 2 * s.cornerRadius,
             r.height + 2 * s.cornerRadius,
           )
           ..cornerRadius = s.cornerRadius
           ..offset = r.center;
-      case jge.PolygonShape s:
+      case jge.Polygon2DShape s:
         collider
-          ..shape = jge.ColliderShape2D.polygon
+          ..shape = jge.Collider2DShape.polygon
           ..points = [...s.vertices];
-      case jge.SegmentShape s:
+      case jge.Segment2DShape s:
         collider
-          ..shape = jge.ColliderShape2D.segment
+          ..shape = jge.Collider2DShape.segment
           ..points = [s.point1, s.point2]
           ..thickness = s.thickness;
-      case jge.ChainShape s:
+      case jge.Chain2DShape s:
         collider
-          ..shape = jge.ColliderShape2D.chain
+          ..shape = jge.Collider2DShape.chain
           ..points = [...s.vertices]
           ..loop = s.loop
           ..thickness = s.thickness;
@@ -430,7 +429,7 @@ class _LiveReadoutState extends State<_LiveReadout>
   @override
   Widget build(BuildContext context) {
     final entity = PhysicsBodyExtras.ownerOf(widget.scope, widget.body);
-    final body = entity?.getComponent<jge.PhysicsBodyRefComponent>()?.body;
+    final body = entity?.getComponent<jge.Physics2DBodyRefComponent>()?.body;
     final b = widget.body;
     String n(double v) => v.toStringAsFixed(0);
     final rows = <(String, String)>[

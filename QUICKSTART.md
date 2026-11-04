@@ -91,14 +91,14 @@ ComponentDefinition<MyHealthComponent> get myHealthDefinition =>
       type: 'MyHealthComponent',
       create: MyHealthComponent.new,
       fields: [
-        SchemaField(
+        FieldDefinition(
           name: 'maxHp',
           kind: FieldTypes.integer,
           min: 0,
           read: (c) => (c as MyHealthComponent).maxHp,
           write: (c, v) => (c as MyHealthComponent).maxHp = v as int,
         ),
-        SchemaField(
+        FieldDefinition(
           name: 'invincible',
           kind: FieldTypes.boolean,
           read: (c) => (c as MyHealthComponent).invincible,
@@ -186,7 +186,7 @@ To get back to painting later, double-click *Level Map* in the scene tree. The d
 Register the engine's camera systems where you register your others:
 
 ```dart
-registerCameraSystems(engine.world, engine.cameraSystem);
+registerCameraSystems(engine.world, engine.camera);
 ```
 
 In the Level Designer, place a **Virtual camera** from the *Camera* palette group and name what it follows (an entity, or a tag your game gives the player it spawns). Add stages from *Add Component → Camera*: Framing, Confiner (name a **Camera bounds** entity), Noise, Impulse Listener. A **Camera zone** is a shot of its own while its target is inside. The overlay draws every camera's frame; select one to see its dead and soft zones. The picture-in-picture (F4) shows what the live camera frames while you work, and **Solo camera** in the scene tree looks through one shot whatever its priority. Press Play to see blends and damping; Stop returns your view.

@@ -14,12 +14,13 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_editor_core/host.dart';
 import 'package:just_game_engine_editor/src/ui/level_designer_3d/panels/view_3d_panel.dart';
 import 'package:just_game_engine_editor/src/ui/level_designer_3d/split/split_views.dart';
+import 'package:just_graphics_engine/just_graphics_engine.dart' show NullGpuDevice, rendererNullShaders;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('the panes', () {
-    final main = OrbitFlyEditorView.of(Camera(viewportSize: const Size(400, 300)))
+    final main = OrbitFlyEditorView.of(OutputCamera(viewportSize: const Size(400, 300)))
       ..distance = 15;
     main.pivot.setValues(1, -2, 3);
     late SplitViews split;

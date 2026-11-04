@@ -42,7 +42,7 @@ void main() {
   test('a material is pictured on a ball, and the picture is kept', () async {
     File(
       '${dir.path}/red.material.json',
-    ).writeAsStringSync(const MaterialFile(color: 0xFFE53935).encode());
+    ).writeAsStringSync(const Material3DFile(color: 0xFFE53935).encode());
 
     final image = await pictures.of('red.material.json');
     expect(image, isNotNull);
@@ -61,7 +61,7 @@ void main() {
   }, skip: skip);
 
   test('every shape, in every preset light', () async {
-    const grey = MaterialFile(color: 0xFFB0B0B0, roughness: 0.5);
+    const grey = Material3DFile(color: 0xFFB0B0B0, roughness: 0.5);
     final corners = <PreviewShape, List<int>>{};
     for (final shape in PreviewShape.values) {
       for (final lighting in PreviewLighting.values) {
@@ -82,7 +82,7 @@ void main() {
   }, skip: skip);
 
   test('the light changes how it looks; the scene\'s own is used', () async {
-    const white = MaterialFile(color: 0xFFFFFFFF, roughness: 0.6);
+    const white = Material3DFile(color: 0xFFFFFFFF, roughness: 0.6);
     Future<int> centreIn(PreviewLighting l, {RenderScene? scene}) async {
       final image = await pictures.render(white, lighting: l, scene: scene);
       return brightness((await readPixels(image!)).atFraction(0.5, 0.5));
@@ -104,7 +104,7 @@ void main() {
   test('a changed map draws the pictures that use it again', () async {
     await writePng('tint.png', const ui.Color(0xFFFF0000));
     File('${dir.path}/tinted.material.json').writeAsStringSync(
-      const MaterialFile(colorMap: 'tint.png', unlit: true).encode(),
+      const Material3DFile(colorMap: 'tint.png', unlit: true).encode(),
     );
     final first = await pictures.of('tinted.material.json');
     final red = (await readPixels(first!)).atFraction(0.5, 0.5);
@@ -122,10 +122,10 @@ void main() {
 
   test('a variant is pictured over its parent', () async {
     File('${dir.path}/base.material.json').writeAsStringSync(
-      const MaterialFile(color: 0xFF2040FF, unlit: true).encode(),
+      const Material3DFile(color: 0xFF2040FF, unlit: true).encode(),
     );
     File('${dir.path}/variant.material.json').writeAsStringSync(
-      const MaterialFile(parent: 'base.material.json').encode(),
+      const Material3DFile(parent: 'base.material.json').encode(),
     );
     final image = await pictures.of('variant.material.json');
     final centre = (await readPixels(image!)).atFraction(0.5, 0.5);

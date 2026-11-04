@@ -5,6 +5,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:just_editor_core/io.dart';
 import 'package:just_game_engine/just_game_engine_3d.dart';
+import 'package:just_graphics_engine/just_graphics_engine.dart'
+    show RenderView, gltfToEngine;
 
 /// Pictures of model files for the Assets dock and the palettes, rendered
 /// off screen with the 3-D renderer — no engine, no scene — one at a time,

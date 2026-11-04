@@ -269,7 +269,7 @@ void main() {
     final entity = world.createEntityWithComponents([
       jge.TransformComponent(position: jge.Vector3(100, 100, 0)),
       jge.RigidBody2DComponent(),
-      jge.Collider2DComponent(shape: jge.ColliderShape2D.circle, radius: 10),
+      jge.Collider2DComponent(shape: jge.Collider2DShape.circle, radius: 10),
     ], name: 'Ball');
     await tester.binding.setSurfaceSize(const Size(420, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));

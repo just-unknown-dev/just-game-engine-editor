@@ -44,9 +44,9 @@ abstract final class Physics3DChecks {
         );
         continue;
       }
-      if (body.bodyType == BodyType3D.dynamic &&
-          (collider.shape == ColliderShape3D.mesh ||
-              collider.shape == ColliderShape3D.heightField)) {
+      if (body.bodyType == Body3DType.dynamic &&
+          (collider.shape == Collider3DShape.mesh ||
+              collider.shape == Collider3DShape.heightField)) {
         problems.add(
           SceneProblem(
             message:
@@ -59,7 +59,7 @@ abstract final class Physics3DChecks {
               ProblemFix(
                 label: 'Make it a convex hull',
                 apply: () =>
-                    _setShape(context, e, collider, ColliderShape3D.convexHull),
+                    _setShape(context, e, collider, Collider3DShape.convexHull),
               ),
             ],
           ),
@@ -83,7 +83,7 @@ abstract final class Physics3DChecks {
 
     for (final e in world.query([Collider3DComponent])) {
       final c = e.getComponent<Collider3DComponent>()!;
-      if (c.shape == ColliderShape3D.matchShape &&
+      if (c.shape == Collider3DShape.matchShape &&
           !e.components.any((x) => x is SolidShapeSource)) {
         problems.add(
           SceneProblem(
@@ -96,15 +96,15 @@ abstract final class Physics3DChecks {
             fixes: [
               ProblemFix(
                 label: 'Make it a box',
-                apply: () => _setShape(context, e, c, ColliderShape3D.box),
+                apply: () => _setShape(context, e, c, Collider3DShape.box),
               ),
             ],
           ),
         );
       }
       final needsModel =
-          c.shape == ColliderShape3D.mesh ||
-          c.shape == ColliderShape3D.convexHull;
+          c.shape == Collider3DShape.mesh ||
+          c.shape == Collider3DShape.convexHull;
       if (needsModel && c.model.trim().isEmpty) {
         problems.add(
           SceneProblem(
@@ -150,7 +150,7 @@ abstract final class Physics3DChecks {
     ValidationContext context,
     Entity entity,
     Collider3DComponent collider,
-    ColliderShape3D shape,
+    Collider3DShape shape,
   ) {
     final field = context.scope.definitions
         .definitionFor(collider)

@@ -36,13 +36,13 @@ void main() {
   });
 
   jge.Entity body({
-    jge.CollisionShape? shape,
-    jge.BodyType type = jge.BodyType.dynamic,
+    jge.Shape2D? shape,
+    jge.Body2DType type = jge.Body2DType.dynamic,
     List<jge.Component> more = const [],
     Offset offset = Offset.zero,
   }) {
     final collider = jge.Collider2DComponent();
-    PhysicsBodyExtras.setFrom(collider, shape ?? jge.RectangleShape(40, 20));
+    PhysicsBodyExtras.setFrom(collider, shape ?? jge.Rectangle2DShape(40, 20));
     collider.offset += offset;
     return world.createEntityWithComponents([
       jge.TransformComponent(position: jge.Vector3(100, 100, 0)),
@@ -101,7 +101,7 @@ void main() {
     testWidgets('shows one body type, and only what applies to it', (
       tester,
     ) async {
-      final e = body(type: jge.BodyType.static);
+      final e = body(type: jge.Body2DType.static);
       await pump(tester, e);
       expect(find.text('Body type'), findsOneWidget);
       expect(find.text('Static'), findsNothing, reason: 'no second switch');
@@ -109,7 +109,7 @@ void main() {
       expect(find.text('Bounciness'), findsOneWidget);
       expect(find.text('Layer'), findsOneWidget);
 
-      rigidOf(e).bodyType = jge.BodyType.dynamic;
+      rigidOf(e).bodyType = jge.Body2DType.dynamic;
       scope.sceneState.refresh();
       await pump(tester, e);
       expect(find.text('Mass'), findsOneWidget);
@@ -139,10 +139,11 @@ void main() {
       expect(find.text('As the grid says for Enemies'), findsOneWidget);
     });
 
-    testWidgets('a slider for bounciness, and a preset row for the material',
-        (tester) async {
+    testWidgets("sliders for grip, bounciness and the collider's "
+        'reflectivity, and a preset row for the material', (tester) async {
       await pump(tester, body());
-      expect(find.byType(SliderFieldRow), findsNWidgets(2));
+      expect(find.byType(SliderFieldRow), findsNWidgets(3));
+      expect(find.text('Reflectivity'), findsOneWidget);
       expect(find.text('Preset'), findsOneWidget);
     });
   });
@@ -161,7 +162,7 @@ void main() {
 
   test('Fit to visual takes the circle drawn, as one undo step', () {
     final e = body(
-      shape: jge.CircleShape(17.4),
+      shape: jge.Circle2DShape(17.4),
       offset: const Offset(3, 0),
       more: [jge.Circle2DComponent(radius: 16.3)],
     );
@@ -180,7 +181,7 @@ void main() {
     late ColliderEditSession session;
 
     setUp(() {
-      final camera = jge.Camera()..viewportSize = const Size(800, 600);
+      final camera = jge.OutputCamera()..viewportSize = const Size(800, 600);
       view = GameCameraEditorView.of(camera);
       session = ColliderEditSession.of(scope);
     });
@@ -208,7 +209,7 @@ void main() {
       expect(session.isEditing(e), isTrue);
       // Bottom-right, 10 right and 10 down.
       drag(handle(ColliderHandleKind.corner, 2), const Offset(10, 10));
-      expect(c.shape, jge.ColliderShape2D.box);
+      expect(c.shape, jge.Collider2DShape.box);
       expect((c.size.x, c.size.y), (50, 30));
       expect(c.offset, const Offset(5, 5));
       // The whole drag is one step.
@@ -219,7 +220,7 @@ void main() {
 
     test("the diamond moves the collider; a circle's edge sets its radius",
         () {
-      final e = body(shape: jge.CircleShape(10));
+      final e = body(shape: jge.Circle2DShape(10));
       final c = colliderOf(e);
       session.toggle(e);
       drag(handle(ColliderHandleKind.center, 0), const Offset(0, 8));
@@ -230,7 +231,7 @@ void main() {
 
     test('a point is added between two, and Alt-click takes one away', () {
       final e = body(
-        shape: jge.PolygonShape(const [
+        shape: jge.Polygon2DShape(const [
           Offset(-10, -10),
           Offset(10, -10),
           Offset(10, 10),
@@ -252,7 +253,7 @@ void main() {
 
     test('a collider matching what is drawn has nothing to edit', () {
       final e = body(more: [jge.Rectangle2DComponent(width: 40, height: 20)]);
-      colliderOf(e).shape = jge.ColliderShape2D.matchShape;
+      colliderOf(e).shape = jge.Collider2DShape.matchShape;
       session.toggle(e);
       expect(session.isActive, isFalse);
     });
@@ -277,7 +278,7 @@ void main() {
 
     test('a collider bigger than the circle drawn, with Fit as the fix', () {
       final e = body(
-        shape: jge.CircleShape(17.4),
+        shape: jge.Circle2DShape(17.4),
         more: [jge.Circle2DComponent(radius: 16.3)],
       );
       scope.sceneState.selectEntity(e);
@@ -285,7 +286,7 @@ void main() {
       expect(problems.single.message, contains('17.4'));
       expect([for (final f in problems.single.fixes) f.label], ['Match what is drawn', 'Fit to visual']);
       problems.single.fixes.first.apply();
-      expect(colliderOf(e).shape, jge.ColliderShape2D.matchShape);
+      expect(colliderOf(e).shape, jge.Collider2DShape.matchShape);
       expect(check(), isEmpty);
     });
 
@@ -302,7 +303,7 @@ void main() {
 
     test('a polygon with a dent', () {
       body(
-        shape: jge.PolygonShape(const [
+        shape: jge.Polygon2DShape(const [
           Offset(-10, -10),
           Offset(0, 0),
           Offset(10, -10),
@@ -317,7 +318,7 @@ void main() {
       final lone = world.createEntityWithComponents([jge.TransformComponent(), jge.RigidBody2DComponent()], name: 'Lone');
       final ghost = world.createEntityWithComponents([
         jge.TransformComponent(),
-        jge.Collider2DComponent(shape: jge.ColliderShape2D.matchShape),
+        jge.Collider2DComponent(shape: jge.Collider2DShape.matchShape),
       ], name: 'Ghost');
       final problems = check();
       expect(problems.map((p) => p.entity), [lone, ghost]);
@@ -325,7 +326,7 @@ void main() {
         p.fixes.first.apply();
       }
       expect(lone.hasComponent<jge.Collider2DComponent>(), isTrue);
-      expect(ghost.getComponent<jge.Collider2DComponent>()!.shape, jge.ColliderShape2D.box);
+      expect(ghost.getComponent<jge.Collider2DComponent>()!.shape, jge.Collider2DShape.box);
     });
 
     test('a character that is also a body, kept a character in one step', () {

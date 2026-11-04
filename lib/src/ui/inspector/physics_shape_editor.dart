@@ -5,7 +5,7 @@ import 'package:just_game_engine/just_game_engine.dart' as jge;
 
 import 'package:just_editor_core/host.dart';
 
-/// Which [jge.CollisionShape] a body uses. Never persisted: the shape's own
+/// Which [jge.Shape2D] a body uses. Never persisted: the shape's own
 /// encoding carries its kind.
 enum PhysicsShapeKind {
   circle,
@@ -16,42 +16,42 @@ enum PhysicsShapeKind {
   segment,
   chain;
 
-  // Most specific first: RoundedPolygonShape and RectangleShape both extend
-  // PolygonShape.
-  static PhysicsShapeKind of(jge.CollisionShape s) => switch (s) {
-    jge.CircleShape() => circle,
-    jge.RoundedPolygonShape() => roundedPolygon,
-    jge.RectangleShape() => rectangle,
-    jge.PolygonShape() => polygon,
-    jge.CapsuleShape() => capsule,
-    jge.SegmentShape() => segment,
-    jge.ChainShape() => chain,
+  // Most specific first: RoundedPolygon2DShape and Rectangle2DShape both extend
+  // Polygon2DShape.
+  static PhysicsShapeKind of(jge.Shape2D s) => switch (s) {
+    jge.Circle2DShape() => circle,
+    jge.RoundedPolygon2DShape() => roundedPolygon,
+    jge.Rectangle2DShape() => rectangle,
+    jge.Polygon2DShape() => polygon,
+    jge.Capsule2DShape() => capsule,
+    jge.Segment2DShape() => segment,
+    jge.Chain2DShape() => chain,
     _ => circle,
   };
 
   /// A sensible starting shape when the kind is switched.
-  jge.CollisionShape get defaultShape => switch (this) {
-    circle => jge.CircleShape(24),
-    rectangle => jge.RectangleShape(64, 40),
-    capsule => jge.CapsuleShape.vertical(height: 52, radius: 10),
-    polygon => jge.PolygonShape(const [
+  jge.Shape2D get defaultShape => switch (this) {
+    circle => jge.Circle2DShape(24),
+    rectangle => jge.Rectangle2DShape(64, 40),
+    capsule => jge.Capsule2DShape.vertical(height: 52, radius: 10),
+    polygon => jge.Polygon2DShape(const [
       Offset(0, -30),
       Offset(28, -8),
       Offset(18, 28),
       Offset(-18, 28),
       Offset(-28, -8),
     ]),
-    roundedPolygon => jge.RoundedPolygonShape.rect(
+    roundedPolygon => jge.RoundedPolygon2DShape.rect(
       width: 56,
       height: 36,
       cornerRadius: 8,
     ),
-    segment => jge.SegmentShape(
+    segment => jge.Segment2DShape(
       const Offset(-48, 0),
       const Offset(48, -20),
       thickness: 3,
     ),
-    chain => jge.ChainShape(const [
+    chain => jge.Chain2DShape(const [
       Offset(-60, 8),
       Offset(-30, -14),
       Offset(0, 8),
@@ -88,8 +88,8 @@ class PhysicsShapeEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shape = ctx.value is jge.CollisionShape
-        ? ctx.value as jge.CollisionShape
+    final shape = ctx.value is jge.Shape2D
+        ? ctx.value as jge.Shape2D
         : PhysicsShapeKind.circle.defaultShape;
     final kind = PhysicsShapeKind.of(shape);
     // A field its hint says is not to be edited shows what it holds.
@@ -129,17 +129,17 @@ class PhysicsShapeEditor extends StatelessWidget {
         },
       ),
       ...switch (shape) {
-        jge.CircleShape s => [
-          num('Radius', s.radius, _size, (v) => set(jge.CircleShape(v))),
+        jge.Circle2DShape s => [
+          num('Radius', s.radius, _size, (v) => set(jge.Circle2DShape(v))),
         ],
-        jge.RoundedPolygonShape s => [
+        jge.RoundedPolygon2DShape s => [
           OffsetListEditorRow(
             label: 'Vertices',
             points: List.of(s.vertices),
             minPoints: 3,
             onChanged: (v) {
               if (v.length >= 3) {
-                set(jge.RoundedPolygonShape(List.of(v), s.cornerRadius));
+                set(jge.RoundedPolygon2DShape(List.of(v), s.cornerRadius));
               }
             },
           ),
@@ -147,43 +147,43 @@ class PhysicsShapeEditor extends StatelessWidget {
             'Corner radius',
             s.cornerRadius,
             _corner,
-            (v) => set(jge.RoundedPolygonShape(List.of(s.vertices), v)),
+            (v) => set(jge.RoundedPolygon2DShape(List.of(s.vertices), v)),
           ),
         ],
-        jge.RectangleShape s => [
+        jge.Rectangle2DShape s => [
           num(
             'Width',
             s.width,
             _size,
-            (v) => set(jge.RectangleShape(v, s.height)),
+            (v) => set(jge.Rectangle2DShape(v, s.height)),
           ),
           num(
             'Height',
             s.height,
             _size,
-            (v) => set(jge.RectangleShape(s.width, v)),
+            (v) => set(jge.Rectangle2DShape(s.width, v)),
           ),
         ],
-        jge.PolygonShape s => [
+        jge.Polygon2DShape s => [
           OffsetListEditorRow(
             label: 'Vertices',
             points: List.of(s.vertices),
             minPoints: 3,
             onChanged: (v) {
               if (v.length >= 3) {
-                set(jge.PolygonShape(List.of(v)));
+                set(jge.Polygon2DShape(List.of(v)));
               }
             },
           ),
         ],
-        jge.CapsuleShape s => () {
+        jge.Capsule2DShape s => () {
           // Upright along Y, or lying along X: the two a level needs.
           final lying =
               s.center1.dy == s.center2.dy && s.center1.dx != s.center2.dx;
           final length = (s.center1 - s.center2).distance + s.radius * 2;
-          jge.CapsuleShape make(double length, double radius, bool lying) {
+          jge.Capsule2DShape make(double length, double radius, bool lying) {
             final half = math.max(length / 2 - radius, 0.0);
-            return jge.CapsuleShape(
+            return jge.Capsule2DShape(
               center1: lying ? Offset(-half, 0) : Offset(0, -half),
               center2: lying ? Offset(half, 0) : Offset(0, half),
               radius: radius,
@@ -211,25 +211,25 @@ class PhysicsShapeEditor extends StatelessWidget {
             ),
           ];
         }(),
-        jge.SegmentShape s => [
+        jge.Segment2DShape s => [
           ...point(
             'Point 1',
             s.point1,
-            (p) => set(jge.SegmentShape(p, s.point2, thickness: s.thickness)),
+            (p) => set(jge.Segment2DShape(p, s.point2, thickness: s.thickness)),
           ),
           ...point(
             'Point 2',
             s.point2,
-            (p) => set(jge.SegmentShape(s.point1, p, thickness: s.thickness)),
+            (p) => set(jge.Segment2DShape(s.point1, p, thickness: s.thickness)),
           ),
           num(
             'Thickness',
             s.thickness,
             _thin,
-            (v) => set(jge.SegmentShape(s.point1, s.point2, thickness: v)),
+            (v) => set(jge.Segment2DShape(s.point1, s.point2, thickness: v)),
           ),
         ],
-        jge.ChainShape s => [
+        jge.Chain2DShape s => [
           OffsetListEditorRow(
             label: 'Vertices',
             points: List.of(s.vertices),
@@ -237,7 +237,7 @@ class PhysicsShapeEditor extends StatelessWidget {
             onChanged: (v) {
               if (v.length >= 2) {
                 set(
-                  jge.ChainShape(
+                  jge.Chain2DShape(
                     List.of(v),
                     loop: s.loop,
                     thickness: s.thickness,
@@ -251,14 +251,14 @@ class PhysicsShapeEditor extends StatelessWidget {
             s.thickness,
             _thin,
             (v) => set(
-              jge.ChainShape(List.of(s.vertices), loop: s.loop, thickness: v),
+              jge.Chain2DShape(List.of(s.vertices), loop: s.loop, thickness: v),
             ),
           ),
           BoolEditorRow(
             label: 'Loop',
             value: s.loop,
             onChanged: (v) => set(
-              jge.ChainShape(
+              jge.Chain2DShape(
                 List.of(s.vertices),
                 loop: v,
                 thickness: s.thickness,

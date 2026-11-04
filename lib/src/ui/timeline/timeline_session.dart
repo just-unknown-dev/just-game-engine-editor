@@ -67,7 +67,7 @@ class _FieldEdit {
   final TrackBinding binding;
   final Component component;
   final String componentType;
-  final SchemaField field;
+  final FieldDefinition field;
   final String channel;
   final Object live;
   final Object? was;
@@ -679,7 +679,7 @@ class TimelineSession {
   void addPropertyTracks(
     TrackBinding binding,
     String componentType,
-    SchemaField field,
+    FieldDefinition field,
   ) {
     final current = asset.value;
     if (current == null) return;
@@ -783,7 +783,7 @@ class TimelineSession {
       // What cannot blend — a flag, a name, a path — holds until the next.
       interpolation: v is num ? KeyInterpolation.bezier : KeyInterpolation.step,
     );
-    final curve = track.curve.withKey(key);
+    final curve = track.curve.withKey(key, isColor: track.isColor);
     apply('Key', current.withTrackAt(trackIndex, track.copyWith(curve: curve)));
     final index = curve.keys.indexWhere((k) => (k.time - at).abs() < 1e-6);
     return TimelineItemRef(trackIndex, index);
@@ -803,7 +803,9 @@ class TimelineSession {
       label,
       current.withTrackAt(
         ref.track,
-        track.copyWith(curve: KeyCurve(keys).withAutoTangents()),
+        track.copyWith(
+          curve: KeyCurve(keys).withAutoTangents(isColor: track.isColor),
+        ),
       ),
     );
   }
@@ -1072,7 +1074,10 @@ class TimelineSession {
         );
       }
       return track.copyWith(
-        curve: KeyCurve([...kept, ...moved]).withAutoTangents(),
+        curve: KeyCurve([
+          ...kept,
+          ...moved,
+        ]).withAutoTangents(isColor: track.isColor),
       );
     }
     if (track is EventTrack) {
@@ -1306,7 +1311,10 @@ class TimelineSession {
       final item = copied.item;
       if (track is PropertyTrack && item is TimelineKey) {
         tracks[t] = track.copyWith(
-          curve: track.curve.withKey(item.copyWith(time: to)),
+          curve: track.curve.withKey(
+            item.copyWith(time: to),
+            isColor: track.isColor,
+          ),
         );
       } else if (track is EventTrack && item is TimelineEvent) {
         tracks[t] = track.copyWith(
@@ -1682,7 +1690,8 @@ class TimelineSession {
 
   // What every watched field held when the timeline was last shown, in its
   // saved form: a difference from this is somebody's edit.
-  final Map<Component, Map<SchemaField, Object?>> _expected = Map.identity();
+  final Map<Component, Map<FieldDefinition, Object?>> _expected =
+      Map.identity();
 
   /// How [entity] is bound from this timeline: as "self" when it is the
   /// owner, else by its name; null when it has no name to be bound by.
@@ -1716,7 +1725,7 @@ class TimelineSession {
     'LevelMapComponent',
   };
 
-  Iterable<(Component, ComponentDefinition, SchemaField)> _fieldsOf(
+  Iterable<(Component, ComponentDefinition, FieldDefinition)> _fieldsOf(
     Entity entity,
   ) sync* {
     for (final component in entity.components) {
@@ -1814,7 +1823,7 @@ class TimelineSession {
   /// The channels of [field] to make tracks for and key: those the scene's
   /// mode shows (a 2-D scene keys a position's x and y, a rotation's z),
   /// or the one value of a field that is one.
-  List<String> _shownChannels(String componentType, SchemaField field) {
+  List<String> _shownChannels(String componentType, FieldDefinition field) {
     final all = PropertyAccess.channelsOf(field);
     if (field.kind.channels.isEmpty) return all;
     final hint = scope.definitions
@@ -1835,12 +1844,16 @@ class TimelineSession {
   /// Keys [field] of [entity]'s [component] at the playhead with the value
   /// it has now, making its tracks if there are none: the inspector's key
   /// button. False when [entity] cannot be bound from this timeline.
-  bool keyField(Entity entity, Component component, SchemaField field) =>
+  bool keyField(Entity entity, Component component, FieldDefinition field) =>
       keyFields(entity, component, [field]);
 
   /// [keyField] for several fields of one component, as one undo step.
   /// Nothing during a play-test: what the game did is not a key.
-  bool keyFields(Entity entity, Component component, List<SchemaField> fields) {
+  bool keyFields(
+    Entity entity,
+    Component component,
+    List<FieldDefinition> fields,
+  ) {
     final current = asset.value;
     final binding = bindingFor(entity);
     final definition = scope.definitions.definitionFor(component);
@@ -1930,6 +1943,7 @@ class TimelineSession {
                 ? KeyInterpolation.bezier
                 : KeyInterpolation.step,
           ),
+          isColor: track.isColor,
         ),
       );
     }
@@ -1953,7 +1967,7 @@ class TimelineSession {
   FieldKeyState keyStateOf(
     Entity entity,
     Component component,
-    SchemaField field,
+    FieldDefinition field,
   ) {
     final current = asset.value;
     final binding = current == null ? null : bindingFor(entity);
@@ -2005,10 +2019,13 @@ class TimelineSession {
             ? KeyCurve(
                 List.of(track.curve.keys)
                   ..[at] = track.curve.keys[at].copyWith(value: value),
-              ).withAutoTangents()
+              ).withAutoTangents(isColor: track.isColor)
             // The other channel has a key here and this one does not: give it
             // one, or the dot could only move along one axis.
-            : track.curve.withKey(TimelineKey(time: time, value: value)),
+            : track.curve.withKey(
+                TimelineKey(time: time, value: value),
+                isColor: track.isColor,
+              ),
       );
     }
     _set(start.copyWith(tracks: tracks));
@@ -2131,11 +2148,12 @@ class TimelineSession {
 
   // What each field held before the preview first wrote to it, in the
   // field's saved form.
-  final Map<Component, Map<SchemaField, Object?>> _authored = Map.identity();
+  final Map<Component, Map<FieldDefinition, Object?>> _authored =
+      Map.identity();
 
   // What the preview showed in each field it wrote, after its last seek: a
   // field that holds something else has been changed by somebody.
-  final Map<Component, Map<SchemaField, Object?>> _shown = Map.identity();
+  final Map<Component, Map<FieldDefinition, Object?>> _shown = Map.identity();
 
   // An edit while Recording was off changed what the scene holds: the
   // preview is built again before it next shows a moment.
@@ -2149,10 +2167,10 @@ class TimelineSession {
 
   /// The value [field] of [component] has in the scene — not what a preview
   /// is showing. Null when the preview has not touched it.
-  Object? authoredValue(Component component, SchemaField field) =>
+  Object? authoredValue(Component component, FieldDefinition field) =>
       _authored[component]?[field];
 
-  bool isPreviewed(Component component, SchemaField field) =>
+  bool isPreviewed(Component component, FieldDefinition field) =>
       _authored[component]?.containsKey(field) ?? false;
 
   Entity? _resolve(TrackBinding binding) =>
@@ -2369,9 +2387,8 @@ class TimelineSession {
   // scene really held before and after it, and its undo and redo leave
   // those in the fields the preview showed.
 
-  final Expando<Map<Component, Map<SchemaField, _Authored>>> _tainted = Expando(
-    'timelineTainted',
-  );
+  final Expando<Map<Component, Map<FieldDefinition, _Authored>>> _tainted =
+      Expando('timelineTainted');
 
   void Function()? _stopHistory;
   EditorCommand? _lastTop, _lastRedoTop;
@@ -2414,7 +2431,7 @@ class TimelineSession {
   // the preview shows is remembered with the scene's values.
   void _madeWhilePreviewing(EditorCommand step) {
     if (_othersHold()) return;
-    final edits = <(Component, SchemaField, Object?)>[];
+    final edits = <(Component, FieldDefinition, Object?)>[];
     for (final MapEntry(key: component, value: fields) in _authored.entries) {
       final shown = _shown[component];
       if (shown == null) continue;
@@ -2461,7 +2478,7 @@ class TimelineSession {
   // much — and the rest takes what was put there.
   Object? _authoredAfterEdit(
     Component component,
-    SchemaField field,
+    FieldDefinition field,
     Object? authored,
     Object? shown,
     Object? live,

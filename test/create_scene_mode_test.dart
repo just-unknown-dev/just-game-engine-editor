@@ -132,7 +132,7 @@ void main() {
       final t = cam.getComponent<TransformComponent>()!;
       final vcam = cam.getComponent<VirtualCameraComponent>()!;
       expect(vcam.projection, CameraProjection.perspective);
-      final camera = Camera(
+      final camera = OutputCamera(
         viewportSize: const Size(100, 100),
         position: Offset(t.position.x, t.position.y),
         z: t.position.z,

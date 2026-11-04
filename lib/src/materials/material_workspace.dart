@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart';
 import 'package:just_game_engine/just_game_engine_3d.dart';
+import 'package:just_graphics_engine/just_graphics_engine.dart' show GpuSurface;
 
 import 'map_pictures.dart';
 import 'material_pictures.dart';
@@ -77,28 +78,28 @@ class MaterialWorkspace extends StatefulWidget {
 
 /// The state of a [MaterialWorkspace]; public for tests.
 class MaterialWorkspaceState extends State<MaterialWorkspace> {
-  MaterialFile _saved = const MaterialFile();
-  final List<MaterialFile> _history = [const MaterialFile()];
+  Material3DFile _saved = const Material3DFile();
+  final List<Material3DFile> _history = [const Material3DFile()];
   int _at = 0;
   Object? _error;
   bool _loaded = false;
 
   /// The material as it will be saved: for a variant, its own values.
-  MaterialFile get material => _history[_at];
+  Material3DFile get material => _history[_at];
 
   /// Whether it differs from the file.
   bool get dirty => material != _saved;
 
   // What is shown: the material over its parents, worked out once per
   // version of it.
-  MaterialFile? _shownFor;
-  MaterialFile _shown = const MaterialFile();
+  Material3DFile? _shownFor;
+  Material3DFile _shown = const Material3DFile();
   List<String> _chainProblems = const [];
-  final Map<String, MaterialFile?> _parents = {};
+  final Map<String, Material3DFile?> _parents = {};
 
   /// What the fields and the preview show: [material], and for a variant
   /// its parents' values where it has none of its own.
-  MaterialFile get shown {
+  Material3DFile get shown {
     final m = material;
     if (!identical(_shownFor, m)) {
       _shownFor = m;
@@ -117,9 +118,9 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
     return _shown;
   }
 
-  MaterialFile? _parent(String path) => _parents.putIfAbsent(path, () {
+  Material3DFile? _parent(String path) => _parents.putIfAbsent(path, () {
     try {
-      return MaterialFile.parse(_fileOf(path).readAsStringSync());
+      return Material3DFile.parse(_fileOf(path).readAsStringSync());
     } on Object {
       return null;
     }
@@ -138,7 +139,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
             'changed here.';
 
   // A value being dragged or picked: drawn, not yet an undo step.
-  MaterialFile? _live;
+  Material3DFile? _live;
 
   /// The preview's shape and light, kept for the next material opened.
   static PreviewShape _lastShape = PreviewShape.ball;
@@ -167,7 +168,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   GpuSurface? _plainSurface;
 
   /// What Compare shows on the other side of its line: a plain grey.
-  static const MaterialFile plain = MaterialFile(
+  static const Material3DFile plain = Material3DFile(
     color: 0xFF5F646B,
     roughness: 0.6,
   );
@@ -222,7 +223,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   /// Reads the file and draws the first preview.
   Future<void> load() async {
     try {
-      final file = MaterialFile.parse(await _file.readAsString());
+      final file = Material3DFile.parse(await _file.readAsString());
       if (!mounted) return;
       setState(() {
         _saved = file;
@@ -242,7 +243,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   /// Puts [next] in as the material, one undo step. Nothing is edited until
   /// the file is read: one that could not be (broken JSON, a newer format)
   /// is never written over with the defaults shown meanwhile.
-  void edit(MaterialFile next) {
+  void edit(Material3DFile next) {
     if (!_loaded) return;
     _live = null;
     if (next == material) {
@@ -260,7 +261,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
 
   /// Changes what is [shown] as [change] says, as one undo step; on a
   /// variant every value it changes becomes the variant's own.
-  void change(MaterialFile Function(MaterialFile m) change) {
+  void change(Material3DFile Function(Material3DFile m) change) {
     final before = shown;
     edit(material.withEdit(change(before), shown: before));
   }
@@ -272,7 +273,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   /// Without [rebuild] only the preview is drawn again, not the window: for
   /// a slider, which shows the value dragged to itself.
   void preview(
-    MaterialFile Function(MaterialFile m) change, {
+    Material3DFile Function(Material3DFile m) change, {
     bool rebuild = true,
   }) {
     if (!_loaded) return;
@@ -293,7 +294,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   }
 
   /// What the preview draws: a [preview], or what is [shown].
-  MaterialFile get drawn => _live ?? shown;
+  Material3DFile get drawn => _live ?? shown;
 
   /// What modules adding to the window see of it ([WorkspaceIds.material]).
   Material3DWorkspaceView get view => _extensionView;
@@ -381,7 +382,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
       final mine = m.toJson()
         ..remove('parent')
         ..remove('formatVersion');
-      final next = MaterialFile.fromJson({...theirs, ...mine});
+      final next = Material3DFile.fromJson({...theirs, ...mine});
       // Whole or not at all: every variant of it is drawn from it.
       await ProjectFiles.writeString(parent.path, next.encode());
     } on Object catch (error) {
@@ -491,7 +492,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
         }
         if (!mounted) return;
         final surface = _surface ??= renderer.device.createSurface(w, h);
-        Future<ui.Image?> draw(MaterialFile file, GpuSurface into) =>
+        Future<ui.Image?> draw(Material3DFile file, GpuSurface into) =>
             widget.pictures.render(
               file,
               width: w,
@@ -838,7 +839,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   Widget _colour(
     String label,
     int argb,
-    MaterialFile Function(MaterialFile m, int argb) set, {
+    Material3DFile Function(Material3DFile m, int argb) set, {
     String? key,
   }) => _row(
     key: key,
@@ -860,7 +861,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
     String label,
     double value,
     double max,
-    MaterialFile Function(MaterialFile m, double v) set, {
+    Material3DFile Function(Material3DFile m, double v) set, {
     double min = 0,
     double? step,
     int decimals = 2,
@@ -884,7 +885,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   Widget _number(
     String label,
     double value,
-    MaterialFile Function(MaterialFile m, double v) set, {
+    Material3DFile Function(Material3DFile m, double v) set, {
     bool positive = false,
     String? key,
   }) => _row(
@@ -905,7 +906,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
     String label,
     String text,
     bool value,
-    MaterialFile Function(MaterialFile m, bool v) set, {
+    Material3DFile Function(Material3DFile m, bool v) set, {
     String? key,
   }) => _row(
     key: key,
@@ -928,7 +929,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   Widget _map(
     String label,
     String path,
-    MaterialFile Function(MaterialFile m, String path) set, {
+    Material3DFile Function(Material3DFile m, String path) set, {
     String? key,
   }) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1061,7 +1062,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
     ],
   );
 
-  static MaterialFile _withLayer(MaterialFile m, int i, String path) {
+  static Material3DFile _withLayer(Material3DFile m, int i, String path) {
     final layers = [...m.layers];
     while (layers.length <= i) {
       layers.add('');
@@ -1241,7 +1242,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
       return;
     }
     edit(
-      MaterialFile.fromJson(
+      Material3DFile.fromJson(
         m.toJson()..removeWhere((k, _) => keys.contains(k)),
       ),
     );
@@ -1323,7 +1324,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
   Widget _fields() {
     if (!_loaded) return _unread();
     final m = _live ?? shown;
-    final layered = m.kind == MaterialKind.layered;
+    final layered = m.kind == Material3DKind.layered;
     final problems = material.validate();
     return ListView(
       children: [
@@ -1334,15 +1335,15 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
         _row(
           key: 'kind',
           'Kind',
-          EditorSegmented<MaterialKind>(
+          EditorSegmented<Material3DKind>(
             value: m.kind,
             options: const [
-              (MaterialKind.lit, 'Lit'),
-              (MaterialKind.layered, 'Layered'),
+              (Material3DKind.lit, 'Lit'),
+              (Material3DKind.layered, 'Layered'),
             ],
             tooltips: const {
-              MaterialKind.lit: 'A colour, how metal and how rough, and maps',
-              MaterialKind.layered:
+              Material3DKind.lit: 'A colour, how metal and how rough, and maps',
+              Material3DKind.layered:
                   "Up to four materials blended by a mesh's vertex colours — "
                   'terrain',
             },
@@ -1404,25 +1405,25 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
             _row(
               key: 'alpha',
               'Mode',
-              EditorSegmented<MaterialAlpha>(
+              EditorSegmented<Material3DAlpha>(
                 value: m.alpha,
                 options: const [
-                  (MaterialAlpha.opaque, 'Opaque'),
-                  (MaterialAlpha.cutout, 'Cutout'),
-                  (MaterialAlpha.blend, 'Blend'),
+                  (Material3DAlpha.opaque, 'Opaque'),
+                  (Material3DAlpha.cutout, 'Cutout'),
+                  (Material3DAlpha.blend, 'Blend'),
                 ],
                 tooltips: const {
-                  MaterialAlpha.opaque: 'Solid: nothing shows through',
-                  MaterialAlpha.cutout:
+                  Material3DAlpha.opaque: 'Solid: nothing shows through',
+                  Material3DAlpha.cutout:
                       "Holes where the colour map's alpha is below the cutoff "
                       '— leaves, fences',
-                  MaterialAlpha.blend:
+                  Material3DAlpha.blend:
                       'See-through by its opacity — glass, water',
                 },
                 onChanged: (a) => change((x) => x.copyWith(alpha: a)),
               ),
             ),
-            if (m.alpha == MaterialAlpha.cutout)
+            if (m.alpha == Material3DAlpha.cutout)
               _slider(
                 'Cutoff',
                 key: 'alphaCutoff',
@@ -1430,7 +1431,7 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
                 1,
                 (x, v) => x.copyWith(alphaCutoff: v),
               ),
-            if (m.alpha == MaterialAlpha.blend)
+            if (m.alpha == Material3DAlpha.blend)
               _slider(
                 'Opacity',
                 key: 'opacity',
@@ -1489,25 +1490,25 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
           ]),
         ] else
           _card('layers', [
-            for (var i = 0; i < MaterialFile.maxLayers; i++)
+            for (var i = 0; i < Material3DFile.maxLayers; i++)
               _layer(i, i < m.layers.length ? m.layers[i] : ''),
           ]),
         _card('layout', [
           _row(
             key: 'uv',
             'How',
-            EditorSegmented<MaterialUv>(
+            EditorSegmented<Material3DUv>(
               value: m.uv,
               options: const [
-                (MaterialUv.natural, 'Mesh'),
-                (MaterialUv.metres, 'Metres'),
-                (MaterialUv.world, 'World'),
+                (Material3DUv.natural, 'Mesh'),
+                (Material3DUv.metres, 'Metres'),
+                (Material3DUv.world, 'World'),
               ],
               tooltips: const {
-                MaterialUv.natural: "As the mesh's own coordinates say",
-                MaterialUv.metres:
+                Material3DUv.natural: "As the mesh's own coordinates say",
+                Material3DUv.metres:
                     'Repeated per metre along the mesh, at any size',
-                MaterialUv.world:
+                Material3DUv.world:
                     'Projected from the world: no seams between pieces side '
                     'by side',
               },
@@ -1515,14 +1516,16 @@ class MaterialWorkspaceState extends State<MaterialWorkspace> {
             ),
           ),
           _number(
-            m.uv == MaterialUv.natural ? 'Repeat across' : 'Repeat per m',
+            m.uv == Material3DUv.natural ? 'Repeat across' : 'Repeat per m',
             key: 'tiling',
             m.tilingX,
             (x, v) => x.copyWith(tilingX: v),
             positive: true,
           ),
           _number(
-            m.uv == MaterialUv.natural ? 'Repeat down' : 'Repeat per m (down)',
+            m.uv == Material3DUv.natural
+                ? 'Repeat down'
+                : 'Repeat per m (down)',
             key: 'tiling',
             m.tilingY,
             (x, v) => x.copyWith(tilingY: v),
@@ -1869,17 +1872,17 @@ final class _Material3DView implements Material3DWorkspaceView {
   Listenable get changes => _changes;
 
   @override
-  MaterialFile get material => _state.material;
+  Material3DFile get material => _state.material;
 
   @override
-  MaterialFile get shown => _state.drawn;
+  Material3DFile get shown => _state.drawn;
 
   @override
-  void change(MaterialFile Function(MaterialFile m) change) =>
+  void change(Material3DFile Function(Material3DFile m) change) =>
       _state.change(change);
 
   @override
-  void preview(MaterialFile Function(MaterialFile m) change) =>
+  void preview(Material3DFile Function(Material3DFile m) change) =>
       _state.preview(change);
 
   @override

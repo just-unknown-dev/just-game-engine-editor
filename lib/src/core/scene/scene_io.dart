@@ -1,5 +1,7 @@
 import 'package:just_debugger/just_debugger.dart' show DebuggerLogLevel;
 import 'package:just_game_engine/just_game_engine.dart';
+import 'package:just_game_engine/just_game_engine_3d.dart'
+    show EngineGraphics3D;
 
 import 'package:just_editor_core/host.dart';
 import '../scope/editor_scope_services.dart';
@@ -211,6 +213,7 @@ class SceneIO {
     final made = <Entity>[];
     try {
       await _build(sceneName, rawJson, made, clock);
+      _releaseUnused();
       return true;
     } on Object catch (error, stack) {
       // The scene being left is gone already, and this one is half made:
@@ -227,6 +230,16 @@ class SceneIO {
         details: '$stack',
       );
       return false;
+    }
+  }
+
+  /// What the 3-D renderer still holds for the scene left — its models,
+  /// material files and maps — that the scene opened does not draw, let go
+  /// of: opening scene after scene does not pile them up on the GPU.
+  void _releaseUnused() {
+    final graphics = scope.engine?.graphics3D;
+    if (graphics != null && graphics.isStarted) {
+      graphics.sceneRenderer.releaseUnused();
     }
   }
 
@@ -379,7 +392,7 @@ class SceneIO {
     if (rawJson != null) {
       // The prefabs its instances are made from, read first; each instance
       // then becomes the entities it makes, as the game makes them.
-      final library = PrefabLibrary.of(scope.context);
+      final library = scope.context.prefabLibrary;
       await library.loadScene(rawJson);
       final entityList = PrefabExpander.expandScene(
         _entries(sceneName, rawJson['entities']),

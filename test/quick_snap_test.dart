@@ -178,8 +178,11 @@ void main() {
         'outlines of what is off the Level Map', (tester) async {
       if (!kDebugMode) return;
       await start(tester);
-      final physics = Physics2DSystem(plugin.engine.physics);
-      plugin.engine.world.addSystem(physics);
+      plugin.engine.world.addSystem(Physics2DSystem(plugin.engine.physics));
+      // The engine's collider drawer, in the world while outlines show.
+      Collider2DDebuggerSystem? outlines() => plugin.engine.world.systems
+          .whereType<Collider2DDebuggerSystem>()
+          .firstOrNull;
       final solid = plugin.engine.world.createEntityWithComponents([
         TransformComponent(),
         RigidBody2DComponent(),
@@ -188,21 +191,21 @@ void main() {
       plugin.openLevelDesigner();
       await tester.pump();
       plugin.update(1 / 60);
-      expect(physics.drawsOutlines, isFalse, reason: 'hidden as it starts');
+      expect(outlines(), isNull, reason: 'hidden as it starts');
 
       await tester.tap(gizmoButton());
       await tester.pump();
       await tester.pump();
       plugin.update(1 / 60);
       expect(plugin.gizmoMode, GizmoMode.designer);
-      expect(physics.drawsOutlines, isTrue);
-      expect(physics.outlineFilter!(solid), isTrue, reason: 'off the map');
+      expect(outlines(), isNotNull);
+      expect(outlines()!.outlineFilter!(solid), isTrue, reason: 'off the map');
 
       await tester.tap(gizmoButton());
       await tester.pump();
       await tester.pump();
       plugin.update(1 / 60);
-      expect(physics.drawsOutlines, isFalse);
+      expect(outlines(), isNull);
       await stop(tester);
     });
 

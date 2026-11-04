@@ -319,7 +319,7 @@ abstract final class TextureSets {
     }
 
     final emission = maps[TextureRole.emission]?.path ?? '';
-    final file = MaterialFile(
+    final file = Material3DFile(
       colorMap: maps[TextureRole.colour]?.path ?? '',
       normalMap: normal,
       metalRoughMap: metalRough,
@@ -329,7 +329,7 @@ abstract final class TextureSets {
       metallic: metallic,
       roughness: roughness,
     );
-    final path = free(set.name, MaterialFile.ending);
+    final path = free(set.name, Material3DFile.ending);
     await ProjectFiles.writeString('$root/$path', file.encode());
     return TextureSetImport(set, path, made, notes);
   }

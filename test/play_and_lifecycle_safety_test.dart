@@ -11,7 +11,7 @@ import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/core/state/play_snapshot.dart';
 import 'package:just_editor_core/host.dart';
 import 'package:just_game_engine_editor/src/core/ecs/systems/editor_log_capture_system.dart';
-import 'package:just_game_engine_editor/src/core/ecs/systems/physics_body_binding_system.dart';
+import 'package:just_game_engine_editor/src/core/ecs/systems/physics_2d_body_binding_system.dart';
 import 'package:just_game_engine_editor/src/extension/built_in_lighting_2d_contributions.dart';
 
 /// Records what a built-in module hears.
@@ -284,7 +284,7 @@ void main() {
       expect(engine.world.getSystem<RenderSystem>()?.shouldRender, isNull);
       expect(engine.world.systems.whereType<EditorLogCaptureSystem>(), isEmpty);
       expect(
-        engine.world.systems.whereType<PhysicsBodyBindingSystem>(),
+        engine.world.systems.whereType<Physics2DBodyBindingSystem>(),
         isEmpty,
       );
       expect(engine.time.timeScale, isNot(0), reason: 'the game runs again');

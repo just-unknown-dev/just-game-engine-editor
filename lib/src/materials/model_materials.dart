@@ -75,16 +75,16 @@ abstract final class ModelMaterials {
       final (r, g, b, a) = m.baseColor;
       final (er, eg, eb) = m.emissive;
       final glow = math.max(er, math.max(eg, eb));
-      final material = MaterialFile(
+      final material = Material3DFile(
         color: _argb(r, g, b, a),
         metallic: m.metallic.clamp(0.0, 1.0),
         roughness: m.roughness.clamp(0.0, 1.0),
         emission: glow <= 0 ? 0xFF000000 : _argb(er, eg, eb, 1),
         emissionStrength: math.max(0, m.emissiveStrength),
         alpha: switch (m.alphaMode) {
-          AlphaMode.mask => MaterialAlpha.cutout,
-          AlphaMode.blend => MaterialAlpha.blend,
-          AlphaMode.opaque => MaterialAlpha.opaque,
+          AlphaMode.mask => Material3DAlpha.cutout,
+          AlphaMode.blend => Material3DAlpha.blend,
+          AlphaMode.opaque => Material3DAlpha.opaque,
         },
         alphaCutoff: m.alphaCutoff.clamp(0.0, 1.0),
         doubleSided: m.doubleSided,
@@ -102,7 +102,7 @@ abstract final class ModelMaterials {
         offsetY: colour?.offset.$2 ?? 0,
         rotation: (colour?.rotation ?? 0) * 180 / math.pi,
       );
-      final out = _free(root, at('${model}_$own'), MaterialFile.ending);
+      final out = _free(root, at('${model}_$own'), Material3DFile.ending);
       await ProjectFiles.writeString('$root/$out', material.encode());
       made.add(out);
     }

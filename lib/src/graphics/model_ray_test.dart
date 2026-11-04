@@ -41,7 +41,7 @@ final class ModelRayTest
     if (data == null) return null;
     final geometry = _triangles.putIfAbsent(
       data,
-      () => GraphicsModelAsset.trianglesOf(data),
+      () => Graphics3DModelAsset.trianglesOf(data),
     );
     if (geometry == null) return const [];
     final p = geometry.positions;
@@ -65,7 +65,7 @@ final class ModelRayTest
     if (data == null) return null;
     final geometry = _triangles.putIfAbsent(
       data,
-      () => GraphicsModelAsset.trianglesOf(data),
+      () => Graphics3DModelAsset.trianglesOf(data),
     );
     final miss = RayTriangleHit(double.infinity, Vector3(0, -1, 0));
     if (geometry == null) return miss;
@@ -82,7 +82,7 @@ final class ModelRayTest
     if (data == null) return null;
     final geometry = _triangles.putIfAbsent(
       data,
-      () => GraphicsModelAsset.trianglesOf(data),
+      () => Graphics3DModelAsset.trianglesOf(data),
     );
     if (geometry == null) return double.infinity;
     transform.localToWorldInto(_world);

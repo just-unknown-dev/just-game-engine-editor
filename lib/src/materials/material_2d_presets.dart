@@ -61,7 +61,7 @@ final class Material2DPreset {
       'White all over: animate its amount when hit',
       Material2DKind.sprite,
       {
-        'flash': {'colour': 0xFFFFFFFF, 'amount': 1.0},
+        'flash': {'color': 0xFFFFFFFF, 'amount': 1.0},
       },
     ),
     Material2DPreset(
@@ -70,7 +70,7 @@ final class Material2DPreset {
       'A dark line round its edge',
       Material2DKind.sprite,
       {
-        'outline': {'colour': 0xFF101014, 'width': 1.0},
+        'outline': {'color': 0xFF101014, 'width': 1.0},
       },
     ),
     Material2DPreset(
@@ -79,7 +79,7 @@ final class Material2DPreset {
       'A soft warm light round it',
       Material2DKind.sprite,
       {
-        'glow': {'colour': 0xFFFFD54F, 'radius': 8.0, 'strength': 1.2},
+        'glow': {'color': 0xFFFFD54F, 'radius': 8.0, 'strength': 1.2},
       },
     ),
     Material2DPreset(
@@ -89,7 +89,7 @@ final class Material2DPreset {
       Material2DKind.sprite,
       {
         'dropShadow': {
-          'colour': 0x80000000,
+          'color': 0x80000000,
           'offset': [4.0, 4.0],
           'softness': 3.0,
         },
@@ -97,7 +97,7 @@ final class Material2DPreset {
     ),
     Material2DPreset('ghost', 'Ghost', 'Pale and cold', Material2DKind.sprite, {
       'greyscale': {'amount': 0.7},
-      'tint': {'colour': 0xFFB3E5FC},
+      'tint': {'color': 0xFFB3E5FC},
     }),
     Material2DPreset(
       'water',
@@ -129,7 +129,7 @@ final class Material2DPreset {
       'Burning away: animate its amount',
       Material2DKind.sprite,
       {
-        'dissolve': {'amount': 0.5, 'edgeColour': 0xFFFF8800},
+        'dissolve': {'amount': 0.5, 'edgeColor': 0xFFFF8800},
       },
     ),
     Material2DPreset(

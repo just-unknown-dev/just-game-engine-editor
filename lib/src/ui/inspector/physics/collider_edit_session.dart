@@ -112,7 +112,7 @@ class ColliderEditSession {
     final e = target.value;
     if (e == null || !e.isAlive) return null;
     final c = e.getComponent<jge.Collider2DComponent>();
-    return c == null || c.shape == jge.ColliderShape2D.matchShape ? null : c;
+    return c == null || c.shape == jge.Collider2DShape.matchShape ? null : c;
   }
 
   /// Whether [entity]'s collider is the one being edited.
@@ -124,7 +124,7 @@ class ColliderEditSession {
     if (isEditing(entity)) {
       stop();
     } else if (entity.getComponent<jge.Collider2DComponent>()?.shape ==
-        jge.ColliderShape2D.matchShape) {
+        jge.Collider2DShape.matchShape) {
       scope.log.log(
         'Its collider matches what is drawn: change what is drawn, or pick a shape for the collider to edit it.',
         source: 'editor',
@@ -171,10 +171,10 @@ class ColliderEditSession {
 
   /// [c]'s own scale, as its shape is built with it.
   static (double, double) _ownScale(jge.Collider2DComponent c) {
-    double clean(double v) => v.abs() < jge.ColliderGeometry.minScale
+    double clean(double v) => v.abs() < jge.Collider2DGeometry.minScale
         ? (v.isNegative
-              ? -jge.ColliderGeometry.minScale
-              : jge.ColliderGeometry.minScale)
+              ? -jge.Collider2DGeometry.minScale
+              : jge.Collider2DGeometry.minScale)
         : v;
     return (clean(c.scale.x), clean(c.scale.y));
   }
@@ -224,11 +224,11 @@ class ColliderEditSession {
   }
 
   /// [c]'s capsule in its own space: upright about its middle.
-  static jge.CapsuleShape _capsuleOf(jge.Collider2DComponent c) {
+  static jge.Capsule2DShape _capsuleOf(jge.Collider2DComponent c) {
     final (cx, cy) = _ownScale(c);
     final r = math.max(c.radius.abs() * cx.abs(), 1e-3);
     final h = math.max(c.height.abs() * cy.abs(), 2 * r);
-    return jge.CapsuleShape.vertical(height: h, radius: r);
+    return jge.Capsule2DShape.vertical(height: h, radius: r);
   }
 
   /// [c]'s box in its own space, rounded corners and all: (width, height).
@@ -252,7 +252,7 @@ class ColliderEditSession {
     final grow = math.max(sx.abs(), sy.abs());
     final out = <ColliderHandle>[];
     switch (b.shape) {
-      case jge.ColliderShape2D.circle:
+      case jge.Collider2DShape.circle:
         final (cx, cy) = _ownScale(b);
         final r = math.max(b.radius.abs() * math.max(cx.abs(), cy.abs()), 1e-3);
         final centre = _scaled(o);
@@ -266,7 +266,7 @@ class ColliderEditSession {
             ColliderHandle(ColliderHandleKind.radius, i, centre + d * r * grow),
           );
         }
-      case jge.ColliderShape2D.box:
+      case jge.Collider2DShape.box:
         final (w, h) = _boxOf(b);
         final hw = w / 2, hh = h / 2;
         for (var i = 0; i < 4; i++) {
@@ -289,7 +289,7 @@ class ColliderEditSession {
             ),
           );
         }
-      case jge.ColliderShape2D.capsule:
+      case jge.Collider2DShape.capsule:
         final c = _capsuleOf(b);
         final axis = c.center2 - c.center1;
         final len = axis.distance;
@@ -316,7 +316,7 @@ class ColliderEditSession {
               at((c.center1 + c.center2) / 2 + Offset(-u.dy, u.dx) * c.radius),
             ),
           );
-      case jge.ColliderShape2D.polygon:
+      case jge.Collider2DShape.polygon:
         _points(
           out,
           _ownPoints(b),
@@ -324,12 +324,12 @@ class ColliderEditSession {
           at: at,
           canInsert: _canInsert,
         );
-      case jge.ColliderShape2D.segment:
+      case jge.Collider2DShape.segment:
         final points = _ownPoints(b);
         for (var i = 0; i < math.min(2, points.length); i++) {
           out.add(ColliderHandle(ColliderHandleKind.vertex, i, at(points[i])));
         }
-      case jge.ColliderShape2D.chain:
+      case jge.Collider2DShape.chain:
         _points(
           out,
           _ownPoints(b),
@@ -337,7 +337,7 @@ class ColliderEditSession {
           at: at,
           canInsert: _canInsert,
         );
-      case jge.ColliderShape2D.matchShape:
+      case jge.Collider2DShape.matchShape:
         break;
     }
     out.add(ColliderHandle(ColliderHandleKind.center, 0, _scaled(o)));
@@ -380,8 +380,8 @@ class ColliderEditSession {
   bool get _canInsert {
     final b = body;
     return switch (b?.shape) {
-      jge.ColliderShape2D.polygon => b!.points.length < 8,
-      jge.ColliderShape2D.chain => true,
+      jge.Collider2DShape.polygon => b!.points.length < 8,
+      jge.Collider2DShape.chain => true,
       _ => false,
     };
   }
@@ -501,7 +501,7 @@ class ColliderEditSession {
       case ColliderHandleKind.center:
         c.offset = _snapP(o + (p - _startPointer));
       case ColliderHandleKind.corner || ColliderHandleKind.side
-          when c.shape == jge.ColliderShape2D.box:
+          when c.shape == jge.Collider2DShape.box:
         final w = math.max(start.size.x.abs() * cx.abs(), 1e-3);
         final hgt = math.max(start.size.y.abs() * cy.abs(), 1e-3);
         final k = h.kind == ColliderHandleKind.corner
@@ -543,11 +543,11 @@ class ColliderEditSession {
             math.max(rect.height, 1) / cy.abs(),
           )
           ..offset = o + _rotate(rect.center, turn);
-      case ColliderHandleKind.radius when c.shape == jge.ColliderShape2D.circle:
+      case ColliderHandleKind.radius when c.shape == jge.Collider2DShape.circle:
         final r = (_scaled(p) - _scaled(o)).distance / grow;
         c.radius = math.max(_snap(r), 0.5) / math.max(cx.abs(), cy.abs());
       case ColliderHandleKind.radius
-          when c.shape == jge.ColliderShape2D.capsule:
+          when c.shape == jge.Collider2DShape.capsule:
         final shape = start.capsule;
         final axis = _rotate(shape.center2 - shape.center1, turn);
         final len = axis.distance;
@@ -561,7 +561,7 @@ class ColliderEditSession {
         final r =
             (d.dx * n.dx * sx.sign + d.dy * n.dy * sy.sign).abs() / across;
         c.radius = math.max(_snap(r), 0.5) / cx.abs();
-      case ColliderHandleKind.end when c.shape == jge.ColliderShape2D.capsule:
+      case ColliderHandleKind.end when c.shape == jge.Collider2DShape.capsule:
         final shape = start.capsule;
         final other = h.index == 0 ? shape.center2 : shape.center1;
         final out = q - other;
@@ -604,8 +604,8 @@ class ColliderEditSession {
 
   void _removePoint(jge.Collider2DComponent b, int i) {
     final least = switch (b.shape) {
-      jge.ColliderShape2D.polygon => 4,
-      jge.ColliderShape2D.chain => 3,
+      jge.Collider2DShape.polygon => 4,
+      jge.Collider2DShape.chain => 3,
       _ => null,
     };
     if (least == null || b.points.length < least) return;
@@ -652,8 +652,8 @@ class ColliderEditSession {
     final t = _transform;
     if (t == null) return;
     final (sx, sy) = _scale;
-    final built = jge.ColliderGeometry.build(
-      jge.ColliderGeometry.shapeOf(b) ?? jge.RectangleShape(1, 1),
+    final built = jge.Collider2DGeometry.build(
+      jge.Collider2DGeometry.shapeOf(b) ?? jge.Rectangle2DShape(1, 1),
       offset: b.offset,
       rotation: b.rotation,
       sx: sx,
@@ -666,14 +666,14 @@ class ColliderEditSession {
       ..translate(at.dx, at.dy)
       ..rotate(t.angle)
       ..scale(view.zoom);
-    jge.ColliderGeometry.paint(
+    jge.Collider2DGeometry.paint(
       canvas,
       built,
       Paint()
         ..color = accent.withValues(alpha: 0.18)
         ..style = PaintingStyle.fill,
     );
-    jge.ColliderGeometry.paint(
+    jge.Collider2DGeometry.paint(
       canvas,
       built,
       Paint()
@@ -723,7 +723,7 @@ class ColliderEditSession {
     }
 
     // What can be done here, under the collider.
-    final bounds = jge.ColliderGeometry.boundsOf(built);
+    final bounds = jge.Collider2DGeometry.boundsOf(built);
     final below = view.worldToScreen(
       toWorld(Offset(bounds.center.dx, bounds.bottom)),
     );
@@ -767,7 +767,7 @@ class _ColliderFields {
   final List<Offset> points;
 
   /// The capsule in the collider's own space.
-  final jge.CapsuleShape capsule;
+  final jge.Capsule2DShape capsule;
 }
 
 /// A change to a collider — its shape, sizes and offset together, every

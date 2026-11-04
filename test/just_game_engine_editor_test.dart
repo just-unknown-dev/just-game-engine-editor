@@ -4,7 +4,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
 import 'package:just_game_engine_editor/src/core/ecs/systems/editor_log_capture_system.dart';
-import 'package:just_game_engine_editor/src/core/ecs/systems/physics_body_binding_system.dart';
+import 'package:just_game_engine_editor/src/core/ecs/systems/physics_2d_body_binding_system.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -85,8 +85,7 @@ void main() {
       0,
       reason: "the game's own systems are its boot's to add",
     );
-    expect(countSystem<PhysicsBodyBindingSystem>(), 1);
-    expect(countSystem<PhysicsJointBindingSystem>(), 1);
+    expect(countSystem<Physics2DBodyBindingSystem>(), 1);
     expect(countSystem<EditorLogCaptureSystem>(), 1);
 
     plugin.dispose();
@@ -114,8 +113,7 @@ void main() {
       0,
       reason: "the game's own systems are its boot's to add",
     );
-    expect(countSystem<PhysicsBodyBindingSystem>(), 1);
-    expect(countSystem<PhysicsJointBindingSystem>(), 1);
+    expect(countSystem<Physics2DBodyBindingSystem>(), 1);
     expect(countSystem<EditorLogCaptureSystem>(), 1);
 
     plugin.dispose();
@@ -156,8 +154,7 @@ void main() {
     // exported from the package's public barrel, so this test file (which
     // only imports the barrel) has no `Type` literal to reference them with.
     const allowedAddedTypeNames = <String>{
-      'PhysicsBodyBindingSystem',
-      'PhysicsJointBindingSystem',
+      'Physics2DBodyBindingSystem',
       'EditorLogCaptureSystem',
       'SpriteLoadSystem',
       // Tile maps are drawn in the editor as in the game; their collision
@@ -181,11 +178,7 @@ void main() {
     expect(actuallyAddedTypeNames.difference(allowedAddedTypeNames), isEmpty);
     expect(engine.world.systems.whereType<SimpleMovementSystem>(), isEmpty);
     expect(
-      engine.world.systems.whereType<PhysicsBodyBindingSystem>().length,
-      1,
-    );
-    expect(
-      engine.world.systems.whereType<PhysicsJointBindingSystem>().length,
+      engine.world.systems.whereType<Physics2DBodyBindingSystem>().length,
       1,
     );
     expect(engine.world.systems.whereType<EditorLogCaptureSystem>().length, 1);

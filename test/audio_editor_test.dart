@@ -55,16 +55,16 @@ void main() {
 
     setUp(() {
       s = scope(mode: SceneMode.twoD);
-      source = AudioSourceComponent(clipPath: 'a.wav', is3d: true, minDistance: 50, maxDistance: 200);
+      source = AudioSourceComponent(clipPath: 'a.wav', is3D: true, minDistance: 50, maxDistance: 200);
       entity = s.world.createEntityWithComponents([TransformComponent(position: Vector3(400, 300, 0)), source]);
     });
 
     test('a selected 3-D source: one ring near, one far, in 2-D', () {
-      final view = GameCameraEditorView.of(Camera(viewportSize: const Size(800, 600)));
+      final view = GameCameraEditorView.of(OutputCamera(viewportSize: const Size(800, 600)));
       expect(paint(view), 0, reason: 'not selected');
       s.sceneState.selectedEntity.value = entity;
       expect(paint(view), 2 * 48);
-      source.is3d = false;
+      source.is3D = false;
       expect(paint(view), 0, reason: 'a flat sound carries everywhere');
     });
 
@@ -72,7 +72,7 @@ void main() {
       final in3d = scope();
       final e = in3d.world.createEntityWithComponents([
         TransformComponent(position: Vector3(0, -1, 6)),
-        AudioSourceComponent(clipPath: 'a.wav', is3d: true, minDistance: 1, maxDistance: 3),
+        AudioSourceComponent(clipPath: 'a.wav', is3D: true, minDistance: 1, maxDistance: 3),
       ]);
       in3d.sceneState.selectedEntity.value = e;
       in3d.editorView.viewportSize = const Size(800, 600);
@@ -102,12 +102,12 @@ void main() {
       final flat = prefab(BuiltInAudioContributions.sound3dId).build(const Offset(10, 20), const Size(48, 48));
       final source2d = flat.whereType<AudioSourceComponent>().single;
       expect(flat.whereType<LayerComponent>(), hasLength(1));
-      expect((source2d.is3d, source2d.minDistance, source2d.maxDistance, source2d.dopplerLevel), (true, 64.0, 1024.0, 0.0));
+      expect((source2d.is3D, source2d.minDistance, source2d.maxDistance, source2d.dopplerLevel), (true, 64.0, 1024.0, 0.0));
 
       final ground = SurfacePoint(Vector3(2, 0, 3), Vector3(0, -1, 0));
       final deep = prefab(BuiltInAudioContributions.sound3dId).buildAt!(ground);
       final source3d = deep.whereType<AudioSourceComponent>().single;
-      expect((source3d.is3d, source3d.minDistance, source3d.maxDistance, source3d.dopplerLevel), (true, 1.0, 20.0, 1.0));
+      expect((source3d.is3D, source3d.minDistance, source3d.maxDistance, source3d.dopplerLevel), (true, 1.0, 20.0, 1.0));
       expect(source3d.farCutoff, greaterThan(0), reason: 'muffled far away');
       final at = deep.whereType<TransformComponent>().single.position;
       expect([at.x, at.y, at.z], [2, -1, 3], reason: 'a metre above the ground (up is -Y)');
@@ -117,7 +117,7 @@ void main() {
       final listener = prefab(BuiltInAudioContributions.listenerId).build(Offset.zero, const Size(48, 48));
       expect(listener.whereType<AudioListenerComponent>(), hasLength(1));
       final sound = prefab(BuiltInAudioContributions.soundId).build(Offset.zero, const Size(48, 48));
-      expect(sound.whereType<AudioSourceComponent>().single.is3d, isFalse);
+      expect(sound.whereType<AudioSourceComponent>().single.is3D, isFalse);
     });
   });
 
@@ -138,7 +138,7 @@ void main() {
     AudioDrop.place(drop);
     expect(name, 'orb_hum');
     final source = placed.whereType<AudioSourceComponent>().single;
-    expect((source.clipPath, source.loop, source.is3d), ('assets/audio/orb_hum.wav', true, true));
+    expect((source.clipPath, source.loop, source.is3D), ('assets/audio/orb_hum.wav', true, true));
     final at = placed.whereType<TransformComponent>().single.position;
     expect([at.x, at.y, at.z], [1, -1, 4]);
   });

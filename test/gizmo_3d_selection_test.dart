@@ -39,7 +39,7 @@ class _OnHandle extends GizmoHitTester {
 
 /// A view from 20 m above the origin, looking down.
 OrbitFlyEditorView _above() {
-  final view = OrbitFlyEditorView.of(Camera(viewportSize: const Size(400, 400)))
+  final view = OrbitFlyEditorView.of(OutputCamera(viewportSize: const Size(400, 400)))
     ..viewportSize = const Size(400, 400)
     ..pivot.setValues(0, 0, 0)
     ..distance = 20
@@ -59,7 +59,7 @@ void main() {
   setUp(() {
     final world = World()..initialize();
     // Shapes' sizes, for their boxes.
-    Graphics3D.registerSchemas(world.context);
+    Graphics3D.registerDefinitions(world.context);
     scope = testScope(world: world);
     scope.sceneState.openScene(EditorScene(name: 'deep', mode: SceneMode.threeD));
     view = _above();

@@ -132,15 +132,15 @@ class _BindingDialog extends StatefulWidget {
 }
 
 class _BindingDialogState extends State<_BindingDialog> {
-  late jge.TrackBindingKind _kind = widget.initial.kind;
+  late jge.EntityTargetKind _kind = widget.initial.kind;
   late final TextEditingController _value = TextEditingController(
     text: widget.initial.value,
   );
 
   jge.TrackBinding get _binding => switch (_kind) {
-    jge.TrackBindingKind.self => jge.TrackBinding.owner,
-    jge.TrackBindingKind.name => jge.TrackBinding.name(_value.text.trim()),
-    jge.TrackBindingKind.tag => jge.TrackBinding.tag(_value.text.trim()),
+    jge.EntityTargetKind.self => jge.TrackBinding.owner,
+    jge.EntityTargetKind.name => jge.TrackBinding.name(_value.text.trim()),
+    jge.EntityTargetKind.tag => jge.TrackBinding.tag(_value.text.trim()),
   };
 
   @override
@@ -167,9 +167,9 @@ class _BindingDialogState extends State<_BindingDialog> {
             Row(
               children: [
                 for (final (kind, label) in const [
-                  (jge.TrackBindingKind.self, 'Self'),
-                  (jge.TrackBindingKind.name, 'Entity'),
-                  (jge.TrackBindingKind.tag, 'Tag'),
+                  (jge.EntityTargetKind.self, 'Self'),
+                  (jge.EntityTargetKind.name, 'Entity'),
+                  (jge.EntityTargetKind.tag, 'Tag'),
                 ])
                   EditorChip(
                     label: label,
@@ -179,13 +179,13 @@ class _BindingDialogState extends State<_BindingDialog> {
               ],
             ),
             const SizedBox(height: 10),
-            if (_kind == jge.TrackBindingKind.self)
+            if (_kind == jge.EntityTargetKind.self)
               Text(
                 'Whoever plays the timeline. This is what lets one timeline '
                 'animate many entities.',
                 style: _body,
               )
-            else if (_kind == jge.TrackBindingKind.tag) ...[
+            else if (_kind == jge.EntityTargetKind.tag) ...[
               TagPicker(
                 scope: widget.session.scope,
                 value: _value.text,
@@ -200,7 +200,7 @@ class _BindingDialogState extends State<_BindingDialog> {
                 decoration: _input('The entity’s name'),
                 onSubmitted: (_) => Navigator.of(context).pop(_binding),
               ),
-              if (_kind == jge.TrackBindingKind.name && names.isNotEmpty)
+              if (_kind == jge.EntityTargetKind.name && names.isNotEmpty)
                 SizedBox(
                   height: 120,
                   child: ListView(
@@ -242,7 +242,7 @@ class PropertyChoice {
 
   final jge.TrackBinding binding;
   final String componentType;
-  final jge.SchemaField field;
+  final jge.FieldDefinition field;
 }
 
 /// Lists every field of the bound entity that can be keyed; null when

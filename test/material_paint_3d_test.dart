@@ -28,10 +28,10 @@ void main() {
 
   setUp(() {
     final world = World()..initialize();
-    Graphics3D.registerSchemas(world.context);
+    Graphics3D.registerDefinitions(world.context);
     scope = testScope(world: world);
     scope.sceneState.openScene(EditorScene(name: 'level', mode: SceneMode.threeD));
-    view = OrbitFlyEditorView.of(Camera(viewportSize: const Size(400, 400)))
+    view = OrbitFlyEditorView.of(OutputCamera(viewportSize: const Size(400, 400)))
       ..viewportSize = const Size(400, 400)
       ..pivot.setValues(0, 0, 0)
       ..distance = 20

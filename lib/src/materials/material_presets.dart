@@ -15,7 +15,7 @@ final class MaterialPreset {
   final String detail;
 
   /// The material with this preset's values.
-  final MaterialFile Function(MaterialFile m) apply;
+  final Material3DFile Function(Material3DFile m) apply;
 
   /// The presets the workspace offers, in the order it lists them. A
   /// getter, so an edited preset shows after a hot reload.
@@ -77,14 +77,14 @@ final class MaterialPreset {
         color: 0xFFE6F2FF,
         metallic: 0,
         roughness: 0.04,
-      ).copyWith(alpha: MaterialAlpha.blend, opacity: 0.25),
+      ).copyWith(alpha: Material3DAlpha.blend, opacity: 0.25),
     ),
     MaterialPreset(
       'foliage',
       'Leaves',
       'Cut out by its colour map, both faces',
       (m) => m.copyWith(
-        alpha: MaterialAlpha.cutout,
+        alpha: Material3DAlpha.cutout,
         alphaCutoff: 0.5,
         doubleSided: true,
         metallic: 0,
@@ -114,17 +114,17 @@ final class MaterialPreset {
   }
 
   // An opaque, lit surface: the look most presets start from.
-  static MaterialFile _surface(
-    MaterialFile m, {
+  static Material3DFile _surface(
+    Material3DFile m, {
     int? color,
     required double metallic,
     required double roughness,
   }) => m.copyWith(
-    kind: MaterialKind.lit,
+    kind: Material3DKind.lit,
     color: color,
     metallic: metallic,
     roughness: roughness,
-    alpha: MaterialAlpha.opaque,
+    alpha: Material3DAlpha.opaque,
     unlit: false,
   );
 }

@@ -37,8 +37,8 @@ class _Kit extends EditorModule {
 
 EditorScope _scope({List<EditorModule> modules = const []}) {
   final world = World()..initialize();
-  Graphics3D.registerSchemas(world.context);
-  Physics3D.registerSchemas(world.context);
+  Graphics3D.registerDefinitions(world.context);
+  Physics3D.registerDefinitions(world.context);
   final scope = testScope(world: world, modules: modules);
   scope.sceneState.openScene(EditorScene(name: 'level', mode: SceneMode.threeD));
   return scope;
@@ -89,7 +89,7 @@ void main() {
       _make(scope, [
         TransformComponent(position: Vector3(0, 20, 0)),
         Collider3DComponent(size: Vector3(20, 2, 20)),
-        RigidBody3DComponent(bodyType: BodyType3D.static, isSensor: true),
+        RigidBody3DComponent(bodyType: Body3DType.static, isSensor: true),
       ], 'Pit');
       expect(_problems(scope), isEmpty);
     });
@@ -113,7 +113,7 @@ void main() {
 
   test('Measure: from one point to another, in metres, up as up', () {
     final scope = _scope();
-    final view = OrbitFlyEditorView.of(Camera(viewportSize: const Size(400, 400)))
+    final view = OrbitFlyEditorView.of(OutputCamera(viewportSize: const Size(400, 400)))
       ..viewportSize = const Size(400, 400)
       ..pivot.setValues(0, 0, 0)
       ..distance = 20

@@ -124,7 +124,7 @@ void main() {
     File('${dir.path}/p.material2d.json').writeAsStringSync(
       const Material2DFile(
         effects: {'flash': true},
-        values: {'flash.amount': 0.4, 'flash.colour': 0xFFFF0000},
+        values: {'flash.amount': 0.4, 'flash.color': 0xFFFF0000},
       ).encode(),
     );
     File('${dir.path}/v.material2d.json').writeAsStringSync(
@@ -158,7 +158,7 @@ void main() {
     );
     await tester.pump();
     expect(view.shown.number('flash.amount'), closeTo(0.8, 1e-9));
-    expect(view.shown.colour('flash.colour'), 0xFFFF0000);
+    expect(view.shown.color('flash.color'), 0xFFFF0000);
     // Only what it changed is the variant's own; the rest stays inherited.
     expect(state.material.parent, 'p.material2d.json');
     expect(state.material.values.keys, ['flash.amount']);
@@ -169,7 +169,7 @@ void main() {
   testWidgets('the 3-D window: a tool and a section', (tester) async {
     File(
       '${dir.path}/a.material.json',
-    ).writeAsStringSync(const MaterialFile().encode());
+    ).writeAsStringSync(const Material3DFile().encode());
     scope = EditorScope(world: World()..initialize(), modules: [_Extras()]);
     addTearDown(scope.dispose);
     final key = GlobalKey<MaterialWorkspaceState>();

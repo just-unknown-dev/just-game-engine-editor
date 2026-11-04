@@ -2,9 +2,19 @@
 
 ## Unreleased
 
+- Requires just_game_engine ^2.0.0-dev.4.
+- Uses just_physics_engine 2.0's names, through the engine (`Physics2DBody`, `Shape2D`, `Circle2DShape`, `Body2DType`, …); the system that holds a dragged body still while a play-test runs (`JustGameEditorPlugin(bindPhysicsBodies:)`) is `Physics2DBodyBindingSystem`. Nothing behaves differently.
 - Converts colours for the 3-D material previews with the engine's `LinearColor.of` (was `GraphicsShapes.linear`).
 - Follows the engine's feature layout: the 2-D material stage's world has the built-in components, and 3-D graphics is given as a service (`EngineConfig(services: [Graphics3D()])`).
 - Uses the engine's new component names (`RigidBody2DComponent`, `Light3DComponent`, `Circle2DComponent`, …), in the inspector, the viewport handles and the material users.
+- Collider outlines are drawn by the engine's `Collider2DDebuggerSystem`, which the editor puts in the game's world while it shows colliders: the same colours and filters as before, drawn above the scene's sprites and shapes rather than under them.
+- The inspector shows a 2-D collider's **Reflectivity** (its Rays group, 0 to 1): how much of a ray the engine's `RayTracer2D` bounces off it. It is saved with the scene; a collider saved before it existed absorbs rays (0).
+- Saving a picture a 2-D material uses, such as a normal map, shows the new picture instead of drawing with a released one.
+- Saving a 3-D scene's skybox picture shows the new sky at once.
+- Colour keys added, moved, pasted or recorded in the Timeline get even-paced handles, as the engine blends colours.
+- Opening a scene lets go of the 3-D models, material files and maps only the scene left behind used.
+- 2-D material files, a preset's included, are saved in 2-D material format 2, which keys a colour value `color` (`tint.color`, `dissolve.edgeColor`); a format 1 file opens as before and is saved as format 2.
+- Depends on just_graphics_engine directly (it was a dev dependency): model cooking and glTF import, thumbnails and the material previews use the parts of it that the engine's 3-D library no longer re-exports.
 
 ## 0.1.0-dev.2
 

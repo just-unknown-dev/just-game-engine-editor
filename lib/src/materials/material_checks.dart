@@ -256,7 +256,7 @@ abstract final class MaterialChecks {
           message:
               '${_name(e)}: its own material values for '
               '${unknown.join(', ')} change nothing — a game can change '
-              '${MaterialFile.animatableKeys.join(', ')}.',
+              '${Material3DFile.animatableKeys.join(', ')}.',
           fixes: [
             ProblemFix(
               label: 'Remove them',
@@ -277,7 +277,7 @@ abstract final class MaterialChecks {
 
   static bool _known3D(String key) {
     final hash = key.indexOf('#');
-    if (hash < 0) return MaterialFile.animatableKeys.contains(key);
+    if (hash < 0) return Material3DFile.animatableKeys.contains(key);
     final pair = key.substring(0, hash);
     final i = key.substring(hash + 1);
     return (pair == 'tiling' || pair == 'offset') && (i == '0' || i == '1');
@@ -400,11 +400,11 @@ final class _Files {
     }
   }
 
-  MaterialFile? resolved3D(String path, Entity e, List<SceneProblem> out) {
-    if (_threeD.containsKey(path)) return _threeD[path] as MaterialFile?;
-    MaterialFile? read(String p) {
+  Material3DFile? resolved3D(String path, Entity e, List<SceneProblem> out) {
+    if (_threeD.containsKey(path)) return _threeD[path] as Material3DFile?;
+    Material3DFile? read(String p) {
       final text = context.readText(p);
-      return text == null ? null : MaterialFile.parse(text);
+      return text == null ? null : Material3DFile.parse(text);
     }
 
     try {

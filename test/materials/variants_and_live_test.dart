@@ -93,7 +93,7 @@ void main() {
     setUp(() {
       write(
         'rock.material.json',
-        const MaterialFile(
+        const Material3DFile(
           color: 0xFF808080,
           metallic: 1,
           roughness: 0.8,
@@ -101,7 +101,7 @@ void main() {
       );
       write(
         'mossy.material.json',
-        const MaterialFile(
+        const Material3DFile(
           parent: 'rock.material.json',
           color: 0xFF4C7A3A,
           roughness: 0.3,
@@ -130,7 +130,7 @@ void main() {
         () => state.applyToParent(confirm: false),
       );
       expect(applied, isTrue);
-      final rock = MaterialFile.parse(read('rock.material.json'));
+      final rock = Material3DFile.parse(read('rock.material.json'));
       expect([rock.color, rock.roughness, rock.metallic], [0xFF4C7A3A, 0.3, 1]);
       expect(rock.isVariant, isFalse);
       expect(state.material.overrides, isEmpty, reason: 'its own let go');
@@ -140,10 +140,10 @@ void main() {
     });
 
     testWidgets('into a parent that is itself a variant', (tester) async {
-      write('stone.material.json', const MaterialFile(roughness: 1).encode());
+      write('stone.material.json', const Material3DFile(roughness: 1).encode());
       write(
         'rock.material.json',
-        const MaterialFile(
+        const Material3DFile(
           parent: 'stone.material.json',
           metallic: 1,
           overrides: {'metallic'},
@@ -151,7 +151,7 @@ void main() {
       );
       final state = await open(tester);
       await tester.runAsync(() => state.applyToParent(confirm: false));
-      final rock = MaterialFile.parse(read('rock.material.json'));
+      final rock = Material3DFile.parse(read('rock.material.json'));
       expect(rock.parent, 'stone.material.json');
       expect(rock.overrides, {'metallic', 'color', 'roughness'});
       expect(rock.roughness, 0.3);
@@ -195,14 +195,14 @@ void main() {
         'base.material2d.json',
         jsonEncode({
           'outline': {'width': 2},
-          'tint': {'colour': 0xFFFF0000},
+          'tint': {'color': 0xFFFF0000},
         }),
       );
       write(
         'dark.material2d.json',
         jsonEncode({
           'parent': 'base.material2d.json',
-          'outline': {'colour': 0xFF0000FF},
+          'outline': {'color': 0xFF0000FF},
           'tint': false,
         }),
       );
@@ -213,7 +213,7 @@ void main() {
     ) async {
       final state = await open(tester);
       expect(state.shown.isOn('tint'), isFalse, reason: 'its own switch');
-      expect(state.shown.colour('outline.colour'), 0xFF0000FF);
+      expect(state.shown.color('outline.color'), 0xFF0000FF);
       expect(state.shown.number('outline.width'), 2, reason: "the parent's");
       // The outline is on, so its card comes first (its switch, its
       // colour); the tint the variant switched off is in the list to add.
@@ -242,7 +242,7 @@ void main() {
       await tester.runAsync(() => state.applyToParent(confirm: false));
       final base = Material2DFile.parse(read('base.material2d.json'));
       expect(base.isOn('tint'), isFalse);
-      expect(base.colour('outline.colour'), 0xFF0000FF);
+      expect(base.color('outline.color'), 0xFF0000FF);
       expect(base.number('outline.width'), 2);
       expect(state.material.effects, isEmpty);
       expect(state.material.values, isEmpty);
@@ -253,7 +253,7 @@ void main() {
       final engine = Engine();
       await tester.runAsync(engine.initialize);
       addTearDown(engine.dispose);
-      final game = Material2DLibrary.of(engine.context);
+      final game = engine.context.material2DLibrary;
       final state = await open(tester, engine: engine);
       expect(state.liveInScene, isTrue);
       expect(game.isPreviewing('dark.material2d.json'), isFalse);
@@ -291,7 +291,7 @@ void main() {
   testWidgets('3-D: unsaved edits drawn in the open scene until saved or '
       'closed', (tester) async {
     bigView(tester);
-    write('a.material.json', const MaterialFile(roughness: 0.5).encode());
+    write('a.material.json', const Material3DFile(roughness: 0.5).encode());
     final engine = Engine(config: EngineConfig(services: [Graphics3D()]));
     await tester.runAsync(engine.initialize);
     addTearDown(engine.dispose);
@@ -336,7 +336,7 @@ void main() {
     test('beside the material, taking everything from it', () async {
       final module = BuiltInMaterialsModule(root: dir.path);
       addTearDown(module.dispose);
-      write('assets/m/rock.material.json', const MaterialFile().encode());
+      write('assets/m/rock.material.json', const Material3DFile().encode());
       write('assets/m/hit.material2d.json', jsonEncode({'kind': 'screen'}));
       final a = await module.newVariant('assets/m/rock.material.json');
       final b = await module.newVariant('assets/m/rock.material.json');
@@ -344,7 +344,10 @@ void main() {
       expect(a, 'assets/m/rock_variant.material.json');
       expect(b, 'assets/m/rock_variant_2.material.json');
       expect(c, 'assets/m/hit_variant.material2d.json');
-      expect(MaterialFile.parse(read(a)).parent, 'assets/m/rock.material.json');
+      expect(
+        Material3DFile.parse(read(a)).parent,
+        'assets/m/rock.material.json',
+      );
       final flat = Material2DFile.parse(read(c));
       expect(flat.parent, 'assets/m/hit.material2d.json');
       expect(

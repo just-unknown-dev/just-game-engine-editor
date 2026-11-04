@@ -24,7 +24,7 @@ class FieldKeyButton extends StatefulWidget {
 
   /// The fields of the row this sits beside: one, or the cells of a shared
   /// row.
-  final List<jge.SchemaField> fields;
+  final List<jge.FieldDefinition> fields;
 
   @override
   State<FieldKeyButton> createState() => _FieldKeyButtonState();

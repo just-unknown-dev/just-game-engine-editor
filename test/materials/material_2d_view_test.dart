@@ -43,7 +43,7 @@ void main() {
     late Material2DStage stage;
     setUp(() {
       write('a.material2d.json', {
-        'tint': {'colour': 0xFFFFFFFF},
+        'tint': {'color': 0xFFFFFFFF},
       });
       stage = Material2DStage(root: dir.path)
         ..show('a.material2d.json', kind: Material2DKind.sprite);
@@ -88,7 +88,7 @@ void main() {
       final light = stage.world.query(const [Light2DComponent]).single;
       final l = light.getComponent<Light2DComponent>()!;
       expect(
-        [l.colour, l.intensity, l.radius, l.height],
+        [l.color, l.intensity, l.radius, l.height],
         [const Color(0xFFFFAA00), 2.0, 200.0, 50.0],
       );
 
@@ -198,7 +198,7 @@ void main() {
     ) async {
       write('a.material2d.json', {
         'outline': {'width': 3},
-        'tint': {'colour': 0xFF00FF00},
+        'tint': {'color': 0xFF00FF00},
       });
       final state = await open(tester, 'a.material2d.json');
       state.setSolo('outline');
@@ -214,7 +214,7 @@ void main() {
       );
       await tester.pump();
       expect(state.material.isOn('outline'), isFalse);
-      expect(state.material.values.keys, ['tint.colour'], reason: 'gone');
+      expect(state.material.values.keys, ['tint.color'], reason: 'gone');
       expect(state.material.effects.containsKey('outline'), isFalse);
       expect(state.solo, isNull, reason: 'nothing left to show alone');
       expect(find.text('Outline'), findsNothing, reason: 'its card went');
@@ -231,7 +231,7 @@ void main() {
       write('v.material2d.json', {
         'parent': 'base.material2d.json',
         'outline': {'width': 5},
-        'tint': {'colour': 0xFF0000FF},
+        'tint': {'color': 0xFF0000FF},
       });
       final variant = await open(tester, 'v.material2d.json');
       variant.removeEffect('outline');
@@ -240,7 +240,7 @@ void main() {
       expect(variant.shown.isOn('outline'), isFalse);
       variant.removeEffect('tint');
       expect(variant.material.effects.containsKey('tint'), isFalse);
-      expect(variant.material.values.containsKey('tint.colour'), isFalse);
+      expect(variant.material.values.containsKey('tint.color'), isFalse);
       expect(variant.shown.isOn('tint'), isFalse, reason: 'never the parent');
     });
 
@@ -269,7 +269,7 @@ void main() {
     ) async {
       write('a.material2d.json', {
         'outline': {'width': 3},
-        'tint': {'colour': 0xFF00FF00},
+        'tint': {'color': 0xFF00FF00},
       });
       final state = await open(tester, 'a.material2d.json');
       expect(

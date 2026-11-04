@@ -15,11 +15,11 @@ import 'package:just_editor_core/host.dart';
 ///
 /// The actual position push happens for free: [EditorSceneState]'s
 /// translate/rotate/scale operations mutate [TransformComponent] directly,
-/// and [Physics2DSystem] already pushes `TransformComponent -> PhysicsBody`
+/// and [Physics2DSystem] already pushes `TransformComponent -> Physics2DBody`
 /// unconditionally at the start of every step (that's how spawns/teleports
 /// take effect) — dragging is just another such write.
-class PhysicsBodyBindingSystem extends System {
-  PhysicsBodyBindingSystem({
+class Physics2DBodyBindingSystem extends System {
+  Physics2DBodyBindingSystem({
     this.sceneState,
     this.isAuthoringActive,
     this.isDraggingActive,
@@ -38,19 +38,19 @@ class PhysicsBodyBindingSystem extends System {
   final bool Function()? isDraggingActive;
 
   // Runs after Physics2DSystem (priority 90) in the same frame, so every
-  // dragged entity's PhysicsBodyRefComponent already exists by the time
+  // dragged entity's Physics2DBodyRefComponent already exists by the time
   // this reads it.
   @override
   int get priority => SystemPriorities.physics - 3;
 
   @override
-  List<Type> get requiredComponents => [PhysicsBodyRefComponent];
+  List<Type> get requiredComponents => [Physics2DBodyRefComponent];
 
   @override
   void update(double deltaTime) {
     forEach((entity) {
       if (!_shouldOverrideBody(entity)) return;
-      final body = entity.getComponent<PhysicsBodyRefComponent>()!.body;
+      final body = entity.getComponent<Physics2DBodyRefComponent>()!.body;
       body.velocity.setZero();
       body.angularVelocity = 0.0;
       body.isAwake = true;

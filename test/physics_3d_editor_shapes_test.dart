@@ -37,7 +37,7 @@ void main() {
 
   EditorScope scope() {
     final world = World()..initialize();
-    Physics3D.registerSchemas(world.context);
+    Physics3D.registerDefinitions(world.context);
     final s = EditorScope(
       builtIns: const [BuiltInEditorModule.new],
       world: world,
@@ -71,8 +71,8 @@ void main() {
     expect(solid.offersFor(stairs), isTrue);
     expect(solid.offersFor(plain), isFalse);
     final parts = solid.of(stairs).build(Offset.zero, Size.zero);
-    expect(parts.whereType<RigidBody3DComponent>().single.bodyType, BodyType3D.static);
-    expect(parts.whereType<Collider3DComponent>().single.shape, ColliderShape3D.matchShape);
+    expect(parts.whereType<RigidBody3DComponent>().single.bodyType, Body3DType.static);
+    expect(parts.whereType<Collider3DComponent>().single.shape, Collider3DShape.matchShape);
     final trigger = BuiltInPhysics3DContributions.trigger.of(stairs);
     expect(trigger.name, 'Trigger Stairs');
     expect(trigger.build(Offset.zero, Size.zero).whereType<RigidBody3DComponent>().single.isSensor, isTrue);
@@ -115,16 +115,16 @@ void main() {
 
   test('a collider matching a shape that is not there is an error; its fix makes it a box', () {
     final s = scope();
-    final c = Collider3DComponent(shape: ColliderShape3D.matchShape);
+    final c = Collider3DComponent(shape: Collider3DShape.matchShape);
     s.world.createEntityWithComponents([TransformComponent(), c], name: 'Ghost');
     final problems = Physics3DChecks.all(ValidationContext(scope: s, projectRoot: Directory.systemTemp.path));
     expect(problems.single.message, contains('no 3-D shape'));
     problems.single.fixes.single.apply();
-    expect(c.shape, ColliderShape3D.box);
+    expect(c.shape, Collider3DShape.box);
     s.world.createEntityWithComponents([
       TransformComponent(),
       _Steps(2),
-      Collider3DComponent(shape: ColliderShape3D.matchShape),
+      Collider3DComponent(shape: Collider3DShape.matchShape),
     ]);
     expect(Physics3DChecks.all(ValidationContext(scope: s, projectRoot: Directory.systemTemp.path)), isEmpty);
   });

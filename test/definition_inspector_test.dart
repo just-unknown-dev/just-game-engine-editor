@@ -38,10 +38,14 @@ class _ThingModule extends EditorModule {
   };
 }
 
-jge.SchemaField _field(jge.FieldType kind) =>
-    jge.SchemaField(name: 'f', kind: kind, read: (_) => 'v', write: (_, _) {});
+jge.FieldDefinition _field(jge.FieldType kind) => jge.FieldDefinition(
+  name: 'f',
+  kind: kind,
+  read: (_) => 'v',
+  write: (_, _) {},
+);
 
-Widget _host(EditorScope scope, jge.SchemaField field) => MaterialApp(
+Widget _host(EditorScope scope, jge.FieldDefinition field) => MaterialApp(
   home: Scaffold(
     body: scope.fieldEditors.build(
       FieldEditorContext(
@@ -82,10 +86,10 @@ void main() {
     tester,
   ) async {
     final scope = testScope();
-    final field = jge.SchemaField(
+    final field = jge.FieldDefinition(
       name: 'bodyType',
-      kind: const jge.EnumFieldType(jge.BodyType.values),
-      read: (_) => jge.BodyType.values.first,
+      kind: const jge.EnumFieldType(jge.Body2DType.values),
+      read: (_) => jge.Body2DType.values.first,
       write: (_, _) {},
     );
     await tester.pumpWidget(_host(scope, field));

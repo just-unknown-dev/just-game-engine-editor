@@ -132,8 +132,8 @@ class PlayController {
       // Each play-test starts the cameras from nothing, as the game does:
       // no memory of the last run, impulse and noise seeds from the start —
       // so a shake or a handheld drift plays the same way every time.
-      if (engine.cameraSystem.isInitialized) {
-        engine.cameraSystem.brain.reset();
+      if (engine.camera.isInitialized) {
+        engine.camera.brain.reset();
       }
       _snapshot = snapshot;
       // What is done in the play-test is undone by Stop, not by Ctrl+Z

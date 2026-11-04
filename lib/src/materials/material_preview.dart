@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' show Color;
 
 import 'package:just_game_engine/just_game_engine_3d.dart';
+import 'package:just_graphics_engine/just_graphics_engine.dart' show RenderView;
 
 /// What a material is shown on in a preview.
 enum PreviewShape {

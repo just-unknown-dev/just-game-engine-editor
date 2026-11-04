@@ -21,7 +21,7 @@ import '../../ui/level_designer_3d/split/split_views.dart';
 import '../assets/file_sprite_asset_loader.dart';
 import '../../ui/level_designer/state/map_placement.dart';
 import '../ecs/systems/editor_log_capture_system.dart';
-import '../ecs/systems/physics_body_binding_system.dart';
+import '../ecs/systems/physics_2d_body_binding_system.dart';
 import '../entity/entity_ops.dart';
 import '../physics/physics_bodies.dart';
 import '../input/viewport_input.dart';
@@ -89,7 +89,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   @override
-  void update(double dt) => _update(dt);
+  void update(double deltaTime) => _update(deltaTime);
 
   /// The engine calls this over the world every frame (its plugin overlay
   /// hook, order 100); the editor draws only while it is shown.
@@ -231,14 +231,14 @@ class JustGameEditorPlugin implements EnginePlugin {
   final void Function(JustGameEditorPlugin plugin)? _onReassemble;
 
   /// Whether to enable gizmo-drag-to-move for physics bodies (registers
-  /// [PhysicsBodyBindingSystem]/[PhysicsJointBindingSystem]).
+  /// [Physics2DBodyBindingSystem]).
   ///
-  /// [Physics2DSystem] (core engine) always owns physics-body lifecycle and
-  /// [Engine.physics] stepping when it's present in the game's `World` —
-  /// this flag doesn't affect that. It only gates the thin override that
-  /// makes a body dragged during a play-test feel immediate (zeroing its
-  /// velocity, waking it) and joint authoring. Safe to leave at its default
-  /// in any game.
+  /// [Physics2DSystem] (core engine) always owns physics-body lifecycle,
+  /// the joints between bodies and [Engine.physics] stepping when it's
+  /// present in the game's `World` — this flag doesn't affect that. It only
+  /// gates the thin override that makes a body dragged during a play-test
+  /// feel immediate (zeroing its velocity, waking it). Safe to leave at its
+  /// default in any game.
   final bool bindPhysicsBodies;
 
   final LogicalKeyboardKey _toggleKey;
@@ -529,25 +529,20 @@ class JustGameEditorPlugin implements EnginePlugin {
     // entity would move in the editor and stand still in the shipped game.
     if (bindPhysicsBodies) {
       // No bridge system here — Physics2DSystem (core engine) owns
-      // syncing PhysicsBody results back to TransformComponent itself, for
+      // syncing Physics2DBody results back to TransformComponent itself, for
       // every entity with a Collider2DComponent, not just editor-authored ones.
       if (!engine.world.systems.any(
-        (system) => system is PhysicsBodyBindingSystem,
+        (system) => system is Physics2DBodyBindingSystem,
       )) {
         _ownSystems.add(
           // A drag is what it acts on: during a play-test, where bodies
           // move. (Authoring, nothing steps.)
-          PhysicsBodyBindingSystem(
+          Physics2DBodyBindingSystem(
             sceneState: sceneState,
             isDraggingActive: () => viewport.isDragging,
           ),
         );
         engine.world.addSystem(_ownSystems.last);
-      }
-      if (!engine.world.systems.any(
-        (system) => system is PhysicsJointBindingSystem,
-      )) {
-        engine.world.addSystem(PhysicsJointBindingSystem(engine.physics));
       }
     }
     if (!engine.world.systems.any(
@@ -578,6 +573,8 @@ class JustGameEditorPlugin implements EnginePlugin {
       engine,
       include: const {
         DefaultSystem.sprites,
+        DefaultSystem.animation,
+        DefaultSystem.timelines,
         DefaultSystem.levelMaps,
         DefaultSystem.mapCollision,
       },
@@ -1310,7 +1307,7 @@ class JustGameEditorPlugin implements EnginePlugin {
         !canDropAsset(path, mode: sceneState.editingMode, scope: scope)) {
       return null;
     }
-    final at = engine.cameraSystem.mainCamera.screenToWorld(canvasPosition);
+    final at = engine.camera.mainCamera.screenToWorld(canvasPosition);
     final view = scope.editorView;
     // In space a sprite stands where the pointer meets the ground; a model
     // on the surface under it.
@@ -1511,7 +1508,6 @@ class JustGameEditorPlugin implements EnginePlugin {
   @internal
   void reloadAsset(String path) {
     final lower = path.toLowerCase();
-    _reloadMaterials(path);
     if (lower.endsWith('.animator.json')) {
       reloadAnimators(path);
     } else if (lower.endsWith('.timeline.json')) {
@@ -1532,6 +1528,9 @@ class JustGameEditorPlugin implements EnginePlugin {
     } else if (!_isFont(lower) && !_isAudio(lower)) {
       reloadSprites();
     }
+    // After the sprites: a material reads its maps through the sprite
+    // loader, whose cache now has the new picture.
+    _reloadMaterials(path);
     // And whatever a module shows from it — a theme, a font, a screen —
     // the editor's own built-in modules (its materials) among them.
     for (final module in scope.modules.withBuiltIns) {
@@ -1540,14 +1539,15 @@ class JustGameEditorPlugin implements EnginePlugin {
   }
 
   // The engine's materials: a changed one — or a map, a layer or a normal
-  // map one uses — read again, 2-D (its variants follow) and 3-D. Each is
-  // drawn again once read; a path no material uses is passed over.
+  // map one uses — read again, 2-D (its variants follow) and 3-D, with the
+  // 3-D shapes' textures and the skybox. Each is drawn again once read; a
+  // path nothing uses is passed over.
   void _reloadMaterials(String path) {
-    Material2DLibrary.of(engine.context).reload(path);
+    engine.context.material2DLibrary.reload(path);
     if (!engine.isInitialized) return;
     final graphics = engine.services.maybe<g3.Graphics3D>();
     if (graphics != null && graphics.isStarted) {
-      graphics.sceneRenderer.materials.reload(path);
+      graphics.sceneRenderer.reload(path);
     }
   }
 
@@ -1560,7 +1560,6 @@ class JustGameEditorPlugin implements EnginePlugin {
     final maps = <String>{};
     for (final path in paths) {
       final lower = path.toLowerCase();
-      _reloadMaterials(path);
       if (lower.endsWith('.animator.json')) {
         reloadAnimators(path);
       } else if (lower.endsWith('.timeline.json')) {
@@ -1588,6 +1587,8 @@ class JustGameEditorPlugin implements EnginePlugin {
       maps.forEach(reloadLevelMaps);
     }
     if (sprites) reloadSprites();
+    // After the sprites, whose loader the materials read their maps from.
+    paths.forEach(_reloadMaterials);
     for (final path in paths) {
       for (final module in scope.modules.withBuiltIns) {
         module.onAssetChanged(path);
@@ -1780,8 +1781,8 @@ class JustGameEditorPlugin implements EnginePlugin {
     // gizmos and the game preview draw.
     if (isAuthoring.value &&
         engine.isInitialized &&
-        engine.cameraSystem.isInitialized) {
-      engine.cameraSystem.brain.evaluate(engine.world, 0, snap: true);
+        engine.camera.isInitialized) {
+      engine.camera.brain.evaluate(engine.world, 0, snap: true);
     }
   }
 
@@ -1830,17 +1831,45 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (activeSplit != null) sceneAids.skippedViews.add(engine.rendering.view);
   }
 
+  /// The engine's collider drawer, in the game's world while it shows 2-D
+  /// colliders — see [_syncColliderOutlines].
+  Collider2DDebuggerSystem? _colliderOutlines;
+
   /// The engine's 2-D collider outlines: drawn while the mode now shows
   /// colliders (in a play-test or the Level Designer only once asked
   /// for), never with the editor closed; not for what the eye or a hidden
-  /// layer hid.
+  /// layer hid. Only for a game with 2-D physics ([Physics2DSystem]), drawn
+  /// through the camera its [RenderSystem] draws through.
   void _syncColliderOutlines() {
     if (!engine.isInitialized) return;
-    final physics = engine.world.getSystem<Physics2DSystem>();
-    if (physics == null) return;
-    physics
-      ..drawsOutlines = showsGizmo(GizmoKind.colliders)
-      ..outlineFilter = _gizmosShownFor;
+    final world = engine.world;
+    final shown =
+        showsGizmo(GizmoKind.colliders) && world.hasSystem<Physics2DSystem>();
+    final outlines = _colliderOutlines;
+    if (shown == (outlines != null && world.systems.contains(outlines))) {
+      return;
+    }
+    if (shown) {
+      final render = world.getSystem<RenderSystem>();
+      world.addSystem(
+        _colliderOutlines = Collider2DDebuggerSystem(
+          camera: render != null ? render.camera : engine.camera.mainCamera,
+          outlineFilter: _gizmosShownFor,
+        ),
+      );
+    } else {
+      _removeColliderOutlines();
+    }
+  }
+
+  /// Takes [_colliderOutlines] off the game's world.
+  void _removeColliderOutlines() {
+    final outlines = _colliderOutlines;
+    if (outlines == null) return;
+    _colliderOutlines = null;
+    if (engine.isInitialized && engine.world.systems.contains(outlines)) {
+      engine.world.removeSystem(outlines);
+    }
   }
 
   /// Switches the 3-D view between perspective and orthographic (pad 5).
@@ -1858,11 +1887,11 @@ class JustGameEditorPlugin implements EnginePlugin {
   /// Decides who writes the output camera. Authoring: the editor — its pan,
   /// zoom and bookmarks — while the brain only thinks. Otherwise the brain.
   void _syncCameraOwnership() {
-    if (!engine.isInitialized || !engine.cameraSystem.isInitialized) return;
-    final brain = engine.cameraSystem.brain;
+    if (!engine.isInitialized || !engine.camera.isInitialized) return;
+    final brain = engine.camera.brain;
     final authoring = isAuthoring.value;
     if (authoring == !brain.driveOutput) return;
-    final camera = engine.cameraSystem.mainCamera;
+    final camera = engine.camera.mainCamera;
     if (authoring) {
       brain.driveOutput = false;
       if (_editorView case final view?) camera.apply(view);
@@ -1977,7 +2006,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       _paintPaneLabel(canvas, pane, active: identical(pane, split.active));
       canvas.restore();
     }
-    _paintGamePreview(canvas, size, engine.cameraSystem.mainCamera);
+    _paintGamePreview(canvas, size, engine.camera.mainCamera);
   }
 
   /// What has been typed during a gizmo drag, beside the gizmo.
@@ -2292,7 +2321,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     if (flat && isAuthoring.value) collider.paint(canvas, camera);
 
     if (preview) {
-      _paintGamePreview(canvas, size, engine.cameraSystem.mainCamera);
+      _paintGamePreview(canvas, size, engine.camera.mainCamera);
     }
 
     final selected = sceneState.selectedEntity.value;
@@ -2412,7 +2441,7 @@ class JustGameEditorPlugin implements EnginePlugin {
   // The preview's own view, kept so a 3-D backend keeps one surface for it.
   final FrameView _previewFrame = FrameView();
 
-  void _paintGamePreview(Canvas canvas, Size size, Camera camera) {
+  void _paintGamePreview(Canvas canvas, Size size, OutputCamera camera) {
     if (!showGamePreview.value || !isAuthoring.value) return;
     // Under a workspace the level is dimmed and covered: nobody sees it.
     if (scope.activeWorkspace.value != null) return;
@@ -2645,7 +2674,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       sceneState.selectEntity(entity);
       return;
     }
-    engine.cameraSystem.mainCamera.position = Offset(
+    engine.camera.mainCamera.position = Offset(
       transform.position.x,
       transform.position.y,
     );
@@ -2787,7 +2816,7 @@ class JustGameEditorPlugin implements EnginePlugin {
       final b = g.cellCenter(used.right.toInt() - 1, used.bottom.toInt() - 1);
       centre += Offset(layer.offsetX, layer.offsetY) + Offset.lerp(a, b, 0.5)!;
     }
-    engine.cameraSystem.mainCamera.position = centre;
+    engine.camera.mainCamera.position = centre;
   }
 
   /// Deletes everything selected, as one undoable action.
@@ -3311,13 +3340,7 @@ class JustGameEditorPlugin implements EnginePlugin {
     scope.viewOverride = null;
     if (!engine.isInitialized) return;
     _syncRuntimeSystems(0);
-    final physics = engine.world.getSystem<Physics2DSystem>();
-    if (physics != null) {
-      physics.drawsOutlines = false;
-      if (physics.outlineFilter == _gizmosShownFor) {
-        physics.outlineFilter = null;
-      }
-    }
+    _removeColliderOutlines();
     final graphics = engine.services.maybe<g3.Graphics3D>();
     if (graphics != null && graphics.isStarted) {
       final renderer = graphics.sceneRenderer;
@@ -3398,8 +3421,8 @@ class JustGameEditorPlugin implements EnginePlugin {
       // What was read from the project's files is not the bundle's.
       engine.context.tiles.clear();
     }
-    if (engine.isInitialized && engine.cameraSystem.isInitialized) {
-      engine.cameraSystem.brain.driveOutput = true;
+    if (engine.isInitialized && engine.camera.isInitialized) {
+      engine.camera.brain.driveOutput = true;
     }
     try {
       HardwareKeyboard.instance.removeHandler(_onHardwareKey);

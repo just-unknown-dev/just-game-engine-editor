@@ -21,7 +21,7 @@ void main() {
       scope: scope,
       world: () => scope.world,
       sceneState: scope.sceneState,
-      camera: () => GameCameraEditorView.of(Camera()),
+      camera: () => GameCameraEditorView.of(OutputCamera()),
     );
     scope.sceneState.openScene(EditorScene(name: 'level_test'));
   });

@@ -12,8 +12,9 @@ import '../../core/scope/editor_scope_services.dart';
 /// collides with as chips to switch on and off.
 abstract final class PhysicsFieldEditors {
   static Map<String, FieldEditorBuilder> get all => {
-    jge.FieldTypes.physicsLayer.id: (c) => PhysicsLayerField(ctx: c),
-    jge.FieldTypes.physicsLayerMask.id: (c) => PhysicsLayerMaskField(ctx: c),
+    jge.PhysicsDefinitions.layerType.id: (c) => PhysicsLayerField(ctx: c),
+    jge.PhysicsDefinitions.layerMaskType.id: (c) =>
+        PhysicsLayerMaskField(ctx: c),
   };
 
   /// The colour [layer] is shown in, by the project's layers.
@@ -195,8 +196,8 @@ class PhysicsLayerMaskField extends StatelessWidget {
   int get _ownLayer {
     final component = ctx.component;
     final definition = ctx.scope?.definitions.definitionFor(component);
-    for (final f in definition?.fields ?? const <jge.SchemaField>[]) {
-      if (f.kind == jge.FieldTypes.physicsLayer) {
+    for (final f in definition?.fields ?? const <jge.FieldDefinition>[]) {
+      if (f.kind == jge.PhysicsDefinitions.layerType) {
         return (f.read(component) as num?)?.toInt() ?? 0;
       }
     }

@@ -43,8 +43,8 @@ abstract final class BuiltInPhysics3DContributions {
         'Something to stand on and bump into: a static body matching the shape.',
     appliesTo: _hasShape,
     extra: () => [
-      RigidBody3DComponent(bodyType: BodyType3D.static),
-      Collider3DComponent(shape: ColliderShape3D.matchShape),
+      RigidBody3DComponent(bodyType: Body3DType.static),
+      Collider3DComponent(shape: Collider3DShape.matchShape),
     ],
   );
 
@@ -57,8 +57,8 @@ abstract final class BuiltInPhysics3DContributions {
         'Reports what enters and leaves it: a sensor matching the shape.',
     appliesTo: _hasShape,
     extra: () => [
-      RigidBody3DComponent(bodyType: BodyType3D.static, isSensor: true),
-      Collider3DComponent(shape: ColliderShape3D.matchShape),
+      RigidBody3DComponent(bodyType: Body3DType.static, isSensor: true),
+      Collider3DComponent(shape: Collider3DShape.matchShape),
     ],
   );
 }
