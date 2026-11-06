@@ -17,6 +17,7 @@ import '../entities/scope_entities.dart';
 import 'overlay_layout.dart';
 import '../docks/scope_docks.dart';
 import '../play/play_controller.dart';
+import '../project/flutter_pin_check.dart';
 
 // ─ Frame-safe overlay settings watcher ────────────────────────────────────
 
@@ -136,9 +137,35 @@ class _EditorOverlayState extends State<EditorOverlay> {
           );
       // Where the last session left off, as the settings ask.
       unawaited(widget.plugin.reopenLastSession());
+      _tellFlutterPin();
     });
     _syncTheme();
     _applyTheme();
+  }
+
+  /// Under [EditorMessenger], which this state builds: where its messages
+  /// are reached from.
+  final GlobalKey _underMessenger = GlobalKey(debugLabel: 'underMessenger');
+
+  /// The project pins another Flutter than the editor runs on: said in a
+  /// message that stays until dismissed, once per pinned version. The log
+  /// and Problems say it every session.
+  void _tellFlutterPin() {
+    final scope = widget.plugin.scope;
+    final pin = FlutterPinCheck.of(scope).mismatch;
+    if (pin == null) return;
+    if (scope.prefs.get(FlutterPinCheck.shownPref) == pin.pinned) return;
+    final at = _underMessenger.currentContext;
+    if (at == null) return;
+    EditorMessenger.of(at).showSnackBar(
+      EditorSnackBarEntry(
+        title: pin.title,
+        message: pin.notice,
+        type: EditorSnackBarType.warning,
+        sticky: true,
+      ),
+    );
+    unawaited(scope.prefs.set(FlutterPinCheck.shownPref, pin.pinned));
   }
 
   /// A hot reload. The one place the editor hears of it: everything it
@@ -336,6 +363,7 @@ class _EditorOverlayState extends State<EditorOverlay> {
         controller: plugin.scope.theme,
         child: EditorMessenger(
           child: FocusScope(
+            key: _underMessenger,
             node: plugin.gameFocusScopeNode,
             child: Focus(
               // Not autofocus: this wrapper has no onKeyEvent of its own, and

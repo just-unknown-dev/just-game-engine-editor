@@ -45,6 +45,7 @@ const _layers = [
     'docks',
     'materials',
     'play',
+    'project',
     'tileset',
     'viewport',
   ],

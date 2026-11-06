@@ -55,6 +55,7 @@ just_game_engine_editor/lib/
     │                     ImagePixels; materials_2d/ and materials_3d/: the Material windows, their
     │                     pictures, presets and previews (see Materials)
     ├── play/           ← PlayController, PlaySnapshot
+    ├── project/        ← FlutterPinCheck: the Flutter just.json pins against the one the editor runs on
     ├── tileset/        ← the Tileset Editor: TilesetWorkspace (and its WorkspaceDefinition),
     │                     TilesetSession, its editors, PropertyTableEditor
     ├── viewport/       ← gizmos/ (Gizmo2DPainter and Gizmo2DHitTester, Gizmo3DPainter and
@@ -110,7 +111,7 @@ assets, timeline
 physics, scene_tree, scenes, tags
 graphics, level_map, prefabs
 entities, problems
-asset_store, audio, camera, docks, materials, play, tileset, viewport ── no editor imports
+asset_store, audio, camera, docks, materials, play, project, tileset, viewport ── no editor imports
 ```
 
 What keeps it so:
@@ -134,7 +135,7 @@ Folder loops inside one feature are tolerated: `asset_store` with `asset_store/u
 
 `register({engine, scope, modules, spawners, bindPhysicsBodies, toggleKey, statusPanelToggleKey, protectedSceneNames, startVisible, onReassemble})` is how a game makes one: it returns null outside a debug build and off the desktop (`supportsPlatform`), and initializes the plugin it makes. The constructor takes the same arguments and makes neither check nor starts it — the engine does, on `attach` — which is what tests use. Without a `scope` the plugin makes and owns one with the editor's own modules and the given ones; with one, they are registered into it, and the caller disposes it.
 
-- **Initializing** (`attach`, or `register`): starts `EditorPresence` and the log session, and says in the log when the project cannot be written (`SceneStore.writeAccessProblem`); adds the editor's systems (below); points the engine's loaders at the project's files (`engine.context.overrideLoaders`: sprites, animator graphs, timelines, tile text, prefabs and 2-D material text, through `FileSpriteAssetLoader`, restored on dispose, so another engine in the process is not affected); adds the sprite, level-map and map-collision default systems; sets up camera ownership and Level Map focus; installs the hardware key handler; and `scope.reload()`s.
+- **Initializing** (`attach`, or `register`): starts `EditorPresence` and the log session, and says in the log when the project cannot be written (`SceneStore.writeAccessProblem`) or pins another Flutter than the editor runs on (`FlutterPinCheck`, see *Problems*); adds the editor's systems (below); points the engine's loaders at the project's files (`engine.context.overrideLoaders`: sprites, animator graphs, timelines, tile text, prefabs and 2-D material text, through `FileSpriteAssetLoader`, restored on dispose, so another engine in the process is not affected); adds the sprite, level-map and map-collision default systems; sets up camera ownership and Level Map focus; installs the hardware key handler; and `scope.reload()`s.
 - **Each tick** (`update`): the modules' `onUpdate`, the play controller's tick, autosave, and which runtime systems run (below); while visible, the 3-D fly keys and a snapped evaluation of the camera brain while authoring.
 - **Drawing** (`renderOverlay`): the grid (or, in 3-D, the ground grid), the camera rigs, markers, viewport overlays and handles, the gizmo, the collider being edited, and the game preview.
 
@@ -283,7 +284,9 @@ The Add Component catalogue is `componentEntries(scope)` (`just_editor_core/lib/
 
 ## Problems
 
-A check is a `SceneValidator` (`just_editor_core/lib/src/scene/scene_validator.dart`): a function from a `ValidationContext` to `SceneProblem`s, each with a message, a severity (warning or error), the entity, a hint and `ProblemFix`es — a label and an edit pushed on the undo stack like any other. `BuiltInEditorModule.validators` lists the editor's own — each in its feature: `SceneChecks` (`lib/src/problems/scene_checks.dart`), `LevelMapChecks`, `TagChecks`, `PhysicsChecks`, `Physics3DChecks`, `Level3DChecks` — and `ProblemScan` runs `scope.validators`, the editor's first: missing assets, entity references that name nothing, animator clips a sheet lacks, timelines, cameras with nothing to follow, the tag checks (`TagChecks`: unknown tags, spawn points with no spawner, targets naming nothing), the physics checks (`PhysicsChecks`, `Physics3DChecks`), drawing with no transform, the Level Map checks, unshipped tile and layer files, and unknown components. A module adds checks with `EditorModule.validators`. `ProblemScan` runs them all, errors first, caches the result for a moment for the dock, its tab badge and the status strip, and turns a check that throws into a problem of its own.
+A check is a `SceneValidator` (`just_editor_core/lib/src/scene/scene_validator.dart`): a function from a `ValidationContext` to `SceneProblem`s, each with a message, a severity (warning or error), the entity, a hint and `ProblemFix`es — a label and an edit pushed on the undo stack like any other. `BuiltInEditorModule.validators` lists the editor's own — each in its feature: `SceneChecks` (`lib/src/problems/scene_checks.dart`), `LevelMapChecks`, `TagChecks`, `PhysicsChecks`, `Physics3DChecks`, `Level3DChecks`, and `FlutterPinCheck` (`lib/src/project/`) — and `ProblemScan` runs `scope.validators`, the editor's first: a project pinned to another Flutter, missing assets, entity references that name nothing, animator clips a sheet lacks, timelines, cameras with nothing to follow, the tag checks (`TagChecks`: unknown tags, spawn points with no spawner, targets naming nothing), the physics checks (`PhysicsChecks`, `Physics3DChecks`), drawing with no transform, the Level Map checks, unshipped tile and layer files, and unknown components. A module adds checks with `EditorModule.validators`. `ProblemScan` runs them all, errors first, caches the result for a moment for the dock, its tab badge and the status strip, and turns a check that throws into a problem of its own.
+
+`FlutterPinCheck` is of the project, not the scene: `just` pins one exact Flutter per project in `just.json` (`"flutter": "3.47.9"`), since 3-D draws with Flutter GPU, which changes between Flutter versions. It compares that pin with the Flutter the editor was built with (`FlutterVersion.version`, else the `flutterVersion` of `.dart_tool/package_config.json`), exactly; no pin, a pin that is not one exact version, or nothing readable says nothing. It reads the files once per scope (`FlutterPinCheck.of`). A mismatch is said three ways: a warning in the log at start (category `project`, the fix in its details), its Problems entry (whose fix, **Copy command**, copies `just sdk install`), and a message from the overlay that stays until dismissed, once per pinned version (`FlutterPinCheck.shownPref`, `editor.flutterPin.shown`).
 
 ## The module contract
 

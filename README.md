@@ -94,6 +94,7 @@ flutter run -t lib/main_editor.dart -d windows   # or macos, linux
 
 - **The package compiles everywhere Flutter does**: Android, iOS, the web (JavaScript and WebAssembly), Windows, macOS and Linux. A game that imports it in its editor entry point still builds for each of them. Its file and process calls go through `package:just_editor_core/io.dart`, which is `dart:io` on native platforms and stand-ins on the web.
 - **Editing runs on a desktop** (Windows, macOS or Linux) in a debug build launched from the project folder: the editor reads and saves the project's own files, under the working directory. On a phone, a tablet or the web the app has only its bundled, read-only assets, so `register` returns null there, `supportsPlatform` says why, and the game runs on its own.
+- **The project's Flutter**: `just` pins one exact Flutter per project in `just.json` (`"flutter": "3.47.9"`), since 3-D draws with Flutter GPU, which changes between Flutter versions. When the editor runs on another, it says so in the Console, in Problems (with a button that copies the fix) and once in a message: run `just sdk install` in the project folder, then restart the editor with `just game run --editor`.
 - **macOS**: the primary modifier is **Cmd** (Cmd+S saves, Cmd+Z undoes, Cmd+click adds to a selection), and Backspace deletes as Delete does. A sandboxed debug app cannot write the project folder: set `com.apple.security.app-sandbox` to `false` in `macos/Runner/DebugProfile.entitlements` (release builds never include the editor, so the release entitlements stay as they are). The editor says in its Console when it cannot write the project.
 
 ---
@@ -417,7 +418,7 @@ In a project the store manages, `just store link ../my_level_tools` registers it
   "kind": "editor-extension",
   "category": "editors",
   "license": {"spdx": "MIT"},
-  "requires": {"just_game_engine": "^2.0.0-dev.4"},
+  "requires": {"just_game_engine": "^2.0.0"},
   "dependencies": {"just_game_engine_editor": "^0.1.0-dev.3"},
   "editor": {
     "editorOnlyLibraries": ["*"],

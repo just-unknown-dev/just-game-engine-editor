@@ -58,6 +58,7 @@ import '../prefabs/prefab_placement.dart';
 import 'commands/built_in_commands.dart';
 import '../camera/game_preview_style.dart';
 import '../problems/problem_scan.dart';
+import '../project/flutter_pin_check.dart';
 
 part 'editor_visibility.dart';
 part 'editor_debugger_attach.dart';
@@ -581,6 +582,17 @@ class JustGameEditorPlugin implements EnginePlugin {
         source: 'editor',
         category: 'scene',
         level: DebuggerLogLevel.warning,
+      );
+    }
+    // A project pinned to another Flutter than this one: the game may not
+    // build, and 3-D may draw wrongly. Problems and a message say it too.
+    if (FlutterPinCheck.of(scope).mismatch case final pin?) {
+      scope.log.log(
+        pin.message,
+        source: 'editor',
+        category: 'project',
+        level: DebuggerLogLevel.warning,
+        details: pin.fix,
       );
     }
     // No gameplay systems of the editor's own (a movement system, say):

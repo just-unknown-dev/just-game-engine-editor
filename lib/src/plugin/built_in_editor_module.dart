@@ -29,6 +29,7 @@ import '../level_map/level_map_checks.dart';
 import '../physics/physics_3d/physics_3d_checks.dart';
 import '../physics/physics_checks.dart';
 import '../problems/scene_checks.dart';
+import '../project/flutter_pin_check.dart';
 import '../tags/tag_checks.dart';
 import '../assets/json_workspace.dart';
 import '../tileset/tileset_workspace.dart';
@@ -126,9 +127,10 @@ class BuiltInEditorModule extends EditorModule {
   @override
   List<PrefabCategory> get prefabCategories => BuiltInPrefabs.categories;
 
-  /// The checks it makes of every scene, in the order the Problems dock
-  /// lists what they find (errors first).
+  /// The checks it makes of every scene, and of the project's Flutter pin,
+  /// in the order the Problems dock lists what they find (errors first).
   static const List<SceneValidator> _checks = [
+    FlutterPinCheck.problems,
     SceneChecks.missingAssets,
     SceneChecks.unresolvedEntityReferences,
     SceneChecks.animatorClips,
