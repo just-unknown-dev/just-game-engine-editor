@@ -35,7 +35,7 @@ flutter pub add --dev just_game_engine_editor
 
 ```yaml
 dev_dependencies:
-  just_game_engine_editor: ^0.1.0-dev.1
+  just_game_engine_editor: ^0.1.0-dev.3
 ```
 
 Plugins that only add to the editor (the sprite or input editors) go in `dev_dependencies` too. A kit's game half ships with the game, so a kit is a regular dependency ([Plugins and kits](#plugins-and-kits)). A project made with `just create` has all of this already.
@@ -107,7 +107,7 @@ flutter run -t lib/main_editor.dart -d windows   # or macos, linux
 - **Snapping**: a move step, rotation and scale steps, smart snapping to other entities and guides, one switch for the whole editor. Ctrl (Cmd on macOS) suspends it mid-drag.
 - **Gizmos per mode**: markers, camera frames, light and sound reach, collider and selection outlines, shown or hidden for the editor, the Level Designer and a play-test, each on its own.
 - **Scene tree**: re-parent, reorder, group, rename, enable, hide, lock, isolate, colour labels, and filters by component, tag, layer or problem.
-- **Inspector**, built from each component's runtime definition: an editor for every field type, a colour picker, tag and entity pickers, and cards you can rearrange.
+- **Inspector**, built from each component's runtime definition: an editor for every field type, a colour picker, tag and entity pickers, input action pickers (the actions of the project's `.input.json` files), and cards you can rearrange.
 - **Physics**: 2-D and 3-D bodies look and work alike. Body type, material presets, Fit to visual, collider handles in the viewport, named collision layers, and a live readout while playing.
 - **Cameras**: the game's virtual cameras previewed while you work, their frames, zones and bounds drawn in the viewport, and Solo camera in the scene tree.
 - **Level Designer**: a grouped tool strip and the scene's **Level Map** (tiles on square, isometric, staggered and hexagonal grids, a built-in *Basic shapes* tileset, a Tileset Editor), with everything placed as an entity on one of the map's layers. Tiled maps import and export. A 3-D scene gets a 3-D Level Designer.
@@ -237,7 +237,7 @@ A module can bring prefabs and tools, overlays, snap providers and a grid to the
 
 Everything a module contributes is rebuilt from the modules on every reload of the editor's registries, so nothing piles up across hot reloads. `onRegister` runs once; `onReassemble` after each hot reload.
 
-The editor's own tools arrive the same way: `BuiltInEditorModule` (field editors, commands, prefabs, workspaces and the rest), `BuiltInMaterialsModule` (materials, in `package:just_game_engine_editor/materials.dart`), `BuiltInAssetStoreModule` (the Asset Store, in `package:just_game_engine_editor/asset_store.dart`) and, for a game with 3-D graphics, `BuiltInGraphicsModule` (models, lights and the environment, in `package:just_game_engine_editor/graphics.dart`) are registered ahead of every other module, so a module replaces any of it by reusing an id. `JustGameEditorPlugin.builtInsFor(engine)` lists them for a game.
+The editor's own tools arrive the same way: `BuiltInEditorModule` (field editors, commands, prefabs, workspaces and the rest), `BuiltInMaterialsModule` (materials, in `package:just_game_engine_editor/materials.dart`), `BuiltInAssetStoreModule` (the Asset Store, in `package:just_game_engine_editor/asset_store.dart`) and, for a game with 3-D graphics, `BuiltInGraphics3DModule` (models, lights and the environment, in `package:just_game_engine_editor/graphics.dart`) are registered ahead of every other module, so a module replaces any of it by reusing an id. `JustGameEditorPlugin.builtInsFor(engine)` lists them for a game.
 
 | First-party module | Package | What it adds |
 |--------|---------|--------------|
@@ -247,7 +247,6 @@ The editor's own tools arrive the same way: `BuiltInEditorModule` (field editors
 | `UiEditorModule` | `just_ui_editor` | The game's screens (`assets/ui/*.ui.json`) and themes |
 | `SpriteStudioModule` | `just_sprite_editor` | Sprite sheets, atlases and animator graphs |
 | `InputEditorModule` | `just_input_editor` | The input actions asset |
-| `MaterialEditorModule` | `just_material_editor` | Room for advanced material tools beside the built-in ones |
 
 ---
 
@@ -418,8 +417,8 @@ In a project the store manages, `just store link ../my_level_tools` registers it
   "kind": "editor-extension",
   "category": "editors",
   "license": {"spdx": "MIT"},
-  "requires": {"just_game_engine": "^2.0.0"},
-  "dependencies": {"just_game_engine_editor": "^0.1.0-dev.1"},
+  "requires": {"just_game_engine": "^2.0.0-dev.4"},
+  "dependencies": {"just_game_engine_editor": "^0.1.0-dev.3"},
   "editor": {
     "editorOnlyLibraries": ["*"],
     "modules": [
@@ -461,7 +460,7 @@ assets/scenes/
 - **With no scene open**, the viewport shows a start card: New scene, Reopen the last one (or Open the first), the steps to a saved level with their keys, the tools that need no scene, and the modules' tips. The **Scenes** panel on the right searches, sorts (play order, name, recently opened), reorders the play order by dragging or Alt+↑/↓, and renames, duplicates and deletes. A scene the game protects (`register(protectedSceneNames:)`) cannot be renamed or deleted.
 - **Saving.** Ctrl+S saves the scene, and any map files it uses. Saving during a play-test saves the level as authored, not as the game left it.
 - **Autosave** runs every 2 minutes by default and, unless set to save the scene itself, keeps a backup in `.editor_backups/<scene>/`, the newest 10 by default. Opening a scene whose newest backup holds changes the file lacks asks whether to recover them; *Open saved* sets the backup aside.
-- **The editor's log** is kept in `.editor_logs/editor_runtime.jsonl`, so the Console shows the last session too. While it runs, the editor touches `.dart_tool/just_core_cli/editor.lock`, and `just game scene` and `just upgrade` wait for it to close rather than write scenes it would save over.
+- **The editor's log** is kept in `.editor_logs/editor_runtime.jsonl`, so the Console shows the last session too. While it runs, the editor writes its heartbeat to `.dart_tool/just_core_cli/editor.lock` every 5 seconds, and `just game scene` and `just upgrade` wait for it to close rather than write scenes it would save over.
 
 ### Play-testing
 
@@ -598,7 +597,7 @@ Materials are the editor's own (`BuiltInMaterialsModule`), in every project: not
 
 The 3-D pictures and preview need Flutter GPU on in the game's runner (`set_enable_flutter_gpu(true)` on Windows; see just_graphics_engine's README for the others). Without it the dock shows the material's icon and the 3-D window says it has no GPU for a preview; everything else works. The 2-D ones need nothing.
 
-`package:just_game_engine_editor/materials.dart` has the editor's module for them (`BuiltInMaterialsModule`) and the normal map maker (`NormalMaps`) for tools. A module adds to the material windows through the workspace contributions of `just_editor_core` (`WorkspaceIds.material`, `WorkspaceIds.material2D`).
+`package:just_game_engine_editor/materials.dart` has the editor's module for them (`BuiltInMaterialsModule`) and the normal map maker (`NormalMaps`) for tools. A module adds to the material windows through the workspace contributions of `just_editor_core` (`WorkspaceIds.material3D`, `WorkspaceIds.material2D`).
 
 ### Docks
 
@@ -656,4 +655,5 @@ A profile or release (AOT) build of the game holds no editor:
 - The editor saves scenes, backups and logs through `dart:io` relative to the working directory, so start it from the project root.
 - A Level Map exports to Tiled (`.tmx` / `.tmj`) with *Export for Tiled…*: its tile layers and tilesets, with a built-in tileset's picture written as a `.png` beside its `.tsx`. The entities on its layers are not exported.
 - `just_game_engine` has no debugger panel of its own inside `GameWidget`; this package is the development-time overlay.
+- The tests that draw with Flutter GPU (the 3-D material pictures, the model thumbnails) skip themselves in a plain `flutter test`. Run them with `dart run tool/test_gpu.dart` from the package folder; [CONTRIBUTING.md](https://github.com/just-unknown-dev/just-game-engine-editor/blob/main/CONTRIBUTING.md#running-the-tests) says when.
 - Issues and contributions: [github.com/just-unknown-dev/just-game-engine-editor](https://github.com/just-unknown-dev/just-game-engine-editor) ([CONTRIBUTING.md](https://github.com/just-unknown-dev/just-game-engine-editor/blob/main/CONTRIBUTING.md)).

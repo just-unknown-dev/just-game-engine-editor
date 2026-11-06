@@ -15,21 +15,15 @@ import 'package:just_editor_core/just_editor_core.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/materials/materials.dart';
 
+import '../support/real_io.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory dir;
 
   setUp(() {
     dir = Directory.systemTemp.createTempSync('jge_material_2d');
-    addTearDown(() {
-      // A read a widget test's frozen clock never let finish may still
-      // hold a file open; the folder goes with the next clean-up.
-      try {
-        dir.deleteSync(recursive: true);
-      } on FileSystemException {
-        // Left for the system's own clean-up.
-      }
-    });
+    addTearDown(() => deleteWhenFree(dir));
   });
 
   void write(String path, Map<String, Object?> json) {
@@ -146,6 +140,14 @@ void main() {
       final state = key.currentState!;
       await tester.runAsync(state.load);
       await tester.pump();
+      // The stage reads a variant's parent on that frame, on the frozen
+      // clock: waited for, or the file is still open when the test ends
+      // and on Windows its folder can't be removed.
+      await pumpUntil(
+        tester,
+        () => state.stage.ready,
+        what: 'the material and its parents to be read',
+      );
       return state;
     }
 
@@ -349,12 +351,12 @@ void main() {
     });
 
     test('a swap starts from a colour not swapped yet', () {
-      const colours = Material2DSamples.spriteColours;
-      final next = ColourSwapsEditor.withOneMore([
-        (colours[0], 0xFF000000),
-      ], colours);
-      expect(next.last, (colours[1], colours[1]));
-      expect(ColourSwapsEditor.withOneMore(const [], const []).single, (
+      const colors = Material2DSamples.spriteColors;
+      final next = ColorSwapsEditor.withOneMore([
+        (colors[0], 0xFF000000),
+      ], colors);
+      expect(next.last, (colors[1], colors[1]));
+      expect(ColorSwapsEditor.withOneMore(const [], const []).single, (
         0xFF000000,
         0xFFFFFFFF,
       ));

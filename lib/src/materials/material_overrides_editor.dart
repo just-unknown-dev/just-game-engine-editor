@@ -12,13 +12,67 @@ abstract final class MaterialOverrideEditors {
   static Map<String, FieldEditorBuilder> get all => forRoot(null);
 
   /// By field type id, for the project at [root] (the working directory
-  /// when null).
-  static Map<String, FieldEditorBuilder> forRoot(String? root) => {
-    Material2DDefinitions.overridesType.id: (c) =>
-        MaterialOverridesEditor(context: c, flat: true, root: root),
-    Material3DDefinitions.overridesType.id: (c) =>
-        MaterialOverridesEditor(context: c, flat: false, root: root),
+  /// when null), reading material files through [reads] (each read every
+  /// time it is asked for when null).
+  static Map<String, FieldEditorBuilder> forRoot(
+    String? root, {
+    MaterialFileReads? reads,
+  }) => {
+    Material2DDefinitions.overridesType.id: (c) => MaterialOverridesEditor(
+      context: c,
+      flat: true,
+      root: root,
+      reads: reads,
+    ),
+    Material3DDefinitions.overridesType.id: (c) => MaterialOverridesEditor(
+      context: c,
+      flat: false,
+      root: root,
+      reads: reads,
+    ),
   };
+}
+
+/// The material files the inspector's material editors have read, each by
+/// its absolute path with what it was when read (when it changed, how big
+/// it is): the inspector is built again on every selection and edit, and
+/// asks for the material each time. One per project, owned by the
+/// materials module and let go with it ([clear]).
+final class MaterialFileReads {
+  final Map<String, (String, Object?)> _read = {};
+
+  /// The file at [absolute] parsed by [parse]; null when it is not there.
+  /// Read again only once it changed: as the project's asset index has
+  /// seen it ([modified] and [size], when it has), else as the disk says.
+  T? read<T extends Object>(
+    String absolute,
+    T Function(String text) parse, {
+    DateTime? modified,
+    int? size,
+  }) {
+    final String stamp;
+    if (modified != null && size != null) {
+      stamp = '${modified.microsecondsSinceEpoch}:$size:$T';
+    } else {
+      final stat = FileStat.statSync(absolute);
+      if (stat.type == FileSystemEntityType.notFound) return null;
+      stamp = '${stat.modified.microsecondsSinceEpoch}:${stat.size}:$T';
+    }
+    final known = _read[absolute];
+    if (known != null && known.$1 == stamp) return known.$2 as T?;
+    final file = parse(File(absolute).readAsStringSync());
+    _read[absolute] = (stamp, file);
+    return file;
+  }
+
+  /// The file at [absolute] changed: it is read again when next asked.
+  void forget(String absolute) => _read.remove(absolute);
+
+  /// Lets go of every file read.
+  void clear() => _read.clear();
+
+  /// How many files are kept.
+  int get keptFiles => _read.length;
 }
 
 /// An entity's own values for its material: each with an editor of its
@@ -33,6 +87,7 @@ class MaterialOverridesEditor extends StatelessWidget {
     required this.context,
     required this.flat,
     this.root,
+    this.reads,
   });
 
   /// The field being edited.
@@ -45,6 +100,10 @@ class MaterialOverridesEditor extends StatelessWidget {
   /// when null.
   final String? root;
 
+  /// Where the material files read are kept until they change: the
+  /// materials module's. Null reads each file every time.
+  final MaterialFileReads? reads;
+
   /// The values, by key.
   Map<String, Object> get values => {
     for (final MapEntry(:key, :value)
@@ -54,24 +113,27 @@ class MaterialOverridesEditor extends StatelessWidget {
 
   String get _root => (root ?? Directory.current.path).replaceAll(r'\', '/');
 
-  // Each material file read, by its absolute path, with when it changed
-  // and how big it was: the inspector is built again on every selection
-  // and edit, and asks for the material each time.
-  static final Map<String, (String, Object?)> _read = {};
-
   // The material file at [path] (a project path or a package's asset key)
-  // parsed by [parse]; null when it is not there. Read again only once it
-  // changed.
+  // parsed by [parse]; null when it is not there. Through [reads], read
+  // again only once it changed — as the asset index saw it, with no look
+  // at the disk at every build of a drag, when the index has it.
   T? _file<T extends Object>(String path, T Function(String text) parse) {
     final absolute = PackageAssetPaths.of(_root).absolute(path);
-    final stat = FileStat.statSync(absolute);
-    if (stat.type == FileSystemEntityType.notFound) return null;
-    final stamp = '${stat.modified.microsecondsSinceEpoch}:${stat.size}:$T';
-    final known = _read[absolute];
-    if (known != null && known.$1 == stamp) return known.$2 as T?;
-    final file = parse(File(absolute).readAsStringSync());
-    _read[absolute] = (stamp, file);
-    return file;
+    final reads = this.reads;
+    if (reads == null) {
+      final file = File(absolute);
+      return file.existsSync() ? parse(file.readAsStringSync()) : null;
+    }
+    final scope = context.scope;
+    final indexed = scope != null && scope.container.isRegistered<AssetIndex>()
+        ? scope.assetIndex.entryAt(path)
+        : null;
+    return reads.read(
+      absolute,
+      parse,
+      modified: indexed?.modified,
+      size: indexed?.size,
+    );
   }
 
   // ── 2-D ─────────────────────────────────────────────────────────────

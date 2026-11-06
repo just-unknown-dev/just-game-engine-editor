@@ -23,8 +23,8 @@ void main() {
   tearDown(() => dir.deleteSync(recursive: true));
 
   /// A [w] × [h] picture of one colour.
-  Pixels solid(int w, int h, int r, int g, int b, [int a = 255]) {
-    final p = Pixels(w, h);
+  ImagePixels solid(int w, int h, int r, int g, int b, [int a = 255]) {
+    final p = ImagePixels(w, h);
     for (var i = 0; i < w * h; i++) {
       p.rgba
         ..[i * 4] = r
@@ -35,30 +35,30 @@ void main() {
     return p;
   }
 
-  Future<void> png(String path, Pixels p) => p.writePng('$root/$path');
+  Future<void> png(String path, ImagePixels p) => p.writePng('$root/$path');
 
   test('pixels survive a PNG, half-clear ones keeping their colour', () async {
     await png('a.png', solid(3, 2, 200, 40, 10, 128));
-    final back = await Pixels.read('$root/a.png');
+    final back = await ImagePixels.read('$root/a.png');
     expect((back.width, back.height), (3, 2));
     for (var c = 0; c < 4; c++) {
       expect(back.at(1, 1, c), closeTo([200, 40, 10, 128][c], 2));
     }
-    final big = await Pixels.read('$root/a.png', width: 6, height: 4);
+    final big = await ImagePixels.read('$root/a.png', width: 6, height: 4);
     expect((big.width, big.height), (6, 4));
-    expect(await Pixels.sizeOf('$root/a.png'), (3, 2));
+    expect(await ImagePixels.sizeOf('$root/a.png'), (3, 2));
   });
 
   group('texture sets', () {
     test('a map known by its name, as sites and tools write them', () {
       expect(TextureSets.roleOf('brick_albedo.png'), (
         'brick',
-        TextureRole.colour,
+        TextureRole.color,
         false,
       ));
       expect(TextureSets.roleOf('Bricks059_1K-PNG_Color.png'), (
         'Bricks059',
-        TextureRole.colour,
+        TextureRole.color,
         false,
       ));
       expect(TextureSets.roleOf('Bricks059_1K-PNG_NormalDX.png'), (
@@ -75,7 +75,7 @@ void main() {
       expect(TextureSets.roleOf('brick_wall_arm_2k.jpg')!.$2, TextureRole.orm);
       expect(TextureSets.roleOf('rock_Base_Color.png'), (
         'rock',
-        TextureRole.colour,
+        TextureRole.color,
         false,
       ));
       expect(
@@ -103,7 +103,7 @@ void main() {
         ['assets/t/brick', 'assets/u/brick', 'assets/t/wood'],
       );
       expect(sets.first.maps.keys.toSet(), {
-        TextureRole.colour,
+        TextureRole.color,
         TextureRole.normal,
         TextureRole.roughness,
       });
@@ -131,13 +131,15 @@ void main() {
       expect((m.metallic, m.roughness), (1.0, 1.0), reason: 'the maps say');
       expect(m.validate(), isEmpty);
 
-      final orm = await Pixels.read('$root/assets/t/brick_orm.png');
+      final orm = await ImagePixels.read('$root/assets/t/brick_orm.png');
       expect((orm.width, orm.height), (4, 4), reason: 'the largest');
       expect(
         [orm.at(1, 1, 0), orm.at(1, 1, 1), orm.at(1, 1, 2)],
         [200, 100, 255],
       );
-      final normal = await Pixels.read('$root/assets/t/brick_normal_gl.png');
+      final normal = await ImagePixels.read(
+        '$root/assets/t/brick_normal_gl.png',
+      );
       expect(normal.at(0, 0, 1), 255 - 40, reason: 'green turned over');
       expect(result.notes.join(' '), contains('height map'));
       expect(result.notes.join(' '), contains('scaled to 4 × 4'));
@@ -158,7 +160,7 @@ void main() {
         await png('t/b_orm.png', solid(2, 2, 1, 2, 3));
         final sets = TextureSets.inFolder(root, 't');
         final a = await TextureSets.make(root, sets.first);
-        final packed = await Pixels.read('$root/t/a_orm.png');
+        final packed = await ImagePixels.read('$root/t/a_orm.png');
         expect(packed.at(0, 0, 1), 0, reason: 'fully glossy: smooth');
         expect(packed.at(0, 0, 2), 0, reason: 'no metal map: not metal');
         final ma = Material3DFile.parse(read(root, a.material));
@@ -183,7 +185,7 @@ void main() {
         [128, 128, 255],
       );
       // Brighter to the right: higher to the right, so it faces left.
-      final ramp = Pixels(5, 5);
+      final ramp = ImagePixels(5, 5);
       for (var y = 0; y < 5; y++) {
         for (var x = 0; x < 5; x++) {
           final i = (y * 5 + x) * 4;
@@ -196,7 +198,7 @@ void main() {
       expect(right.at(2, 2, 0), lessThan(128));
       expect(right.at(2, 2, 1), 128);
       // Brighter going down: higher below, so it faces up (green up).
-      final down = Pixels(5, 5);
+      final down = ImagePixels(5, 5);
       for (var y = 0; y < 5; y++) {
         for (var x = 0; x < 5; x++) {
           final i = (y * 5 + x) * 4;
@@ -217,7 +219,7 @@ void main() {
     });
 
     test('a sprite: clear stays clear, its edges round off', () {
-      final sprite = Pixels(9, 9);
+      final sprite = ImagePixels(9, 9);
       for (var y = 2; y < 7; y++) {
         for (var x = 2; x < 7; x++) {
           final i = (y * 9 + x) * 4;
@@ -260,7 +262,7 @@ void main() {
       final a = await NormalMaps.generate(root, 'hero.png');
       final b = await NormalMaps.generate(root, 'hero.png');
       expect((a, b), ('hero_normal.png', 'hero_normal_2.png'));
-      expect((await Pixels.read('$root/$a')).width, 4);
+      expect((await ImagePixels.read('$root/$a')).width, 4);
       final flipped = NormalMaps.flipGreen(solid(1, 1, 10, 20, 30));
       expect(flipped.at(0, 0, 1), 235);
     });

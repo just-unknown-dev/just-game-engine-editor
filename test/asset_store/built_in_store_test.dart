@@ -5,7 +5,7 @@ import 'package:just_game_engine/just_game_engine_3d.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/asset_store.dart';
 import 'package:just_game_engine_editor/just_game_engine_editor.dart';
-import 'package:just_game_engine_editor/src/ui/overlay/shared/transform_toolbar.dart'
+import 'package:just_game_engine_editor/src/chrome/toolbars/transform_toolbar.dart'
     show ToolColumnButtons;
 
 void main() {

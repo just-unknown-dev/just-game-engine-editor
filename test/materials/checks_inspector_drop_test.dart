@@ -345,6 +345,7 @@ void main() {
       scope: scope,
       path: path,
       at: Vector3(x, y, 0),
+      mode: SceneMode.twoD,
       place: (components, name) {
         placed.add(name ?? '?');
         return scope.world.createEntityWithComponents(components, name: name);
@@ -397,5 +398,30 @@ void main() {
       expect(placed, ['Screen'], reason: 'not another');
       expect(screen.material, 'fx/night.material2d.json');
     });
+  });
+
+  test('a material file the inspector reads is read again once the asset '
+      'index saw it change, with no look at the disk meanwhile', () {
+    write('stone.material.json', const Material3DFile(roughness: 0.7).encode());
+    final reads = MaterialFileReads();
+    final path = '$root/stone.material.json';
+    final seen = DateTime(2026);
+    Material3DFile? read({DateTime? modified}) =>
+        reads.read(path, Material3DFile.parse, modified: modified, size: 10);
+    expect(read(modified: seen)!.roughness, 0.7);
+    write('stone.material.json', const Material3DFile(roughness: 0.2).encode());
+    expect(
+      read(modified: seen)!.roughness,
+      0.7,
+      reason: 'as the index last saw it',
+    );
+    expect(read(modified: DateTime(2027))!.roughness, 0.2);
+    reads.clear();
+    expect(reads.keptFiles, 0);
+    expect(
+      reads.read(path, Material3DFile.parse)!.roughness,
+      0.2,
+      reason: "without the index's word, the disk's",
+    );
   });
 }

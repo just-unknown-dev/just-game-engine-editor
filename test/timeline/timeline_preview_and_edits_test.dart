@@ -1,0 +1,478 @@
+// The timeline session's preview and edits at their edges: the preview
+// never leaks into the editor's undo, a session no dock shows stops,
+// what Record does not key, paste onto its own kind, a marker dragged
+// as one step, blocks trimmed where they cannot grow, numbers that are
+// not numbers, and nothing keyed during a play-test.
+
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:just_game_engine/just_game_engine.dart';
+import 'package:just_game_engine_editor/just_game_engine_editor.dart';
+import 'package:just_game_engine_editor/src/timeline/timeline_dock.dart';
+import 'package:just_game_engine_editor/src/timeline/timeline_item_bar.dart';
+import 'package:just_game_engine_editor/src/timeline/timeline_session.dart';
+
+import '../support/test_scope.dart';
+
+TimelineKey _k(double t, double v) =>
+    TimelineKey(time: t, value: v, interpolation: KeyInterpolation.linear);
+
+PropertyTrack _x(
+  List<TimelineKey> keys, {
+  PropertyTrackMode mode = PropertyTrackMode.absolute,
+  TrackBinding binding = TrackBinding.owner,
+}) => PropertyTrack(
+  component: 'TransformComponent',
+  field: 'position',
+  channel: 'x',
+  mode: mode,
+  binding: binding,
+  curve: KeyCurve(keys),
+);
+
+void main() {
+  late Directory root;
+  late EditorScope scope;
+  late TimelineSession s;
+  late Entity door;
+  late TransformComponent transform;
+  late TimelinePlayerComponent player;
+
+  double x() => transform.position.x;
+
+  setUp(() {
+    root = Directory.systemTemp.createTempSync('timeline_fixes');
+    addTearDown(() {
+      try {
+        root.deleteSync(recursive: true);
+      } on FileSystemException {
+        // Windows may still hold a file for a moment; it is a temp one.
+      }
+    });
+    scope = testScope();
+    s = TimelineSession(scope, root: root.path);
+    addTearDown(s.dispose);
+    transform = TransformComponent(position: Vector3(40, 0, 0));
+    player = TimelinePlayerComponent(
+      inline: TimelineAsset(
+        duration: 2,
+        fps: 10,
+        // At t = 1 the door is shown at 100; the scene has it at 40.
+        tracks: [
+          _x([_k(0, 0), _k(2, 200)]),
+        ],
+      ),
+    );
+    door = scope.world.createEntityWithComponents([
+      transform,
+      player,
+    ], name: 'Door');
+  });
+
+  // An inspector edit as the inspector makes it: what the field holds is
+  // the step's "before", whatever a preview put there.
+  void inspectorEdit(double to) {
+    final before = x();
+    scope.history.push(
+      CallbackCommand(
+        label: 'Change Position',
+        onRedo: () => transform.setPositionXY(to, transform.position.y),
+        onUndo: () => transform.setPositionXY(before, transform.position.y),
+      ),
+    );
+  }
+
+  group('a session no dock shows', () {
+    testWidgets('closing the dock stops recording and ends the preview', (
+      tester,
+    ) async {
+      final session = TimelineSession.of(scope);
+      addTearDown(session.dispose);
+      scope.sceneState.selectedEntity.value = door;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: TimelineDock(scope: scope)),
+        ),
+      );
+      await tester.pump();
+      expect(session.isShown, isTrue);
+      session.setRecording(true);
+      expect(session.isPreviewing, isTrue);
+
+      await tester.pumpWidget(const SizedBox());
+      expect(session.isShown, isFalse);
+      expect(session.record.value, isFalse);
+      expect(session.isPreviewing, isFalse);
+      expect(x(), 40);
+    });
+
+    testWidgets('the inspector shows no key button with no dock open', (
+      tester,
+    ) async {
+      final session = TimelineSession.of(scope);
+      addTearDown(session.dispose);
+      await session.follow(door);
+      Future<void> pump() => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                children: buildComponentSections(
+                  entity: door,
+                  sceneState: scope.sceneState,
+                  scope: scope,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await pump();
+      expect(
+        find.byWidgetPredicate(
+          (w) => w.runtimeType.toString() == 'FieldKeyButton',
+        ),
+        findsNothing,
+      );
+      session.attachView();
+      scope.sceneState.refresh();
+      await pump();
+      expect(
+        find.byWidgetPredicate(
+          (w) => w.runtimeType.toString() == 'FieldKeyButton',
+        ),
+        findsWidgets,
+      );
+      await session.detachView();
+    });
+  });
+
+  group('the preview never leaks into the editor\'s undo', () {
+    test('Record on: the edit is a key; undoing it after Stop leaves the '
+        'scene as authored', () async {
+      await s.follow(door);
+      s.scrubTo(1);
+      expect(x(), closeTo(100, 1e-9));
+      s.setRecording(true);
+      inspectorEdit(150);
+      expect(s.captureEdits(), 1);
+      expect(
+        s.asset.value!.propertyTracks.first.curve.numberAt(1),
+        closeTo(150, 1e-9),
+      );
+      s.stop();
+      expect(x(), 40);
+
+      scope.history.undo();
+      expect(x(), 40, reason: 'not the 100 the preview showed');
+      scope.history.redo();
+      expect(x(), 40, reason: 'the edit went to the timeline');
+    });
+
+    test('Record off: the edit is the scene\'s, kept when the preview '
+        'ends, and undone to what was authored', () async {
+      await s.follow(door);
+      s.scrubTo(1);
+      inspectorEdit(150);
+      s.stop();
+      expect(x(), 150, reason: 'not thrown away');
+
+      scope.history.undo();
+      expect(x(), 40);
+      scope.history.redo();
+      expect(x(), 150);
+    });
+
+    test(
+      'a relative track keeps the edit as a move of the scene\'s value',
+      () async {
+        player.inline = TimelineAsset(
+          duration: 2,
+          fps: 10,
+          tracks: [
+            _x([_k(0, 0), _k(2, 200)], mode: PropertyTrackMode.relative),
+          ],
+        );
+        await s.follow(door);
+        s.scrubTo(1);
+        expect(x(), closeTo(140, 1e-9), reason: '40 + 100');
+        inspectorEdit(150); // moved 10 further
+        s.stop();
+        expect(x(), closeTo(50, 1e-9));
+      },
+    );
+  });
+
+  group('what Record does not key', () {
+    test('a colour picker trying values out, and an editor undo', () async {
+      await s.follow(door);
+      s.scrubTo(1);
+      s.setRecording(true);
+
+      final preview = LivePreview(
+        read: () => transform.position.x,
+        write: (v) => transform.setPositionXY(v! as double, 0),
+        scope: scope,
+      )..show(120.0);
+      expect(s.captureEdits(), 0, reason: 'only being tried out');
+      preview.restore();
+      expect(s.captureEdits(), 0);
+      expect(s.asset.value!.propertyTracks.single.curve.keys, hasLength(2));
+
+      // An edit made before, undone while the preview shows: the scene's
+      // value now, not a key.
+      s.stop();
+      inspectorEdit(60);
+      s.setRecording(true);
+      scope.history.undo();
+      expect(s.captureEdits(), 0);
+      expect(s.asset.value!.propertyTracks.single.curve.keys, hasLength(2));
+      s.stop();
+      expect(x(), 40);
+    });
+  });
+
+  test('an entity a track moves can be selected without closing the '
+      'timeline', () async {
+    final panel = scope.world.createEntityWithComponents([
+      TransformComponent(),
+    ], name: 'Panel');
+    player.inline = TimelineAsset(
+      duration: 2,
+      tracks: [
+        _x([_k(0, 0)], binding: const TrackBinding.name('Panel')),
+      ],
+    );
+    await s.follow(door);
+    await s.follow(panel);
+    expect(s.owner, door);
+    expect(s.asset.value, isNotNull);
+    await s.follow(scope.world.createEntity(name: 'Rock'));
+    expect(s.asset.value, isNull);
+  });
+
+  test('a colour key gets handles a third of the way to its neighbours, as '
+      'the engine blends colours', () async {
+    player.inline = TimelineAsset(
+      duration: 2,
+      fps: 10,
+      tracks: [
+        PropertyTrack(
+          component: 'SpriteComponent',
+          field: 'tint',
+          channel: '',
+          isColor: true,
+          curve: KeyCurve([
+            const TimelineKey(time: 0, value: 0xFFFF0000),
+            const TimelineKey(time: 2, value: 0xFF0000FF),
+          ]),
+        ),
+      ],
+    );
+    await s.follow(door);
+    s.setKey(0, 1, value: 0xFF00FF00);
+    final keys = (s.asset.value!.tracks[0] as PropertyTrack).curve.keys;
+    expect(keys, hasLength(3));
+    // A colour's handle values are fractions of the way to the next key,
+    // not ARGB numbers.
+    expect(keys[1].inTangent.dv, closeTo(-1 / 3, 1e-9));
+    expect(keys[1].outTangent.dv, closeTo(1 / 3, 1e-9));
+  });
+
+  group('paste', () {
+    test('only onto a track of the same kind of value, and found again by '
+        'what the track is', () async {
+      player.inline = TimelineAsset(
+        duration: 2,
+        fps: 10,
+        tracks: [
+          _x([_k(0, 5)]),
+          PropertyTrack(
+            component: 'SpriteComponent',
+            field: 'tint',
+            channel: '',
+            isColor: true,
+            curve: KeyCurve([const TimelineKey(time: 0, value: 0xFFFF0000)]),
+          ),
+        ],
+      );
+      await s.follow(door);
+      s.selection.value = {const TimelineItemRef(0, 0)};
+      s.copy();
+      s
+        ..selectedTrack.value = 1
+        ..playhead.value = 1;
+      s.paste();
+      final tint = s.asset.value!.tracks[1] as PropertyTrack;
+      expect(tint.curve.keys, hasLength(1), reason: 'a number is no colour');
+      final xs = s.asset.value!.tracks[0] as PropertyTrack;
+      expect(xs.curve.keys.map((k) => k.time), [0, 1]);
+
+      // Another timeline: its first track is something else.
+      final other = scope.world.createEntityWithComponents([
+        TransformComponent(),
+        TimelinePlayerComponent(
+          inline: TimelineAsset(
+            duration: 2,
+            fps: 10,
+            tracks: [EventTrack(), _x([])],
+          ),
+        ),
+      ], name: 'Other');
+      await s.follow(other);
+      s.paste(time: 0.5);
+      expect((s.asset.value!.tracks[0] as EventTrack).events, isEmpty);
+      expect(
+        (s.asset.value!.tracks[1] as PropertyTrack).curve.keys.single.time,
+        0.5,
+      );
+    });
+  });
+
+  test('dragging a marker is one undo step', () async {
+    await s.follow(door);
+    s.addMarker(0.5, 'M');
+    final start = s.beginDrag(label: 'Marker')!;
+    var index = 0;
+    for (final t in [0.6, 0.8, 1.0, 1.2]) {
+      index = s.dragMarker(start, 0, t);
+    }
+    s.endDrag(start);
+    expect(index, 0);
+    expect(s.asset.value!.markers.single.time, closeTo(1.2, 1e-9));
+    s.undo();
+    expect(s.asset.value!.markers.single.time, 0.5);
+    s.undo();
+    expect(s.asset.value!.markers, isEmpty);
+  });
+
+  group('trimming a block where it cannot grow', () {
+    test('a block past the end, and one shorter than a frame', () async {
+      player.inline = TimelineAsset(
+        duration: 4,
+        fps: 10,
+        tracks: [
+          AudioTrack(blocks: const [TimelineBlock(start: 3, length: 0.5)]),
+        ],
+      );
+      await s.follow(door);
+      s.apply('Length', s.asset.value!.copyWith(duration: 2));
+      final start = s.beginDrag()!;
+      s.dragTrim(start, const TimelineItemRef(0, 0), 3.3, leadingEdge: false);
+      s.dragTrim(start, const TimelineItemRef(0, 0), 1, leadingEdge: true);
+      s.endDrag(start);
+
+      s.apply(
+        'Short',
+        s.asset.value!.copyWith(
+          fps: 60,
+          tracks: [
+            AudioTrack(blocks: const [TimelineBlock(start: 0, length: 1 / 60)]),
+          ],
+        ),
+      );
+      s.apply('FPS', s.asset.value!.copyWith(fps: 10));
+      final again = s.beginDrag()!;
+      s.dragTrim(again, const TimelineItemRef(0, 0), 0.5, leadingEdge: true);
+      s.endDrag(again);
+      final block = (s.asset.value!.tracks.single as AudioTrack).blocks.single;
+      expect(block.start, 0);
+      expect(block.end, closeTo(1 / 60, 1e-9), reason: 'its end stayed');
+    });
+  });
+
+  test('a Timeline Player added, and a play range set, are undone '
+      'by the editor\'s undo; a grip drag is one step', () async {
+    final rock = scope.world.createEntityWithComponents([
+      TransformComponent(),
+    ], name: 'Rock');
+    s.createInlineFor(rock);
+    expect(rock.hasComponent<TimelinePlayerComponent>(), isTrue);
+    scope.history.undo();
+    expect(rock.hasComponent<TimelinePlayerComponent>(), isFalse);
+    await s.resync();
+    expect(s.asset.value, isNull);
+
+    await s.follow(door);
+    s.setPlayRange(0.5, 1.5);
+    expect(player.from, 0.5);
+    scope.history.undo();
+    expect(player.hasRange, isFalse);
+
+    final depth = scope.history.undoDepth;
+    final edit = s.beginPlayRangeDrag();
+    for (final t in [1.2, 1.4, 0.2]) {
+      s.dragPlayRange(t, 1.0);
+    }
+    s.endPlayRangeDrag(edit);
+    expect(scope.history.undoDepth, depth + 1);
+    // Dragged past the other end: that end stayed where it was.
+    expect((player.from, player.to), (0.2, 1.0));
+  });
+
+  test('playing tells the panels a dozen times a second, not every '
+      'frame', () async {
+    await s.follow(door);
+    s.play();
+    final before = scope.sceneState.revision.value;
+    for (var i = 0; i < 10; i++) {
+      s.tick(0.01);
+    }
+    expect(scope.sceneState.revision.value - before, lessThanOrEqualTo(2));
+  });
+
+  group('numbers that are not numbers', () {
+    test('a colour of six digits is opaque; NaN is no value', () {
+      expect(TimelineItemBar.parseArgb('FF0000'), 0xFFFF0000);
+      expect(TimelineItemBar.parseArgb('#80FF0000'), 0x80FF0000);
+      expect(TimelineItemBar.parseArgb('nope'), isNull);
+    });
+
+    test('the session refuses a drag to a time that is not a number', () async {
+      await s.follow(door);
+      s.scrubTo(double.nan);
+      expect(s.playhead.value, 0);
+      final start = s.beginDrag()!;
+      s.dragDuration(start, double.infinity);
+      s.endDrag(start);
+      expect(s.duration, 2);
+      expect(() => s.asset.value!.encode(), returnsNormally);
+    });
+  });
+
+  test('nothing is keyed during a play-test', () async {
+    await s.follow(door);
+    s.isAuthoring = () => false;
+    final definition = scope.definitions.definitionFor(transform)!;
+    expect(
+      s.keyField(
+        door,
+        transform,
+        definition.fields.firstWhere((f) => f.name == 'position'),
+      ),
+      isFalse,
+    );
+    expect(s.canEdit, isFalse, reason: 'an inline timeline is the scene');
+  });
+
+  test('a key given another key\'s time takes its place', () async {
+    player.inline = TimelineAsset(
+      duration: 2,
+      fps: 10,
+      tracks: [
+        _x([_k(0, 0), _k(1, 10), _k(2, 20)]),
+      ],
+    );
+    await s.follow(door);
+    final track = s.asset.value!.tracks.first as PropertyTrack;
+    s.updateKey(
+      const TimelineItemRef(0, 2),
+      track.curve.keys[2].copyWith(time: 1),
+    );
+    final keys = (s.asset.value!.tracks.first as PropertyTrack).curve.keys;
+    expect(keys.map((k) => k.time), [0, 1]);
+    expect(keys[1].value, 20);
+  });
+}

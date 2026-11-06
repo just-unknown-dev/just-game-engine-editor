@@ -27,8 +27,8 @@ void main() {
 
   tearDown(() => dir.deleteSync(recursive: true));
 
-  MaterialPictures session({String? folder}) {
-    final pictures = MaterialPictures(
+  Material3DPictures session({String? folder}) {
+    final pictures = Material3DPictures(
       root: dir.path,
       size: 64,
       cacheFolder: folder,
@@ -37,11 +37,11 @@ void main() {
     return pictures;
   }
 
-  Future<void> writePng(String path, ui.Color colour, {int size = 8}) async {
+  Future<void> writePng(String path, ui.Color color, {int size = 8}) async {
     final recorder = ui.PictureRecorder();
     ui.Canvas(recorder).drawRect(
       ui.Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble()),
-      ui.Paint()..color = colour,
+      ui.Paint()..color = color,
     );
     final image = await recorder.endRecording().toImage(size, size);
     final png = await image.toByteData(format: ui.ImageByteFormat.png);

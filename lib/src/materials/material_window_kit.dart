@@ -211,19 +211,21 @@ class ShortcutsHint extends StatelessWidget {
 }
 
 /// Which cards are folded, by id, for as long as the editor runs: a card
-/// folded stays folded in the next material opened.
-abstract final class MaterialCardFolds {
-  static final Set<String> _folded = {};
+/// folded stays folded in the next material opened. One per editor
+/// ([of]), let go with it.
+final class MaterialCardFolds {
+  /// The folds of the editor [scope]: the same ones wherever asked for.
+  static MaterialCardFolds of(EditorScope scope) =>
+      scope.service(MaterialCardFolds.new);
+
+  final Set<String> _folded = {};
 
   /// Whether the card [id] is folded.
-  static bool isFolded(String id) => _folded.contains(id);
+  bool isFolded(String id) => _folded.contains(id);
 
   /// Folds the card [id], or unfolds it.
-  static void set(String id, bool folded) =>
+  void set(String id, bool folded) =>
       folded ? _folded.add(id) : _folded.remove(id);
-
-  /// Unfolds every card; for tests.
-  static void clear() => _folded.clear();
 }
 
 /// A group of a material's values, or one of its effects: a header with a

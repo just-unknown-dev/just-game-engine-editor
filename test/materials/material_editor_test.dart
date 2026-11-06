@@ -55,7 +55,7 @@ void main() {
     'without a GPU a material has no picture, and asking never throws',
     () async {
       final path = await module.newMaterial('assets/materials');
-      final pictures = MaterialPictures(root: dir.path);
+      final pictures = Material3DPictures(root: dir.path);
       addTearDown(pictures.dispose);
       expect(pictures.peek(path), isNull);
       expect(await pictures.of(path), isNull);
@@ -75,15 +75,15 @@ void main() {
     final scope = EditorScope(world: World()..initialize(), modules: const []);
     addTearDown(scope.dispose);
     final reloaded = <String>[];
-    final key = GlobalKey<MaterialWorkspaceState>();
+    final key = GlobalKey<Material3DWorkspaceState>();
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: MaterialWorkspace(
+          body: Material3DWorkspace(
             key: key,
             path: path!,
             root: dir.path,
-            pictures: MaterialPictures(root: dir.path),
+            pictures: Material3DPictures(root: dir.path),
             workspace: WorkspaceContext(
               scope: scope,
               onClose: () {},
@@ -132,6 +132,7 @@ void main() {
       scope: scope,
       path: 'assets/materials/stone.material.json',
       at: Vector3.zero(),
+      mode: SceneMode.threeD,
       surface: SurfacePoint(Vector3.zero(), Vector3(0, -1, 0), onto: onto),
       place: (_, _) => throw StateError('a material makes nothing'),
     );

@@ -7,10 +7,10 @@ import 'package:just_editor_core/just_editor_core.dart' show ProjectFiles;
 
 /// An image's pixels: [width] × [height] RGBA, 8 bits a channel, alpha
 /// not multiplied in, rows top to bottom.
-final class Pixels {
+final class ImagePixels {
   /// [width] × [height] pixels: [rgba] when given (its length must be
   /// `width * height * 4`), else all clear black.
-  Pixels(this.width, this.height, [Uint8List? rgba])
+  ImagePixels(this.width, this.height, [Uint8List? rgba])
     : rgba = rgba ?? Uint8List(width * height * 4);
 
   /// The image's size, in pixels.
@@ -25,12 +25,16 @@ final class Pixels {
 
   /// The image file at [path], its pixels — scaled to [width] × [height]
   /// when given. Throws when it can't be read as an image.
-  static Future<Pixels> read(String path, {int? width, int? height}) async =>
+  static Future<ImagePixels> read(
+    String path, {
+    int? width,
+    int? height,
+  }) async =>
       decode(await File(path).readAsBytes(), width: width, height: height);
 
   /// [bytes] (PNG, JPEG, …) decoded, scaled to [width] × [height] when
   /// given.
-  static Future<Pixels> decode(
+  static Future<ImagePixels> decode(
     Uint8List bytes, {
     int? width,
     int? height,
@@ -65,12 +69,12 @@ final class Pixels {
     }
   }
 
-  static Future<Pixels> _of(ui.Image image) async {
+  static Future<ImagePixels> _of(ui.Image image) async {
     // Straight alpha: a half-clear pixel keeps its own colour.
     final data = await image.toByteData(
       format: ui.ImageByteFormat.rawStraightRgba,
     );
-    return Pixels(
+    return ImagePixels(
       image.width,
       image.height,
       Uint8List.fromList(data!.buffer.asUint8List()),

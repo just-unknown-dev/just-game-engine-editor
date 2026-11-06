@@ -9,8 +9,8 @@ import 'package:just_asset_store/just_asset_store.dart';
 import 'package:just_editor_core/host.dart';
 import 'package:just_game_engine_editor/src/asset_store/store_checks.dart';
 import 'package:just_game_engine_editor/src/asset_store/store_controller.dart';
-import 'package:just_game_engine_editor/src/asset_store/ui/store_window.dart';
-import 'package:just_game_engine_editor/src/editor_release.dart';
+import 'package:just_game_engine_editor/src/asset_store/ui/store_workspace.dart';
+import 'package:just_game_engine_editor/src/plugin/editor_release.dart';
 
 import 'support/store_fixtures.dart';
 
@@ -132,7 +132,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: StoreWindow(controller: c))),
+      MaterialApp(home: Scaffold(body: StoreWorkspace(controller: c))),
     );
     await tester.pump();
     expect(find.text('BETA'), findsOneWidget);
@@ -170,7 +170,6 @@ void main() {
     };
     expect(stages, {
       'just_input_editor': ItemStage.beta,
-      'just_material_editor': ItemStage.beta,
       'just_platformer_kit': ItemStage.beta,
       'just_sprite_editor': ItemStage.beta,
       'just_third_person_kit': ItemStage.beta,

@@ -55,8 +55,8 @@ final class NormalMapOptions {
 /// the map is clear too.
 abstract final class NormalMaps {
   /// The normal map of [picture].
-  static Pixels of(
-    Pixels picture, {
+  static ImagePixels of(
+    ImagePixels picture, {
     NormalMapOptions options = const NormalMapOptions(),
   }) {
     final w = picture.width, h = picture.height;
@@ -89,7 +89,7 @@ abstract final class NormalMaps {
       return height[y * w + x];
     }
 
-    final out = Pixels(w, h);
+    final out = ImagePixels(w, h);
     final dst = out.rgba;
     final s = options.strength;
     for (var y = 0; y < h; y++) {
@@ -120,7 +120,7 @@ abstract final class NormalMaps {
 
   /// How far in from a clear edge each pixel is, as a height rising from
   /// 0 at the edge to 1 at [width] pixels in (eased, so it rounds).
-  static Float32List _bevel(Pixels picture, int width) {
+  static Float32List _bevel(ImagePixels picture, int width) {
     final w = picture.width, h = picture.height;
     // Distance to the nearest clear pixel, by two passes (a chamfer).
     const far = 1 << 20;
@@ -192,7 +192,7 @@ abstract final class NormalMaps {
         "is a package's: no normal map is made in it",
       );
     }
-    final picture = await Pixels.read('$root/$path');
+    final picture = await ImagePixels.read('$root/$path');
     final map = await compute(_make, (picture, options));
     final dot = path.lastIndexOf('.');
     final stem = dot <= path.lastIndexOf('/') ? path : path.substring(0, dot);
@@ -207,13 +207,17 @@ abstract final class NormalMaps {
   }
 
   // [of], on another isolate.
-  static Pixels _make((Pixels, NormalMapOptions) job) =>
+  static ImagePixels _make((ImagePixels, NormalMapOptions) job) =>
       of(job.$1, options: job.$2);
 
   /// [map], a DirectX-style normal map (green down), as an OpenGL-style
   /// one: its green turned over.
-  static Pixels flipGreen(Pixels map) {
-    final out = Pixels(map.width, map.height, Uint8List.fromList(map.rgba));
+  static ImagePixels flipGreen(ImagePixels map) {
+    final out = ImagePixels(
+      map.width,
+      map.height,
+      Uint8List.fromList(map.rgba),
+    );
     for (var i = 1; i < out.rgba.length; i += 4) {
       out.rgba[i] = 255 - out.rgba[i];
     }

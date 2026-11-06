@@ -50,11 +50,11 @@ void main() {
     ..createSync(recursive: true)
     ..writeAsStringSync(jsonEncode(json));
 
-  Future<void> png(String path, int w, int h, Color colour) async {
+  Future<void> png(String path, int w, int h, Color color) async {
     final r = ui.PictureRecorder();
     Canvas(r).drawRect(
       Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
-      Paint()..color = colour,
+      Paint()..color = color,
     );
     final picture = r.endRecording();
     final image = await picture.toImage(w, h);
@@ -87,12 +87,12 @@ void main() {
             },
           ],
         });
-        final user = (await Material2DUsers.find(dir.path, _material))!;
+        final user = (await Material2DUsers(root: dir.path).find(_material))!;
         expect(user.spritePath, 'assets/rock.png');
         expect(user.label, 'Rock (b)');
 
         File('${dir.path}/assets/scenes/b.scene.json').deleteSync();
-        final shape = (await Material2DUsers.find(dir.path, _material))!;
+        final shape = (await Material2DUsers(root: dir.path).find(_material))!;
         expect(shape.spritePath, isNull);
         expect(
           [for (final c in shape.shape!) c['type']],
@@ -102,11 +102,68 @@ void main() {
         expect(shape.file, 'assets/scenes/a.scene.json');
 
         expect(
-          await Material2DUsers.find(dir.path, 'other.material2d.json'),
+          await Material2DUsers(root: dir.path).find('other.material2d.json'),
           isNull,
         );
       },
     );
+
+    test('found in a scene saved before format 11, by its old names', () async {
+      // As scene format 10 saved them: `Material2D`, `CircleComponent`, a
+      // 2-D light's `colour`.
+      write('assets/scenes/old.scene.json', {
+        'version': 10,
+        'entities': [
+          {
+            'name': 'Glow',
+            'components': [
+              _component('TransformComponent', {}),
+              _component('CircleComponent', {'radius': 6.0}),
+              _component('Light2D', {'colour': 0xFFFFC107}),
+              _component('Material2D', {'material': _material}),
+            ],
+          },
+        ],
+      });
+      final user = (await Material2DUsers(root: dir.path).find(_material))!;
+      expect(user.label, 'Glow (old)');
+      expect(
+        [for (final c in user.shape!) c['type']],
+        ['Circle2DComponent', 'Light2DComponent'],
+        reason: 'drawn by the names the engine reads now',
+      );
+      expect(user.shape![1]['fields'], {'color': 0xFFFFC107});
+    });
+
+    test("kept by the materials module, and let go with it — not by the "
+        'process', () async {
+      write('assets/scenes/a.scene.json', {
+        'entities': [
+          _entity('Rock', [_sprite('assets/rock.png')]),
+        ],
+      });
+      File('${dir.path}/$_material')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('{}');
+      final module = BuiltInMaterialsModule(root: dir.path);
+      expect(
+        (await module.users2D.find(_material))!.spritePath,
+        'assets/rock.png',
+      );
+      expect(module.users2D.keptFiles, 1);
+      expect(
+        module.reads.read(
+          '${dir.path}/$_material',
+          (text) => Material2DFile.parse(text),
+        ),
+        isNotNull,
+      );
+      expect(module.reads.keptFiles, 1);
+      expect(await Material2DUsers(root: dir.path).find(_material), isNotNull);
+      module.dispose();
+      expect(module.users2D.keptFiles, 0);
+      expect(module.reads.keptFiles, 0);
+    });
   });
 
   test('what fits it, by its effects; lit when bumps or a glow', () {

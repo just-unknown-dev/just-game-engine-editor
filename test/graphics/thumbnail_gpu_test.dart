@@ -32,4 +32,25 @@ void main() {
     File('${dir.path}/broken.glb').writeAsStringSync('nope');
     expect(await thumbnails.of('broken.glb'), isNull);
   }, skip: skip);
+
+  test('a model changed on disk is pictured again, and the old picture let '
+      'go', () async {
+    final dir = Directory.systemTemp.createTempSync('jge_thumb');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/hero.glb')..writeAsBytesSync(mannequinGlb());
+    final thumbnails = ModelThumbnails(root: dir.path, size: 64);
+    addTearDown(thumbnails.dispose);
+
+    final first = await thumbnails.of('hero.glb', modified: DateTime(2026));
+    expect(first, isNotNull);
+    file.setLastModifiedSync(DateTime(2026, 2));
+    final second = await thumbnails.of(
+      'hero.glb',
+      modified: file.lastModifiedSync(),
+    );
+    expect(second, isNotNull);
+    expect(first!.debugDisposed, isTrue, reason: 'the old picture let go');
+    expect(second!.debugDisposed, isFalse);
+    expect(thumbnails.keptPictures, 1);
+  }, skip: skip);
 }

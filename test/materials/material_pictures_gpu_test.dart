@@ -15,11 +15,11 @@ import 'package:just_game_engine_editor/src/materials/materials.dart';
 void main() {
   final skip = gpuUnavailableReason();
   late Directory dir;
-  late MaterialPictures pictures;
+  late Material3DPictures pictures;
 
   setUp(() {
     dir = Directory.systemTemp.createTempSync('jge_material_picture');
-    pictures = MaterialPictures(root: dir.path, size: 64);
+    pictures = Material3DPictures(root: dir.path, size: 64);
   });
 
   tearDown(() {
@@ -29,11 +29,11 @@ void main() {
 
   int brightness(List<int> rgba) => rgba[0] + rgba[1] + rgba[2];
 
-  Future<void> writePng(String path, ui.Color colour) async {
+  Future<void> writePng(String path, ui.Color color) async {
     final recorder = ui.PictureRecorder();
     ui.Canvas(
       recorder,
-    ).drawRect(const ui.Rect.fromLTWH(0, 0, 8, 8), ui.Paint()..color = colour);
+    ).drawRect(const ui.Rect.fromLTWH(0, 0, 8, 8), ui.Paint()..color = color);
     final image = await recorder.endRecording().toImage(8, 8);
     final png = await image.toByteData(format: ui.ImageByteFormat.png);
     File('${dir.path}/$path').writeAsBytesSync(png!.buffer.asUint8List());
@@ -83,7 +83,7 @@ void main() {
 
   test('the light changes how it looks; the scene\'s own is used', () async {
     const white = Material3DFile(color: 0xFFFFFFFF, roughness: 0.6);
-    Future<int> centreIn(PreviewLighting l, {RenderScene? scene}) async {
+    Future<int> centreIn(PreviewLighting l, {Render3DScene? scene}) async {
       final image = await pictures.render(white, lighting: l, scene: scene);
       return brightness((await readPixels(image!)).atFraction(0.5, 0.5));
     }
@@ -92,7 +92,7 @@ void main() {
     final night = await centreIn(PreviewLighting.night);
     expect(night, lessThan(studio));
     // A dark scene: no sun, no sky light.
-    final dark = RenderScene();
+    final dark = Render3DScene();
     dark.sun.enabled = false;
     dark.environment
       ..sky = false
@@ -119,6 +119,35 @@ void main() {
     final blue = (await readPixels(again!)).atFraction(0.5, 0.5);
     expect(blue[2], greaterThan(blue[0]));
   }, skip: skip);
+
+  test(
+    'a layered material with an empty slot between layers is pictured',
+    () async {
+      File(
+        '${dir.path}/moss.material.json',
+      ).writeAsStringSync(const Material3DFile(color: 0xFF30A030).encode());
+      // The first slot (red vertex colour) cleared, the second kept: what
+      // Clear on a layer saves.
+      File('${dir.path}/blend.material.json').writeAsStringSync(
+        const Material3DFile(
+          kind: Material3DKind.layered,
+          layers: ['', 'moss.material.json'],
+        ).encode(),
+      );
+      final image = await pictures.of('blend.material.json');
+      expect(image, isNotNull, reason: 'the empty slot draws nothing');
+      expect(
+        await pictures.render(
+          Material3DFile.parse(
+            File('${dir.path}/blend.material.json').readAsStringSync(),
+          ),
+        ),
+        isNotNull,
+        reason: "the window's preview too",
+      );
+    },
+    skip: skip,
+  );
 
   test('a variant is pictured over its parent', () async {
     File('${dir.path}/base.material.json').writeAsStringSync(

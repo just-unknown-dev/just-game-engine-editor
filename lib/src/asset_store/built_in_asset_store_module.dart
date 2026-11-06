@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show internal;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_asset_store/just_asset_store.dart';
@@ -9,7 +10,7 @@ import 'package:just_editor_core/just_editor_core.dart';
 import 'store_checks.dart';
 import 'store_controller.dart';
 import 'store_settings.dart';
-import 'ui/store_window.dart';
+import 'ui/store_workspace.dart';
 
 /// The Asset Store: how a project gets art, sound, editor tools and kits.
 ///
@@ -34,10 +35,28 @@ import 'ui/store_window.dart';
 /// can't take the store down with it, and the store can always repair it.
 class BuiltInAssetStoreModule extends EditorModule {
   /// The store for the project at [root] (the working directory when null).
-  BuiltInAssetStoreModule({this.root, this.sources, this.cacheDir, this.pub});
+  BuiltInAssetStoreModule({this.root})
+    : _sources = null,
+      _cacheDir = null,
+      _pub = null;
 
-  /// The module for [scope]: how the editor makes its built-ins.
-  static EditorModule make(EditorScope scope) => BuiltInAssetStoreModule();
+  /// The store for tests: catalogs to read instead of the settings'
+  /// ([sources]), a download cache of its own ([cacheDir]) and a stand-in
+  /// for pub get ([pub]). Native only: the web module has no store.
+  @visibleForTesting
+  BuiltInAssetStoreModule.forTest({
+    this.root,
+    List<SourceConfig>? sources,
+    String? cacheDir,
+    PubRunner? pub,
+  }) : _sources = sources,
+       _cacheDir = cacheDir,
+       _pub = pub;
+
+  /// The module for [scope]: how the editor makes its built-ins. Its
+  /// project folder is the scope's ([EditorScope.projectRoot]).
+  static EditorModule make(EditorScope scope) =>
+      BuiltInAssetStoreModule(root: scope.projectRoot);
 
   /// Its id.
   static const String moduleId = 'asset_store';
@@ -49,25 +68,26 @@ class BuiltInAssetStoreModule extends EditorModule {
   final String? root;
 
   /// Catalogs to read instead of the settings' (tests).
-  final List<SourceConfig>? sources;
+  final List<SourceConfig>? _sources;
 
   /// The download cache; the per-user one when null.
-  final String? cacheDir;
+  final String? _cacheDir;
 
   /// Runs pub get; the project's Flutter SDK when null (tests use a fake).
-  final PubRunner? pub;
+  final PubRunner? _pub;
 
   StoreController? _controller;
   StoreChecks? _checks;
 
   /// The store's state for [scope]: one per editor session.
+  @internal
   StoreController controllerFor(EditorScope scope) =>
       _controller ??= StoreController(
         scope: scope,
         root: root,
-        sources: sources,
-        cacheDir: cacheDir,
-        pub: pub,
+        sources: _sources,
+        cacheDir: _cacheDir,
+        pub: _pub,
       );
 
   @override
@@ -106,7 +126,7 @@ class BuiltInAssetStoreModule extends EditorModule {
       icon: Icons.storefront_rounded,
       build: (context, workspace) {
         final path = workspace.path;
-        return StoreWindow(
+        return StoreWorkspace(
           controller: controllerFor(workspace.scope),
           workspace: workspace,
           focusItem: path != null && path.startsWith('store:')
@@ -140,7 +160,7 @@ class BuiltInAssetStoreModule extends EditorModule {
     DesignerCommand(
       id: 'store.open',
       label: 'Open the Asset Store',
-      scope: CommandScope.always,
+      availability: CommandAvailability.always,
       run: (context) => context.scope.openWorkspace(workspaceId),
     ),
   ];

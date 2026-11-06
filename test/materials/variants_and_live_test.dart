@@ -20,14 +20,7 @@ void main() {
 
   setUp(() {
     dir = Directory.systemTemp.createTempSync('jge_variants');
-    addTearDown(() {
-      try {
-        dir.deleteSync(recursive: true);
-      } on FileSystemException {
-        // A read a widget test's frozen clock never finished: left for
-        // the system's clean-up.
-      }
-    });
+    addTearDown(() => deleteWhenFree(dir));
   });
 
   void write(String path, String text) => File('${dir.path}/$path')
@@ -41,7 +34,8 @@ void main() {
   // Waits until the 2-D material and its parent are read, so the reads a
   // widget test's frozen clock started (the window asks its stage every
   // frame) are over: on Windows a file still open for reading can't be
-  // saved over (a save is written beside it and moved over it).
+  // saved over (a save is written beside it and moved over it), nor its
+  // folder removed when the test ends.
   Future<void> settle(WidgetTester tester, Material2DWorkspaceState state) =>
       pumpUntil(
         tester,
@@ -58,7 +52,7 @@ void main() {
   group('a 3-D variant', () {
     late List<String> reloaded;
 
-    Future<MaterialWorkspaceState> open(WidgetTester tester) async {
+    Future<Material3DWorkspaceState> open(WidgetTester tester) async {
       bigView(tester);
       final scope = EditorScope(
         world: World()..initialize(),
@@ -66,14 +60,14 @@ void main() {
       );
       addTearDown(scope.dispose);
       reloaded = [];
-      final key = GlobalKey<MaterialWorkspaceState>();
+      final key = GlobalKey<Material3DWorkspaceState>();
       await tester.pumpWidget(
         host(
-          MaterialWorkspace(
+          Material3DWorkspace(
             key: key,
             path: 'mossy.material.json',
             root: dir.path,
-            pictures: MaterialPictures(root: dir.path),
+            pictures: Material3DPictures(root: dir.path),
             workspace: WorkspaceContext(
               scope: scope,
               onClose: () {},
@@ -139,6 +133,40 @@ void main() {
       expect(state.dirty, isTrue, reason: 'the variant is saved by hand');
     });
 
+    testWidgets('keys a material does not have are kept, in the file and its '
+        'parent', (tester) async {
+      Map<String, dynamic> json(String path) =>
+          jsonDecode(read(path)) as Map<String, dynamic>;
+      write(
+        'rock.material.json',
+        jsonEncode({
+          ...json('rock.material.json'),
+          'notes': 'used by the castle set',
+        }),
+      );
+      write(
+        'mossy.material.json',
+        jsonEncode({
+          ...json('mossy.material.json'),
+          'tool': {'name': 'painter', 'version': 3},
+        }),
+      );
+      final state = await open(tester);
+      state.change((m) => m.copyWith(roughness: 0.5));
+      expect(await tester.runAsync(state.save), isTrue);
+      expect(json('mossy.material.json')['tool'], {
+        'name': 'painter',
+        'version': 3,
+      });
+      expect(json('mossy.material.json')['roughness'], 0.5);
+      expect(
+        await tester.runAsync(() => state.applyToParent(confirm: false)),
+        isTrue,
+      );
+      expect(json('rock.material.json')['notes'], 'used by the castle set');
+      expect(json('rock.material.json')['roughness'], 0.5);
+    });
+
     testWidgets('into a parent that is itself a variant', (tester) async {
       write('stone.material.json', const Material3DFile(roughness: 1).encode());
       write(
@@ -187,6 +215,7 @@ void main() {
       final state = key.currentState!;
       await tester.runAsync(state.load);
       await tester.pump();
+      await settle(tester, state);
       return state;
     }
 
@@ -238,7 +267,6 @@ void main() {
 
     testWidgets('its own written into the parent', (tester) async {
       final state = await open(tester);
-      await settle(tester, state);
       await tester.runAsync(() => state.applyToParent(confirm: false));
       final base = Material2DFile.parse(read('base.material2d.json'));
       expect(base.isOn('tint'), isFalse);
@@ -298,14 +326,14 @@ void main() {
     final game = engine.service<Graphics3D>().sceneRenderer.materials;
     final scope = EditorScope(engine: engine, modules: const []);
     addTearDown(scope.dispose);
-    final key = GlobalKey<MaterialWorkspaceState>();
+    final key = GlobalKey<Material3DWorkspaceState>();
     await tester.pumpWidget(
       host(
-        MaterialWorkspace(
+        Material3DWorkspace(
           key: key,
           path: 'a.material.json',
           root: dir.path,
-          pictures: MaterialPictures(root: dir.path),
+          pictures: Material3DPictures(root: dir.path),
           workspace: WorkspaceContext(
             scope: scope,
             onClose: () {},

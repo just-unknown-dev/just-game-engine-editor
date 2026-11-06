@@ -9,8 +9,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_asset_store/just_asset_store.dart';
 import 'package:just_editor_core/just_editor_core.dart';
 import 'package:just_game_engine_editor/src/asset_store/store_controller.dart';
-import 'package:just_game_engine_editor/src/asset_store/ui/store_window.dart';
+import 'package:just_game_engine_editor/src/asset_store/ui/store_workspace.dart';
 
+import '../support/real_io.dart';
 import 'support/store_fixtures.dart';
 
 void main() {
@@ -29,24 +30,28 @@ void main() {
     return c;
   }
 
-  /// Lets real file work finish between frames.
-  Future<void> settle(WidgetTester tester) async {
-    for (var i = 0; i < 20; i++) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 10)),
-      );
-      await tester.pump();
-    }
-  }
+  /// Lets real file work go on, frame by frame, until [done] holds —
+  /// what the next expectation needs — rather than for a fixed time.
+  Future<void> settle(
+    WidgetTester tester,
+    bool Function() done, {
+    required String what,
+  }) => pumpUntil(tester, done, what: what);
+
+  bool shows(Finder finder) => finder.evaluate().isNotEmpty;
 
   Future<void> show(WidgetTester tester, StoreController c) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: StoreWindow(controller: c))),
+      MaterialApp(home: Scaffold(body: StoreWorkspace(controller: c))),
     );
-    await settle(tester);
+    await settle(
+      tester,
+      () => shows(find.byType(StoreWorkspace)),
+      what: 'the page',
+    );
   }
 
   /// A checkout of your own at plugins/just_mine, with a picture, which no
@@ -204,7 +209,11 @@ void main() {
     await tester.runAsync(() async => c = await controller([standardCatalog()]));
     await show(tester, c);
     await tester.tap(find.text('Knight'));
-    await settle(tester);
+    await settle(
+      tester,
+      () => shows(find.widgetWithText(EditorButton, 'Install')),
+      what: 'the details',
+    );
     expect(find.widgetWithText(EditorButton, 'Install'), findsOneWidget);
     await tester.tap(find.byType(EditorDropdown<Version>));
     await tester.pumpAndSettle();
@@ -228,7 +237,11 @@ void main() {
     // Local says it is installed already.
     expect(find.text('Installed'), findsOneWidget); // the sidebar's
     await tester.tap(find.text('My Tool'));
-    await settle(tester);
+    await settle(
+      tester,
+      () => shows(find.textContaining('Your own checkout')),
+      what: 'the details',
+    );
     expect(find.textContaining('Your own checkout'), findsOneWidget);
     expect(find.byType(EditorButton), findsNothing);
   });

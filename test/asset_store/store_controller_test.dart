@@ -87,7 +87,7 @@ void main() {
       expect(c.installed('just_art_knight')!.version, '1.1.0');
       expect(c.updates, isEmpty);
 
-      await c.apply(c.planUninstall('just_art_knight')!);
+      await c.apply((await c.planUninstall('just_art_knight'))!);
       expect(c.installed('just_art_knight'), isNull);
       expect(
         Directory(
@@ -109,6 +109,93 @@ void main() {
       ).readAsStringSync(),
       contains('s0.HandyModule()'),
     );
+  });
+
+  test('registries that differ only in line endings need no restart', () {
+    final modules = File('${project.path}/${StoreProject.modulesFile}');
+    final extensions = File('${project.path}/${StoreProject.extensionsFile}');
+    String crlf(String text) => text.replaceAll('\n', '\r\n');
+    // Checked out by git with core.autocrlf: CRLF on disk.
+    modules
+      ..createSync(recursive: true)
+      ..writeAsStringSync(crlf(StoreCodegen.modules(const [])));
+    final started = StoreController(
+      scope: storeScope(),
+      root: project.path,
+      sources: [standardCatalog()],
+      pub: pub,
+    );
+    addTearDown(started.dispose);
+    // Written again with LF, the same registry.
+    modules.writeAsStringSync(StoreCodegen.modules(const []));
+    // Missing when the editor started, then checked out with CRLF.
+    extensions
+      ..createSync(recursive: true)
+      ..writeAsStringSync(crlf(StoreCodegen.extensions(const [])));
+    expect(started.restartPending, isFalse);
+    // A real change still counts.
+    modules.writeAsStringSync('// changed\n');
+    expect(started.restartPending, isTrue);
+  });
+
+  group('the preview names files changed by hand', () {
+    Future<File> installEdited() async {
+      await c.apply(
+        c.planInstall('just_art_knight', version: Version.parse('1.0.0'))!,
+      );
+      final sprite = File(
+        '${project.path}/packages/characters/just_art_knight/sprites/just_art_knight.png',
+      );
+      sprite.writeAsStringSync('painted over');
+      return sprite;
+    }
+
+    test('an update warns of them, and says where they went', () async {
+      await installEdited();
+      final plan = c.planUpdate('just_art_knight')!;
+      final reviewed = (await c.review(plan))!;
+      expect(reviewed.edited, isTrue);
+      final warning = reviewed.plan.issues.single;
+      expect(warning.level, IssueLevel.warning);
+      expect(warning.message, contains('sprites/just_art_knight.png'));
+      expect(warning.message, contains('The update replaces the folder'));
+      final result = await c.apply(reviewed.plan);
+      final trash = result.trashFolder!;
+      expect(
+        File(
+          '${project.path}/$trash/packages/characters/just_art_knight/sprites/just_art_knight.png',
+        ).readAsStringSync(),
+        'painted over',
+      );
+    });
+
+    test('an uninstall warns of them, its references found off this '
+        'isolate', () async {
+      await installEdited();
+      final reviewed = (await c.review(c.planUninstall('just_art_knight')))!;
+      expect(reviewed.edited, isTrue);
+      expect(
+        reviewed.plan.issues.single.message,
+        contains('Uninstalling removes the folder'),
+      );
+      expect(reviewed.plan.changes.single.kind, ChangeKind.remove);
+    });
+
+    test('an untouched folder adds nothing; the window is busy meanwhile, '
+        'and a second review waits its turn', () async {
+      await c.apply(
+        c.planInstall('just_art_knight', version: Version.parse('1.0.0'))!,
+      );
+      final plan = c.planUpdate('just_art_knight')!;
+      final first = c.review(plan);
+      expect(c.busy, isTrue);
+      expect(await c.review(plan), isNull);
+      final reviewed = (await first)!;
+      expect(c.busy, isFalse);
+      expect(reviewed.edited, isFalse);
+      expect(reviewed.plan.issues, plan.issues);
+      expect(await c.review(null), isNull);
+    });
   });
 
   test(
@@ -206,7 +293,10 @@ void main() {
   test(
     'the module contributes its window, button, command, key and actions',
     () {
-      final module = BuiltInAssetStoreModule(root: project.path, pub: pub);
+      final module = BuiltInAssetStoreModule.forTest(
+        root: project.path,
+        pub: pub,
+      );
       expect(module.workspaces.single.id, BuiltInAssetStoreModule.workspaceId);
       expect(module.toolbarButtons.single.id, 'asset_store.open');
       expect(module.gettingStartedTips.single.id, 'asset_store.tip');
@@ -239,7 +329,10 @@ void main() {
   );
 
   test('the shop button stands under the transform tools, always', () {
-    final module = BuiltInAssetStoreModule(root: project.path, pub: pub);
+    final module = BuiltInAssetStoreModule.forTest(
+      root: project.path,
+      pub: pub,
+    );
     final button = module.toolbarButtons.single;
     expect(button.slot, ToolbarSlot.toolColumn);
     expect(button.tooltip, contains('Ctrl+Shift+G'));

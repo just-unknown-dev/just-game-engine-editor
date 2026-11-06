@@ -12,20 +12,20 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'map_pictures.dart';
 import 'material_checks.dart';
 import 'material_overrides_editor.dart';
-import 'model_materials.dart';
+import 'materials_3d/model_materials.dart';
 import 'normal_maps.dart';
-import 'texture_sets.dart';
-import 'material_2d_pictures.dart';
-import 'material_2d_users.dart';
-import 'material_2d_workspace.dart';
-import 'material_pictures.dart';
-import 'material_workspace.dart';
+import 'materials_3d/texture_sets.dart';
+import 'materials_2d/material_2d_pictures.dart';
+import 'materials_2d/material_2d_users.dart';
+import 'materials_2d/material_2d_workspace.dart';
+import 'materials_3d/material_3d_pictures.dart';
+import 'materials_3d/material_3d_workspace.dart';
 
 /// Materials in the editor, 3-D and 2-D.
 ///
 /// - **3-D materials** (`.material.json`) in the Assets dock, pictured on
-///   a ball ([MaterialPictures]); opened, a material shows in a workspace of
-///   its look with a live preview ([MaterialWorkspace]); dropped on a shape
+///   a ball ([Material3DPictures]); opened, a material shows in a workspace of
+///   its look with a live preview ([Material3DWorkspace]); dropped on a shape
 ///   or a model in the viewport, it draws it (one undo step).
 /// - **2-D materials** (`.material2d.json`), for sprites, shapes and tile
 ///   layers or for the whole frame, pictured as the game draws them
@@ -38,16 +38,18 @@ import 'material_workspace.dart';
 /// editor tells it when a file changes.
 ///
 /// One of the editor's own modules, so materials can always be made and
-/// edited; an add-on (`just_material_editor`) adds to its windows through
+/// edited; another module adds to its windows through
 /// `EditorModule.workspaceContributions` (their ids: [WorkspaceIds]).
 class BuiltInMaterialsModule extends EditorModule {
   /// The module for the project at [root] (the working directory when
   /// null).
-  BuiltInMaterialsModule({this.root, MaterialPictures? pictures})
+  BuiltInMaterialsModule({this.root, Material3DPictures? pictures})
     : _pictures = pictures;
 
-  /// The module for [scope]: how the editor makes its built-ins.
-  static EditorModule make(EditorScope scope) => BuiltInMaterialsModule();
+  /// The module for [scope]: how the editor makes its built-ins. Its
+  /// project folder is the scope's ([EditorScope.projectRoot]).
+  static EditorModule make(EditorScope scope) =>
+      BuiltInMaterialsModule(root: scope.projectRoot);
 
   /// Its id.
   static const String moduleId = 'materials';
@@ -55,14 +57,14 @@ class BuiltInMaterialsModule extends EditorModule {
   /// The project folder.
   final String? root;
 
-  MaterialPictures? _pictures;
+  Material3DPictures? _pictures;
   Material2DPictures? _pictures2D;
 
   String get _root => (root ?? Directory.current.path).replaceAll(r'\', '/');
 
   /// The pictures of 3-D materials the Assets dock and the workspace show.
   @internal
-  MaterialPictures get pictures => _pictures ??= MaterialPictures(
+  Material3DPictures get pictures => _pictures ??= Material3DPictures(
     root: _root,
     cacheFolder: '$_root/.dart_tool/just_game_engine_editor/material_pictures',
   );
@@ -70,7 +72,17 @@ class BuiltInMaterialsModule extends EditorModule {
   /// The pictures of 2-D materials the Assets dock shows.
   @internal
   Material2DPictures get pictures2D =>
-      _pictures2D ??= Material2DPictures(root: _root);
+      _pictures2D ??= Material2DPictures(root: _root, users: users2D);
+
+  /// What in the project draws with each 2-D material: what the pictures
+  /// and the 2-D window's Auto are shown on. The module's, let go with it.
+  @internal
+  late final Material2DUsers users2D = Material2DUsers(root: _root);
+
+  /// The material files the inspector's editors read, kept until each
+  /// changes. The module's, let go with it.
+  @internal
+  late final MaterialFileReads reads = MaterialFileReads();
 
   /// The pictures of the images materials' maps name.
   @internal
@@ -79,7 +91,7 @@ class BuiltInMaterialsModule extends EditorModule {
   final StreamController<String> _changes = StreamController.broadcast();
 
   /// The 3-D material workspace's id.
-  static const String workspaceId = WorkspaceIds.material;
+  static const String workspaceId = WorkspaceIds.material3D;
 
   /// The 2-D material workspace's id.
   static const String workspace2DId = WorkspaceIds.material2D;
@@ -160,7 +172,7 @@ class BuiltInMaterialsModule extends EditorModule {
       label: 'Material',
       icon: Icons.texture,
       fileExtensions: const ['material.json'],
-      build: (context, workspace) => MaterialWorkspace(
+      build: (context, workspace) => Material3DWorkspace(
         path: workspace.path!,
         root: _root,
         pictures: pictures,
@@ -178,6 +190,7 @@ class BuiltInMaterialsModule extends EditorModule {
         path: workspace.path!,
         root: _root,
         maps: maps,
+        users: users2D,
         changes: _changes.stream,
         workspace: workspace,
       ),
@@ -225,7 +238,7 @@ class BuiltInMaterialsModule extends EditorModule {
       appliesTo: (path, {required isDirectory}) =>
           !isDirectory &&
           _ownFile(path) &&
-          (Material3DFile.isMaterialPath(path) ||
+          (Material3DFile.isMaterial3DPath(path) ||
               Material2DFile.isMaterial2DPath(path)),
       run: (scope, path) => _made(scope, newVariant(path)),
     ),
@@ -405,7 +418,7 @@ class BuiltInMaterialsModule extends EditorModule {
 
   @override
   Map<String, FieldEditorBuilder> get fieldEditors =>
-      MaterialOverrideEditors.forRoot(_root);
+      MaterialOverrideEditors.forRoot(_root, reads: reads);
 
   /// The kind of the 2-D material at [path], its parents followed; null
   /// when it can't be read.
@@ -585,7 +598,8 @@ class BuiltInMaterialsModule extends EditorModule {
     _pictures2D?.forget(path);
     maps.forget(path);
     // A scene or prefab: what is drawn with a 2-D material, read again.
-    if (path.endsWith('.json')) Material2DUsers.forget(_root, path);
+    if (path.endsWith('.json')) users2D.forget(path);
+    reads.forget(PackageAssetPaths.of(_root).absolute(path));
     _changes.add(path);
   }
 
@@ -597,6 +611,8 @@ class BuiltInMaterialsModule extends EditorModule {
     _pictures2D?.dispose();
     _pictures2D = null;
     maps.dispose();
+    users2D.clear();
+    reads.clear();
     _changes.close();
   }
 }

@@ -9,6 +9,7 @@ import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_editor_core/just_editor_core.dart';
 
 import '../../support/memory_settings_store.dart';
+import '../../support/real_io.dart';
 
 /// A pub runner that succeeds and records its calls.
 class FakePub implements PubRunner {
@@ -21,12 +22,11 @@ class FakePub implements PubRunner {
   }
 }
 
-/// A fresh folder, deleted after the test.
+/// A fresh folder, deleted after the test — once the system lets go of
+/// what is in it.
 Directory tempDir(String prefix) {
   final dir = Directory.systemTemp.createTempSync(prefix);
-  addTearDown(() {
-    if (dir.existsSync()) dir.deleteSync(recursive: true);
-  });
+  addTearDown(() => deleteWhenFree(dir));
   return dir;
 }
 

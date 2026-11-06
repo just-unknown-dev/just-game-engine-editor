@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:just_asset_store/just_asset_store.dart';
 import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart';
+import 'package:flutter/foundation.dart' show internal;
 
 import '../store_controller.dart';
 import '../store_settings.dart';
 
 /// Where the store reads from, which Flutter SDK it resolves with, its
 /// download cache, and restoring missing packages.
+@internal
 class SourcesPage extends StatefulWidget {
   const SourcesPage({super.key, required this.controller});
 
@@ -276,16 +278,23 @@ class _SourcesPageState extends State<SourcesPage> {
     await c.load(refresh: true);
   }
 
+  /// Restores what is missing, and says how it went — a failure too (no
+  /// network, a lock a running `just store` holds), rather than throwing
+  /// out of the button with nothing shown.
   Future<void> _restore() async {
-    final result = await c.restore();
-    if (!mounted) return;
-    setState(
-      () => _restoreMessage = result.problems.isNotEmpty
+    String message;
+    try {
+      final result = await c.restore();
+      message = result.problems.isNotEmpty
           ? result.problems.join('\n')
           : result.restored.isEmpty
           ? 'Nothing is missing.'
-          : 'Restored ${result.restored.join(', ')}.',
-    );
+          : 'Restored ${result.restored.join(', ')}.';
+    } on Object catch (error) {
+      message = 'Could not restore: $error';
+    }
+    if (!mounted) return;
+    setState(() => _restoreMessage = message);
   }
 }
 

@@ -31,7 +31,7 @@ void main() {
       ..writeAsStringSync(file.encode());
   }
 
-  Future<MaterialWorkspaceState> open(
+  Future<Material3DWorkspaceState> open(
     WidgetTester tester,
     String path, {
     Stream<String>? changes,
@@ -42,15 +42,15 @@ void main() {
     addTearDown(tester.view.reset);
     final scope = EditorScope(world: World()..initialize(), modules: const []);
     addTearDown(scope.dispose);
-    final key = GlobalKey<MaterialWorkspaceState>();
+    final key = GlobalKey<Material3DWorkspaceState>();
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: MaterialWorkspace(
+          body: Material3DWorkspace(
             key: key,
             path: path,
             root: dir.path,
-            pictures: MaterialPictures(root: dir.path),
+            pictures: Material3DPictures(root: dir.path),
             maps: maps,
             changes: changes,
             workspace: WorkspaceContext(
@@ -96,8 +96,6 @@ void main() {
   testWidgets('a card resets what it holds as one undo step, and folds', (
     tester,
   ) async {
-    MaterialCardFolds.clear();
-    addTearDown(MaterialCardFolds.clear);
     write(
       'a.material.json',
       const Material3DFile(color: 0xFF336699, metallic: 0.8, tilingX: 2),
@@ -120,7 +118,10 @@ void main() {
     await tester.pump();
     expect(find.text('Metallic'), findsNothing);
     expect(find.text('Surface'), findsOneWidget, reason: 'its header stays');
-    expect(MaterialCardFolds.isFolded('3d.surface'), isTrue);
+    expect(
+      MaterialCardFolds.of(state.widget.workspace.scope).isFolded('3d.surface'),
+      isTrue,
+    );
   });
 
   testWidgets("a variant's card takes its own values back to the parent's", (
@@ -200,10 +201,10 @@ void main() {
   testWidgets('a preset is one undo step', (tester) async {
     write('a.material.json', const Material3DFile(color: 0xFF336699));
     final state = await open(tester, 'a.material.json');
-    state.change(MaterialPreset.byId('gold')!.apply);
+    state.change(Material3DPreset.byId('gold')!.apply);
     expect(state.material.metallic, 1);
     expect(state.material.color, 0xFFFFC356);
-    state.change(MaterialPreset.byId('glass')!.apply);
+    state.change(Material3DPreset.byId('glass')!.apply);
     expect(state.material.alpha, Material3DAlpha.blend);
     expect(state.material.validate(), isEmpty);
     state.undo();
@@ -212,7 +213,7 @@ void main() {
     expect(state.material.color, 0xFF336699);
     expect(state.dirty, isFalse);
     // Every preset makes a material that saves.
-    for (final p in MaterialPreset.all) {
+    for (final p in Material3DPreset.all) {
       expect(p.apply(const Material3DFile()).validate(), isEmpty, reason: p.id);
     }
   });
@@ -275,7 +276,7 @@ void main() {
       );
       expect(saved.parent, 'rock.material.json');
       expect(saved.overrides, {'color', 'metallic'});
-      state.change(MaterialPreset.byId('rubber')!.apply);
+      state.change(Material3DPreset.byId('rubber')!.apply);
       expect(
         state.material.overrides,
         containsAll(['color', 'metallic', 'roughness']),
@@ -399,7 +400,7 @@ void main() {
                 _FakeContext(),
                 WorkspaceContext(scope: scope, onClose: () {}, path: 'a.json'),
               )
-              as MaterialWorkspace;
+              as Material3DWorkspace;
       final sub = built.changes!.listen(seen.add);
       addTearDown(sub.cancel);
       module.onAssetChanged('assets/textures/brick.png');

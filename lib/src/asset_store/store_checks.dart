@@ -1,6 +1,7 @@
 import 'package:just_asset_store/just_asset_store.dart';
 import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart';
+import 'package:flutter/foundation.dart' show internal;
 
 import 'store_controller.dart';
 
@@ -9,6 +10,7 @@ import 'store_controller.dart';
 /// The dock asks every second or so, on the UI thread, so the answer is
 /// worked out at most once every few seconds and kept: these checks read
 /// files, and the dock must stay cheap.
+@internal
 class StoreChecks {
   StoreChecks(this.controller, {this.every = const Duration(seconds: 5)});
 
@@ -120,7 +122,8 @@ class StoreChecks {
           out.add(
             SceneProblem(
               severity: ProblemSeverity.error,
-              message: '${e.key} was taken down by the store: '
+              message:
+                  '${e.key} was taken down by the store: '
                   '${removal.reason}',
               hint: 'Uninstall it in the Asset Store.',
             ),
@@ -132,7 +135,8 @@ class StoreChecks {
           final by = item.replacedBy;
           out.add(
             SceneProblem(
-              message: '${item.name} is deprecated: it is no longer '
+              message:
+                  '${item.name} is deprecated: it is no longer '
                   'developed.',
               hint: by == null
                   ? 'Look for another in the Asset Store.'

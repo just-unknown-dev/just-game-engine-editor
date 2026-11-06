@@ -17,6 +17,7 @@ import 'package:just_graphics_engine/just_graphics_engine.dart'
     show gltfToEngine;
 
 import '../support/real_io.dart';
+import 'package:just_game_engine_editor/src/plugin/just_game_editor_plugin.dart';
 
 EditorScope _scope(List<EditorModule> modules) {
   final world = World()..initialize();
@@ -33,19 +34,19 @@ void main() {
     test('the editor brings it to a 3-D game, not to a 2-D one', () {
       final flat = Engine();
       final deep = Engine(config: EngineConfig(services: [Graphics3D()]));
-      expect(BuiltInGraphicsModule.isFor(flat), isFalse);
-      expect(BuiltInGraphicsModule.isFor(deep), isTrue);
+      expect(BuiltInGraphics3DModule.isFor(flat), isFalse);
+      expect(BuiltInGraphics3DModule.isFor(deep), isTrue);
       expect(
         JustGameEditorPlugin.builtInsFor(flat),
-        isNot(contains(BuiltInGraphicsModule.make)),
+        isNot(contains(BuiltInGraphics3DModule.make)),
       );
       expect(
         JustGameEditorPlugin.builtInsFor(deep),
-        contains(BuiltInGraphicsModule.make),
+        contains(BuiltInGraphics3DModule.make),
       );
       expect(
         JustGameEditorPlugin.builtInsFor(flat),
-        containsAll([BuiltInEditorModule.new, BuiltInMaterialsModule.make]),
+        containsAll([BuiltInEditorModule.make, BuiltInMaterialsModule.make]),
         reason: "the editor's tools and materials, whatever the game",
       );
     });
@@ -65,8 +66,8 @@ void main() {
           addTearDown(plugin.dispose);
           final scope = plugin.scope;
           expect(
-            scope.modules.byId(BuiltInGraphicsModule.moduleId),
-            threeD ? isA<BuiltInGraphicsModule>() : isNull,
+            scope.modules.byId(BuiltInGraphics3DModule.moduleId),
+            threeD ? isA<BuiltInGraphics3DModule>() : isNull,
           );
           expect(
             scope.assetKinds.of('assets/models/crate.glb').id,
@@ -81,8 +82,8 @@ void main() {
           expect(
             scope.workspaces.map((w) => w.id),
             threeD
-                ? contains(BuiltInGraphicsModule.workspaceId)
-                : isNot(contains(BuiltInGraphicsModule.workspaceId)),
+                ? contains(BuiltInGraphics3DModule.workspaceId)
+                : isNot(contains(BuiltInGraphics3DModule.workspaceId)),
           );
         },
         timeout: bootTimeout,
@@ -94,7 +95,7 @@ void main() {
     test('a model drops in a 3-D scene; a 2-D one turns it away, saying '
         'where it goes', () {
       final scope = _scope([
-        BuiltInGraphicsModule(root: Directory.systemTemp.path),
+        BuiltInGraphics3DModule(root: Directory.systemTemp.path),
       ]);
       const model = 'assets/models/crate.glb';
       bool drops(String path, SceneMode mode) =>
@@ -157,10 +158,10 @@ void main() {
 
     test('placing a model with its lights and sockets is offered while a '
         '3-D scene is open', () {
-      final module = BuiltInGraphicsModule(root: Directory.systemTemp.path);
+      final module = BuiltInGraphics3DModule(root: Directory.systemTemp.path);
       final scope = _scope([module]);
       final place = module.assetActions.singleWhere(
-        (a) => a.id == BuiltInGraphicsModule.placeId,
+        (a) => a.id == BuiltInGraphics3DModule.placeId,
       );
       bool offered() =>
           place.appliesTo('assets/models/lamp.glb', isDirectory: false);
@@ -175,7 +176,7 @@ void main() {
 
     test("a package's models are not cooked: its files are not the "
         "project's", () {
-      final module = BuiltInGraphicsModule(root: Directory.systemTemp.path);
+      final module = BuiltInGraphics3DModule(root: Directory.systemTemp.path);
       _scope([module]);
       bool offers(String id, String path, {bool isDirectory = false}) => module
           .assetActions
@@ -196,7 +197,7 @@ void main() {
 
   group('registration', () {
     test('models are a kind of file, lights are marked, aids are drawn', () {
-      final module = BuiltInGraphicsModule(root: Directory.systemTemp.path);
+      final module = BuiltInGraphics3DModule(root: Directory.systemTemp.path);
       final scope = _scope([module]);
       expect(scope.assetKinds.of('assets/models/Crate.glb').id, 'model');
       expect(scope.assetKinds.of('assets/models/tree.gltf').id, 'model');
@@ -220,11 +221,11 @@ void main() {
     test(
       "a model opens in its workspace; material files are the editor's own",
       () {
-        final module = BuiltInGraphicsModule(root: Directory.systemTemp.path);
+        final module = BuiltInGraphics3DModule(root: Directory.systemTemp.path);
         _scope([module]);
         expect(module.assetKinds.map((k) => k.id), ['model', 'cookedModel']);
         final model = module.workspaces.single;
-        expect(model.id, BuiltInGraphicsModule.workspaceId);
+        expect(model.id, BuiltInGraphics3DModule.workspaceId);
         expect(
           model.matchOf('assets/models/crate.glb'),
           greaterThan(0),
@@ -240,17 +241,18 @@ void main() {
 
     test('a model dropped is an entity showing it where it landed', () {
       final scope = _scope([
-        BuiltInGraphicsModule(root: Directory.systemTemp.path),
+        BuiltInGraphics3DModule(root: Directory.systemTemp.path),
       ]);
       Entity? made;
       final drop = AssetDrop(
         scope: scope,
         path: 'assets/models/old_crate.glb',
         at: Vector3(2, 0, -3),
+        mode: SceneMode.threeD,
         place: (components, name) => made = scope.world
             .createEntityWithComponents(components, name: name),
       );
-      BuiltInGraphicsModule.dropModel(drop);
+      BuiltInGraphics3DModule.dropModel(drop);
       expect(made!.name, 'old_crate');
       expect(
         made!.getComponent<ModelComponent>()!.model,
@@ -258,6 +260,32 @@ void main() {
       );
       final p = made!.getComponent<TransformComponent>()!.position;
       expect([p.x, p.y, p.z], [2, 0, -3]);
+    });
+
+    test('disposed with the editor, it lets go of its pictures', () async {
+      final module = BuiltInGraphics3DModule(root: Directory.systemTemp.path);
+      final pictures = module.thumbnails;
+      module.dispose();
+      expect(
+        () => pictures.revision.addListener(() {}),
+        throwsFlutterError,
+        reason: 'the pictures are disposed with the module',
+      );
+      expect(await pictures.of('assets/models/crate.glb'), isNull);
+      module.dispose();
+    });
+
+    test('a model pictured again once it changed keeps one picture', () {
+      final pictures = ModelThumbnails(root: Directory.systemTemp.path);
+      addTearDown(pictures.dispose);
+      const path = 'assets/models/crate.glb';
+      pictures.peek(path, modified: DateTime(2026, 1, 1));
+      pictures.peek(path, modified: DateTime(2026, 1, 2));
+      expect(pictures.keptPictures, 1, reason: 'the older one let go');
+      pictures.peek(path, modified: DateTime(2026, 1, 1));
+      expect(pictures.keptPictures, 1, reason: 'an older ask gets the newer');
+      pictures.forget(path);
+      expect(pictures.keptPictures, 0);
     });
   });
 
@@ -279,8 +307,8 @@ void main() {
         (path) => path == 'mannequin.glb' ? mannequin : null,
       );
       // Chest height: up is -Y in the engine.
-      final through = Ray3()..setValues(0, -1.2, -5, 0, 0, 1);
-      final beside = Ray3()..setValues(1.5, -1.2, -5, 0, 0, 1);
+      final through = Ray3D()..setValues(0, -1.2, -5, 0, 0, 1);
+      final beside = Ray3D()..setValues(1.5, -1.2, -5, 0, 0, 1);
       expect(
         test.distanceTo(entity, through),
         allOf(greaterThan(4.5), lessThan(5)),
@@ -302,6 +330,26 @@ void main() {
       expect(test.distanceTo(other, through), isNull);
     });
 
+    test('a model loaded again replaces what picking kept of it', () async {
+      final again = await loadModelData(mannequinGlb(), name: 'mannequin');
+      final world = World()..initialize();
+      addTearDown(world.dispose);
+      final entity = world.createEntityWithComponents([
+        TransformComponent(),
+        ModelComponent(model: 'mannequin.glb'),
+      ]);
+      var data = mannequin;
+      final test = ModelRayTest((path) => data);
+      final through = Ray3D()..setValues(0, -1.2, -5, 0, 0, 1);
+      expect(test.distanceTo(entity, through), lessThan(5));
+      // Saved, cooked, changed on disk: the game has a new model.
+      data = again;
+      expect(test.distanceTo(entity, through), lessThan(5));
+      expect(test.keptModels, 1, reason: 'the old model is let go');
+      test.forget('mannequin.glb');
+      expect(test.keptModels, 0);
+    });
+
     test('the model inspector frames what it knows', () {
       expect(
         mannequin.animations.map((a) => a.name),
@@ -318,7 +366,7 @@ void main() {
       final scope = _scope(const []);
       final environment = EnvironmentComponent();
       final entity = scope.world.createEntityWithComponents([environment]);
-      GraphicsInspectors.applySky(scope, entity, 'Night');
+      Graphics3DInspectors.applySky(scope, entity, 'Night');
       expect(environment.zenith, const Color(0xFF05070F));
       expect(environment.exposure, 0.8);
       scope.history.undo();
@@ -328,21 +376,23 @@ void main() {
 
     test('a light says what it does', () {
       expect(
-        GraphicsInspectors.lightNote(
+        Graphics3DInspectors.lightNote(
           Light3DComponent(kind: Light3DKind.directional),
         ),
         contains('shadows'),
       );
       expect(
-        GraphicsInspectors.lightNote(Light3DComponent(range: 4)),
+        Graphics3DInspectors.lightNote(Light3DComponent(range: 4)),
         contains('4.0 m'),
       );
       expect(
-        GraphicsInspectors.lightNote(Light3DComponent()),
+        Graphics3DInspectors.lightNote(Light3DComponent()),
         contains('no limit'),
       );
       expect(
-        GraphicsInspectors.lightNote(Light3DComponent(kind: Light3DKind.spot)),
+        Graphics3DInspectors.lightNote(
+          Light3DComponent(kind: Light3DKind.spot),
+        ),
         contains('cone'),
       );
     });

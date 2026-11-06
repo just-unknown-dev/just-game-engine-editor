@@ -2,8 +2,10 @@ import 'dart:convert';
 
 import 'package:just_asset_store/just_asset_store.dart';
 import 'package:just_editor_core/just_editor_core.dart';
+import 'package:flutter/foundation.dart' show internal;
 
 /// The Asset Store's settings, kept per user on this machine.
+@internal
 abstract final class StoreSettings {
   /// Whether the official catalog is read.
   static final SettingPref<bool> official = SettingPref.boolean(

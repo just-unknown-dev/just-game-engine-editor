@@ -56,7 +56,7 @@ For a feature, open an issue labelled **`enhancement`** that describes the probl
 
 The editor runs only in a debug build on Windows, macOS or Linux, so you need one of those to try a change (the package itself compiles for every platform, web and wasm included). It is published on pub.dev, and games take it as a dev dependency. What a module builds on is a package of its own, [`just_editor_core`](https://github.com/just-unknown-dev/just-editor-core): a change to the module contract, the scope, undo, the inspector's rows or the UI kit is made there.
 
-Clone it into a folder named after the package, and check out any `just_*` package you work with beside it, under its own package name. The overrides below and `test/tiled_import_test.dart` look for them there.
+Clone it into a folder named after the package, and check out any `just_*` package you work with beside it, under its own package name. The overrides below and `test/level_map/tiled_import_test.dart` look for them there.
 
 ```bash
 git clone https://github.com/just-unknown-dev/just-game-engine-editor.git just_game_engine_editor
@@ -80,7 +80,7 @@ The editor writes scenes, backups and logs relative to the working directory. Le
 
 ## Working Against Unpublished Dependencies
 
-The package's `just_*` dependencies are `just_editor_core`, `just_game_engine`, `just_tiled`, `just_debugger` and `just_signals`; its tests also use `just_graphics_engine`, `just_colours` and `just_storage`. `just_editor_core` brings `just_game_engine_formats`, `just_di` and the rest. When a change needs an unreleased version of one, check it out next to this repository and point this package at it with a `pubspec_overrides.yaml` in the repository root:
+The package's `just_*` dependencies are `just_editor_core`, `just_game_engine`, `just_game_engine_formats`, `just_graphics_engine`, `just_asset_store`, `just_tiled`, `just_debugger` and `just_signals`; its tests also use `just_colours` and `just_storage`. `just_editor_core` brings `just_di` and the rest. When a change needs an unreleased version of one, check it out next to this repository and point this package at it with a `pubspec_overrides.yaml` in the repository root:
 
 ```yaml
 # pubspec_overrides.yaml: local only, never commit it.
@@ -97,62 +97,47 @@ List only what you have checked out. `just_game_engine` has `just_*` dependencie
 
 Do not change `pubspec.yaml` to a path dependency. If your pull request needs a version of a `just_*` package that is not published yet, say so in the pull request: this package can only be released after it.
 
-Seven packages build on `just_editor_core`, each with an `EditorModule` of its own: the modules `just_ui_editor`, `just_sprite_editor`, `just_input_editor` and `just_material_editor`, and the kits `just_platformer_kit`, `just_third_person_kit` and `just_world_builder_kit`; three of them (the interface and material editors and the World Builder kit) take this package too. If you change the public API, above all `EditorModule`, say in the pull request what they will need.
+Six packages build on `just_editor_core`, each with an `EditorModule` of its own: the modules `just_ui_editor`, `just_sprite_editor` and `just_input_editor`, and the kits `just_platformer_kit`, `just_third_person_kit` and `just_world_builder_kit`; three of them (the interface editor and the Platformer and World Builder kits) take this package too, as a dev dependency for their tests. If you change the public API, above all `EditorModule`, say in the pull request what they will need.
 
 ---
 
 ## How the Package Fits Together
 
-`JustGameEditorPlugin` attaches to a running `Engine` and owns one `EditorScope`, which holds every registry and service of one editor. `JustGameEngineEditor` puts `JustGameEditorOverlay` over the game's `GameWidget`. Games, kits and tools add to the editor through `EditorModule`s. [ARCHITECTURE.md](ARCHITECTURE.md) explains each part in depth.
+`JustGameEditorPlugin` attaches to a running `Engine` and owns one `EditorScope`, which holds every registry and service of one editor. `JustGameEngineEditor` puts `EditorOverlay` over the game's `GameWidget`. Games, kits and tools add to the editor through `EditorModule`s. [ARCHITECTURE.md](ARCHITECTURE.md) explains each part in depth.
 
-In this package:
+In this package, one folder of `lib/src/` per feature, each with its barrel (`<feature>/<feature>.dart`); ARCHITECTURE.md's *Module structure and the import graph* gives the layers:
 
 | Folder | Contents |
 |--------|----------|
 | `lib/just_game_engine_editor.dart` | The public library: what a game's editor entry point and a module's tests use (the plugin, `JustGameEngineEditor`, `BuiltInEditorModule`, `LevelDesignerSession`, the Tiled importer, ...), and `just_editor_core` re-exported |
-| `lib/materials.dart` | `BuiltInMaterialsModule` and the normal map maker (`NormalMaps`, `Pixels`) |
-| `lib/graphics.dart` | `BuiltInGraphicsModule`, model cooking (`ModelCooking`) and pictures (`ModelThumbnails`) |
-| `lib/src/core/plugin/` | `JustGameEditorPlugin`: the engine plugin, the key handler, autosave, the Level Designer session |
-| `lib/src/core/scope/` | `EditorScopeServices`: the editor's own services on the scope (the dock controller, `EntityOps`, the Level Map's) |
-| `lib/src/core/state/`, `core/play/` | `PlaySnapshot`; `PlayController` |
-| `lib/src/core/scene/`, `core/serialization/` | `SceneIO` (open, save, migrate), `SceneLoading`; `SceneManager`, `SceneNameValidator` |
-| `lib/src/core/entity/` | `EntityOps`: create, delete, group, re-parent and the clipboard, over the core's commands |
-| `lib/src/core/view/`, `core/input/` | `OrbitFlyEditorView` (3-D), `PlanarEntityPicker`; `ViewportInput`, the gizmo drag solvers |
-| `lib/src/core/level_map/` | Editing the Level Map: `LevelMapDocuments`, `LevelMapProvision`, the tile commands, `TilesToEntity`, Tiled import and export |
-| `lib/src/core/physics/`, `core/tags/` | Renaming and deleting collision layers and tags across scenes (`LayerRefactor`, `TagRefactor`), `PhysicsBodies`, the 3-D collider overlay |
-| `lib/src/core/prefabs/` | `PrefabInstances`: prefab files, their instances and overrides |
-| `lib/src/core/validation/` | The built-in Problems checks: `BuiltInValidators`, `PhysicsChecks`, `Physics3DChecks`, `TagChecks` |
-| `lib/src/core/prefs/`, `core/project/`, `core/assets/`, `core/ecs/` | `RecentScenes`; `EditorPresence`, the `editor.lock` heartbeat; the project-file sprite loader; the editor's two systems |
-| `lib/src/extension/` | `BuiltInEditorModule` and the built-in contributions it gathers (camera, audio, 2-D lighting, tags, tiles, 3-D physics, row decorations) |
-| `lib/src/integration/` | `JustGameEngineEditor`, the widget a game puts on screen |
-| `lib/src/debugger/` | The engine's debugger, attached to the plugin |
-| `lib/src/materials/` | `BuiltInMaterialsModule`: the 2-D and 3-D Material windows, their pictures, presets, checks, inspector editors and importers |
-| `lib/src/graphics/` | `BuiltInGraphicsModule`, for a game with 3-D graphics: models in the Assets dock (pictures, drop, the Model window, cooking, placing with lights and sockets), picking by triangles, light and camera aids, the Model, Light and Environment inspector sections |
-| `lib/src/ui/overlay/` | `JustGameEditorOverlay`: the chrome, docks, settings, right panel, start card, gizmos and viewport menu |
-| `lib/src/ui/inspector/`, `ui/panels/` | The built-in field editors and extras, `EntityHeader`, the physics inspector; `EntityInspectorPanel`, `ScenePickerPanel` |
-| `lib/src/ui/scene_tree/` | `SceneTreePanel`, `SceneTreeController`, `MapItemRow` |
-| `lib/src/ui/level_designer/`, `ui/level_designer_3d/` | The Level Designer (its session, panels, controls, built-in tools, overlays, commands and keys); the Default 3D kit |
-| `lib/src/ui/timeline/`, `ui/tileset/`, `ui/json_viewer/` | The Timeline dock (`TimelineSession`); the Tileset Editor workspace (`TilesetSession`) and `BuiltInWorkspaces`; the read-only JSON window |
+| `lib/materials.dart`, `lib/graphics.dart`, `lib/asset_store.dart` | `BuiltInMaterialsModule` and the normal map maker (`NormalMaps`, `ImagePixels`); `BuiltInGraphics3DModule`, model cooking (`ModelCooking`) and pictures (`ModelThumbnails`); `BuiltInAssetStoreModule` |
+| `lib/src/plugin/` | `JustGameEditorPlugin` (its jobs in parts, `editor_*.dart`), `BuiltInEditorModule`, `BuiltInDocks`, `ViewportInput`, the editor's commands and keys (`commands/`), the debugger, `EditorPresence` (writes the `editor.lock` heartbeat through just_game_engine_formats' `EditorHeartbeat`), `EditorRelease`, the log capture system |
+| `lib/src/chrome/` | `JustGameEngineEditor`, `EditorOverlay`: the chrome, right panel, dock area and pop-outs, start card and loader, toolbars, viewport menu, settings |
+| `lib/src/inspector/`, `level_designer/` | The built-in field editors and extras, `EntityHeader`, `EntityInspectorPanel`; the Level Designer (session, panels, controls, built-in tools and overlays), its 2-D and 3-D kits |
+| `lib/src/assets/`, `timeline/` | The Assets dock, the project-file sprite loader, the read-only JSON window; the Timeline dock (`TimelineSession`) |
+| `lib/src/scenes/`, `scene_tree/`, `tags/`, `physics/` | `SceneIO` (open, save, migrate), `SceneLoading`, `SceneManager`, the Scenes panel and dialogs; `SceneTreePanel`; tag edits, refactor, checks and the Tags dock; collision layers, bodies, checks, the physics inspector and dock, 2-D collider editing, the 3-D overlays |
+| `lib/src/level_map/`, `prefabs/`, `graphics/` | Editing the Level Map (`LevelMapDocuments`, `LevelMapProvision`, the tile commands, `MapPlacement`, `TilesToEntity`, Tiled import and export, its checks); `PrefabInstances`, prefab files and placement; 2-D lighting, and `BuiltInGraphics3DModule` for a game with 3-D graphics |
+| `lib/src/entities/`, `problems/` | `EntityOps`: create, delete, group, re-parent and the clipboard; `ProblemScan`, the scene-wide checks and the Problems dock |
+| `lib/src/viewport/`, `play/`, `docks/`, `tileset/`, `camera/`, `audio/`, `materials/`, `asset_store/` | The gizmos and their solvers, snaps, split views; `PlayController`, `PlaySnapshot`; the dock framework and the docks of no other feature; the Tileset Editor; the camera and sound contributions; the Material windows; the Asset Store |
 | `example/` | A bare engine with the editor over it |
-| `test/` | The tests; shared helpers are in `test/support/` |
+| `test/` | The tests, by the feature they test (`test/<feature>/`), the layout guard (`test/library_layout_test.dart`); shared helpers are in `test/support/` |
 
-In [`just_editor_core`](https://github.com/just-unknown-dev/just-editor-core), what modules build on (`lib/src/`):
+In [`just_editor_core`](https://github.com/just-unknown-dev/just-editor-core), what modules build on (`lib/src/`, lowest layer first):
 
 | Folder | Contents |
 |--------|----------|
-| `extension/` | `EditorModule` and its contributions, asset kinds and the asset index, markers, viewport overlays and handles, prefab variants, workspace contributions |
-| `scope/` | `EditorScope`: one editor's registries and services, in a `just_di` container |
-| `model/` | `EditorHistory` and the entity and hierarchy commands, `ComponentEdit`, `CommandRegistry` and `DesignerCommand`, `EditorKeys` and `ModifierKeys`, `EditorSceneState`, `EditorViewState`, `SceneCodec`, `SceneStore`, `UnknownTypesComponent` |
-| `designer/` | The Level Designer's API: `DesignerSession`, tools, overlays, snapping, prefabs, layers, grids, the 3-D working plane |
-| `inspector/` | `DefinitionSection`, the field rows, `FieldEditorRegistry`, component extras, `CollectionEditor`, `AddComponentPicker` |
-| `view/` | `EditorView`, `GameCameraEditorView`, the pickers, `HandleDragSession` |
-| `project/`, `settings/`, `services/`, `validation/` | Tags, physics layers and colours; `EditorPrefs` and the overlay settings; the log, `ProjectFiles`, `PackageAssetPaths`; `SceneValidator` |
-| `scene_tree/` | `SceneTreeModel` and the row tile |
-| `look/` | `EditorTheme`, `EditorThemeData`, `EditorMetrics`, `ThemeController`, `ViewportLook`; `kit/` and `widgets/`, the shared widgets every panel, dock, dialog and module is built from |
-| `io/` | The `dart:io` seam behind `package:just_editor_core/io.dart` |
+| `io/`, `input/`, `view/`, `settings/`, `log/` | The `dart:io` seam behind `package:just_editor_core/io.dart`; `EditorKeys`, `ModifierKeys`; `EditorView`, `GameCameraEditorView`, `OrbitFlyEditorView`, the pickers; `EditorPrefs` and the overlay settings; the log |
+| `look/` | `EditorTheme`, `EditorThemeData`, `EditorMetrics`, `ThemeController`, `ViewportLook`; `kit/` and `widgets/`, the shared widgets every panel, dock, dialog and module is built from (`showEditorPrompt` among them) |
+| `scope/` | `EditorScope`: the kernel, one editor's `just_di` container, and `service` for what a feature keeps on it |
+| `assets/` | `ProjectFiles`, `PackageAssetPaths`, `AssetIndex`, `AssetKind` and `AssetDrop` |
+| `scene/`, `project/` | `EditorSceneState`, `EditorViewState`, `SceneCodec`, `SceneStore`, `SceneValidator`; tags, physics layers and colours |
+| `history/` | `EditorHistory` and the entity and hierarchy commands, `ComponentEdit` |
+| `designer/`, `inspector/`, `scene_tree/` | The Level Designer's API (sessions, tools, overlays, snapping, prefabs, layers, commands, grids); `DefinitionSection`, the field rows, `FieldEditorRegistry`, component extras; `SceneTreeModel` and the row tile |
+| `modules/` | `EditorModule` and its contributions, and the wiring that reads them into a scope |
 
 A few rules hold the package together. Keep them:
 
+- **One folder per feature, in layers.** A file belongs to the feature it serves, logic and widgets together; its feature's barrel exports it, or its public declarations are `@internal`. A feature imports only features in its own layer or below (ARCHITECTURE.md lists them), and the public libraries export barrels with `show`. `test/library_layout_test.dart` checks it; a new folder takes its place in that test's layers.
 - **Debug builds on the desktop only.** `JustGameEditorPlugin.register` returns null outside `kDebugMode` and where `supportsPlatform` is false (anything but Windows, macOS and Linux), and `JustGameEngineEditor` is then a plain `GameWidget`. Keep both checks.
 - **It compiles everywhere.** A game imports this package in its editor entry point and still builds for Android, iOS, the web and wasm. So `lib/` never imports `dart:io`: it imports `package:just_editor_core/io.dart` (stand-ins on the web), and reads pictures from files with its `fileImage`. Tests may import `dart:io`.
 - **Files are written safely.** Write a project file through `ProjectFiles` (`writeString`, `writeBytes`: whole or not at all; `rename`: safe for a change of case, never over another file), and refuse a path read out of a file that would leave the project (`ProjectFiles.isContained`, `PackageAssetPaths.isWritable`). Compare paths with `ProjectFiles.samePath`, never `==`: Windows and macOS fold case.
@@ -164,43 +149,45 @@ A few rules hold the package together. Keep them:
 - **What is built from code is a getter.** Component definitions, prefabs, workspaces, docks and styles that read `EditorTheme` are getters, never `static final`, so a hot reload brings them up to date. `EditorModule.onRegister` runs once per module; `onReassemble` runs after each hot reload.
 - **Every `EditorModule` member has a default** (an empty list, null, or nothing to do), so a module overrides only what it adds. Give a new member one too. Ids are saved: dock ids key the layout in the `editor.docks` preference and command ids key the user's changed keys in `editor.keys.shortcuts`, so never rename one.
 - **Map data is looked up, never held.** Stop and a state undo replace a `LevelMapComponent` and its `LevelMapData`, so editor code never keeps either. Look the map up by entity id or path (`LevelMapRef`, `scope.mapDocs`) each time, and a layer by its id.
-- **`just_game_engine_cli` knows this package by name.** Its release check (`ReleaseRules`) looks in a built game for this package's paths, for `JustGameEditorPlugin`, `EditorScope` and `LevelDesignerSession`, and for the strings `Runtime editor initialized.` and `Just Runtime Editor`. Its own `EditorPresence` reads the `.dart_tool/just_core_cli/editor.lock` that this package's `EditorPresence` touches. Change one of these and `just_game_engine_cli` must change with it.
+- **`just_game_engine_cli` knows this package by name.** Its release check (`ReleaseRules`) looks in a built game for this package's paths, for `JustGameEditorPlugin`, `EditorScope` and `LevelDesignerSession`, and for the strings `Runtime editor initialized.` and `Just Runtime Editor`. Change one of these and `just_game_engine_cli` must change with it. The editor's heartbeat (`.dart_tool/just_core_cli/editor.lock`), which this package's `EditorPresence` writes and `just_game_engine_cli`'s `editorIsOpen()` reads, is not one of them: both go through just_game_engine_formats' `EditorHeartbeat` (the path, the beat, the stale rule and the file's text), so a change there reaches both.
 - **`just_store.json` is the Asset Store manifest**, for projects that install the editor through the store. Its `id` and `version` must equal `name` and `version` in `pubspec.yaml`, or the store refuses the package. `editorOnlyLibraries: ["*"]` tells the release check that no library here may reach a release build.
 
 ---
 
 ## Running the Tests
 
-Run every command from the repository root. `test/reassemble_test.dart` reads `lib/` from disk, and `test/tiled_import_test.dart` reads real Tiled files from `../just_tiled/test/fixtures`, so it needs `just_tiled` checked out beside this repository.
+Run every command from the repository root. `test/plugin/reassemble_test.dart` reads `lib/` from disk, and `test/level_map/tiled_import_test.dart` reads real Tiled files from `../just_tiled/test/fixtures`, so it needs `just_tiled` checked out beside this repository.
 
 ```bash
 # The whole suite.
 flutter test
 
 # One file.
-flutter test test/scene_manager_test.dart
+flutter test test/scenes/scene_manager_test.dart
 
-# The tests that render, on a real GPU.
+# The tests that render, on a real GPU, one file at a time.
+dart run tool/test_gpu.dart
+# …which runs this; add a path or other `flutter test` arguments to either.
 flutter test --enable-impeller --enable-flutter-gpu --tags gpu --concurrency=1
 ```
 
-**The `gpu` tag.** A test that renders with Flutter GPU (the 3-D material pictures) carries `@Tags(['gpu'])` (declared in `dart_test.yaml`) and skips with the reason from `gpuUnavailableReason()` (`package:just_graphics_engine/testing.dart`, a dev dependency), so a plain `flutter test` passes on any machine. Run it for any change to the material pictures or the 3-D Material window's preview.
+**The `gpu` tag.** A test that renders with Flutter GPU (the 3-D material pictures, the model thumbnails) carries `@Tags(['gpu'])` (declared in `dart_test.yaml`) and skips with the reason from `gpuUnavailableReason()` (`package:just_graphics_engine/testing.dart`, a dev dependency), so a plain `flutter test` passes on any machine. Run `dart run tool/test_gpu.dart` for any change to the material pictures, the model thumbnails or the 3-D Material window's preview, and before a release.
 
 **Tests that hold the rules.**
 
-- `test/reassemble_test.dart` fails on a `static final` or top-level `final` that makes a `TextStyle`, `PrefabDefinition`, `WorkspaceDefinition` or `DockDefinition`, or that reads `EditorTheme`. Make it a getter. (`just_editor_core`'s `hygiene_test.dart` holds its own `lib/` to the same rule.)
-- `test/readme_snippets_test.dart` compiles the code README.md and QUICKSTART.md give a game to copy. Change both together.
-- `test/inspector_look_test.dart` measures a real inspector and fails when its controls stop looking alike.
-- `test/unknown_components_test.dart`, `test/play_snapshot_test.dart` and `test/component_round_trip_test.dart` hold the save rules above.
-- `test/mac_keys_test.dart` presses the keys as a Mac does (Cmd, Backspace).
-- In `just_editor_core`: `test/editor_dropdown_test.dart` fails on a Material `DropdownButton` or `DropdownButtonFormField` in its `lib/` (use `EditorDropdown`, here too), and `test/scene_starters_parity_test.dart` fails when a component's saved form changes (update the starters in `just_game_engine_formats` to match).
+- `test/plugin/reassemble_test.dart` fails on a `static final` or top-level `final` that makes a `TextStyle`, `PrefabDefinition`, `WorkspaceDefinition` or `DockDefinition`, or that reads `EditorTheme`. Make it a getter. (`just_editor_core`'s `no_static_final_styles_test.dart` holds its own `lib/` to the same rule.)
+- `test/plugin/readme_snippets_test.dart` compiles the code README.md and QUICKSTART.md give a game to copy. Change both together.
+- `test/inspector/inspector_look_test.dart` measures a real inspector and fails when its controls stop looking alike.
+- `test/problems/unknown_components_test.dart`, `test/play/play_snapshot_test.dart` and `test/inspector/component_round_trip_test.dart` hold the save rules above.
+- `test/chrome/mac_keys_test.dart` presses the keys as a Mac does (Cmd, Backspace).
+- In `just_editor_core`: `test/look/editor_dropdown_test.dart` fails on a Material `DropdownButton` or `DropdownButtonFormField` in its `lib/` (use `EditorDropdown`, here too), and `test/scene/scene_starters_parity_test.dart` fails when a component's saved form changes (update the starters in `just_game_engine_formats` to match).
 
 **Writing tests.**
 
 - `testScope()` (`test/support/test_scope.dart`) gives an `EditorScope` over a bare world, disposed with the test. Two tests get two scopes and share nothing.
 - `MemorySettingsStore` (`test/support/memory_settings_store.dart`) keeps preferences in memory, so a test touches neither the disk nor `path_provider`.
 - Put files in a folder from `Directory.systemTemp.createTempSync`, passed as the scope's `scenesRoot` or a `SceneStore`'s `root`. Never use a fixed path: `flutter test` runs test files in parallel processes.
-- Synthetic pointer events carry a zero timestamp unless given one, and the scene tree reads two quick clicks as a double click. Give each click its own `timeStamp`, as `clickAt` in `test/scene_tree_panel_test.dart` does.
+- Synthetic pointer events carry a zero timestamp unless given one, and the scene tree reads two quick clicks as a double click. Give each click its own `timeStamp`, as `clickAt` in `test/scene_tree/scene_tree_panel_test.dart` does.
 - Real file I/O inside `testWidgets` finishes on the real clock: run it in `tester.runAsync`, and wait for its outcome with `pumpUntil` / `waitUntil` (`test/support/real_io.dart`), never for a fixed time.
 
 ---
@@ -222,7 +209,7 @@ flutter test --enable-impeller --enable-flutter-gpu --tags gpu --concurrency=1
 - **Documentation.** Give every public API you add a `///` doc comment. Describe user-visible changes in [CHANGELOG.md](CHANGELOG.md). Update [README.md](README.md) when what users see changes, and [ARCHITECTURE.md](ARCHITECTURE.md) when the structure or the module contract does.
 - **Tests.** Add or update tests for any behaviour you change. A bug fix comes with a test that fails without it.
 - **Dependencies.** Do not add a dependency without discussing it in an issue first.
-- **Structure.** Match the existing folders under `lib/src/`. What a module needs belongs in `just_editor_core`, not here. Export what a game's editor entry point or a module's tests need through `lib/just_game_engine_editor.dart` (materials' through `lib/materials.dart`), each export with a `show` list; anything else stays in `lib/src/`. A member that other files of the package need but no game or module should is `@internal`. Modules and games import the library, never files under `lib/src/`; the package's own tests may.
+- **Structure.** Match the existing folders under `lib/src/`. What a module needs belongs in `just_editor_core`, not here. Export what a game's editor entry point or a module's tests need through `lib/just_game_engine_editor.dart` (materials', 3-D graphics' and the Asset Store's through `lib/materials.dart`, `lib/graphics.dart` and `lib/asset_store.dart`), each export with a `show` list; anything else stays in `lib/src/`. A member that other files of the package need but no game or module should is `@internal`. Modules and games import the library, never files under `lib/src/`; the package's own tests may.
 
 ---
 

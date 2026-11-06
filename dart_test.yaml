@@ -5,5 +5,14 @@ timeout: 2x
 tags:
   # Renders with Flutter GPU (the 3-D material pictures). These tests skip
   # themselves when it is not enabled; run them with:
-  #   flutter test --enable-impeller --enable-flutter-gpu --tags gpu
+  #   dart run tool/test_gpu.dart
+  # which is:
+  #   flutter test --enable-impeller --enable-flutter-gpu --tags gpu --concurrency=1
   gpu:
+  # Timings (test/perf/): how the editor's hot paths scale with a big scene,
+  # each under a wall-clock ceiling far above what it measures but still at
+  # the mercy of a busy machine, so a plain `flutter test` skips them. Run
+  # only them, for before/after numbers, with:
+  #   flutter test --tags perf --run-skipped
+  perf:
+    skip: "a timing: run with flutter test --tags perf --run-skipped"

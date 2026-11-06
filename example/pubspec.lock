@@ -203,42 +203,42 @@ packages:
       path: "../../just_asset_store"
       relative: true
     source: path
-    version: "0.2.1"
+    version: "0.3.0"
   just_audio_engine:
     dependency: "direct overridden"
     description:
       path: "../../just_audio_engine"
       relative: true
     source: path
-    version: "1.1.0"
+    version: "2.0.0"
   just_box_2d:
     dependency: "direct overridden"
     description:
       path: "../../just_box_2d"
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.2.0"
   just_colours:
     dependency: "direct overridden"
     description:
       path: "../../just_colours"
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.2.0"
   just_core_cli:
     dependency: "direct overridden"
     description:
       path: "../../just_core_cli"
       relative: true
     source: path
-    version: "0.1.2"
+    version: "0.2.0"
   just_dart:
     dependency: "direct overridden"
     description:
       path: "../../just_dart"
       relative: true
     source: path
-    version: "0.2.0"
+    version: "0.3.0"
   just_database:
     dependency: transitive
     description:
@@ -253,7 +253,7 @@ packages:
       path: "../../just_debugger"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "0.1.0"
   just_deflate:
     dependency: "direct overridden"
     description:
@@ -275,7 +275,7 @@ packages:
       path: "../../just_editor_core"
       relative: true
     source: path
-    version: "0.1.0-dev.1"
+    version: "0.1.0-dev.2"
   just_game_engine:
     dependency: "direct main"
     description:
@@ -289,7 +289,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.1.0-dev.2"
+    version: "0.1.0-dev.3"
   just_game_engine_formats:
     dependency: "direct overridden"
     description:
@@ -303,28 +303,28 @@ packages:
       path: "../../just_gamepads"
       relative: true
     source: path
-    version: "0.1.1"
+    version: "0.2.0"
   just_graphics_engine:
     dependency: "direct overridden"
     description:
       path: "../../just_graphics_engine"
       relative: true
     source: path
-    version: "0.1.0-dev.2"
+    version: "0.2.0-dev.1"
   just_inputs:
     dependency: "direct overridden"
     description:
       path: "../../just_inputs"
       relative: true
     source: path
-    version: "0.1.1"
+    version: "0.2.0"
   just_jolt:
     dependency: "direct overridden"
     description:
       path: "../../just_jolt"
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.2.0"
   just_memory:
     dependency: transitive
     description:
@@ -362,15 +362,14 @@ packages:
       path: "../../just_tiled"
       relative: true
     source: path
-    version: "0.4.1"
+    version: "0.5.0"
   just_zstd:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: just_zstd
-      sha256: b2fa7bd191709f51577912a9807382fc08fa3a6c7147c7b7c9bdb01f54edb2ba
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.2.0"
+      path: "../../just_zstd"
+      relative: true
+    source: path
+    version: "0.3.0"
   leak_tracker:
     dependency: transitive
     description:

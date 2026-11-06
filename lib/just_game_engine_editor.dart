@@ -29,19 +29,11 @@ library;
 
 export 'package:just_editor_core/just_editor_core.dart';
 
-export 'src/core/level_map/tiled_import.dart'
+export 'src/chrome/chrome.dart' show JustGameEngineEditor;
+export 'src/level_designer/level_designer.dart'
+    show BuiltInPrefabs, ComponentResizer, LevelDesignerSession;
+export 'src/level_map/level_map.dart'
     show TiledFiles, TiledImportPlan, TiledImporter;
-export 'src/core/play/play_controller.dart' show EditorPlayState;
-export 'src/core/plugin/editor_plugin.dart' show JustGameEditorPlugin;
-export 'src/core/view/orbit_fly_editor_view.dart'
-    show OrbitFlyEditorView, ViewPose3D;
-export 'src/extension/built_in_editor_module.dart' show BuiltInEditorModule;
-export 'src/integration/just_game_editor_adapter.dart'
-    show JustGameEngineEditor;
-export 'src/ui/level_designer/grid/hex_grid.dart' show HexGridModule;
-export 'src/ui/level_designer/level_designer_session.dart'
-    show LevelDesignerSession;
-export 'src/ui/level_designer/state/built_in_prefabs.dart' show BuiltInPrefabs;
-export 'src/ui/level_designer/state/component_resizer.dart'
-    show ComponentResizer;
-export 'src/ui/overlay/gizmo_painter.dart' show GizmoPainter;
+export 'src/play/play.dart' show EditorPlayState;
+export 'src/plugin/plugin.dart' show BuiltInEditorModule, JustGameEditorPlugin;
+export 'src/viewport/viewport.dart' show Gizmo2DPainter;

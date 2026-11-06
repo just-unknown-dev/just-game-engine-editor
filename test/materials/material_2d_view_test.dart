@@ -21,13 +21,7 @@ void main() {
 
   setUp(() {
     dir = Directory.systemTemp.createTempSync('jge_material_view');
-    addTearDown(() {
-      try {
-        dir.deleteSync(recursive: true);
-      } on FileSystemException {
-        // Left for the system's own clean-up.
-      }
-    });
+    addTearDown(() => deleteWhenFree(dir));
   });
 
   void write(String path, Object json) => File('${dir.path}/$path')
@@ -80,7 +74,7 @@ void main() {
     test("the light's settings; the normals view lights it", () async {
       stage
         ..show('a.material2d.json', kind: Material2DKind.sprite, lit: true)
-        ..lightColour = const Color(0xFFFFAA00)
+        ..lightColor = const Color(0xFFFFAA00)
         ..lightHeight = 0.5
         ..lightReach = 1
         ..lightStrength = 2;
@@ -138,6 +132,14 @@ void main() {
       final state = key.currentState!;
       await tester.runAsync(state.load);
       await tester.pump();
+      // The stage reads a variant's parent on that frame, on the frozen
+      // clock: waited for, or the file is still open when the test ends
+      // and on Windows its folder can't be removed.
+      await pumpUntil(
+        tester,
+        () => state.stage.ready,
+        what: 'the material and its parents to be read',
+      );
       return state;
     }
 
@@ -247,8 +249,6 @@ void main() {
     testWidgets('a card folds, and stays folded in the next material', (
       tester,
     ) async {
-      MaterialCardFolds.clear();
-      addTearDown(MaterialCardFolds.clear);
       write('a.material2d.json', {
         'outline': {'width': 2},
       });
@@ -258,7 +258,17 @@ void main() {
       await tester.pump();
       expect(find.text('Width'), findsNothing);
       expect(find.text('Outline'), findsOneWidget, reason: 'its header stays');
-      expect(MaterialCardFolds.isFolded('2d.outline'), isTrue);
+      expect(MaterialCardFolds.of(scope).isFolded('2d.outline'), isTrue);
+      final other = EditorScope(
+        world: World()..initialize(),
+        modules: const [],
+      );
+      addTearDown(other.dispose);
+      expect(
+        MaterialCardFolds.of(other).isFolded('2d.outline'),
+        isFalse,
+        reason: "another editor's folds are its own",
+      );
       await tester.tap(find.byTooltip('Unfold'));
       await tester.pump();
       expect(find.text('Width'), findsOneWidget);

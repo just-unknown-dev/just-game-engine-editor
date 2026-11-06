@@ -4,7 +4,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:just_game_engine_editor/src/materials/texture_cache.dart';
+import 'package:just_game_engine_editor/src/materials/materials_3d/texture_cache.dart';
 
 // A stand-in for a texture: its size in bytes.
 final class _Texture {

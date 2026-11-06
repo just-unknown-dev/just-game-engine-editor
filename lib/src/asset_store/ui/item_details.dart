@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:just_asset_store/just_asset_store.dart';
 import 'package:just_editor_core/io.dart';
 import 'package:just_editor_core/just_editor_core.dart';
+import 'package:flutter/foundation.dart' show internal;
 
 import '../store_controller.dart';
-import 'install_flow.dart';
-import 'store_window.dart';
+import 'install_preview.dart';
+import 'store_workspace.dart';
 
 /// Everything about one item, and what can be done with it: its pictures,
 /// what it is, the facts of the version picked, what it needs and does,
 /// links, and the buttons.
+@internal
 class ItemDetails extends StatefulWidget {
   const ItemDetails({super.key, required this.controller, required this.id});
 
@@ -44,7 +46,9 @@ class _ItemDetailsState extends State<ItemDetails> {
     final entry = listed ?? c.localEntry(id)!;
     final item = entry.item;
     final linked = installed?.origin == ItemOrigin.linked;
-    final versions = listed == null ? const <StoreItemVersion>[] : c.versionsOf(id);
+    final versions = listed == null
+        ? const <StoreItemVersion>[]
+        : c.versionsOf(id);
     final have = installed == null ? null : Version.tryParse(installed.version);
     // The version described: the one picked, else the newest.
     final shown =
@@ -116,8 +120,10 @@ class _ItemDetailsState extends State<ItemDetails> {
                   'Version',
                   versions.length > 1 && !linked
                       ? _versionMenu(versions, shown, have)
-                      : Text('${shown?.version ?? installed?.version ?? '–'}',
-                          style: _text),
+                      : Text(
+                          '${shown?.version ?? installed?.version ?? '–'}',
+                          style: _text,
+                        ),
                 ),
                 if (installed != null)
                   _fact(
@@ -187,7 +193,15 @@ class _ItemDetailsState extends State<ItemDetails> {
               ],
             ),
           ),
-          ..._actionBar(context, item, installed, versions, have, shown, update),
+          ..._actionBar(
+            context,
+            item,
+            installed,
+            versions,
+            have,
+            shown,
+            update,
+          ),
         ],
       ),
     );
@@ -207,7 +221,10 @@ class _ItemDetailsState extends State<ItemDetails> {
             aspectRatio: 16 / 9,
             child: count == 0
                 ? ItemPicture(controller: c, entry: entry, iconSize: 48)
-                : _Picture(future: c.picture(entry, index), kind: entry.item.kind),
+                : _Picture(
+                    future: c.picture(entry, index),
+                    kind: entry.item.kind,
+                  ),
           ),
         ),
         if (count > 1) ...[
@@ -226,7 +243,9 @@ class _ItemDetailsState extends State<ItemDetails> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(EditorMetrics.radiusSm),
                     border: Border.all(
-                      color: i == index ? EditorTheme.accent : EditorTheme.border,
+                      color: i == index
+                          ? EditorTheme.accent
+                          : EditorTheme.border,
                       width: i == index ? 1.5 : 1,
                     ),
                   ),
@@ -310,7 +329,7 @@ class _ItemDetailsState extends State<ItemDetails> {
     ItemStage.deprecated => [
       const SizedBox(height: 10),
       _StageNote(
-        colour: EditorTheme.error,
+        color: EditorTheme.error,
         text:
             'Deprecated: it is no longer developed.'
             '${item.replacedBy == null ? '' : ' Use ${c.entry(item.replacedBy!)?.item.name ?? item.replacedBy} instead.'}',
@@ -319,7 +338,7 @@ class _ItemDetailsState extends State<ItemDetails> {
     ItemStage.experimental => [
       const SizedBox(height: 10),
       _StageNote(
-        colour: EditorTheme.warning,
+        color: EditorTheme.warning,
         text: 'Experimental: it may change or break between versions.',
       ),
     ],
@@ -506,7 +525,11 @@ class _ItemDetailsState extends State<ItemDetails> {
 
 /// A picture from [future], or [kind]'s icon while there is none.
 class _Picture extends StatelessWidget {
-  const _Picture({required this.future, required this.kind, this.iconSize = 48});
+  const _Picture({
+    required this.future,
+    required this.kind,
+    this.iconSize = 48,
+  });
 
   final Future<File?> future;
   final ItemKind kind;
@@ -590,18 +613,18 @@ class _Link extends StatelessWidget {
 
 /// A line about how finished an item is.
 class _StageNote extends StatelessWidget {
-  const _StageNote({required this.colour, required this.text});
+  const _StageNote({required this.color, required this.text});
 
-  final Color colour;
+  final Color color;
   final String text;
 
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
     decoration: BoxDecoration(
-      color: colour.withValues(alpha: 0.10),
+      color: color.withValues(alpha: 0.10),
       borderRadius: BorderRadius.circular(EditorMetrics.radiusSm),
-      border: Border.all(color: colour.withValues(alpha: 0.45)),
+      border: Border.all(color: color.withValues(alpha: 0.45)),
     ),
     child: Text(
       text,

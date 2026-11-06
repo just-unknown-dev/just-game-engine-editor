@@ -10,6 +10,8 @@ import 'package:just_game_engine/just_game_engine_3d.dart';
 import 'package:just_game_engine/just_game_engine.dart';
 import 'package:just_game_engine_editor/src/materials/materials.dart';
 
+import '../support/real_io.dart';
+
 class _Extras extends EditorModule {
   @override
   String get id => 'extras';
@@ -43,7 +45,7 @@ class _Extras extends EditorModule {
       build: (context, v, size) => const IgnorePointer(child: Text('Badge')),
     ),
     WorkspaceTool(
-      workspaceId: WorkspaceIds.material,
+      workspaceId: WorkspaceIds.material3D,
       id: 'gold',
       icon: Icons.star,
       tooltip: 'Make it gold',
@@ -52,7 +54,7 @@ class _Extras extends EditorModule {
       ),
     ),
     WorkspaceSection(
-      workspaceId: WorkspaceIds.material,
+      workspaceId: WorkspaceIds.material3D,
       id: 'notes',
       title: 'Notes',
       build: (context, v) => Text('About ${v.path}'),
@@ -67,13 +69,7 @@ void main() {
 
   setUp(() {
     dir = Directory.systemTemp.createTempSync('jge_material_extras');
-    addTearDown(() {
-      try {
-        dir.deleteSync(recursive: true);
-      } on FileSystemException {
-        // Left for the system's own clean-up.
-      }
-    });
+    addTearDown(() => deleteWhenFree(dir));
   });
 
   Future<void> host(WidgetTester tester, Widget window) async {
@@ -82,6 +78,16 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: window)));
   }
+
+  // The stage reads a variant's parent on the first frame, on the frozen
+  // clock: waited for, or the file is still open when the test ends and on
+  // Windows its folder can't be removed.
+  Future<void> settle(WidgetTester tester, Material2DWorkspaceState state) =>
+      pumpUntil(
+        tester,
+        () => state.stage.ready,
+        what: 'the material and its parents to be read',
+      );
 
   testWidgets('the 2-D window: a tool, a section and an overlay', (
     tester,
@@ -107,6 +113,7 @@ void main() {
     final state = key.currentState!;
     await tester.runAsync(state.load);
     await tester.pump();
+    await settle(tester, state);
     expect(state.view.workspaceId, WorkspaceIds.material2D);
     expect(find.text('GRAPH'), findsOneWidget);
     expect(find.text('Effects on: 0'), findsOneWidget);
@@ -150,6 +157,7 @@ void main() {
     final state = key.currentState!;
     await tester.runAsync(state.load);
     await tester.pump();
+    await settle(tester, state);
     final view = state.view;
     // "Twice as strong": what the module is handed is the parent's flash,
     // not the effect's default.
@@ -172,14 +180,14 @@ void main() {
     ).writeAsStringSync(const Material3DFile().encode());
     scope = EditorScope(world: World()..initialize(), modules: [_Extras()]);
     addTearDown(scope.dispose);
-    final key = GlobalKey<MaterialWorkspaceState>();
+    final key = GlobalKey<Material3DWorkspaceState>();
     await host(
       tester,
-      MaterialWorkspace(
+      Material3DWorkspace(
         key: key,
         path: 'a.material.json',
         root: dir.path,
-        pictures: MaterialPictures(root: dir.path),
+        pictures: Material3DPictures(root: dir.path),
         workspace: WorkspaceContext(
           scope: scope,
           onClose: () {},
@@ -210,7 +218,7 @@ void main() {
     expect(module.id, 'materials');
     expect(
       [for (final w in module.workspaces) w.id],
-      [WorkspaceIds.material, WorkspaceIds.material2D],
+      [WorkspaceIds.material3D, WorkspaceIds.material2D],
     );
   });
 }

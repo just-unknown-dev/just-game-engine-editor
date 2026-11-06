@@ -1,0 +1,107 @@
+import 'package:just_game_engine/just_game_engine.dart';
+import 'package:just_editor_core/just_editor_core.dart'
+    show
+        EntityRayTest,
+        EntitySurfaceTest,
+        EntityVertexSource,
+        RayTriangleHit,
+        RayTriangles;
+import 'package:just_game_engine/just_game_engine_3d.dart';
+
+/// Picks a model by its triangles, not its box: a click through the arch
+/// of a doorway picks what is behind it. Knows which way its surface faces
+/// too, for placing on it.
+///
+/// It knows an entity with a [ModelComponent] whose model has loaded
+/// ([dataOf]); for any other it says nothing, and the box decides.
+final class ModelRayTest
+    implements EntityRayTest, EntityVertexSource, EntitySurfaceTest {
+  /// A test finding loaded models through [dataOf].
+  ModelRayTest(this.dataOf);
+
+  /// The parsed model at a path, or null while it isn't loaded.
+  final ModelData? Function(String path) dataOf;
+
+  /// Each model's triangles by its path, with the [ModelData] they were
+  /// read from: a model loaded again — saved, cooked, changed on disk —
+  /// replaces its entry rather than adding one, so the old data goes.
+  final Map<String, (ModelData, ModelGeometry?)> _triangles = {};
+  final Matrix4 _world = Matrix4.identity();
+  final Matrix4 _inverse = Matrix4.identity();
+  final Vector3 _origin = Vector3.zero();
+  final Vector3 _direction = Vector3.zero();
+
+  /// Most corners offered for one model: a big mesh offers none, rather
+  /// than slowing every move.
+  static const int maxVertices = 4096;
+
+  /// How many models' triangles are kept: one per path.
+  int get keptModels => _triangles.length;
+
+  /// The model at [path] changed: its triangles are read again, from the
+  /// model the game loads next.
+  void forget(String path) => _triangles.remove(path);
+
+  ModelGeometry? _geometryOf(String path, ModelData data) {
+    final known = _triangles[path];
+    if (known != null && identical(known.$1, data)) return known.$2;
+    final geometry = Graphics3DModelAsset.trianglesOf(data);
+    _triangles[path] = (data, geometry);
+    return geometry;
+  }
+
+  @override
+  List<Vector3>? verticesOf(Entity entity) {
+    final model = entity.getComponent<ModelComponent>();
+    final transform = entity.getComponent<TransformComponent>();
+    if (model == null || transform == null || model.model.isEmpty) return null;
+    final data = dataOf(model.model);
+    if (data == null) return null;
+    final geometry = _geometryOf(model.model, data);
+    if (geometry == null) return const [];
+    final p = geometry.positions;
+    if (p.length ~/ 3 > maxVertices) return const [];
+    transform.localToWorldInto(_world);
+    final out = <Vector3>[];
+    for (var i = 0; i + 2 < p.length; i += 3) {
+      final v = Vector3.zero();
+      _world.transformPointInto(Vector3(p[i], p[i + 1], p[i + 2]), v);
+      out.add(v);
+    }
+    return out;
+  }
+
+  @override
+  RayTriangleHit? surfaceHit(Entity entity, Ray3D ray) {
+    final model = entity.getComponent<ModelComponent>();
+    final transform = entity.getComponent<TransformComponent>();
+    if (model == null || transform == null || model.model.isEmpty) return null;
+    final data = dataOf(model.model);
+    if (data == null) return null;
+    final geometry = _geometryOf(model.model, data);
+    final miss = RayTriangleHit(double.infinity, Vector3(0, -1, 0));
+    if (geometry == null) return miss;
+    transform.localToWorldInto(_world);
+    return RayTriangles.nearestPlaced(geometry, _world, ray) ?? miss;
+  }
+
+  @override
+  double? distanceTo(Entity entity, Ray3D ray) {
+    final model = entity.getComponent<ModelComponent>();
+    final transform = entity.getComponent<TransformComponent>();
+    if (model == null || transform == null || model.model.isEmpty) return null;
+    final data = dataOf(model.model);
+    if (data == null) return null;
+    final geometry = _geometryOf(model.model, data);
+    if (geometry == null) return double.infinity;
+    transform.localToWorldInto(_world);
+    if (_inverse.copyInverse(_world) == 0) return null;
+    // Into the model's own space; t stays in the ray's units, as the
+    // direction is carried over unnormalised.
+    _inverse
+      ..transformPointInto(ray.origin, _origin)
+      ..transformDirectionInto(ray.direction, _direction);
+    return RayTriangles.nearestHit(geometry, _origin, _direction) ??
+        double.infinity;
+  }
+}

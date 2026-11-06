@@ -8,9 +8,11 @@ import 'package:just_editor_core/just_editor_core.dart';
 import 'store_settings.dart';
 
 /// The store window's pages.
+@internal
 enum StoreTab { browse, installed, updates, sources }
 
 /// The order the grid lists items in.
+@internal
 enum StoreSort {
   name('By name'),
   updated('Recently updated');
@@ -24,6 +26,7 @@ enum StoreSort {
 /// What the store window shows and does: the catalogs, what the project
 /// has, the filters, and the install running now. One per editor session;
 /// it outlives the window, so reopening the store is instant.
+@internal
 class StoreController extends ChangeNotifier {
   StoreController({
     required this.scope,
@@ -374,12 +377,42 @@ class StoreController extends ChangeNotifier {
   InstallPlan? planUpdateAll() => _planner?.updateAll();
 
   /// Plans removing [id], with what still uses it and the dependencies that
-  /// would go with it.
-  InstallPlan? planUninstall(String id) => _planner?.uninstall(
-    id,
-    references: store.referencesTo(id),
-    referencesOf: (dep, going) => store.referencesTo(dep, ignoring: going),
-  );
+  /// would go with it: the project is searched for all of them in one pass,
+  /// on another isolate ([AssetStore.planUninstall]). Null while the
+  /// catalogs are not loaded.
+  Future<InstallPlan?> planUninstall(String id) async {
+    final planner = _planner;
+    if (planner == null) return null;
+    return store.planUninstall(id, planner: planner);
+  }
+
+  /// Waits for [planned] and adds what the user should know before saying
+  /// yes: a warning for each item it replaces or removes whose folder holds
+  /// files changed by hand since the store put it there
+  /// ([AssetStore.withLocalEdits]; they go to the trash with the folder).
+  /// The window is [busy] meanwhile, so its buttons wait while the files
+  /// are read on another isolate. `edited` says whether such a warning was
+  /// added. Null for no plan (the catalogs are not loaded yet), or when a
+  /// task is running already.
+  Future<({InstallPlan plan, bool edited})?> review(
+    FutureOr<InstallPlan?> planned,
+  ) async {
+    if (busy) return null;
+    progress = const InstallProgress('Reading the project');
+    notifyListeners();
+    try {
+      final plan = await planned;
+      if (plan == null) return null;
+      final checked = await store.withLocalEdits(plan);
+      return (
+        plan: checked,
+        edited: checked.issues.length != plan.issues.length,
+      );
+    } finally {
+      progress = null;
+      notifyListeners();
+    }
+  }
 
   /// The task running now, if any: what it says it is doing.
   InstallProgress? progress;
@@ -430,7 +463,10 @@ class StoreController extends ChangeNotifier {
 
   /// Whether installed code changed since the editor started: the
   /// generated registries differ from what this session loaded, so a
-  /// restart (or hot restart) is needed to run it.
+  /// restart (or hot restart) is needed to run it. Line endings aside, as
+  /// [StoreRegistry.holds] compares them: the same registry checked out
+  /// with CRLF (git's `core.autocrlf`) or written again with LF changes no
+  /// code.
   bool get restartPending => _generatedStamp() != _registeredStamp;
 
   String _generatedStamp() {
@@ -443,7 +479,7 @@ class StoreController extends ChangeNotifier {
     return [
       for (final e in empty.entries)
         project.file(e.key).existsSync()
-            ? project.file(e.key).readAsStringSync()
+            ? project.file(e.key).readAsStringSync().replaceAll('\r\n', '\n')
             : e.value,
     ].join('\u0000');
   }
