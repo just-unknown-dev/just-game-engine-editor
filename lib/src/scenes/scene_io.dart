@@ -402,7 +402,7 @@ class SceneIO {
       final library = scope.context.prefabLibrary;
       await library.loadScene(rawJson);
       final entries = _entries(sceneName, rawJson['entities']);
-      // An editor before just_editor_core 0.1.0-dev.2 saved an unnamed
+      // An editor before just_editor_core 0.1.0 saved an unnamed
       // parent with no name, and its children naming it entity_<id>:
       // the parent gets that name back, so they open under it.
       final mended = SceneCodec.nameUnnamedParents(entries);

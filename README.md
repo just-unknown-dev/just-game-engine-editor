@@ -35,7 +35,7 @@ flutter pub add --dev just_game_engine_editor
 
 ```yaml
 dev_dependencies:
-  just_game_engine_editor: ^0.1.0-dev.3
+  just_game_engine_editor: ^0.1.0
 ```
 
 Plugins that only add to the editor (the sprite or input editors) go in `dev_dependencies` too. A kit's game half ships with the game, so a kit is a regular dependency ([Plugins and kits](#plugins-and-kits)). A project made with `just create` has all of this already.
@@ -419,7 +419,7 @@ In a project the store manages, `just store link ../my_level_tools` registers it
   "category": "editors",
   "license": {"spdx": "MIT"},
   "requires": {"just_game_engine": "^2.0.0"},
-  "dependencies": {"just_game_engine_editor": "^0.1.0-dev.3"},
+  "dependencies": {"just_game_engine_editor": "^0.1.0"},
   "editor": {
     "editorOnlyLibraries": ["*"],
     "modules": [

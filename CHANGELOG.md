@@ -1,11 +1,13 @@
 # Changelog
 
-## 0.1.0-dev.3
+## 0.1.0
+
+The first release that isn't a dev release: from here its API follows semantic versioning (in 0.x, a breaking change moves the minor version). It is made for just_game_engine 2.0.x, and so for Flutter 3.47 (just_game_engine's README, "Flutter versions"). The editor runs in a game's desktop debug build: verified on Windows; macOS and Linux are untested. It says so when it runs on another Flutter than the one the project pins (below).
 
 ### Breaking
 
 - **Renamed** (the public library's names): `GizmoPainter` → `Gizmo2DPainter` (beside the 3-D gizmo), `Pixels` → `ImagePixels` (in `materials.dart`; the file was `image_pixels.dart` already), `BuiltInGraphicsModule` → `BuiltInGraphics3DModule` (in `graphics.dart`; it is the 3-D one, beside 2-D lighting). Module, dock, workspace and command ids keep their strings, so nothing saved changes.
-- Requires just_editor_core ^0.1.0-dev.2, whose names follow the naming rules; the editor's library re-exports them: the inspector's rows are `…FieldRow` (`ColorFieldRow`, `DropdownFieldRow`, `ReadonlyFieldRow`, …), color is spelt so (`ProjectColors`, `PrefabColors`, `gridColor`, `selectionColor`, `colorBlindSafe`; the saved settings keys are unchanged), the 3-D tag follows its subject (`Array3DMode`, `View3DMode`, `Pivot3DMode`), a command's `CommandScope` is its `CommandAvailability` (`DesignerCommand(availability:)`, `dispatch(availabilities:)`), and `WorkspaceIds.material` is `WorkspaceIds.material3D` (its id is unchanged).
+- Requires just_editor_core ^0.1.0, whose names follow the naming rules; the editor's library re-exports them: the inspector's rows are `…FieldRow` (`ColorFieldRow`, `DropdownFieldRow`, `ReadonlyFieldRow`, …), color is spelt so (`ProjectColors`, `PrefabColors`, `gridColor`, `selectionColor`, `colorBlindSafe`; the saved settings keys are unchanged), the 3-D tag follows its subject (`Array3DMode`, `View3DMode`, `Pivot3DMode`), a command's `CommandScope` is its `CommandAvailability` (`DesignerCommand(availability:)`, `dispatch(availabilities:)`), and `WorkspaceIds.material` is `WorkspaceIds.material3D` (its id is unchanged).
 - `OrbitFlyEditorView`, `HexGrid` and `HexGridModule` moved into just_editor_core (the editor's library still re-exports them), and the 3-D view's pose is `View3DPose` (was `ViewPose3D`). `GizmoConstants` and `OverlayLayout` moved the other way: they are the editor's own now, and no longer public.
 - `BuiltInAssetStoreModule` has one constructor on every platform, `BuiltInAssetStoreModule({String? root})`: the test seams moved to the native-only `BuiltInAssetStoreModule.forTest(root:, sources:, cacheDir:, pub:)`, the `sources`, `cacheDir` and `pub` fields are private, and `controllerFor` is internal. The web stand-in no longer takes `cacheDir`.
 - The editor's own modules take their project folder from the scope (`EditorScope.projectRoot`, the working folder when the scope was given none): `BuiltInMaterialsModule.make`, `BuiltInGraphics3DModule.make` and `BuiltInAssetStoreModule.make` pass it as `root:`. `BuiltInEditorModule.make` is new, and `JustGameEditorPlugin.builtInsFor` lists `.make` for all four.

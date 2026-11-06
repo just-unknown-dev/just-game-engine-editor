@@ -119,7 +119,7 @@ void main() {
   test(
     'a child of a parent an older editor saved unnamed opens under it',
     () async {
-      // Before just_editor_core 0.1.0-dev.2 such a parent was saved with no
+      // Before just_editor_core 0.1.0 such a parent was saved with no
       // name and its child named it entity_<id>, so the child opened a root.
       Map<String, dynamic> entity(String? name, String? parent) => {
         'name': ?name,

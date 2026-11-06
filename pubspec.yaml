@@ -1,6 +1,6 @@
 name: just_game_engine_editor
 description: "A level editor that runs inside your just_game_engine game while you develop it: scenes, inspector, 2D and 3D level design, timelines, tilesets, materials, an Asset Store."
-version: 0.1.0-dev.3
+version: 0.1.0
 homepage: https://justunknown.com
 repository: https://github.com/just-unknown-dev/just-game-engine-editor
 issue_tracker: https://github.com/just-unknown-dev/just-game-engine-editor/issues
@@ -55,7 +55,7 @@ dependencies:
   flutter:
     sdk: flutter
   just_game_engine: ^2.0.0
-  just_editor_core: ^0.1.0-dev.2
+  just_editor_core: ^0.1.0
   # The editor's heartbeat file (EditorHeartbeat), which `just` reads to
   # know the editor has the project open: one contract for both.
   just_game_engine_formats: ^0.3.0
