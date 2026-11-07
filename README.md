@@ -8,7 +8,7 @@ Press **F1** to show or hide the editor over the game.
 |---|---|
 | ![The editor over a 2D level: scene tree, inspector, gizmo, game camera preview and Assets dock](assets/screenshots/editor_2d_scene.png) | ![A 3D scene: orbit view, 3D gizmo, level aids, game camera preview and materials in the Assets dock](assets/screenshots/editor_3d_scene.png) |
 | ![The Level Designer: a tile stamp over the Level Map, its layers, the tileset palette and the tool strip](assets/screenshots/editor_2d_level_designer.png) | ![The 3D Level Designer in four views, with the World Builder kit](assets/screenshots/editor_3d_level_designer.png) |
-| ![The 2D Material window: a normal-mapped wall under a light, its effect cards and the light's settings](assets/screenshots/editor_2d_material.png) | ![The 3D Material window: a material variant on a ball, lit by the scene's sky](assets/screenshots/editor_3d_material.png) |
+| ![The 2D Material window: normal-mapped cave rock under a light, its effect card and the light's settings](assets/screenshots/editor_2d_material.png) | ![The 3D Material window: a material variant on a ball, lit by the scene's sky](assets/screenshots/editor_3d_material.png) |
 
 | Timeline and physics | Play-testing and settings |
 |---|---|

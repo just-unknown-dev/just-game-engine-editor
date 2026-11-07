@@ -20,15 +20,15 @@ screenshots:
     path: assets/screenshots/editor_2d_level_designer.png
   - description: "The 3D Level Designer in four views with the World Builder kit: prefabs, view modes, materials and groups."
     path: assets/screenshots/editor_3d_level_designer.png
-  - description: "The Timeline dock: curves for a ball's roll, hop, spin and squash, and its motion path drawn in the level."
+  - description: "The Timeline dock: curves for a barrel's roll, hop, spin and squash, and its motion path drawn in the level."
     path: assets/screenshots/editor_timeline.png
   - description: "Physics: a collider edited with handles in the viewport, the rigid body's card, and named collision layers with their grid."
     path: assets/screenshots/editor_physics.png
   - description: "Play-testing in place: the game runs inside the editor and the Profiler times each system; Stop puts the level back."
     path: assets/screenshots/editor_play_test.png
-  - description: "The 2D Material window: a normal-mapped wall under a light you drag, its effect cards and the light's settings."
+  - description: "The 2D Material window: the cave's normal-mapped rock under a light you drag, its effect card and the light's settings."
     path: assets/screenshots/editor_2d_material.png
-  - description: "The 3D Material window: a variant of the temple stone on a ball, lit by the open scene's own sky."
+  - description: "The 3D Material window: a polished variant of the arena panel on a ball, lit by the open scene's own sky."
     path: assets/screenshots/editor_3d_material.png
   - description: "Settings, searchable: appearance, accessibility (text size, contrast, colour-blind safe colours), keys and more."
     path: assets/screenshots/editor_settings.png
@@ -69,7 +69,7 @@ dependencies:
   # The renderer itself, past what the engine's 3-D library shows a game:
   # model cooking and glTF import, thumbnails and previews drawn into
   # views of their own (and, in the tests, GPU checks and pixel reads).
-  just_graphics_engine: ^0.2.0
+  just_graphics_engine: ^0.1.0
 
 dev_dependencies:
   just_colours: ^0.2.0
